@@ -77,9 +77,9 @@ static void check_content(const char* discPath, const PortDiscInfo* info, PortDi
   if (!info->complete) {
     out->kind = XD_DISC_USABLE;
     snprintf(out->text, sizeof(out->text),
-             "Your disc image is a %s file, a format that leaves out unused parts of the disc, so its content "
+             "Your disc image is %s %s file, a format that leaves out unused parts of the disc, so its content "
              "can't be compared with a known-good copy. The game starts without that check.",
-             info->format);
+             strcmp(info->format, "NKit") == 0 ? "an" : "a", info->format);
     return;
   }
 

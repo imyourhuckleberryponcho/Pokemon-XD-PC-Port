@@ -463,7 +463,11 @@ void thread_main(PThread* self) {
 void start_game_thread(PThread* t) { std::thread(thread_main, t).detach(); }
 #else
 void start_game_thread(PThread* t) {
+#ifdef __APPLE__
+  constexpr size_t kStack = 0x100000, kGuard = 0x4000;
+#else
   constexpr size_t kStack = 0x100000, kGuard = 0x1000;
+#endif
   void* block = mmap(nullptr, kGuard + kStack, PROT_READ | PROT_WRITE,
                      MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT | MAP_STACK, -1, 0);
   if (block == MAP_FAILED) {
@@ -675,10 +679,30 @@ void scheduled_idle_step(std::unique_lock<SchedMutex>& lock) {
   idle_run(lock);
 }
 
+#ifndef _WIN32
+std::atomic<bool> gTimerQuit{false}, gTimerGone{false};
+void stop_timer_at_exit() {
+  gTimerQuit.store(true);
+  gTimerCv.notify_all();
+  for (int i = 0; i < 300 && !gTimerGone.load(); ++i) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+}
+#define TIMER_QUIT() gTimerQuit.load()
+#else
+#define TIMER_QUIT() false
+#endif
+
 void timer_main() {
   init_time();
   std::unique_lock<SchedMutex> lock(gSched);
   for (;;) {
+#ifndef _WIN32
+    if (gTimerQuit.load()) {
+      gTimerGone.store(true);
+      return;
+    }
+#endif
     if (gSchedOn) {
       scheduled_idle_step(lock);
       continue;
@@ -710,7 +734,7 @@ void timer_main() {
       gTimerCv.wait_for(lock, std::chrono::microseconds(remainingUs - 1500));
     } else {
       lock.unlock();
-      while (OSGetTime() < next) {
+      while (!TIMER_QUIT() && OSGetTime() < next) {
         std::this_thread::yield();
       }
       lock.lock();
@@ -723,6 +747,8 @@ void ensure_timer() {
     gTimerStarted = true;
 #ifdef _WIN32
     timeBeginPeriod(1);
+#else
+    std::atexit(stop_timer_at_exit);
 #endif
     std::thread(timer_main).detach();
   }

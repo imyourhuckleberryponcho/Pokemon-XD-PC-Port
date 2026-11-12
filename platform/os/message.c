@@ -1,4 +1,5 @@
 #include "port_message.h"
+#include "run_status.h"
 
 #include <SDL3/SDL_messagebox.h>
 
@@ -25,7 +26,9 @@ static void print(PortMessageKind kind, const char* title, const char* text) {
 void PortMessage_Show(PortMessageKind kind, const char* title, const char* text) {
   print(kind, title, text);
   if (sWindows) {
+    PortRunStatus_MessageWindow(true);
     SDL_ShowSimpleMessageBox(box_flags(kind), title, text, NULL);
+    PortRunStatus_MessageWindow(false);
   }
 }
 
@@ -43,7 +46,10 @@ bool PortMessage_Ask(PortMessageKind kind, const char* title, const char* text, 
   const SDL_MessageBoxData box = {box_flags(kind) | SDL_MESSAGEBOX_BUTTONS_LEFT_TO_RIGHT, NULL, title, text, 2, buttons,
                                   NULL};
   int chosen = -1;
-  if (!SDL_ShowMessageBox(&box, &chosen) || chosen < 0) {
+  PortRunStatus_MessageWindow(true);
+  const bool shown = SDL_ShowMessageBox(&box, &chosen);
+  PortRunStatus_MessageWindow(false);
+  if (!shown || chosen < 0) {
     fprintf(stderr, "(Couldn't show the message window: answering \"%s\".)\n", unattended ? yes : no);
     return unattended;
   }

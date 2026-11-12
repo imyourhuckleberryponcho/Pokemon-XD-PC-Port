@@ -60,8 +60,12 @@ void PortGSthread_Create(void* thread, void* entry, PortGSthreadExit exitFunc, u
   Task& t = sTasks[thread];
   t.entry = reinterpret_cast<PortGSthreadEntry>(entry);
   t.exitFunc = exitFunc;
+#ifdef __APPLE__
+  constexpr size_t kReserve = 0x100000, kGuard = 0x4000;
+#else
   constexpr size_t kReserve = 0x100000, kGuard = 0x1000;
-  size_t usable = (pc_stack_size(stackSize) + 0xFFF) & ~size_t{0xFFF};
+#endif
+  size_t usable = (pc_stack_size(stackSize) + 0x3FFF) & ~size_t{0x3FFF};
   if (usable < kReserve) usable = kReserve;
   t.stackSize = usable + kGuard;
   void* stack = mmap(nullptr, t.stackSize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT | MAP_STACK,

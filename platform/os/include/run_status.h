@@ -15,6 +15,8 @@ void PortRunStatus_SetNote(const char* note);
 
 void PortRunStatus_SetWaitingForPlayer(bool waiting);
 
+void PortRunStatus_MessageWindow(bool open);
+
 #ifdef __cplusplus
 }
 #endif

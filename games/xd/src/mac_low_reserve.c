@@ -6,7 +6,9 @@ __asm__(".zerofill __XDLOW,__reserve,_xd_reserve_low,0x10000000,12\n"
         ".zerofill __XDMEMU,__reserve,_xd_reserve_memu,0x01800000,12\n"
         ".no_dead_strip _xd_reserve_memu\n"
         ".zerofill __XDLC,__reserve,_xd_reserve_lc,0x00004000,12\n"
-        ".no_dead_strip _xd_reserve_lc\n");
+        ".no_dead_strip _xd_reserve_lc\n"
+        ".zerofill __XDSTK,__reserve,_xd_reserve_stk,0x20000000,12\n"
+        ".no_dead_strip _xd_reserve_stk\n");
 #else
 typedef int mac_low_reserve_is_empty_elsewhere;
 #endif

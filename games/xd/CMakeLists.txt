@@ -611,7 +611,7 @@ if (MSVC)
 elseif (APPLE) # macOS (docs/MAC.md, never run): the same address, and the reserved ranges of mac_low_reserve.c
   set(XD_PROGRAM_LINK_OPTIONS ${XD_MAC_LOW_LINK_OPTIONS}
     -Wl,-segaddr,__XDLOW,0x70000000 -Wl,-segaddr,__XDMEM1,0x80000000 -Wl,-segaddr,__XDMEMU,0xC0000000
-    -Wl,-segaddr,__XDLC,0xE0000000)
+    -Wl,-segaddr,__XDLC,0xE0000000 -Wl,-segaddr,__XDSTK,0x50000000)
 else () # Linux (docs/LINUX.md, "Low memory"): not position independent, the image at the same fixed address
   set(XD_PROGRAM_LINK_OPTIONS -no-pie -Wl,-Ttext-segment=0x40000000)
 endif ()

@@ -33,6 +33,7 @@ std::mutex sNoteLock;
 std::string sNote;
 std::atomic<bool> sStopped{false};
 std::atomic<bool> sWaitingForPlayer{false};
+std::atomic<int> sMessageWindows{0};
 
 std::string Now() {
   const std::time_t t = std::time(nullptr);
@@ -107,7 +108,7 @@ void* Watch(void*) {
     if (sStopped.load()) break;
     const uint32_t now = sProgress();
     const unsigned long long tick = TickMs();
-    if (sWaitingForPlayer.load()) {
+    if (sWaitingForPlayer.load() || sMessageWindows.load() > 0) {
       lastMove = tick;
       Write(now, 0, "waiting for the player");
       continue;
@@ -126,7 +127,7 @@ void* Watch(void*) {
     if (stuck && !reported) {
       reported = true;
       std::fprintf(stderr, "\n[watchdog] STUCK: no new game frame for %u s (at frame %u). (The threads' call stacks "
-                           "are not printed on Linux yet.)\n",
+                           "are not printed on Linux and Mac yet.)\n",
                    still, now);
       PortLog_Flush();
       if (sExitWhenStuck) {
@@ -174,6 +175,7 @@ extern "C" void PortRunStatus_Start(const char* appFolder, const char* label, ui
 }
 
 extern "C" void PortRunStatus_SetWaitingForPlayer(bool waiting) { sWaitingForPlayer.store(waiting); }
+extern "C" void PortRunStatus_MessageWindow(bool open) { sMessageWindows.fetch_add(open ? 1 : -1); }
 
 extern "C" void PortRunStatus_SetNote(const char* note) {
   std::lock_guard<std::mutex> lock(sNoteLock);

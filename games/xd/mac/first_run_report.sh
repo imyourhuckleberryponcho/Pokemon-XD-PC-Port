@@ -100,7 +100,9 @@ else
   run xattr -l "$XD"
   if xattr "$XD" 2> /dev/null | grep -q com.apple.quarantine; then
     say "The file is still marked as downloaded (quarantine). See the Read me: System Settings > Privacy & Security > Open Anyway."
-    verdict PROBLEM "the program is still in quarantine (Read me: Open Anyway)"
+    # (Not a fault by itself: both first testers played with the mark still on, 2026-11-11. It only matters when
+    #  the start below fails.)
+    verdict INFO "the program is still marked as downloaded (quarantine); fine if it starts, else Read me: Open Anyway"
   fi
   if have otool && dev_tools; then
     run otool -hv "$XD"
@@ -136,6 +138,7 @@ else
     check_segment __XDMEM1 0x80000000 0x1800000
     check_segment __XDMEMU 0xC0000000 0x1800000
     check_segment __XDLC 0xE0000000 0x4000
+    check_segment __XDSTK 0x50000000 0x20000000
     if grep -q HUGE_SECTION "$WORK/segments.txt"; then verdict PROBLEM "the linker moved the reserved memory into a __huge section (-no_huge was ignored)"; fi
     if grep -q CHAINED_FIXUPS "$WORK/segments.txt"; then verdict PROBLEM "the program uses chained fixups (-no_fixup_chains was ignored): its fixed address may be lost"; fi
     say ""
@@ -249,6 +252,22 @@ if [ -d "$DATA" ]; then
   if [ -n "$NEWEST" ]; then
     say "---- newest log: logs/$NEWEST (last 300 lines) ----"
     tail -n 300 "$DATA/logs/$NEWEST" >> "$RAW"
+    # The newest log of a real start WITH a disc (the one above is usually this script's own start without one;
+    # the first testers' reports had to be followed by their logs folder, 2026-11-11), and from every log the
+    # lines that say something went wrong.
+    PLAYED="$(grep -l "aurora. Aurora initializing" "$DATA/logs"/*.log 2> /dev/null | xargs ls -t 2> /dev/null | head -n 1)"
+    if [ -n "$PLAYED" ] && [ "$PLAYED" != "$DATA/logs/$NEWEST" ]; then
+      say "---- newest log of a start with a disc: logs/$(basename "$PLAYED") (first 120 and last 200 lines; the card's \"idx\" lines left out) ----"
+      grep -v "Failed to open file at idx" "$PLAYED" | head -n 120 >> "$RAW"
+      say "    ..."
+      grep -v "Failed to open file at idx" "$PLAYED" | tail -n 200 >> "$RAW"
+    fi
+    say "---- lines of trouble in all logs ----"
+    grep -H -n -E "Stopped \(|\[watchdog\]|no memory below|\[low memory\]|OUT OF MEMORY|WARNING: Pokemon XD|ERROR: Pokemon XD|Device lost" "$DATA/logs"/*.log 2> /dev/null \
+      | sed "s|$DATA/logs/||" | tail -n 60 >> "$RAW"
+    if grep -q "no memory below 2 GB" "$DATA/logs"/*.log 2> /dev/null; then
+      verdict PROBLEM "a game start ran out of low memory for a stack (\"no memory below 2 GB\"): fixed after 0.3.5, is this the newest version?"
+    fi
   else
     say "No log files yet in $DATA/logs."
   fi

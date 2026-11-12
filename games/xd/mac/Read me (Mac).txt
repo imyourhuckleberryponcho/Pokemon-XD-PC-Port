@@ -1,17 +1,25 @@
-Pokemon XD PC @VERSION@ - Mac build (UNTESTED)
-==============================================
+Pokemon XD PC @VERSION@ - Mac build (TEST BUILD)
+================================================
 
 PLEASE READ THIS FIRST
 
-This Mac build has NEVER been run by the people who made it. Nobody on the project has a Mac. It was written on
-a Windows PC and built by an automatic build machine. It may not start at all. If you try it, you are the
-first tester, and what you see is exactly what we need to know.
+Nobody on the project has a Mac. This build was written on a Windows PC and is built by an automatic build
+machine. Two players tried version 0.3.5 on Apple M2 Macs and sent their logs: thank you. What you see when you
+try it is exactly what we need to know.
 
 What we know and what we don't
-- Known: the program builds on a Mac build machine. (See the build's notes for whether its start test passed.)
-- Not known: whether the window opens, whether there is a picture or sound, whether a controller works,
-  whether the game plays correctly, whether saving works.
+- Known (from those two Macs): the window opens, there is a picture and sound, controllers work, settings and
+  saving work, the game plays.
+- Fixed since: 0.3.5 stopped after a few minutes of play ("no memory below 2 GB for a task's stack"), and
+  quitting ended in a crash message. The fix is in this version; it was started on a build machine but has not
+  been played on a Mac yet. If the game still stops after some minutes, please send the logs folder (below).
+- Not known: how the game holds up over hours, and on Intel Macs.
 - The Windows version is the tested one.
+
+Controllers
+- If A and B (confirm and cancel) seem the wrong way round on your controller, please tell us which controller
+  it is. The line  gamepad1.layout = label  (or = position) in settings.ini (folder below) changes whether the
+  GameCube's A, B, X and Y follow the letters printed on the buttons or their place on the controller.
 
 What you need
 - A Mac with an Apple chip (M1 or later), or an Intel Mac, with macOS 13.3 or later.
@@ -48,7 +56,7 @@ Before anything else, if you are one of the first testers: the report
 - If the game cannot start, it also says why in a message window and in the file
   ~/Library/Application Support/Pokemon XD/start_failure.txt
 
-If it does not work (likely, the first time)
+If it does not work
 - Open Terminal and start it from there, so its messages can be read:
       "/path/to/Pokemon XD.app/Contents/MacOS/xd"
   Copy everything it prints and send it to us, together with the newest file in

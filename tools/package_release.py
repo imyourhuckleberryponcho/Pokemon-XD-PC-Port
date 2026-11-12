@@ -96,6 +96,14 @@ Public beta {version}
 Thank you for trying it! This is a beta: expect bugs, and keep a copy of your save.
 Questions, bug reports, other players: https://discord.gg/XVbDVXH4Pn
 
+New in 0.3.6 (fixes after the first days in public)
+---------------------------------------------------
+- Mac: the game stopped after a few minutes of play ("no memory below 2 GB for a task's stack"). Its
+  working memory is now kept for it from the start. Quitting no longer ends in a crash message.
+- Disc images of the shrunk ".nkit.iso" kind no longer get the "content is different from a known-good
+  copy" warning: the game says that such a copy cannot be compared, and starts.
+- The log no longer says "STUCK" while a message window is waiting for you.
+
 New in 0.3.5
 ------------
 - Several saves and a save manager: the launcher's Save page keeps more than one playthrough. The circle

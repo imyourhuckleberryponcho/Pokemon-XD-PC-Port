@@ -13,7 +13,7 @@ This repository contains **no game assets, ROMs, ISOs or executables**, and none
 You need your own legally obtained copy of the game (USA, `GXXE01`); the port reads everything from your disc
 image while it runs.
 
-## Status: public beta — version 0.3.5
+## Status: public beta — version 0.3.6
 
 **Playable from New Game into the story, with known bugs.** It is not finished: expect crashes, stalls and
 graphics differences, and keep backups of saves you care about. Downloads are on the [Releases](../../releases)
@@ -23,10 +23,18 @@ page, one per system:
 |---|---|
 | **Windows** 10 / 11 (64-bit) | The main build: what is developed and tested every day. |
 | **Linux** (x86_64) | Test build. Checked against the Windows build in automatic runs (same random numbers, same saves, same sound), but so far only with software graphics: it has **not been played on a real Linux PC or a Steam Deck** yet. |
-| **Mac** | **UNTESTED.** It builds, its test programs pass and it starts on a Mac in automatic runs, but **nobody has played it on a Mac**: it has never loaded a disc or drawn a picture there. It is an Intel (x86_64) program; on Apple-silicon Macs it runs through Rosetta 2. See *Mac: what to expect* below before you try it. |
+| **Mac** | Test build. Two players have run it on Apple M2 Macs (macOS 15 and 27, through Rosetta 2): picture, sound, controllers, settings and saving work. 0.3.5 stopped after a few minutes of play; 0.3.6 has the fix, which has not been played on a Mac yet. It is an Intel (x86_64) program: Apple-silicon Macs run it through Rosetta 2. No launcher yet. More testers wanted. |
 
 **Found a bug, or want to help test?** Join the [Discord](https://discord.gg/XVbDVXH4Pn) — see
 *Reporting a bug* below.
+
+New in 0.3.6 (fixes after the first days in public):
+
+- **Mac:** the game stopped after a few minutes of play; its working memory is now kept for it from the start.
+  Quitting no longer ends in a crash message.
+- **Shrunk disc images** (`.nkit.iso`) no longer get the "content is different from a known-good copy" warning:
+  the game says that such a copy cannot be compared, and starts.
+- The log no longer says "STUCK" while a message window is waiting for you.
 
 New in 0.3.5:
 
@@ -122,9 +130,10 @@ Please do not post screenshots, videos or files of the game itself in issues on 
 
 ### Mac: what to expect
 
-The Mac build is marked untested because it is: it has only ever been built and started on rented Mac machines
-that have no disc. If you have a Mac and your own disc image and want to be the first, thank you — and please
-expect it to fail somewhere.
+The Mac build is a test build. Two players ran 0.3.5 on Apple M2 Macs and it played (picture, sound, controllers,
+settings, saving) until it stopped after a few minutes; 0.3.6 fixes that stop, and the fix has been built and
+started on a rented Mac machine but not yet played. If you have a Mac and your own disc image: thank you, and
+please tell us how far you get.
 
 - The app is not signed by Apple. macOS will refuse to open it at first: right-click the app and choose Open, or
   allow it under System Settings > Privacy & Security. The `Read me (Mac).txt` in the download has the steps.
@@ -132,6 +141,10 @@ expect it to fail somewhere.
 - The game keeps some memory addresses in the GameCube's small format. On the Mac the program now hands out its own
   memory from low addresses for that, and the automatic runs show it working, but only a real playthrough can prove
   it everywhere. If the game ever stops with a message about an "address above 4 GB", please report it.
+- There is no launcher on the Mac yet. If A and B (confirm and cancel) seem the wrong way round on your
+  controller, the line `gamepad1.layout = label` (or `= position`) in `settings.ini` in
+  `~/Library/Application Support/Pokemon XD` changes whether the buttons follow their printed letters or their
+  place on the controller. Please tell us which controller it was.
 - The download contains a script that writes a first-run report (no game data in it). Sending that file back,
   whatever happens, is the single most useful thing a Mac tester can do.
 

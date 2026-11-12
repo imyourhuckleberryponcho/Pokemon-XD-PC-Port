@@ -132,6 +132,12 @@ PortDiscKind PortDisc_Probe(const char* path, PortDiscInfo* info, char* error, s
       out.format = format_name(meta.format);
       out.complete = meta.lossless;
     }
+    uint8_t mark[4] = {};
+    if (nod_seek(disc, 0x200, 0) == 0x200 && nod_read(disc, mark, sizeof(mark)) == 4 &&
+        std::memcmp(mark, "NKIT", 4) == 0) {
+      out.format = "NKit";
+      out.complete = false;
+    }
   }
   nod_free(disc);
   if (info != nullptr) {

@@ -14,7 +14,7 @@
 
 typedef struct Window { uintptr_t start, end; } Window;
 static const Window kWindows[] = {
-  {0x42000000u, 0x70000000u},
+  {0x42000000u, 0x50000000u},
   {0x81800000u, 0xC0000000u},
   {0xC1800000u, 0xE0000000u},
   {0x01000000u, 0x10000000u},

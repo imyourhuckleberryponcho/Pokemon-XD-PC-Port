@@ -5,8 +5,8 @@
 #   games/xd/mac/package_mac.sh [build bin folder] [output folder]
 #   defaults: build/mac/mac-release/bin   dist
 #
-# Result:  <out>/Pokemon XD PC <version> - Mac (untested)/Pokemon XD.app + Read me.txt
-#          <out>/Pokemon XD PC <version> - Mac (untested).zip
+# Result:  <out>/Pokemon XD PC <version> - Mac (test)/Pokemon XD.app + Read me.txt
+#          <out>/Pokemon XD PC <version> - Mac (test).zip
 # The app holds the game program (xd, x86_64: runs through Rosetta 2 on Apple silicon), the libraries it loads
 # and the licences. No game data: the player picks his own disc image at the first start.
 set -eu
@@ -17,7 +17,7 @@ OUT="${2:-$ROOT/dist}"
 VERSION="$(sed -n 's/^project(xd_port VERSION \([0-9.]*\).*/\1/p' "$ROOT/CMakeLists.txt")"
 [ -n "$VERSION" ] || { echo "package_mac.sh: no version in CMakeLists.txt"; exit 1; }
 [ -x "$BIN/xd" ] || { echo "package_mac.sh: $BIN/xd is missing (build first: ./build_mac.sh)"; exit 1; }
-NAME="Pokemon XD PC $VERSION - Mac (untested)"
+NAME="Pokemon XD PC $VERSION - Mac (test)"
 DEST="$OUT/$NAME"
 APP="$DEST/Pokemon XD.app"
 rm -rf "$DEST" "$OUT/$NAME.zip"

@@ -395,7 +395,11 @@ static char** sLowArgv;
 static void low_stack_entry(void) { sLowResult = xd_main(sLowArgc, sLowArgv); }
 
 int aurora_main(int argc, char** argv) {
+#ifdef __APPLE__
+  const size_t size = 8u << 20, guard = 0x4000;
+#else
   const size_t size = 8u << 20, guard = 4096;
+#endif
   mallopt(M_MMAP_THRESHOLD, 32 << 20);
   mallopt(M_ARENA_MAX, 1);
   mallopt(M_TOP_PAD, 512 << 20);

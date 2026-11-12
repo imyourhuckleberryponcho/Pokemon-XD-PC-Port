@@ -8,7 +8,9 @@
 #else
 extern int port_test_mac_has_reserve;
 #define getsegbyname(name) (port_test_mac_has_reserve ? (const void*)(name) : (const void*)0)
+extern int port_test_mac_has_stack_reserve;
 #endif
+#include <sched.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <sys/mman.h>
@@ -44,8 +46,69 @@ static inline int port_mac_in_reserve(uintptr_t a, size_t n) {
   return 0;
 }
 
+#define PORT_MAC_STK_BASE ((uintptr_t)0x50000000u)
+#define PORT_MAC_STK_SIZE ((uintptr_t)0x20000000u)
+#define PORT_MAC_STK_UNIT ((uintptr_t)0x10000u)
+#define PORT_MAC_STK_UNITS ((unsigned)(PORT_MAC_STK_SIZE / PORT_MAC_STK_UNIT))
+typedef struct PortMacStackKeeper {
+  volatile int lock;
+  unsigned char used[PORT_MAC_STK_UNITS];
+} PortMacStackKeeper;
+
+static inline int port_mac_has_stack_reserve(void) {
+#ifdef __APPLE__
+  return getsegbyname("__XDSTK") != NULL;
+#else
+  return port_test_mac_has_stack_reserve;
+#endif
+}
+
+static inline int port_mac_in_stack_reserve(const void* p) {
+  return (uintptr_t)p >= PORT_MAC_STK_BASE + PORT_MAC_STK_UNIT && (uintptr_t)p < PORT_MAC_STK_BASE + PORT_MAC_STK_SIZE &&
+         port_mac_has_stack_reserve();
+}
+
+static inline void* port_mac_stack_take(size_t len, int prot) {
+  PortMacStackKeeper* k = (PortMacStackKeeper*)PORT_MAC_STK_BASE;
+  const unsigned n = (unsigned)((len + PORT_MAC_STK_UNIT - 1) / PORT_MAC_STK_UNIT);
+  unsigned i, run = 0, first = 0;
+  if (n == 0 || n >= PORT_MAC_STK_UNITS) return MAP_FAILED;
+  while (__sync_lock_test_and_set(&k->lock, 1)) sched_yield();
+  for (i = 1; i < PORT_MAC_STK_UNITS; ++i) {
+    run = k->used[i] ? 0 : run + 1;
+    if (run == n) {
+      first = i + 1 - n;
+      break;
+    }
+  }
+  for (i = 0; first != 0 && i < n; ++i) k->used[first + i] = 1;
+  __sync_lock_release(&k->lock);
+  if (first == 0) return MAP_FAILED;
+  return (mmap)((void*)(PORT_MAC_STK_BASE + first * PORT_MAC_STK_UNIT), n * PORT_MAC_STK_UNIT, prot,
+                MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+}
+
+static inline int port_mac_munmap(void* addr, size_t len) {
+  if (port_mac_in_stack_reserve(addr)) {
+    PortMacStackKeeper* k = (PortMacStackKeeper*)PORT_MAC_STK_BASE;
+    const unsigned first = (unsigned)(((uintptr_t)addr - PORT_MAC_STK_BASE) / PORT_MAC_STK_UNIT);
+    const unsigned n = (unsigned)((len + PORT_MAC_STK_UNIT - 1) / PORT_MAC_STK_UNIT);
+    unsigned i;
+    if (((uintptr_t)addr & (PORT_MAC_STK_UNIT - 1)) != 0 || n == 0 || first + n > PORT_MAC_STK_UNITS) return -1;
+    (mmap)(addr, n * PORT_MAC_STK_UNIT, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+    while (__sync_lock_test_and_set(&k->lock, 1)) sched_yield();
+    for (i = 0; i < n; ++i) k->used[first + i] = 0;
+    __sync_lock_release(&k->lock);
+    return 0;
+  }
+  return (munmap)(addr, len);
+}
+
 static inline void* port_mac_mmap(void* addr, size_t len, int prot, int flags, int fd, off_t off) {
   const int real = flags & ~(MAP_FIXED_NOREPLACE | MAP_32BIT);
+  if ((flags & MAP_32BIT) && port_mac_has_stack_reserve()) {
+    return port_mac_stack_take(len, prot);
+  }
   if (flags & MAP_FIXED_NOREPLACE) {
     void* p;
     if (port_mac_in_reserve((uintptr_t)addr, len)) {
@@ -77,6 +140,7 @@ static inline void* port_mac_mmap(void* addr, size_t len, int prot, int flags, i
   return (mmap)(addr, len, prot, flags, fd, off);
 }
 #define mmap(addr, len, prot, flags, fd, off) port_mac_mmap((addr), (len), (prot), (flags), (fd), (off))
+#define munmap(addr, len) port_mac_munmap((addr), (len))
 
 static inline int port_mac_memfd(const char* name) {
   char path[32];

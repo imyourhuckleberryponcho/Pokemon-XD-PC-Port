@@ -12,6 +12,7 @@
 #include <string.h>
 
 int port_test_mac_has_reserve = 0;
+int port_test_mac_has_stack_reserve = 0;
 static int sFailures = 0;
 #define CHECK(cond)                                                                                                    \
   do {                                                                                                                 \
@@ -99,6 +100,64 @@ int main(void) {
 
     const int fd2 = memfd_create("mem1", 0);
     CHECK(fd2 >= 0 && fd2 != fd);
+  }
+
+
+
+
+
+  {
+    const uintptr_t base = PORT_MAC_STK_BASE, end = PORT_MAC_STK_BASE + PORT_MAC_STK_SIZE;
+    void* whole = (mmap)((void*)base, PORT_MAC_STK_SIZE, PROT_READ | PROT_WRITE,
+                         MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED | MAP_NORESERVE, -1, 0);
+    CHECK(whole == (void*)base);
+    port_test_mac_has_stack_reserve = 1;
+    enum { kLive = 40 };
+    unsigned char* live[kLive] = {0};
+    size_t liveSize[kLive] = {0};
+    unsigned seed = 12345;
+    int bad = 0;
+    for (int i = 0; i < 20000 && bad == 0; ++i) {
+      seed = seed * 1103515245u + 12345u;
+      const int slot = (int)((seed >> 16) % kLive);
+      if (live[slot] != NULL) {
+        if (live[slot][liveSize[slot] - 1] != (unsigned char)slot) bad = 1;
+        if (munmap(live[slot], liveSize[slot]) != 0) bad = 2;
+        live[slot] = NULL;
+      }
+      const size_t size = (seed >> 8) % 5 == 0 ? (8u << 20) + 0x4000 : 0x100000 + 0x4000;
+      unsigned char* p = (unsigned char*)mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT | MAP_STACK, -1, 0);
+      if (p == MAP_FAILED) { bad = 3; break; }
+      if ((uintptr_t)p < base + PORT_MAC_STK_UNIT || (uintptr_t)p + size > end || ((uintptr_t)p & 0xFFFF) != 0) bad = 4;
+      if (p[0] != 0 || p[size - 1] != 0 || p[0x4000] != 0) bad = 5;
+      for (int k = 0; k < kLive; ++k) {
+        if (live[k] != NULL && p < live[k] + liveSize[k] && live[k] < p + size) bad = 6;
+      }
+      mprotect(p, 0x4000, PROT_NONE);
+      memset(p + 0x4000, slot, size - 0x4000);
+      live[slot] = p;
+      liveSize[slot] = size;
+    }
+    if (bad != 0) fprintf(stderr, "stack range: problem %d\n", bad);
+    CHECK(bad == 0);
+
+    for (int k = 0; k < kLive; ++k) {
+      if (live[k] != NULL) CHECK(munmap(live[k], liveSize[k]) == 0);
+    }
+    void* big[64];
+    int got = 0;
+    while (got < 64) {
+      void* p = mmap(NULL, 16u << 20, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT, -1, 0);
+      if (p == MAP_FAILED) break;
+      big[got++] = p;
+    }
+    CHECK(got == 31);
+    CHECK(munmap(big[7], 16u << 20) == 0);
+    CHECK(mmap(NULL, 16u << 20, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT, -1, 0) == big[7]);
+
+    void* other = (mmap)(NULL, 0x10000, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    CHECK(other != MAP_FAILED && munmap(other, 0x10000) == 0);
+    port_test_mac_has_stack_reserve = 0;
   }
   if (sFailures == 0) printf("mac_compat_mmap_test: all passed\n");
   return sFailures == 0 ? 0 : 1;

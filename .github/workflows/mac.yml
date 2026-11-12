@@ -13,7 +13,7 @@
 #
 # What it does: builds the x86_64 Mac program on an Apple-silicon machine, runs every test program that needs no
 # disc (through Rosetta 2, as a player's Mac would), starts the game without a disc to prove that it launches and
-# places its memory below 4 GB, makes "Pokemon XD PC <version> - Mac (untested).zip" and uploads it with the logs.
+# places its memory below 4 GB, makes "Pokemon XD PC <version> - Mac (test).zip" and uploads it with the logs.
 # No game data is needed, used or uploaded.
 #
 # The game's source (the decompilation) is not in this repository. The workflow fetches it from the
@@ -239,7 +239,7 @@ jobs:
           # golang.org/issue/61229), and __TEXT must start at 0x40000000.
           otool -hv "$BIN/xd" | tee logs/xd_header.txt
           if grep -qw PIE logs/xd_header.txt; then echo "xd is position independent: -no_pie was ignored"; exit 1; fi
-          otool -l "$BIN/xd" | grep -A4 -E "segname __(PAGEZERO|TEXT|XDLOW|XDMEM1|XDMEMU|XDLC)$" | grep -E "segname|vmaddr|vmsize" > logs/xd_segments.txt
+          otool -l "$BIN/xd" | grep -A4 -E "segname __(PAGEZERO|TEXT|XDLOW|XDMEM1|XDMEMU|XDLC|XDSTK)$" | grep -E "segname|vmaddr|vmsize" > logs/xd_segments.txt
           cat logs/xd_segments.txt
           otool -L "$BIN/xd" > logs/xd_libraries.txt
           # The first tester's report script does the rest, exactly as a person with a Mac would run it: this
@@ -316,7 +316,7 @@ jobs:
         if: success() && inputs.stage == 'all'
         uses: actions/upload-artifact@v7
         with:
-          name: Pokemon XD PC - Mac (untested)
+          name: Pokemon XD PC - Mac (test)
           path: dist/*.zip
           retention-days: 14
           if-no-files-found: error
