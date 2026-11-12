@@ -1,0 +1,61 @@
+Pokemon XD PC @VERSION@ - Mac build (UNTESTED)
+==============================================
+
+PLEASE READ THIS FIRST
+
+This Mac build has NEVER been run by the people who made it. Nobody on the project has a Mac. It was written on
+a Windows PC and built by an automatic build machine. It may not start at all. If you try it, you are the
+first tester, and what you see is exactly what we need to know.
+
+What we know and what we don't
+- Known: the program builds on a Mac build machine. (See the build's notes for whether its start test passed.)
+- Not known: whether the window opens, whether there is a picture or sound, whether a controller works,
+  whether the game plays correctly, whether saving works.
+- The Windows version is the tested one.
+
+What you need
+- A Mac with an Apple chip (M1 or later), or an Intel Mac, with macOS 13.3 or later.
+- On a Mac with an Apple chip: Rosetta 2. This program is an "Intel" program on purpose (the game needs memory
+  at addresses an Apple-chip program is not allowed to use). macOS offers to install Rosetta the first time; or
+  open Terminal and type:   softwareupdate --install-rosetta
+- Apple has said macOS 27 is the last macOS that runs Intel programs. This build will not run on macOS 28 or
+  later; a build that does is planned.
+- Your own copy of Pokemon XD: Gale of Darkness (USA version, game ID GXXE01) as a disc image file
+  (.iso, .gcm, .rvz ...). No game data comes with this program.
+
+How to open it (the app is not signed by a registered developer, so macOS blocks it at first)
+1. Unzip, and move "Pokemon XD.app" where you like (for example your Applications folder).
+2. Double-click it. macOS says it cannot be opened / is from an unidentified developer. Click "Done"
+   (not "Move to Trash").
+3. Open System Settings > Privacy & Security. Scroll down to "Security". There is a line about "Pokemon XD"
+   with a button "Open Anyway". Click it, confirm, and enter your password if asked.
+4. From now on it opens with a double-click.
+   (If you know Terminal, this does the same in one step:
+      xattr -dr com.apple.quarantine "/path/to/Pokemon XD.app" )
+5. At the first start the program asks for your disc image in a file window. It remembers it afterwards.
+
+Where your files are
+  Your home folder > Library > Application Support > Pokemon XD
+  (saves, settings, logs, recordings, bug reports). In Finder: menu Go > Go to Folder..., then type
+  ~/Library/Application Support/Pokemon XD
+
+Before anything else, if you are one of the first testers: the report
+- Open Terminal (Applications > Utilities), type  bash  and a space, drag the file  first_run_report.sh  (next to
+  this Read me) into the Terminal window, press Return.
+- It looks at your Mac and at the program, starts the game once WITHOUT a disc (it stops by itself) and writes one
+  text file to your Desktop: pokemon_xd_mac_report.txt. Send us that file. It holds no game data, and your user
+  name is replaced in it. Nothing is sent by the script itself.
+- If the game cannot start, it also says why in a message window and in the file
+  ~/Library/Application Support/Pokemon XD/start_failure.txt
+
+If it does not work (likely, the first time)
+- Open Terminal and start it from there, so its messages can be read:
+      "/path/to/Pokemon XD.app/Contents/MacOS/xd"
+  Copy everything it prints and send it to us, together with the newest file in
+  ~/Library/Application Support/Pokemon XD/logs  (if that folder exists).
+- Tell us your Mac model and macOS version (Apple menu > About This Mac).
+- Nothing is ever sent by the program itself.
+
+Not in this build yet (they exist on Windows): the launcher (settings before starting, mods, save manager,
+updates), screenshots and bug-report bundles from inside the game (F10/F12), the window icon made from your disc.
+Settings can be changed in the game's own SETTINGS page, or in settings.ini in the folder above.

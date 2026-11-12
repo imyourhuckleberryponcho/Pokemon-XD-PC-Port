@@ -1,0 +1,17 @@
+diff --git a/lib/gfx/texture_convert.cpp b/lib/gfx/texture_convert.cpp
+index b2f791b..5cab5d0 100644
+--- a/lib/gfx/texture_convert.cpp
++++ b/lib/gfx/texture_convert.cpp
+@@ -85,7 +85,11 @@ bool arb_mip_check(uint32_t width, uint32_t height, uint32_t mips, ArrayRef<uint
+   std::array<const uint8_t*, 10> levels{};
+   std::array<uint32_t, 10> widths{};
+   std::array<uint32_t, 10> heights{};
+-  CHECK(mips <= levels.size(), "arb_mip_check: unsupported mip count {}", mips);
++  // A GX texture can say up to 11 levels (max_lod 10); CHECK is compiled out in release, so more levels than
++  // the arrays hold wrote past them (silent stack overrun). Such textures just aren't checked.
++  if (mips > levels.size()) {
++    return false;
++  }
+ 
+   size_t offset = 0;
+   for (uint32_t mip = 0; mip < mips; ++mip) {

@@ -1,0 +1,141 @@
+diff --git a/include/dolphin/gx/GXAurora.h b/include/dolphin/gx/GXAurora.h
+index bcd61bf..302407b 100644
+--- a/include/dolphin/gx/GXAurora.h
++++ b/include/dolphin/gx/GXAurora.h
+@@ -436,6 +436,24 @@ GXBool AuroraReadbackCaptureColorInStream(AuroraReadbackStream stream, u64 key);
+  */
+ GXBool AuroraReadbackGet(AuroraReadbackStream stream, AuroraReadbackDest* dests, u32 count);
+ 
++/**
++ * Pipeline (shader) counters since start-up, for measuring first-visit stalls and for a shader preparation step.
++ * skippedDraws: draws left out because their pipeline was still compiling (non-blocking draws).
++ * waits / waitMicros / maxWaitMicros: blocking draws that had to wait for their pipeline, and how long.
++ * knownPipelines: pipeline configurations known (from the cache files and this run).
++ * queued / created: pipelines waiting to be compiled / compiled so far.
++ */
++typedef struct {
++  u64 skippedDraws;
++  u64 waits;
++  u64 waitMicros;
++  u64 maxWaitMicros;
++  u32 knownPipelines;
++  u32 queued;
++  u32 created;
++} AuroraPipelineStats;
++void AuroraGetPipelineStats(AuroraPipelineStats* out);
++
+ #if __cplusplus
+ }
+ #endif
+diff --git a/lib/gfx/clear.cpp b/lib/gfx/clear.cpp
+index 8b224f7..11ff01f 100644
+--- a/lib/gfx/clear.cpp
++++ b/lib/gfx/clear.cpp
+@@ -140,6 +140,7 @@ wgpu::RenderPipeline create_pipeline(const PipelineConfig& config, const RenderT
+ 
+ void render(const DrawData& data, const wgpu::RenderPassEncoder& pass, const wgpu::Extent3D& targetSize) {
+   if (!bind_pipeline(data.pipeline, pass)) {
++    note_skipped_draw();
+     return;
+   }
+ 
+diff --git a/lib/gfx/pipeline_cache.cpp b/lib/gfx/pipeline_cache.cpp
+index 46a9903..dba4e20 100644
+--- a/lib/gfx/pipeline_cache.cpp
++++ b/lib/gfx/pipeline_cache.cpp
+@@ -12,8 +12,12 @@
+ #include "../sqlite_utils.hpp"
+ #include "../webgpu/gpu.hpp"
+ 
++#include <aurora/gfx.h>
++#include <dolphin/gx/GXAurora.h>
++
+ #include <algorithm>
+ #include <atomic>
++#include <chrono>
+ #include <condition_variable>
+ #include <deque>
+ #include <filesystem>
+@@ -91,6 +95,11 @@ static std::deque<PendingPipeline> g_pipelineQueue;
+ static std::deque<PendingPipeline> g_backgroundPipelineQueue;
+ static absl::flat_hash_set<PipelineRef> g_pendingPipelines;
+ static std::atomic_bool g_gpuCachePrunePending = false;
++// AuroraGetPipelineStats: draws skipped / waits for a pipeline (first-visit stalls).
++static std::atomic<uint64_t> g_skippedDraws{0};
++static std::atomic<uint64_t> g_pipelineWaits{0};
++static std::atomic<uint64_t> g_pipelineWaitMicros{0};
++static std::atomic<uint64_t> g_pipelineMaxWaitMicros{0};
+ 
+ static sqlite3* g_pipelineCacheDb = nullptr;
+ static sqlite3_stmt* g_pipelineCacheLoadStmt = nullptr;
+@@ -519,8 +528,18 @@ static PipelineRef find_pipeline_impl(PipelineRef runtimeKey, NewPipelineCallbac
+   }
+ 
+   if (blocking && !pipelineReady) {
+-    std::unique_lock lock{g_pipelineMutex};
+-    g_pipelineReadyCv.wait(lock, [=] { return g_pipelines.contains(runtimeKey) || g_pipelineThreadEnd; });
++    const auto start = std::chrono::steady_clock::now();
++    {
++      std::unique_lock lock{g_pipelineMutex};
++      g_pipelineReadyCv.wait(lock, [=] { return g_pipelines.contains(runtimeKey) || g_pipelineThreadEnd; });
++    }
++    const auto micros = static_cast<uint64_t>(
++        std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start).count());
++    ++g_pipelineWaits;
++    g_pipelineWaitMicros += micros;
++    uint64_t max = g_pipelineMaxWaitMicros.load();
++    while (micros > max && !g_pipelineMaxWaitMicros.compare_exchange_weak(max, micros)) {
++    }
+   }
+   return runtimeKey;
+ }
+@@ -1210,4 +1229,25 @@ bool get_pipeline(PipelineRef ref, CompiledPipeline& pipeline) {
+   return true;
+ }
+ 
++void note_skipped_draw() { ++g_skippedDraws; }
++
+ } // namespace aurora::gfx
++
++void AuroraGetPipelineStats(AuroraPipelineStats* out) {
++  using namespace aurora::gfx;
++  if (out == nullptr) {
++    return;
++  }
++  *out = {};
++  out->skippedDraws = g_skippedDraws.load();
++  out->waits = g_pipelineWaits.load();
++  out->waitMicros = g_pipelineWaitMicros.load();
++  out->maxWaitMicros = g_pipelineMaxWaitMicros.load();
++  {
++    std::lock_guard lock{g_pipelineMutex};
++    out->knownPipelines = static_cast<uint32_t>(g_knownPipelines.size());
++  }
++  const AuroraStats* stats = aurora_get_stats();
++  out->queued = stats->queuedPipelines;
++  out->created = stats->createdPipelines;
++}
+diff --git a/lib/gfx/pipeline_cache.hpp b/lib/gfx/pipeline_cache.hpp
+index 6f2afb5..f199c01 100644
+--- a/lib/gfx/pipeline_cache.hpp
++++ b/lib/gfx/pipeline_cache.hpp
+@@ -42,5 +42,7 @@ PipelineRef find_pipeline(const clear::PipelineConfig& config, const RenderTarge
+ PipelineRef find_pipeline(const rmlui::PipelineConfig& config);
+ 
+ bool get_pipeline(PipelineRef ref, CompiledPipeline& pipeline);
++// A draw left out because its pipeline wasn't compiled yet (AuroraGetPipelineStats).
++void note_skipped_draw();
+ 
+ } // namespace aurora::gfx
+diff --git a/lib/gx/pipeline.cpp b/lib/gx/pipeline.cpp
+index aaf7c60..8c7a656 100644
+--- a/lib/gx/pipeline.cpp
++++ b/lib/gx/pipeline.cpp
+@@ -60,6 +60,7 @@ gfx::CompiledPipeline create_pipeline(const PipelineConfig& config, const gfx::R
+ void render(const DrawData& data, const wgpu::RenderPassEncoder& pass) {
+   gfx::CompiledPipeline pipeline;
+   if (!gfx::get_pipeline(data.pipeline, pipeline)) {
++    gfx::note_skipped_draw();
+     return;
+   }
+   const auto& resources = gfx::detail::resources();

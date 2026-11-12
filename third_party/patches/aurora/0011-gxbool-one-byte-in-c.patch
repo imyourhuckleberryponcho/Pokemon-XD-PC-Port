@@ -1,0 +1,19 @@
+diff --git a/include/dolphin/gx/GXEnum.h b/include/dolphin/gx/GXEnum.h
+index 851f594..3c5c17d 100644
+--- a/include/dolphin/gx/GXEnum.h
++++ b/include/dolphin/gx/GXEnum.h
+@@ -10,8 +10,14 @@ extern "C" {
+ #ifdef TARGET_PC
+ #include <stdbool.h>
+ 
++#ifdef __cplusplus
+ typedef bool GXBool;
+ #else
++// One byte, as on the GameCube (u8), also in C files whose <stdbool.h> makes bool an int (a game's own
++// stdbool.h, e.g. Melee-style HSD headers): GXBool fields are part of data read from the disc.
++typedef _Bool GXBool;
++#endif
++#else
+ typedef u8 GXBool;
+ #endif
+ 

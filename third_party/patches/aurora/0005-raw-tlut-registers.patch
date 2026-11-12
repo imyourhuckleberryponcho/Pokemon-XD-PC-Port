@@ -1,0 +1,119 @@
+diff --git a/lib/dolphin/gx/GXTexture.cpp b/lib/dolphin/gx/GXTexture.cpp
+index c486b71..0740e62 100644
+--- a/lib/dolphin/gx/GXTexture.cpp
++++ b/lib/dolphin/gx/GXTexture.cpp
+@@ -106,6 +106,17 @@ void emit_loaded_texobj_metadata(const GXTexObj_& obj, GXTexMapID id) {
+   GX_WRITE_U32(obj.texDataVersion);
+ }
+ 
++// The register form of a TLUT's address (physical address >> 5 in loadTlut0, BP 0x64), as the GameCube SDK
++// sets it, for games that copy TLUT objects' registers into their own command lists (read in bp_tlut_load).
++void set_tlut_address(GXTlutObj_& obj, const void* data) {
++  if (&MEM1Start != nullptr && MEM1Start != nullptr) {
++    const uintptr_t offset = reinterpret_cast<uintptr_t>(data) - reinterpret_cast<uintptr_t>(MEM1Start);
++    if (offset < 0x1800000) {
++      SET_REG_FIELD(0, obj.loadTlut0, 21, 0, static_cast<u32>(offset >> 5));
++    }
++  }
++}
++
+ void emit_loaded_tlut_metadata(const GXTlutObj_& obj, u32 idx) {
+   GX_WRITE_AURORA(GX_AURORA_LOAD_TLUT);
+   GX_WRITE_U8(static_cast<u8>(idx));
+@@ -332,12 +343,14 @@ void GXInitTlutObj(GXTlutObj* obj_, const void* data, GXTlutFmt format, u16 entr
+ 
+   SET_REG_FIELD(0, obj->tlut, 2, 10, format);
+   SET_REG_FIELD(0, obj->loadTlut0, 8, 24, 0x64);
++  set_tlut_address(*obj, data);
+ }
+ 
+ void GXInitTlutObjData(GXTlutObj* obj_, const void* data) {
+   auto* obj = reinterpret_cast<GXTlutObj_*>(obj_);
+   obj->data = data;
+   ++obj->tlutDataVersion;
++  set_tlut_address(*obj, data);
+ }
+ 
+ void GXLoadTlut(const GXTlutObj* obj_, u32 idx) {
+diff --git a/lib/gx/regs.cpp b/lib/gx/regs.cpp
+index f642ceb..1c53a1d 100644
+--- a/lib/gx/regs.cpp
++++ b/lib/gx/regs.cpp
+@@ -385,13 +385,64 @@ void bp_efb_copy(u8, u32 value) noexcept {
+ }
+ 
+ // TLUT load trigger (0x65)
++// The hardware form of a TLUT's place in TMEM (the offset in 512-byte units from 0x80000, as in BP 0x65 and
++// the texture TLUT registers 0x98-0x9B/0xB8-0xBB) to Aurora's TLUT slot, for the SDK's standard regions:
++// GX_TLUT0-15 at 0xC0000 + n * 0x2000, GX_BIGTLUT0-3 at 0xE0000 + n * 0x8000. Aurora's own GXLoadTlut and
++// GXLoadTexObj put the slot number itself there (below 0x200). Returns MaxTluts for anything else.
++u32 tlut_slot_from_tmem(u32 tmem) noexcept {
++  if (tmem < 0x200) {
++    return tmem;
++  }
++  if (tmem < 0x300 && (tmem & 0xF) == 0) {
++    return (tmem - 0x200) / 0x10;
++  }
++  if (tmem < 0x400 && (tmem & 0x3F) == 0) {
++    return 16 + (tmem - 0x300) / 0x40;
++  }
++  return MaxTluts;
++}
++
+ void bp_tlut_load(u8, u32 value) noexcept {
+-  const auto idx = reg_get(value, 10, 0);
+-  if (idx < MaxTluts) {
+-    auto& slot = g_gxState.loadedTluts[idx];
+-    slot.loadTlut0 = g_gxState.bpRegCache[0x64];
++  const u32 tmem = reg_get(value, 10, 0);
++  const u32 idx = tlut_slot_from_tmem(tmem);
++  if (idx >= MaxTluts) {
++    return;
++  }
++  auto& slot = g_gxState.loadedTluts[idx];
++  slot.loadTlut0 = g_gxState.bpRegCache[0x64];
++  if (tmem < 0x200) {
++    // Aurora's GXLoadTlut: GX_AURORA_LOAD_TLUT follows with the data pointer and format.
+     slot.numEntries = static_cast<u16>(reg_get(value, 10, 10) + 1);
++    return;
++  }
++  // As on the hardware (games with their own GX layer write these registers themselves): the palette is
++  // read from the physical address in BP 0x64, the count is in 16-entry units. Cached by content; the
++  // format comes with the texture's TLUT register (bp_tex_tlut).
++  const u32 addr = reg_get(slot.loadTlut0, 21, 0) << 5;
++  if (addr == 0 || &MEM1Start == nullptr || MEM1Start == nullptr) {
++    return;
++  }
++  slot.data = static_cast<const u8*>(MEM1Start) + addr;
++  slot.numEntries = static_cast<u16>(reg_get(value, 11, 10) * 16);
++  slot.tlutObjId = 0;
++  slot.tlutDataVersion = 0;
++}
++
++// A texture's TLUT register (0x98-0x9B, 0xB8-0xBB): which TLUT it reads and the palette's format. Aurora's own
++// GXLoadTexObj writes its slot number here and then sets both with GX_AURORA_LOAD_TEXOBJ / _LOAD_TLUT; in the
++// hardware form (games with their own GX layer) this register is all there is.
++void bp_tex_tlut(u8 reg, u32 value) noexcept {
++  const u32 tmem = reg_get(value, 10, 0);
++  if (tmem < 0x200) {
++    return;
++  }
++  const u32 idx = tlut_slot_from_tmem(tmem);
++  if (idx >= MaxTluts) {
++    return;
+   }
++  const u32 texMapId = (reg & 3) + (reg >= 0xB8 ? 4 : 0);
++  g_gxState.loadedTextures[texMapId].tlut = static_cast<GXTlut>(idx);
++  g_gxState.loadedTluts[idx].format = static_cast<GXTlutFmt>(reg_get(value, 2, 10));
+ }
+ 
+ // TEV color combiner stages (0xC0, 0xC2, ... 0xDE)
+@@ -677,7 +728,7 @@ constexpr auto kBpRegs = [] {
+       regs[base + 0x0C + i] = {};                      // Image1 (GXTexRegion)
+       regs[base + 0x10 + i] = {};                      // Image2 (GXTexRegion)
+       regs[base + 0x14 + i] = {bp_tex, DirtyTextures}; // Image3
+-      regs[base + 0x18 + i] = {};                      // TLUT region TMEM offset
++      regs[base + 0x18 + i] = {bp_tex_tlut, DirtyTextures, /* alwaysHandle */ true}; // TLUT (TMEM offset, format)
+     }
+   }
+   for (u8 r = 0xC0; r <= 0xDE; r += 2) {

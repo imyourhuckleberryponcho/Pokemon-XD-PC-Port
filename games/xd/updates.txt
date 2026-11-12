@@ -1,0 +1,8 @@
+# Updates (docs/UPDATER.md). Compiled into the launcher. While either line is empty the launcher has no updater
+# at all: nothing about updates is shown, asked or sent.
+# feed: where update.json is, for example
+#   https://github.com/<account>/<repository>/releases/latest/download/update.json
+# public_key: the 64 hex digits "python tools/publish/sign_update.py keygen" prints (the PUBLIC half only;
+#   the private key stays on the publisher's PC, outside this folder).
+feed=https://github.com/imyourhuckleberryponcho/Pokemon-XD-PC-Port/releases/latest/download/update.json
+public_key=525a2c8d37e42187e36063e87bafa5e03125ce909381a57facae06777d69264d

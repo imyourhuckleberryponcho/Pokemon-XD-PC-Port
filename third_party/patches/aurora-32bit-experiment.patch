@@ -1,0 +1,44 @@
+diff --git a/include/dolphin/ppc_math.h b/include/dolphin/ppc_math.h
+index c8f4cb5..5eef716 100644
+--- a/include/dolphin/ppc_math.h
++++ b/include/dolphin/ppc_math.h
+@@ -70,8 +70,17 @@ static const struct BaseAndDec64 RSQRTE_TABLE[32] = {
+ #include <intrin.h>
+ static inline uint32_t ppc_clz64(uint64_t x) {
+     unsigned long idx;
++#if defined(_M_IX86)
++    /* 32-bit x86 has no _BitScanReverse64: scan the high half, then the low half. */
++    if (_BitScanReverse(&idx, (unsigned long)(x >> 32))) {
++        return 31u - (uint32_t)idx;
++    }
++    _BitScanReverse(&idx, (unsigned long)x);
++    return 63u - (uint32_t)idx;
++#else
+     _BitScanReverse64(&idx, x);
+     return 63u - (uint32_t)idx;
++#endif
+ }
+ #else
+ static inline uint32_t ppc_clz64(uint64_t x) {
+diff --git a/lib/gfx/texture_replacement.cpp b/lib/gfx/texture_replacement.cpp
+index 03dda46..5af0f94 100644
+--- a/lib/gfx/texture_replacement.cpp
++++ b/lib/gfx/texture_replacement.cpp
+@@ -462,7 +462,7 @@ bool remove_mipmaps(gfx::ConvertedTexture& texture) noexcept {
+     return false;
+   }
+ 
+-  ByteBuffer data{size};
++  ByteBuffer data{static_cast<size_t>(size)};
+   std::memcpy(data.data(), texture.data.data(), size);
+   texture.mips = 1;
+   texture.data = std::move(data);
+@@ -685,7 +685,7 @@ std::optional<gfx::ConvertedTexture> load_encoded_replacement(Source&& src) noex
+     return std::nullopt;
+   }
+ 
+-  ByteBuffer blob{n};
++  ByteBuffer blob{static_cast<size_t>(n)};
+   uint8_t* const dst = blob.data();
+   uint64_t o = 0;
+   const auto append = [&](const ByteBuffer& d) noexcept -> bool {

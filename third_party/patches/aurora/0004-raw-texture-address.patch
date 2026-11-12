@@ -1,0 +1,57 @@
+diff --git a/lib/dolphin/gx/GXTexture.cpp b/lib/dolphin/gx/GXTexture.cpp
+--- a/lib/dolphin/gx/GXTexture.cpp
++++ b/lib/dolphin/gx/GXTexture.cpp
+@@ -8,6 +8,13 @@
+ 
+ #include "tracy/Tracy.hpp"
+ 
++// Where the game's main memory is (dolphin/os); a weak reference, see lib/gx/regs.cpp.
++#if defined(_MSC_VER)
++extern void* MEM1Start;
++#else
++extern void* MEM1Start __attribute__((weak));
++#endif
++
+ namespace {
+ constexpr u8 GXTexMode0Ids[8] = {0x80, 0x81, 0x82, 0x83, 0xA0, 0xA1, 0xA2, 0xA3};
+ constexpr u8 GXTexMode1Ids[8] = {0x84, 0x85, 0x86, 0x87, 0xA4, 0xA5, 0xA6, 0xA7};
+@@ -76,6 +83,14 @@
+   SET_REG_FIELD(0, obj.image0, 4, 20, format & 0xF);
+ 
+   obj.data = data;
++  // The register form of the address too (physical address >> 5), as the GameCube SDK sets it, for games
++  // that copy texture objects' registers into their own command lists (read back in bp_tex).
++  if (&MEM1Start != nullptr && MEM1Start != nullptr) {
++    const uintptr_t offset = reinterpret_cast<uintptr_t>(data) - reinterpret_cast<uintptr_t>(MEM1Start);
++    if (offset < 0x1800000) {
++      SET_REG_FIELD(0, obj.image3, 21, 0, static_cast<u32>(offset >> 5));
++    }
++  }
+ }
+ 
+ void emit_loaded_texobj_metadata(const GXTexObj_& obj, GXTexMapID id) {
+diff --git a/lib/gx/regs.cpp b/lib/gx/regs.cpp
+--- a/lib/gx/regs.cpp
++++ b/lib/gx/regs.cpp
+@@ -599,6 +599,21 @@
+     break;
+   case 5: // Image3
+     slot.image3 = value;
++    // The texture is read from the physical address in this register, as on the hardware. Games with their
++    // own GX layer copy texture objects' registers into their command lists; Aurora's own GXLoadTexObj
++    // follows this with GX_AURORA_LOAD_TEXOBJ, which sets the same pointer.
++    if (const u32 addr = reg_get(value, 21, 0) << 5; addr != 0 && &MEM1Start != nullptr && MEM1Start != nullptr) {
++      const void* data = static_cast<const u8*>(MEM1Start) + addr;
++      if (slot.data != data) {
++        slot.data = data;
++        slot.texObjId = 0; // cached by content
++        slot.texDataVersion = 0;
++        // Mipmaps: the min filter's mip modes (GX2HWFiltConv: 1, 2, 5, 6).
++        const u32 filt = reg_get(slot.mode0, 3, 5);
++        const bool mips = filt == 1 || filt == 2 || filt == 5 || filt == 6;
++        slot.flags = static_cast<u8>((slot.flags & ~1u) | (mips ? 1u : 0u));
++      }
++    }
+     break;
+   default:
+     break;

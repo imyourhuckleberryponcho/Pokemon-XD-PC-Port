@@ -1,0 +1,140 @@
+diff --git a/include/dolphin/gx/GXAurora.h b/include/dolphin/gx/GXAurora.h
+--- a/include/dolphin/gx/GXAurora.h
++++ b/include/dolphin/gx/GXAurora.h
+@@ -150,6 +150,18 @@
+  *   u32 z (24-bit, as in GXSetCopyClear)
+  */
+ #define GX_AURORA_CLEAR 0x0052
++
++/**
++ * Asynchronous full-resolution colour readback of the current EFB/offscreen pass, at this point of the command
++ * stream (AuroraReadbackCaptureColorInStream).
++ *
++ * Command format:
++ *   u64 stream
++ *   u64 sequence
++ *   u32 count (always 1)
++ *   u64 key
++ */
++#define GX_AURORA_READBACK_CAPTURE_COLOR 0x0053
+ 
+ #define GX2_SET_POLYGON_OFFSET 0x1000
+ 
+@@ -359,6 +371,14 @@
+ GXBool AuroraReadbackCaptureColor(AuroraReadbackStream stream, u64 key, u32* width, u32* height);
+ 
+ /**
++ * Like AuroraReadbackCaptureColor, but written into the command stream: the colour is taken when the GPU side
++ * reaches this point, not when the CPU calls it. For commands recorded into a FIFO that is drawn later (an
++ * offscreen pass recorded between other work). An offscreen pass is captured whole; the EFB without its hidden
++ * lines. The result (RGBA8, row by row) is read with AuroraReadbackGet; its size is width * height * 4 of the pass.
++ */
++GXBool AuroraReadbackCaptureColorInStream(AuroraReadbackStream stream, u64 key);
++
++/**
+  * Retrieves results from the stream's most recent completed capture. A peek result is a u32, as GXPeekZ or GXPeekARGB
+  * returns it; a copy result is the texture data as GXCopyTex would have written it to main memory.
+  *
+diff --git a/lib/dolphin/gx/GXAurora.cpp b/lib/dolphin/gx/GXAurora.cpp
+--- a/lib/dolphin/gx/GXAurora.cpp
++++ b/lib/dolphin/gx/GXAurora.cpp
+@@ -150,6 +150,10 @@
+   return aurora::gfx::readback::capture_color(stream, key, width, height) ? GX_TRUE : GX_FALSE;
+ }
+ 
++GXBool AuroraReadbackCaptureColorInStream(AuroraReadbackStream stream, u64 key) {
++  return aurora::gx::readback::capture_color_in_stream(stream, key);
++}
++
+ GXBool AuroraReadbackGet(AuroraReadbackStream stream, AuroraReadbackDest* dests, u32 count) {
+   return aurora::gx::readback::get(stream, dests, count);
+ }
+diff --git a/lib/gfx/readback/readback.hpp b/lib/gfx/readback/readback.hpp
+--- a/lib/gfx/readback/readback.hpp
++++ b/lib/gfx/readback/readback.hpp
+@@ -142,6 +142,9 @@
+ bool valid_stream(StreamHandle stream) noexcept;
+ uint64_t next_sequence(StreamHandle stream) noexcept; // 0 if invalid
+ bool capture_color(StreamHandle stream, uint64_t key = 0, uint32_t* width = nullptr, uint32_t* height = nullptr);
++// The same from the command processor (GX_AURORA_READBACK_CAPTURE_COLOR): no drain, the sequence from the command.
++bool capture_color_at(StreamHandle stream, uint64_t sequence, uint64_t key, uint32_t* width = nullptr,
++                      uint32_t* height = nullptr);
+ void copy_bgra_to_rgba(uint8_t* dst, const uint8_t* src, size_t pixels) noexcept;
+ void copy_color_rows(uint8_t* dst, const uint8_t* src, size_t width, size_t height, size_t rowPitch,
+                      bool bgra) noexcept;
+diff --git a/lib/gfx/recording.cpp b/lib/gfx/recording.cpp
+--- a/lib/gfx/recording.cpp
++++ b/lib/gfx/recording.cpp
+@@ -1321,6 +1321,11 @@
+ 
+ bool readback::capture_color(StreamHandle stream, uint64_t key, uint32_t* widthOut, uint32_t* heightOut) {
+   gx::fifo::drain();
++  return capture_color_at(stream, next_sequence(stream), key, widthOut, heightOut);
++}
++
++bool readback::capture_color_at(StreamHandle stream, uint64_t sequence, uint64_t key, uint32_t* widthOut,
++                                uint32_t* heightOut) {
+   if (!g_recorder.active() || g_recorder.currentRenderPass == UINT32_MAX || !valid_stream(stream)) {
+     return false;
+   }
+@@ -1340,7 +1345,7 @@
+   if (bytes > UINT32_MAX) {
+     return false;
+   }
+-  auto job = create_job(stream, next_sequence(stream), JobKind::Color,
++  auto job = create_job(stream, sequence, JobKind::Color,
+                         {{
+                             .key = key,
+                             .payloadSize = static_cast<uint32_t>(bytes),
+diff --git a/lib/gx/command_processor.cpp b/lib/gx/command_processor.cpp
+--- a/lib/gx/command_processor.cpp
++++ b/lib/gx/command_processor.cpp
+@@ -935,6 +935,8 @@
+     readback::handle_capture_peeks(reader);
+   } else if (subCmd == GX_AURORA_READBACK_CAPTURE_COPIES) {
+     readback::handle_capture_copies(reader);
++  } else if (subCmd == GX_AURORA_READBACK_CAPTURE_COLOR) {
++    readback::handle_capture_color(reader);
+   } else if (subCmd == GX_AURORA_BEGIN_OFFSCREEN) {
+     const u32 width = reader.read<u32>();
+     const u32 height = reader.read<u32>();
+diff --git a/lib/gx/readback.cpp b/lib/gx/readback.cpp
+--- a/lib/gx/readback.cpp
++++ b/lib/gx/readback.cpp
+@@ -132,6 +132,23 @@
+     fifo::write_u64(reinterpret_cast<uintptr_t>(srcs[i].src));
+   }
+   return GX_TRUE;
++}
++
++GXBool capture_color_in_stream(AuroraReadbackStream stream, u64 key) {
++  if (!valid_stream(stream)) {
++    return reject("invalid capture arguments");
++  }
++  write_header(GX_AURORA_READBACK_CAPTURE_COLOR, stream, 1);
++  fifo::write_u64(key);
++  return GX_TRUE;
++}
++
++void handle_capture_color(ByteReader& reader) {
++  const auto header = read_header(reader);
++  const auto key = reader.read<u64>();
++  if (!gfx::readback::capture_color_at(header.stream, header.sequence, key)) {
++    fail("colour capture: no colour target here");
++  }
+ }
+ 
+ GXBool get(AuroraReadbackStream stream, AuroraReadbackDest* dests, u32 count) {
+diff --git a/lib/gx/readback.hpp b/lib/gx/readback.hpp
+--- a/lib/gx/readback.hpp
++++ b/lib/gx/readback.hpp
+@@ -13,7 +13,9 @@
+ GXBool capture_peeks(AuroraReadbackStream stream, const AuroraReadbackPeekRequest* requests, u32 count,
+                      GXAlphaReadMode alphaMode);
+ GXBool capture_copies(AuroraReadbackStream stream, const AuroraReadbackCopySrc* srcs, u32 count);
++GXBool capture_color_in_stream(AuroraReadbackStream stream, u64 key);
+ GXBool get(AuroraReadbackStream stream, AuroraReadbackDest* dests, u32 count);
++void handle_capture_color(ByteReader& reader);
+ 
+ // Command processor: GX_AURORA_READBACK_CAPTURE_PEEKS and GX_AURORA_READBACK_CAPTURE_COPIES
+ void handle_capture_peeks(ByteReader& reader);

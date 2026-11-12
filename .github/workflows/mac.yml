@@ -1,0 +1,335 @@
+# Mac build (docs/MAC.md). UNRUN: written on a Windows PC without a Mac and without a way to start a workflow.
+# Expect the first runs to fail somewhere; every run uploads its logs so the next fix can be made from them.
+# (A person with a Mac does the same by hand, for free: games/xd/mac/Building on a Mac.txt.)
+#
+# Started BY HAND only (Actions tab > "Mac build" > Run workflow): the repository is private, and private
+# repositories pay for Mac minutes out of a small monthly allowance (docs/MAC.md, "What a run costs").
+# To spend as few of them as possible (2026-11-11, as unrun as the rest):
+#  - "stage" = compile (the default) only builds; choose "all" once the build is clean;
+#  - the port's and the game's own files are compiled first (build_mac.sh XD_GAME_FIRST): their errors are in
+#    the log after the first minutes, and a hopeless run can be cancelled by hand;
+#  - a compiler cache (ccache) is kept between runs, also after failed ones: the run after a fix compiles only
+#    what changed. The first run pays for everything once.
+#
+# What it does: builds the x86_64 Mac program on an Apple-silicon machine, runs every test program that needs no
+# disc (through Rosetta 2, as a player's Mac would), starts the game without a disc to prove that it launches and
+# places its memory below 4 GB, makes "Pokemon XD PC <version> - Mac (untested).zip" and uploads it with the logs.
+# No game data is needed, used or uploaded.
+#
+# The game's source (the decompilation) is not in this repository. The workflow fetches it from the
+# decompilation's repository. That repository is public (checked 2026-11-11), so nothing is needed for that:
+# with no secret DECOMP_DEPLOY_KEY the key below is empty and it is fetched like any public repository. It must
+# hold the decompilation commit this port builds on (or newer): push its update first. Should it ever be made
+# private: a read-only key as the secret DECOMP_DEPLOY_KEY (docs/MAC.md, "The one secret"); no credential is
+# ever written in a file.
+name: Mac build
+
+on:
+  workflow_dispatch:
+    inputs:
+      decomp_repository:
+        description: "The decompilation's repository (owner/name)"
+        required: true
+        default: "imyourhuckleberryponcho/Pokemon-XD-Decomp"
+      decomp_commit:
+        description: "Its commit to build (empty: the newest)"
+        required: false
+        default: ""
+      keep_going:
+        description: "Go on after compile errors and list them all (1) or stop at the first (0)"
+        required: false
+        default: "1"
+      stage:
+        description: "compile = only build (cheapest, until the build is clean); all = also tests, start, zip"
+        required: false
+        type: choice
+        options:
+          - compile
+          - all
+        default: "compile"
+      machine:
+        description: "GitHub's Mac machine: macos-15 = Apple silicon (as a player's Mac); macos-15-intel when the first has no free machines"
+        required: false
+        type: choice
+        options:
+          - macos-15
+          - macos-15-intel
+        default: "macos-15-intel"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mac-build
+  cancel-in-progress: true
+
+jobs:
+  mac:
+    name: Mac app (x86_64 through Rosetta 2), untested
+    # (2026-11-11: the first run never got an Apple-silicon machine, "capacity constraints"; nothing was charged.
+    # The Intel machine builds the same x86_64 program, without Rosetta in between.)
+    runs-on: ${{ inputs.machine || 'macos-15' }}
+    timeout-minutes: 75
+    env:
+      XD_BUILD_JOBS: "3"
+      BIN: build/mac/mac-release/bin
+      # The compiler cache (ccache): what a run compiled is kept, so the run after a fix compiles only the files
+      # that changed. Kept after failed runs too: those are the runs that get repeated.
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_MAXSIZE: 3G
+      CCACHE_COMPILERCHECK: content
+    steps:
+      - name: The port's source
+        uses: actions/checkout@v7
+
+      - name: Aurora, SDL and Borealis at the versions third_party/README.md names
+        run: |
+          set -eu
+          # (plain clones, as on the developer's PC: they are not part of this repository)
+          get() { # folder, repository, commit or tag
+            if [ ! -f "third_party/$1/CMakeLists.txt" ]; then
+              rm -rf "third_party/$1"
+              git clone --filter=blob:none "https://github.com/$2" "third_party/$1"
+              git -C "third_party/$1" checkout --detach "$3"
+              git -C "third_party/$1" submodule update --init --recursive --depth 1
+            fi
+          }
+          get aurora encounter/aurora 5794daa2ccbd3d2ddf01af788e51a8612850ffd1
+          get SDL libsdl-org/SDL release-3.4.20
+          get borealis encounter/borealis 8e9427fab92c1935a5d6bacadc6053c687f10c1e
+
+      - name: The game's source (the decompilation), read only
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.decomp_repository }}
+          ssh-key: ${{ secrets.DECOMP_DEPLOY_KEY }}
+          path: decomp
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Snapshot of the game's source
+        env:
+          COMMIT: ${{ inputs.decomp_commit }}
+        run: |
+          set -eu
+          python3 tools/sync_decomp.py --decomp "$PWD/decomp" --commit "${COMMIT:-HEAD}"
+          cat snapshot/CURRENT.txt
+
+      - name: Tools (Rosetta 2, Ninja, libclang for the table generator)
+        run: |
+          set -eu
+          softwareupdate --install-rosetta --agree-to-license || true
+          command -v ninja >/dev/null || brew install ninja
+          command -v ccache >/dev/null || brew install ccache || true
+          ccache --version | head -n 1 || echo "no ccache: this run compiles everything"
+          python3 -m pip install --user --break-system-packages libclang || python3 -m pip install --user libclang
+          clang --version
+          cmake --version
+          arch -x86_64 /usr/bin/true && echo "Rosetta works"
+
+      - name: Downloaded libraries (Dawn, nod and the rest of Aurora's), kept between runs
+        id: deps
+        uses: actions/cache/restore@v6
+        with:
+          path: build/mac/mac-release/_deps
+          key: mac-deps-${{ hashFiles('third_party/README.md', 'third_party/patches/aurora/*.patch') }}
+
+      - name: Compiled files of earlier runs (the newest cache)
+        uses: actions/cache/restore@v6
+        with:
+          path: .ccache
+          key: mac-ccache-${{ inputs.machine || 'macos-15' }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            mac-ccache-${{ inputs.machine || 'macos-15' }}-
+
+      - name: Build
+        id: build
+        env:
+          KEEP_GOING: ${{ inputs.keep_going }}
+          STAGE: ${{ inputs.stage }}
+        run: |
+          # (GitHub starts a step's script with "bash -e": switched off here, the result is looked at by hand)
+          set +e -u
+          mkdir -p logs
+          ccache --zero-stats > /dev/null 2>&1
+          START=$(date +%s)
+          # (stage "compile" is never a build anyone gets: game files the table generator cannot read yet are
+          # listed and the build goes on, so one run shows every other error too. Stage "all" stays strict.)
+          ALLOW_UNREAD=0
+          [ "$STAGE" = compile ] && ALLOW_UNREAD=1
+          XD_PYTHON="$(command -v python3)" XD_KEEP_GOING="$KEEP_GOING" XD_COMPILER_CACHE=1 XD_GAME_FIRST=1 \
+            XD_DISC_TABLES_ALLOW_UNREAD="$ALLOW_UNREAD" bash ./build_mac.sh > logs/build.log 2>&1
+          RESULT=$?
+          MINUTES=$(( ($(date +%s) - START + 59) / 60 ))
+          # (the configure step finished: its downloads are whole and may be kept for the next run)
+          [ -f build/mac/mac-release/build.ninja ] && echo "configured=1" >> "$GITHUB_OUTPUT"
+          tail -n 60 logs/build.log
+          grep -n "error:" logs/build.log | head -n 400 > logs/errors.txt || true
+          cp build/mac/mac-release/disc_tables/flags.json logs/disc_tables_flags.json 2>/dev/null || true
+          cp build/mac/mac-release/linux_first/sys/types.h logs/linux_first_sys_types.h.txt 2>/dev/null || true
+          ccache --show-stats > logs/ccache.txt 2>&1 || true
+          grep -n "build_mac.sh:" logs/build.log
+          echo "errors: $(wc -l < logs/errors.txt)"
+          # (the errors with the lines after each, here in the step's own log too: on 2026-11-11 GitHub failed to
+          # store the logs download and a run's 42 errors were lost with it)
+          echo "===== compile errors, with the lines after each ====="
+          grep -n -A 4 "error:" logs/build.log | head -n 900
+          echo "===== end of the compile errors ====="
+          {
+            echo "### Mac build: $([ $RESULT = 0 ] && echo finished || echo FAILED)"
+            echo "- build step: about $MINUTES minutes"
+            echo "- compile errors listed: $(wc -l < logs/errors.txt) (logs/errors.txt in the mac-build-logs download)"
+            echo '```'
+            grep "build_mac.sh:" logs/build.log
+            grep -i -E "hit|miss" logs/ccache.txt | head -n 8
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $RESULT
+
+      - name: Keep the compiled files for the next run (also after a failure)
+        if: always()
+        uses: actions/cache/save@v6
+        with:
+          path: .ccache
+          key: mac-ccache-${{ inputs.machine || 'macos-15' }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Keep the downloaded libraries for the next run
+        if: always() && steps.build.outputs.configured == '1' && steps.deps.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: build/mac/mac-release/_deps
+          key: mac-deps-${{ hashFiles('third_party/README.md', 'third_party/patches/aurora/*.patch') }}
+
+      - name: Test programs that need no disc
+        if: success() && inputs.stage == 'all'
+        run: |
+          set +e -u
+          FAILED=""
+          for t in settings_test controls_test memcard_test save_backups_test gen3_save_test randomizer_test \
+                   gsthread_test xd_save_test xd_save_convert_test xd_gba_test xd_settings_test dsp_decode_test \
+                   dsp_core_test disc_check_test mods_test data_mods_test playthrough_test disc_overlay_test \
+                   gc_fused_test disc_drive_test gc_memory_test gx_fifo_test card_timing_test input_record_test \
+                   game_clock_test os_threads_test keyboard_defaults_test controls_apply_test button_art_test \
+                   low_arena_test dsp_equiv_test; do
+            # (xd_rel_link_test is not in the list: it needs a disc image)
+            if [ ! -x "$BIN/$t" ]; then echo "MISSING $t"; FAILED="$FAILED $t(missing)"; continue; fi
+            mkdir -p "logs/home_$t"
+            # (each test in a folder of its own for settings and data; 5 minutes at most)
+            if HOME="$PWD/logs/home_$t" XD_SETTINGS_DIR="$PWD/logs/home_$t" XD_NO_MESSAGE_BOXES=1 \
+               perl -e 'alarm 300; exec @ARGV' "$BIN/$t" > "logs/test_$t.log" 2>&1; then
+              echo "PASS $t"
+            else
+              echo "FAIL $t (exit $?)"; tail -n 15 "logs/test_$t.log"; FAILED="$FAILED $t"
+            fi
+          done
+          echo "$FAILED" > logs/tests_failed.txt
+          # (os_threads_test has timing tolerances that fail on busy machines, as on Linux: reported, not fatal)
+          FATAL="$(echo "$FAILED" | tr ' ' '\n' | grep -v '^os_threads_test$' | grep -v '^$' || true)"
+          if [ -n "$FATAL" ]; then echo "Failed: $FATAL"; exit 1; fi
+
+      - name: Start the game without a disc (does it launch, is its memory below 4 GB)
+        if: success() && inputs.stage == 'all'
+        run: |
+          # ("bash -e" off: the game is expected to end with an error code here, no disc was given)
+          set +e -u
+          file "$BIN/xd"
+          xcodebuild -version; ld -v 2>&1 | head -n 3
+          # The program file's header: it must NOT say PIE (Apple's newer linker was reported to ignore -no_pie:
+          # golang.org/issue/61229), and __TEXT must start at 0x40000000.
+          otool -hv "$BIN/xd" | tee logs/xd_header.txt
+          if grep -qw PIE logs/xd_header.txt; then echo "xd is position independent: -no_pie was ignored"; exit 1; fi
+          otool -l "$BIN/xd" | grep -A4 -E "segname __(PAGEZERO|TEXT|XDLOW|XDMEM1|XDMEMU|XDLC)$" | grep -E "segname|vmaddr|vmsize" > logs/xd_segments.txt
+          cat logs/xd_segments.txt
+          otool -L "$BIN/xd" > logs/xd_libraries.txt
+          # The first tester's report script does the rest, exactly as a person with a Mac would run it: this
+          # machine, the program file's layout, one start with no disc (the program places its memory, prints the
+          # proof lines, then stops because no disc was given) and the verdicts on top. The report is uploaded
+          # with the logs (logs/first_run_report.txt). The script keeps its own settings, card and cache folders.
+          XD_REPORT_FILE="$PWD/logs/first_run_report.txt" perl -e 'alarm 300; exec @ARGV' \
+            bash games/xd/mac/first_run_report.sh "$PWD/$BIN/xd" > logs/first_run_report_run.log 2>&1
+          echo "report script exit code $?" >> logs/first_run_report_run.log
+          cat logs/first_run_report_run.log
+          if [ ! -s logs/first_run_report.txt ]; then echo "the report script wrote no report"; exit 1; fi
+          sed -n '/^======== 3\. Start/,/^---- end ----/p' logs/first_run_report.txt
+          # Passed = the memory line is there and the report found no problem.
+          grep -q "mac: game memory in place at 0x80000000 (second view at 0xC0000000: same memory)" logs/first_run_report.txt || { echo "the game memory line is missing"; exit 1; }
+          # (problems the report lists do not stop the run: the packaging step below is to be tried too. They go
+          # into the run's summary. Run 8, 2026-11-11: the C library's memory is above 4 GB, docs/MAC.md risk 1.)
+          if grep -q "^PROBLEM" logs/first_run_report.txt; then
+            { echo "### First start: problems listed"; echo '```'; grep "^PROBLEM" logs/first_run_report.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: The app and the zip
+        if: success() && inputs.stage == 'all'
+        run: |
+          set -eu
+          set -o pipefail
+          bash games/xd/mac/package_mac.sh "$PWD/$BIN" "$PWD/dist" 2>&1 | tee logs/package.log
+          ls -la dist
+
+      - name: The packaged app, checked (signature, libraries, one start from the unpacked zip)
+        if: success() && inputs.stage == 'all'
+        run: |
+          set +e
+          # Unpacked somewhere else, as a player would: the libraries loaded must be the ones inside the app.
+          rm -rf "$RUNNER_TEMP/unzipped"; mkdir -p "$RUNNER_TEMP/unzipped"
+          ditto -x -k dist/*.zip "$RUNNER_TEMP/unzipped"
+          APP="$(find "$RUNNER_TEMP/unzipped" -name "Pokemon XD.app" -maxdepth 3 | head -n 1)"
+          {
+            echo "app: $APP"
+            echo "== codesign --verify (app)"; codesign --verify --strict --verbose=4 "$APP" 2>&1; echo "exit code $?"
+            echo "== codesign -dv (app)"; codesign -dv --verbose=4 "$APP" 2>&1
+            for f in "$APP"/Contents/Frameworks/*.dylib "$APP/Contents/MacOS/xd"; do
+              echo "== codesign --verify $(basename "$f")"; codesign --verify --strict --verbose=4 "$f" 2>&1; echo "exit code $?"
+              echo "== otool -L $(basename "$f")"; otool -L "$f"
+            done
+            echo "== files"; ls -laR "$APP"
+            echo "== paths outside the app and the system (must be none):"
+            for f in "$APP"/Contents/Frameworks/*.dylib "$APP/Contents/MacOS/xd"; do
+              otool -L "$f" | tail -n +2 | awk '{print $1}' | grep -E "^(/usr/local|/opt/|@rpath)" | sed "s|^|$(basename "$f"): |"
+            done
+            echo "(end of list)"
+          } > logs/package_check.txt 2>&1
+          cat logs/package_check.txt
+          # One start of the packaged program without a disc: which libraries the system really loads.
+          mkdir -p "$RUNNER_TEMP/pk/settings" "$RUNNER_TEMP/pk/card" "$RUNNER_TEMP/pk/cache"
+          ( cd "$APP/Contents/MacOS" && DYLD_PRINT_LIBRARIES=1 XD_TEST_RUN=1 XD_NO_MESSAGE_BOXES=1 XD_CRASH_REPORT=0 \
+              XD_SETTINGS_DIR="$RUNNER_TEMP/pk/settings" XD_CARD_DIR="$RUNNER_TEMP/pk/card" XD_CACHE_DIR="$RUNNER_TEMP/pk/cache" \
+              perl -e 'alarm 120; exec @ARGV' ./xd > "$GITHUB_WORKSPACE/logs/package_start.txt" 2>&1
+            echo "exit code $?" >> "$GITHUB_WORKSPACE/logs/package_start.txt" )
+          grep -v "^dyld\[[0-9]*\]: <.*> /System/\|^dyld\[[0-9]*\]: <.*> /usr/lib/" logs/package_start.txt | head -n 120
+          PROBLEMS=""
+          grep -q "does NOT verify\|SIGNING FAILED\|signing failed" logs/package.log && PROBLEMS="$PROBLEMS signing"
+          grep -q -E "^[^ ]+: (/usr/local|/opt/|@rpath)" logs/package_check.txt && PROBLEMS="$PROBLEMS library-paths"
+          grep -q "/usr/local/\|/opt/homebrew/" logs/package_start.txt && PROBLEMS="$PROBLEMS loaded-from-outside"
+          grep -q "^exit code 1$" logs/package_start.txt || PROBLEMS="$PROBLEMS start"
+          grep -q "mac: low memory self-test: OK" logs/package_start.txt || PROBLEMS="$PROBLEMS low-memory"
+          if [ -n "$PROBLEMS" ]; then
+            { echo "### The packaged app: problems"; echo "$PROBLEMS (logs/package.log, package_check.txt, package_start.txt)"; } >> "$GITHUB_STEP_SUMMARY"
+            echo "PROBLEMS with the packaged app:$PROBLEMS"
+          else
+            echo "### The packaged app: signature verifies, libraries from inside the app, start OK" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload the Mac zip
+        if: success() && inputs.stage == 'all'
+        uses: actions/upload-artifact@v7
+        with:
+          name: Pokemon XD PC - Mac (untested)
+          path: dist/*.zip
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Upload the logs (always, also after a failure)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mac-build-logs
+          path: |
+            logs/**/*.log
+            logs/*.txt
+            build/mac/mac-release/CMakeFiles/CMakeConfigureLog.yaml
+            build/mac/mac-release/disc_tables/*.log
+          retention-days: 14
+          if-no-files-found: warn

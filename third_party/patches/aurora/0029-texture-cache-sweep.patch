@@ -1,0 +1,18 @@
+diff --git a/lib/gx/texture.cpp b/lib/gx/texture.cpp
+index 33a8c99..3d151ad 100644
+--- a/lib/gx/texture.cpp
++++ b/lib/gx/texture.cpp
+@@ -738,7 +738,12 @@ void end_frame() noexcept {
+   s_stats.publishBytes = streamingStats.publishBytes;
+   ++s_frameCount;
+   apply_pending_invalidations();
+-  sweep_object_caches();
++  // Port patch 0029: the sweep walks every texture object seen in the last ObjectCacheIdleFrames frames (tens of
++  // thousands when a game sets up its texture objects anew each frame), on the game's thread at every frame end;
++  // doing it every 64th frame keeps entries at most 64 frames longer and costs 1/64 of the time.
++  if ((s_frameCount & 63) == 0) {
++    sweep_object_caches();
++  }
+   s_copyCache.end_frame();
+   s_contentCache.end_frame();
+   update_cache_stats();

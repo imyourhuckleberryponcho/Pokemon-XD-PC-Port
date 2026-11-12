@@ -1,0 +1,107 @@
+Pokemon XD PC - building the Mac version yourself (first try on a real Mac)
+==========================================================================
+
+READ THIS FIRST
+
+The Mac version is written, and it has NEVER been compiled for a Mac. Nobody on the project has one. Everything a
+Windows PC with Linux inside could check has been checked (the program file's memory layout with Apple's own
+open-source linker, the data tables, the C++ files against the Mac's kind of C++ library, the small Unix pieces
+as tests). The rest needs a person with a Mac for about an hour. If that is you: thank you. You do not need to be a
+programmer, and you do not need the game for steps 1 to 5.
+
+Expect it to FAIL the first time, most likely in step 3. That is fine: the log file is exactly what is needed.
+Nothing you run here sends anything anywhere; you send files back by hand.
+
+What is most likely to go wrong, most likely first
+1. The build stops while compiling, at lines that talk to macOS and were never compiled. One-line fixes each.
+2. The build stops while "configuring", in the table generator ("clang could not read N game file(s)").
+3. Apple's linker lays the program out differently from the one it was checked with (step 4 shows it).
+4. Rosetta 2 or macOS does not accept the unusual program (step 4 shows it).
+5. Everything after the first start: picture, sound, controller, saving.
+
+You need: a Mac with an Apple chip (M1 or later; an Intel Mac works too), macOS 13.3 to 27, about 15 GB of free
+disk space (an estimate), and the Terminal (Applications > Utilities > Terminal). The program is an "Intel" program
+on purpose and runs through Rosetta 2 on Apple chips; Apple has said macOS 27 is the last macOS with Rosetta.
+
+1. Install the tools. Type each line into Terminal, then Return:
+
+       xcode-select --install
+       softwareupdate --install-rosetta --agree-to-license
+       /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+       brew install cmake ninja git python
+       python3 -m pip install --user libclang || python3 -m pip install --user --break-system-packages libclang
+
+   The first line opens a window: click Install (Apple's compiler; several minutes). The third installs Homebrew
+   (brew.sh), a common installer for programming tools; skip it if "brew --version" already answers.
+   Which Xcode / command line tools: 15.3 or newer is required. 16.x or 26.x is the best choice; with 27 the build
+   may work just as well, but one fallback of step 4 does not exist there (Xcode 27 removed Apple's older linker).
+   "pkgutil --pkg-info=com.apple.pkg.CLTools_Executables" or "xcodebuild -version" tells the version.
+
+2. Get the source. Three things go into one folder:
+   - this repository ("git clone" and its address, or the folder you were given). All later commands are typed
+     inside it: type "cd" and a space, drag the folder into the Terminal window, press Return;
+   - three libraries, at exactly these versions:
+
+       git clone https://github.com/encounter/aurora third_party/aurora
+       git -C third_party/aurora checkout --detach 5794daa2ccbd3d2ddf01af788e51a8612850ffd1
+       git -C third_party/aurora submodule update --init --recursive --depth 1
+       git clone https://github.com/libsdl-org/SDL third_party/SDL
+       git -C third_party/SDL checkout --detach release-3.4.20
+       git clone https://github.com/encounter/borealis third_party/borealis
+       git -C third_party/borealis checkout --detach 8e9427fab92c1935a5d6bacadc6053c687f10c1e
+       git -C third_party/borealis submodule update --init --recursive --depth 1
+
+     (if third_party/README.md names other versions than these, the README is right);
+   - the game's source code (the "decompilation": program text only, no game data; the README of this repository
+     says where it is). Either you were sent a folder named "snapshot": put it into this folder as it is. Or you
+     have the decompilation itself:
+
+       python3 tools/sync_decomp.py --decomp /path/to/the/decompilation
+
+3. Build. 10 to 40 minutes; it downloads more libraries by itself the first time.
+
+       XD_KEEP_GOING=1 ./build_mac.sh 2>&1 | tee build.log
+
+   SEND BACK build.log (the whole file, it is in this folder), whatever happened. If its last lines say
+   "configuring failed" or "the build failed", stop here: that is the expected first result.
+
+4. The report (only when step 3 ended with "Build finished"):
+
+       bash games/xd/mac/first_run_report.sh build/mac/mac-release/bin/xd
+
+   It looks at the Mac and at the program file, starts the game once without a disc (it stops by itself within
+   seconds; no window should stay open) and writes one text file on your Desktop.
+   SEND BACK pokemon_xd_mac_report.txt from your Desktop. Your user name is replaced in it and it holds no game
+   data; it is plain text, read it first if you like. Its first lines say OK or PROBLEM for each check.
+   - If it says "segment ... is at ..., must be at ..." or "position independent (PIE)", and your Xcode is 15.3 to
+     26: open the file CMakeLists.txt of this folder in a text editor, find the line that starts
+     "set(XD_MAC_LOW_LINK_OPTIONS", add " -Wl,-ld_classic" before the closing bracket of that command, repeat
+     steps 3 and 4, and send both reports.
+   - The same with Xcode 27: just send the report.
+
+5. The small test programs (2 minutes; they need no disc). One line:
+
+       for t in build/mac/mac-release/bin/*_test; do echo "== $t"; XD_SETTINGS_DIR=/tmp/xdtest XD_NO_MESSAGE_BOXES=1 perl -e 'alarm 300; exec @ARGV' "$t" > /tmp/xdtest.out 2>&1; echo "exit code $?"; tail -n 5 /tmp/xdtest.out; done 2>&1 | tee tests.log
+
+   SEND BACK tests.log.
+
+6. Only if step 4 said the game's memory is in place, and you own the game (Pokemon XD: Gale of Darkness, USA
+   version, as a disc image file):
+
+       build/mac/mac-release/bin/xd "/path/to/your disc image.iso" 2>&1 | tee game.log
+
+   Try: does a window open, is there a picture and sound, does the keyboard or a controller work, New Game, walk
+   to the first save point, save, quit, start again, CONTINUE. Then run step 4's command once more.
+   SEND BACK game.log, the new report file, your Mac model and macOS version (Apple menu > About This Mac), and
+   what you saw and heard. (A phone photo of the screen is fine; please do not post pictures of the game publicly.)
+   Your files (saves, settings, logs) are in  ~/Library/Application Support/Pokemon XD
+
+7. The app (optional):
+
+       bash games/xd/mac/package_mac.sh "$PWD/build/mac/mac-release/bin" "$PWD/dist"
+
+   Unzip the zip from the "dist" folder somewhere else and open the app as its Read me says.
+   SEND BACK what macOS says.
+
+Everything to send back, in one list: build.log; pokemon_xd_mac_report.txt (each time it is made); tests.log;
+game.log; Mac model, macOS version, Xcode version; what you saw and heard.

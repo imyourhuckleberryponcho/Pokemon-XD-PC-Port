@@ -1,0 +1,18 @@
+diff --git a/lib/gx/command_processor.cpp b/lib/gx/command_processor.cpp
+--- a/lib/gx/command_processor.cpp
++++ b/lib/gx/command_processor.cpp
+@@ -449,7 +449,13 @@
+     if ((map & 0xFF) == GX_TEXMAP_NULL || (map & 0x100) != 0 || (map & 0xFF) >= MaxTextures) {
+       continue;
+     }
+-    const void* data = state.loadedTextures[map & 0xFF].data;
++    const auto& tex = state.loadedTextures[map & 0xFF];
++    const void* data = tex.data;
++    // (0026) A tiny texture (16x16 or less) spread over the whole screen is a fill (a fade, a dimming layer:
++    // the opening's 8x8 fade over the starfield), not art: stretched too.
++    if (data != nullptr && tex.width() <= 16 && tex.height() <= 16) {
++      continue;
++    }
+     if (data == nullptr || !state.copyTextures.contains(data)) {
+       return false;
+     }

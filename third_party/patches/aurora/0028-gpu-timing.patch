@@ -1,0 +1,411 @@
+diff --git a/include/aurora/gpu_timing.h b/include/aurora/gpu_timing.h
+new file mode 100644
+index 0000000..5664a35
+--- /dev/null
++++ b/include/aurora/gpu_timing.h
+@@ -0,0 +1,24 @@
++#ifndef AURORA_GPU_TIMING_H
++#define AURORA_GPU_TIMING_H
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++/**
++ * Port patch 0028: measure the GPU with timestamp queries and log every `reportSeconds` how long each frame and
++ * each kind of pass took ("[gpu timing]" lines), plus the CPU time to record and submit a frame. Call before
++ * aurora_initialize (the device must ask for timestamp queries); 0 = off (default).
++ */
++void aurora_set_gpu_timing(float reportSeconds);
++/**
++ * Port patch 0028, testing: ask for the system's software adapter (D3D12/D3D11: Microsoft's WARP, which draws on the
++ * CPU) instead of the real GPU: a very slow "GPU" for trying what a weak graphics chip does. Before aurora_initialize.
++ */
++void aurora_set_gpu_fallback_adapter(bool fallback);
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif
+diff --git a/lib/gfx/frame.cpp b/lib/gfx/frame.cpp
+index 67b24e0..51feb05 100644
+--- a/lib/gfx/frame.cpp
++++ b/lib/gfx/frame.cpp
+@@ -755,6 +755,7 @@ void end_frame(EndFrameCallback callback) {
+   if (g_cpuFrameStart.time_since_epoch().count() != 0) {
+     const auto cpuFrameTime = PresentClock::now() - g_cpuFrameStart;
+     update_ema(g_cpuFrameTimeNs, duration_ns(cpuFrameTime));
++    webgpu::gpu_prof::cpu_sample(0, duration_ns(cpuFrameTime)); // (patch 0028)
+     const double cpuFrameTimeMs = std::chrono::duration<double, std::milli>{cpuFrameTime}.count();
+     TracyPlot("aurora: cpuFrameTimeMs", cpuFrameTimeMs);
+   }
+@@ -767,6 +768,7 @@ void end_frame(EndFrameCallback callback) {
+ 
+   const size_t stagingSlot = frame.stagingBuffer;
+   render_worker::enqueue_end_frame(frameId, [frameSlot, stagingSlot, callback = std::move(callback)]() mutable {
++    webgpu::gpu_prof::worker_begin(); // (patch 0028: encode + submit time, up to gpu_prof::frame_end)
+     auto& packet = g_framePackets[frameSlot];
+     g_stagingBuffers[stagingSlot].Unmap();
+     g_mappingStates[stagingSlot].store(BufferMapState::Unmapped, std::memory_order_release);
+diff --git a/lib/webgpu/gpu.cpp b/lib/webgpu/gpu.cpp
+index 610355c..7afe07e 100644
+--- a/lib/webgpu/gpu.cpp
++++ b/lib/webgpu/gpu.cpp
+@@ -770,6 +770,8 @@ bool initialize(AuroraBackend auroraBackend, bool allowCpu) {
+     const wgpu::RequestAdapterOptions options{
+         .featureLevel = wgpu::FeatureLevel::Compatibility,
+         .powerPreference = wgpu::PowerPreference::HighPerformance,
++        // Patch 0028: aurora_set_gpu_fallback_adapter (testing: a software GPU, e.g. WARP, as a very slow GPU).
++        .forceFallbackAdapter = gpu_prof::fallback_adapter(),
+         .backendType = backend,
+         .compatibleSurface = startupSurface,
+     };
+@@ -817,7 +819,7 @@ bool initialize(AuroraBackend auroraBackend, bool allowCpu) {
+   if (adapterName.IsUndefined()) {
+     adapterName = wgpu::StringView("Unknown");
+   }
+-  if (!allowCpu && g_adapterInfo.adapterType == wgpu::AdapterType::CPU && backend != wgpu::BackendType::Null) {
++  if (!allowCpu && !gpu_prof::fallback_adapter() && g_adapterInfo.adapterType == wgpu::AdapterType::CPU && backend != wgpu::BackendType::Null) {
+     Log.warn("Ignoring CPU adapter: {}", adapterName);
+     g_adapterInfo = {};
+     g_adapter = {};
+@@ -926,6 +928,13 @@ bool initialize(AuroraBackend auroraBackend, bool allowCpu) {
+       featureList += magic_enum::enum_name(featureName);
+     }
+     Log.info("Enabling features: {}", featureList);
++#ifndef TRACY_ENABLE
++    // Patch 0028: timestamp queries also for aurora_set_gpu_timing (not only Tracy).
++    if (gpu_prof::requested() && g_adapter.HasFeature(wgpu::FeatureName::TimestampQuery)) {
++      requiredFeatures.push_back(wgpu::FeatureName::TimestampQuery);
++      Log.info("GPU timing: timestamp queries on");
++    }
++#endif
+ #ifdef WEBGPU_DAWN
+     wgpu::DawnCacheDeviceDescriptor cacheDescriptor({.nextInChain = nullptr});
+     cacheDescriptor.SetDawnLoadCacheDataCallback(
+diff --git a/lib/webgpu/gpu_prof.cpp b/lib/webgpu/gpu_prof.cpp
+index d56193a..48b7d0e 100644
+--- a/lib/webgpu/gpu_prof.cpp
++++ b/lib/webgpu/gpu_prof.cpp
+@@ -5,16 +5,23 @@
+ 
+ #include <tracy/Tracy.hpp>
+ 
++// Port patch 0028 (gpu-timing): the profiler also runs without Tracy when aurora_set_gpu_timing() asked for it
++// before start-up, and then logs how long the GPU took per frame and per pass (see report_window below).
+ #ifdef TRACY_ENABLE
+-
+ #include <tracy/TracyC.h>
++#endif
++
++#include <aurora/gfx.h>
++#include <aurora/gpu_timing.h>
+ 
+ #include <algorithm>
+ #include <array>
+ #include <atomic>
+ #include <bitset>
+ #include <chrono>
++#include <cctype>
+ #include <cstring>
++#include <map>
+ #include <string>
+ #include <utility>
+ #include <vector>
+@@ -28,7 +35,7 @@ Module Log("aurora::webgpu::gpu_prof");
+ 
+ // Each zone consumes a begin/end timestamp pair.
+ // The last pair is reserved for the frame zone.
+-constexpr uint32_t MaxZones = 127;
++constexpr uint32_t MaxZones = 511; // (patch 0028: was 127; the game's frames can have more passes)
+ constexpr uint32_t QueryCount = MaxZones * 2 + 2;
+ constexpr uint32_t FrameBeginQuery = MaxZones * 2;
+ constexpr uint32_t FrameEndQuery = MaxZones * 2 + 1;
+@@ -107,6 +114,129 @@ const char* intern_name(std::string_view name) {
+   return stable;
+ }
+ 
++// --- Patch 0028: GPU timing without Tracy ---------------------------------------------------------------
++// Totals over a reporting window (default 10 s), logged by after_submit() on the render worker. GPU times come
++// from the timestamp queries above (a frame = first to last timestamp of one GX frame packet; a pass = its
++// begin/end pair; a zone includes the passes recorded inside it). CPU times: "record" = the GX thread from
++// begin_frame to end_frame, "worker" = the render worker's encode + submit of that frame.
++float g_reportSeconds = 0.f;
++struct NameTotal {
++  uint64_t ns = 0;
++  uint32_t count = 0;
++};
++struct Window {
++  int64_t startNs = 0;
++  uint32_t frames = 0;
++  uint64_t gpuNs = 0;
++  uint64_t busyNs = 0;
++  std::vector<uint32_t> frameUs;
++  std::map<std::string, NameTotal> names;
++  uint32_t overflowFrames = 0;
++  // Bytes sent to the GPU per frame (AuroraStats, summed at each frame_end) and draws.
++  uint64_t statFrames = 0, verts = 0, uniforms = 0, indices = 0, storage = 0, textures = 0, draws = 0;
++};
++Window g_window;
++std::atomic_int64_t g_cpuNs[2]{};
++std::atomic_uint32_t g_cpuCount[2]{};
++std::atomic_uint32_t g_cpuMaxUs[2]{};
++std::atomic_bool g_overflowed{false};
++int64_t g_workerStartNs = 0; // (render worker only)
++
++void report_window(int64_t now) {
++  auto& w = g_window;
++  const double seconds = double(now - w.startNs) * 1e-9;
++  if (w.frames == 0) {
++    Log.info("[gpu timing] {:.1f} s: {} frames ({:.1f}/s), GPU time not measured (no timestamp queries here)",
++             seconds, w.statFrames, w.statFrames / seconds);
++  } else {
++    std::sort(w.frameUs.begin(), w.frameUs.end());
++    const double avg = double(w.gpuNs) * 1e-6 / w.frames;
++    const double p95 = w.frameUs[std::min<size_t>(w.frameUs.size() - 1, w.frameUs.size() * 95 / 100)] * 1e-3;
++    const double mx = w.frameUs.back() * 1e-3;
++    Log.info("[gpu timing] {:.1f} s: {} frames ({:.1f}/s), GPU {:.2f} ms/frame (passes busy {:.2f}, p95 {:.2f}, max "
++             "{:.2f}){}",
++             seconds, w.frames, w.frames / seconds, avg, double(w.busyNs) * 1e-6 / w.frames, p95, mx,
++             w.overflowFrames != 0 ? fmt::format(", {} frames had more than {} passes (rest not timed)",
++                                                 w.overflowFrames, MaxZones)
++                                   : std::string{});
++    std::vector<std::pair<std::string, NameTotal>> sorted(w.names.begin(), w.names.end());
++    std::sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) { return a.second.ns > b.second.ns; });
++    for (const auto& [name, total] : sorted) {
++      Log.info("[gpu timing]   {:<22} {:7.3f} ms/frame {:5.1f}%  {:6.1f} per frame", name,
++               double(total.ns) * 1e-6 / w.frames, 100.0 * double(total.ns) / double(std::max<uint64_t>(1, w.gpuNs)),
++               double(total.count) / w.frames);
++    }
++  }
++  if (w.statFrames != 0) {
++    const double n = double(w.statFrames) * 1024.0;
++    Log.info("[gpu timing]   uploads per frame: vertices {:.0f} KB, uniforms {:.0f} KB, indices {:.0f} KB, storage "
++             "{:.0f} KB, textures {:.0f} KB; {:.0f} draws",
++             w.verts / n, w.uniforms / n, w.indices / n, w.storage / n, w.textures / n,
++             double(w.draws) / double(w.statFrames));
++  }
++  static constexpr const char* CpuNames[2] = {"record (GX thread)", "worker (encode+submit)"};
++  for (int i = 0; i < 2; ++i) {
++    const uint32_t n = g_cpuCount[i].exchange(0);
++    const int64_t ns = g_cpuNs[i].exchange(0);
++    const uint32_t mxUs = g_cpuMaxUs[i].exchange(0);
++    if (n != 0) {
++      Log.info("[gpu timing]   CPU {:<22} {:7.3f} ms/frame (max {:.2f}), {} frames", CpuNames[i],
++               double(ns) * 1e-6 / n, mxUs * 1e-3, n);
++    }
++  }
++  w = Window{};
++  w.startNs = now;
++}
++
++void accumulate(const Slot& slot, const uint64_t* ts, uint64_t frameBegin, uint64_t frameEnd) {
++  if (g_reportSeconds <= 0.f) {
++    return;
++  }
++  auto& w = g_window;
++  const int64_t now = now_ns();
++  if (w.startNs == 0) {
++    w.startNs = now;
++  }
++  ++w.frames;
++  w.gpuNs += frameEnd - frameBegin;
++  w.frameUs.push_back(static_cast<uint32_t>(std::min<uint64_t>((frameEnd - frameBegin) / 1000, UINT32_MAX)));
++  if (g_overflowed.exchange(false)) {
++    ++w.overflowFrames;
++  }
++  std::vector<std::pair<const char*, uint64_t>> open;
++  uint64_t topEnd = 0;
++  for (const auto& event : slot.events) {
++    const uint64_t t = ts[event.query];
++    if (event.kind != EventKind::End) {
++      open.emplace_back(event.name, t);
++      continue;
++    }
++    if (open.empty()) {
++      continue;
++    }
++    const auto [name, begin] = open.back();
++    open.pop_back();
++    if (begin == 0 || t < begin) {
++      continue; // never written (e.g. no encoder timestamps on this backend)
++    }
++    std::string_view key{name}; // "EFB 3" -> "EFB": passes counted by kind, not by their place in the frame
++    while (!key.empty() && (std::isdigit(static_cast<unsigned char>(key.back())) || key.back() == ' ')) {
++      key.remove_suffix(1);
++    }
++    auto& total = w.names[std::string{key.empty() ? std::string_view{name} : key}];
++    total.ns += t - begin;
++    ++total.count;
++    if (open.empty()) { // top level: busy time without the gaps between passes, nested time not counted twice
++      w.busyNs += t - std::max(begin, topEnd);
++      topEnd = std::max(topEnd, t);
++    }
++  }
++  if (double(now - w.startNs) * 1e-9 >= g_reportSeconds) {
++    report_window(now);
++  }
++}
++
++#ifdef TRACY_ENABLE
+ // tracy::GpuContextType not exposed through TracyC.h
+ uint8_t tracy_context_type(wgpu::BackendType backend) {
+   switch (backend) {
+@@ -161,6 +291,7 @@ void emit_zone_end(uint64_t gpuNs) {
+   ___tracy_emit_gpu_zone_end_serial({.queryId = queryId, .context = ContextId});
+   ___tracy_emit_gpu_time_serial({.gpuTime = int64_t(gpuNs), .queryId = queryId, .context = ContextId});
+ }
++#endif
+ 
+ TimestampBounds event_bounds(const Slot& slot, const uint64_t* ts) {
+   TimestampBounds bounds;
+@@ -198,6 +329,7 @@ void emit_frame(Slot& slot) {
+   if (frameBegin == 0 || frameEnd <= frameBegin) {
+     return;
+   }
++  accumulate(slot, ts, frameBegin, frameEnd);
+ 
+   const uint64_t lastFrameEnd = std::exchange(g_lastFrameEnd, frameEnd);
+   if (lastFrameEnd != 0) {
+@@ -214,6 +346,9 @@ void emit_frame(Slot& slot) {
+     }
+   }
+ 
++#ifndef TRACY_ENABLE
++}
++#else
+   if (!TracyIsConnected) {
+     return;
+   }
+@@ -278,10 +413,14 @@ void emit_frame(Slot& slot) {
+   TracyPlot("aurora: gpuIdleMs", double(idleNs) * 1e-6);
+   TracyPlot("aurora: gpuPasses", int64_t(slot.passCount));
+ }
++#endif
+ 
+ Slot& record_slot() { return g_slots[g_recordSlot]; }
+ 
+ uint32_t alloc_zone() {
++  if (g_frameActive && g_zoneCount >= MaxZones) {
++    g_overflowed = true;
++  }
+   if (!g_frameActive || g_zoneCount >= MaxZones) {
+     return UINT32_MAX;
+   }
+@@ -362,6 +501,20 @@ void frame_begin(const wgpu::CommandEncoder& encoder) {
+ }
+ 
+ void frame_end() {
++  if (g_workerStartNs != 0) { // (patch 0028)
++    cpu_sample(1, now_ns() - g_workerStartNs);
++    g_workerStartNs = 0;
++    if (const AuroraStats* stats = aurora_get_stats()) {
++      auto& w = g_window;
++      ++w.statFrames;
++      w.verts += stats->lastVertSize;
++      w.uniforms += stats->lastUniformSize;
++      w.indices += stats->lastIndexSize;
++      w.storage += stats->lastStorageSize;
++      w.textures += stats->lastTextureUploadSize;
++      w.draws += stats->drawCallCount;
++    }
++  }
+   if (!g_enabled || !g_frameActive) {
+     return;
+   }
+@@ -390,6 +543,15 @@ void frame_end() {
+ 
+ void after_submit() {
+   if (!g_enabled) {
++    // (patch 0028) No timestamp queries on this backend (Dawn's D3D11): the CPU and upload numbers still count.
++    if (g_reportSeconds > 0.f) {
++      const int64_t now = now_ns();
++      if (g_window.startNs == 0) {
++        g_window.startNs = now;
++      } else if (double(now - g_window.startNs) * 1e-9 >= g_reportSeconds) {
++        report_window(now);
++      }
++    }
+     return;
+   }
+   if (g_framePending) {
+@@ -465,19 +627,41 @@ Zone::~Zone() {
+   m_encoder->WriteTimestamp(g_querySet, m_endQuery);
+ }
+ 
+-} // namespace aurora::webgpu::gpu_prof
+-
++bool requested() {
++#ifdef TRACY_ENABLE
++  return true;
+ #else
++  return g_reportSeconds > 0.f;
++#endif
++}
++
++void cpu_sample(int which, int64_t ns) {
++  if (g_reportSeconds <= 0.f || which < 0 || which > 1) {
++    return;
++  }
++  g_cpuNs[which] += ns;
++  ++g_cpuCount[which];
++  const uint32_t us = static_cast<uint32_t>(std::min<int64_t>(ns / 1000, UINT32_MAX));
++  uint32_t prev = g_cpuMaxUs[which].load();
++  while (us > prev && !g_cpuMaxUs[which].compare_exchange_weak(prev, us)) {
++  }
++}
++
++void worker_begin() {
++  if (g_reportSeconds > 0.f) {
++    g_workerStartNs = now_ns();
++  }
++}
++
++} // namespace aurora::webgpu::gpu_prof
+ 
+ namespace aurora::webgpu::gpu_prof {
+-void initialize() {}
+-void shutdown() {}
+-void frame_begin(const wgpu::CommandEncoder&) {}
+-void frame_end() {}
+-void after_submit() {}
+-const wgpu::PassTimestampWrites* pass_writes(std::string_view) { return nullptr; }
+-Zone::Zone(const wgpu::CommandEncoder&, std::string_view) {}
+-Zone::~Zone() = default;
++namespace {
++bool g_fallbackAdapter = false;
++}
++bool fallback_adapter() { return g_fallbackAdapter; }
+ } // namespace aurora::webgpu::gpu_prof
+ 
+-#endif
++void aurora_set_gpu_fallback_adapter(bool fallback) { aurora::webgpu::gpu_prof::g_fallbackAdapter = fallback; }
++
++void aurora_set_gpu_timing(float reportSeconds) { aurora::webgpu::gpu_prof::g_reportSeconds = reportSeconds; }
+diff --git a/lib/webgpu/gpu_prof.hpp b/lib/webgpu/gpu_prof.hpp
+index d7f14af..9cdae8f 100644
+--- a/lib/webgpu/gpu_prof.hpp
++++ b/lib/webgpu/gpu_prof.hpp
+@@ -1,5 +1,6 @@
+ #pragma once
+ 
++#include <cstdint>
+ #include <string_view>
+ 
+ #include <webgpu/webgpu_cpp.h>
+@@ -13,6 +14,14 @@ void frame_begin(const wgpu::CommandEncoder& encoder);
+ void frame_end();
+ void after_submit();
+ const wgpu::PassTimestampWrites* pass_writes(std::string_view name);
++// Patch 0028: should the device ask for timestamp queries (Tracy, or aurora_set_gpu_timing before start-up)?
++bool requested();
++// Patch 0028: a CPU time for the timing report: 0 = recording a frame (GX thread), 1 = encoding + submitting it.
++void cpu_sample(int which, int64_t ns);
++// Patch 0028: the render worker starts encoding a frame (its time ends at frame_end).
++void worker_begin();
++// Patch 0028: aurora_set_gpu_fallback_adapter was called (ask for the software adapter).
++bool fallback_adapter();
+ 
+ class Zone {
+ public:

@@ -1,0 +1,61 @@
+diff --git a/include/dolphin/card.h b/include/dolphin/card.h
+--- a/include/dolphin/card.h
++++ b/include/dolphin/card.h
+@@ -251,6 +251,9 @@
+ // pass -1 to set both
+ void CARDSetBasePath(const char*, s32 chan);
+ void CARDSetLoadType(CARDFileType type);
++// Where card timestamps (a new file's modified time, a format's time) come from: seconds since
++// 2000-01-01, local time, as the GameCube's CARD library stamps them from its clock. Null: the PC's clock.
++void CARDSetTimeSource(u32 (*source)(void));
+ 
+ #else
+ void CARDInit(void);
+diff --git a/lib/card/Util.cpp b/lib/card/Util.cpp
+--- a/lib/card/Util.cpp
++++ b/lib/card/Util.cpp
+@@ -3,7 +3,12 @@
+ #include "../internal.hpp"
+ 
+ namespace aurora::card {
++uint32_t (*g_timeSource)() = nullptr;
++
+ uint64_t getGCTime() {
++  if (g_timeSource != nullptr) {
++    return g_timeSource();
++  }
+   time_t sysTime, tzDST;
+ 
+   time(&sysTime);
+diff --git a/lib/card/Util.hpp b/lib/card/Util.hpp
+--- a/lib/card/Util.hpp
++++ b/lib/card/Util.hpp
+@@ -43,6 +43,8 @@
+ namespace aurora::card {
+ 
+ uint64_t getGCTime();
++// CARDSetTimeSource: the game's clock for getGCTime (null: the PC's clock).
++extern uint32_t (*g_timeSource)();
+ 
+ /**
+  * @brief calculateChecksum
+diff --git a/lib/dolphin/card.cpp b/lib/dolphin/card.cpp
+--- a/lib/dolphin/card.cpp
++++ b/lib/dolphin/card.cpp
+@@ -11,6 +11,7 @@
+ #include "../card/DolphinCardPath.hpp"
+ #include "../logging.hpp"
+ #include "../card/CardGciFolder.hpp"
++#include "../card/Util.hpp"
+ #include "../io.hpp"
+ 
+ namespace {
+@@ -291,6 +292,8 @@
+ 
+ void CARDSetLoadType(CARDFileType type) { SelectedFileType = type; }
+ 
++void CARDSetTimeSource(u32 (*source)(void)) { aurora::card::g_timeSource = source; }
++
+ void CARDInit(const char* game, const char* maker) {
+   if (Initialized) {
+     return;

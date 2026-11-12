@@ -1,0 +1,21 @@
+diff --git a/lib/gfx/encoding.cpp b/lib/gfx/encoding.cpp
+index 7f05dc6..dad8171 100644
+--- a/lib/gfx/encoding.cpp
++++ b/lib/gfx/encoding.cpp
+@@ -34,9 +34,14 @@ namespace {
+ constexpr Module Log{"aurora::gfx"};
+ WGPURenderPipeline g_currentPipeline = nullptr;
+ 
++// WebGPU only accepts depths in [0, 1], and rejects -0.0, which GameCube code produces (e.g. a near
++// value computed as 0 * -1). Clamped, with -0.0 becoming 0.
++// TODO(accuracy): a depth range really outside [0, 1] would need the GameCube's behaviour.
++float clamp_depth(float d) { return d > 0.f ? (d < 1.f ? d : 1.f) : 0.f; }
++
+ void apply_viewport(const wgpu::RenderPassEncoder& pass, const Viewport& vp) {
+-  const float minDepth = gx::UseReversedZ ? 1.f - vp.zfar : vp.znear;
+-  const float maxDepth = gx::UseReversedZ ? 1.f - vp.znear : vp.zfar;
++  const float minDepth = clamp_depth(gx::UseReversedZ ? 1.f - vp.zfar : vp.znear);
++  const float maxDepth = clamp_depth(gx::UseReversedZ ? 1.f - vp.znear : vp.zfar);
+   pass.SetViewport(vp.left, vp.top, vp.width, vp.height, minDepth, maxDepth);
+ }
+ 

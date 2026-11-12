@@ -1,0 +1,168 @@
+diff --git a/lib/gfx/frame.cpp b/lib/gfx/frame.cpp
+index 82e25ea..bce897c 100644
+--- a/lib/gfx/frame.cpp
++++ b/lib/gfx/frame.cpp
+@@ -53,6 +53,29 @@ uint32_t g_frameIndex = UINT32_MAX;
+ 
+ std::array<FramePacket, FrameSlotCount> g_framePackets;
+ uint64_t g_nextFrameId = 1;
++
++// Finished frame packets (their textures, views, bind groups...) are handed back to the thread that records
++// frames and freed there, at its next end_frame, instead of on the render worker: freeing GPU objects on the
++// worker while the GX command processor creates others crashed inside Dawn, even with implicit device
++// synchronization (bind group creation reading freed descriptor memory).
++std::mutex g_retiredMutex;
++std::vector<FramePacket> g_retiredPackets;
++
++void retire_packet(FramePacket& packet) {
++  FramePacket dead = std::exchange(packet, {});
++  std::lock_guard lock{g_retiredMutex};
++  g_retiredPackets.push_back(std::move(dead));
++}
++
++void free_retired() {
++  std::vector<FramePacket> dead;
++  {
++    std::lock_guard lock{g_retiredMutex};
++    dead.swap(g_retiredPackets);
++  }
++  dead.clear();
++  render_worker::free_retired();
++}
+ render_worker::FrameSlotPool g_frameSlots{FrameSlotCount};
+ render_worker::FrameSlotPool g_stagingSlots{StagingBufferCount};
+ 
+@@ -564,6 +587,7 @@ void shutdown() {
+   for (auto& packet : g_framePackets) {
+     packet = {};
+   }
++  free_retired();
+   shutdown_recording();
+   present::shutdown();
+   efb::shutdown();
+@@ -669,6 +693,10 @@ bool begin_frame() {
+ 
+ void end_frame(EndFrameCallback callback) {
+   ZoneScoped;
++  // The GX command processor is idle here (aurora::end_frame drained it), so GPU objects the render worker
++  // is done with are freed while nothing else creates any (see g_retiredPackets).
++  free_retired();
++  expire_cached_bind_groups();
+   if (g_cpuFrameStart.time_since_epoch().count() != 0) {
+     const auto cpuFrameTime = PresentClock::now() - g_cpuFrameStart;
+     update_ema(g_cpuFrameTimeNs, duration_ns(cpuFrameTime));
+@@ -705,9 +733,8 @@ void end_frame(EndFrameCallback callback) {
+     }
+     webgpu::gpu_prof::frame_end();
+     webgpu::gpu_prof::after_submit();
+-    packet = {};
++    retire_packet(packet); // freed by the recording thread (free_retired)
+     g_frameSlots.release(frameSlot);
+-    expire_cached_bind_groups();
+     map_staging_buffer(stagingSlot, true);
+     process_events();
+   });
+diff --git a/lib/gfx/render_worker.cpp b/lib/gfx/render_worker.cpp
+index 85783b6..69bb5c9 100644
+--- a/lib/gfx/render_worker.cpp
++++ b/lib/gfx/render_worker.cpp
+@@ -5,6 +5,8 @@
+ #include <algorithm>
+ #include <atomic>
+ #include <chrono>
++#include <mutex>
++#include <vector>
+ 
+ #include <tracy/Tracy.hpp>
+ 
+@@ -18,6 +20,10 @@ thread::Thread g_thread;
+ std::atomic_bool g_running = false;
+ std::atomic_size_t g_pendingItems = 0;
+ std::thread::id g_workerThreadId;
++// Finished items: their work callbacks can hold the last references to GPU objects (passes, textures,
++// views), which are freed by the recording thread instead (free_retired; see frame.cpp g_retiredPackets).
++std::mutex g_retiredMutex;
++std::vector<QueueItem> g_retiredItems;
+ 
+ void complete_sync(const std::shared_ptr<SyncState>& sync) {
+   if (!sync) {
+@@ -49,8 +55,13 @@ void worker_main(std::stop_token token) {
+       item->work();
+     }
+     complete_sync(item->sync);
++    const bool shutdown = item->type == ItemType::Shutdown;
++    if (item->work) {
++      std::lock_guard lock{g_retiredMutex};
++      g_retiredItems.push_back(std::move(*item));
++    }
+     g_pendingItems.fetch_sub(1, std::memory_order_acq_rel);
+-    if (item->type == ItemType::Shutdown) {
++    if (shutdown) {
+       break;
+     }
+   }
+@@ -266,6 +277,14 @@ void synchronize() {
+   sync->cv.wait(lock, [&] { return sync->complete; });
+ }
+ 
++void free_retired() {
++  std::vector<QueueItem> dead;
++  {
++    std::lock_guard lock{g_retiredMutex};
++    dead.swap(g_retiredItems);
++  }
++}
++
+ bool is_worker_thread() noexcept { return g_workerThreadId == std::this_thread::get_id(); }
+ 
+ bool is_idle() noexcept { return g_pendingItems.load(std::memory_order_acquire) == 0; }
+diff --git a/lib/gfx/render_worker.hpp b/lib/gfx/render_worker.hpp
+index 7d652ca..8a41573 100644
+--- a/lib/gfx/render_worker.hpp
++++ b/lib/gfx/render_worker.hpp
+@@ -82,6 +82,8 @@ void enqueue_end_frame(uint64_t frameId, WorkCallback work);
+ void enqueue_work(WorkCallback work);
+ void synchronize();
+ 
++// Frees finished items' callbacks (and what they hold) on the calling thread (frame.cpp, end_frame).
++void free_retired();
+ bool is_worker_thread() noexcept;
+ bool is_idle() noexcept;
+ 
+diff --git a/lib/webgpu/gpu.cpp b/lib/webgpu/gpu.cpp
+index 97f886f..9317d24 100644
+--- a/lib/webgpu/gpu.cpp
++++ b/lib/webgpu/gpu.cpp
+@@ -878,6 +878,7 @@ bool initialize(AuroraBackend auroraBackend, bool allowCpu) {
+     g_dualSourceBlendingSupported = false;
+     wgpu::SupportedFeatures supportedFeatures;
+     g_adapter.GetFeatures(&supportedFeatures);
++    [[maybe_unused]] bool hasImplicitSync = false;
+     for (size_t i = 0; i < supportedFeatures.featureCount; ++i) {
+       const auto feature = supportedFeatures.features[i];
+       if (feature == wgpu::FeatureName::CoreFeaturesAndLimits || feature == wgpu::FeatureName::TextureCompressionBC ||
+@@ -900,8 +901,24 @@ bool initialize(AuroraBackend auroraBackend, bool allowCpu) {
+       if (feature == wgpu::FeatureName::TimestampQuery) {
+         requiredFeatures.push_back(feature);
+       }
++#endif
++#ifdef WEBGPU_DAWN
++      // The device is used from several threads at once (the GX command processor creates textures and
++      // bind groups while the render worker encodes and submits, and the pipeline thread compiles);
++      // without this Dawn's device is not thread-safe.
++      if (feature == wgpu::FeatureName::ImplicitDeviceSynchronization) {
++        requiredFeatures.push_back(feature);
++        hasImplicitSync = true;
++      }
+ #endif
+     }
++#ifdef WEBGPU_DAWN
++    if (hasImplicitSync) {
++      Log.info("Device: implicit device synchronization on (Dawn calls from several threads)");
++    } else {
++      Log.warn("Device: Dawn has no implicit device synchronization; calls from several threads may race");
++    }
++#endif
+     std::string featureList;
+     for (auto featureName : requiredFeatures) {
+       featureList += "\n  ";

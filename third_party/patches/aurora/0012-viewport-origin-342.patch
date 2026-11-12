@@ -1,0 +1,28 @@
+diff --git a/lib/dolphin/gx/GXTransform.cpp b/lib/dolphin/gx/GXTransform.cpp
+--- a/lib/dolphin/gx/GXTransform.cpp
++++ b/lib/dolphin/gx/GXTransform.cpp
+@@ -142,8 +142,8 @@
+ 
+   sx = width / 2.0f;
+   sy = -height / 2.0f;
+-  ox = 340.0f + (left + width / 2.0f);
+-  oy = 340.0f + (top + height / 2.0f);
++  ox = 342.0f + (left + width / 2.0f);
++  oy = 342.0f + (top + height / 2.0f);
+   zmin = std::clamp(__gx->zScale * nearZ + __gx->zOffset, 0.0f, 1.6777215e7f);
+   zmax = std::clamp(__gx->zScale * farZ + __gx->zOffset, 0.0f, 1.6777215e7f);
+   sz = zmax - zmin;
+diff --git a/lib/gx/regs.cpp b/lib/gx/regs.cpp
+--- a/lib/gx/regs.cpp
++++ b/lib/gx/regs.cpp
+@@ -1078,8 +1078,8 @@
+   f32 width = sx * 2.0f;
+   f32 height = -sy * 2.0f;
+   set_logical_viewport({
+-      .left = ox - 340.0f - width / 2.0f,
+-      .top = oy - 340.0f - height / 2.0f,
++      .left = ox - 342.0f - width / 2.0f,
++      .top = oy - 342.0f - height / 2.0f,
+       .width = width,
+       .height = height,
+       .znear = (oz - sz) / 1.6777215e7f,

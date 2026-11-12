@@ -1,0 +1,32 @@
+// The programs' icon and description, for Explorer, the taskbar and Task Manager. The icon is original art
+// drawn by tools/make_icon.py (no game data); the game's window may show one made from the player's own disc
+// instead (platform/os/include/port_window_icon.h).
+#include <winver.h>
+
+1 ICON "xd_icon.ico"
+
+#ifndef XD_FILE_DESCRIPTION
+#define XD_FILE_DESCRIPTION "Pokemon XD PC port"
+#endif
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION 0,0,0,0
+PRODUCTVERSION 0,0,0,0
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_APP
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904B0"
+    BEGIN
+      VALUE "FileDescription", XD_FILE_DESCRIPTION
+      VALUE "ProductName", "Pokemon XD PC port"
+      VALUE "FileVersion", "0.0.0"
+      VALUE "ProductVersion", "0.0.0"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1200
+  END
+END

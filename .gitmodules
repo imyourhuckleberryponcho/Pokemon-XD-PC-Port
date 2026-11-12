@@ -1,0 +1,10 @@
+[submodule "third_party/aurora"]
+	path = third_party/aurora
+	url = https://github.com/encounter/aurora
+[submodule "third_party/SDL"]
+	path = third_party/SDL
+	url = https://github.com/libsdl-org/SDL
+	branch = release-3.4.20
+[submodule "third_party/borealis"]
+	path = third_party/borealis
+	url = https://github.com/encounter/borealis

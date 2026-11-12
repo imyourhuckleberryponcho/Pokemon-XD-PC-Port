@@ -1,0 +1,277 @@
+diff --git a/cmake/aurora_core.cmake b/cmake/aurora_core.cmake
+index bdc3d0e..78c5110 100644
+--- a/cmake/aurora_core.cmake
++++ b/cmake/aurora_core.cmake
+@@ -92,6 +92,7 @@ if (AURORA_ENABLE_GX)
+             lib/webgpu/gpu.cpp
+             lib/webgpu/gpu_cache.cpp
+             lib/webgpu/gpu_prof.cpp
++            lib/webgpu/sampler_keeper.cpp
+             lib/dawn/BackendBinding.cpp
+             lib/dawn/TracyPlatform.cpp
+     )
+diff --git a/lib/gfx/resource_cache.cpp b/lib/gfx/resource_cache.cpp
+index 8c131ab..06e6e63 100644
+--- a/lib/gfx/resource_cache.cpp
++++ b/lib/gfx/resource_cache.cpp
+@@ -3,6 +3,7 @@
+ #include "frame.hpp"
+ #include "hash.hpp"
+ #include "../webgpu/gpu.hpp"
++#include "../webgpu/sampler_keeper.hpp"
+ 
+ #include <cstddef>
+ #include <cstdint>
+@@ -87,6 +88,9 @@ BindGroupRef bind_group_ref(const WGPUBindGroupDescriptor& descriptor) {
+   const auto it = g_cachedBindGroups.find(id);
+   if (it == g_cachedBindGroups.end()) {
+     auto bindGroup = wgpu::BindGroup::Acquire(wgpuDeviceCreateBindGroup(webgpu::g_device.Get(), &descriptor));
++    if (const size_t kept = webgpu::keep_sampler_set(webgpu::g_device, descriptor); kept >= 256 && (kept & (kept - 1)) == 0) {
++      Log.info("Sampler keeper: {} sampler sets kept", kept);
++    }
+     g_cachedBindGroups.emplace(id, CachedBindGroup{
+                                        .bindGroup = std::move(bindGroup),
+                                        .lastUsedFrame = current_frame(),
+diff --git a/lib/gfx/tex_copy_conv.cpp b/lib/gfx/tex_copy_conv.cpp
+index 62ce96c..5f1b73e 100644
+--- a/lib/gfx/tex_copy_conv.cpp
++++ b/lib/gfx/tex_copy_conv.cpp
+@@ -6,6 +6,7 @@
+ #include "../gx/gx.hpp"
+ #include "../webgpu/gpu.hpp"
+ #include "../webgpu/gpu_prof.hpp"
++#include "../webgpu/sampler_keeper.hpp"
+ #include "texture.hpp"
+ #include "../gx/gx_fmt.hpp"
+ #include "efb_wgsl.hpp"
+@@ -662,7 +663,7 @@ static void execute(const wgpu::CommandEncoder& cmd, const ConvRequest& req, con
+         .entryCount = bindGroupEntries.size(),
+         .entries = bindGroupEntries.data(),
+     };
+-    bindGroup = g_device.CreateBindGroup(&bindGroupDescriptor);
++    bindGroup = webgpu::create_bind_group(g_device, bindGroupDescriptor);
+   }
+ 
+   const std::array colorAttachments{
+diff --git a/lib/gfx/tex_palette_conv.cpp b/lib/gfx/tex_palette_conv.cpp
+index 392dcc8..fa65fa7 100644
+--- a/lib/gfx/tex_palette_conv.cpp
++++ b/lib/gfx/tex_palette_conv.cpp
+@@ -3,6 +3,7 @@
+ #include "../internal.hpp"
+ #include "../webgpu/gpu.hpp"
+ #include "../webgpu/gpu_prof.hpp"
++#include "../webgpu/sampler_keeper.hpp"
+ #include "texture.hpp"
+ 
+ #include <vector>
+@@ -236,7 +237,7 @@ void run(const wgpu::CommandEncoder& cmd, const ConvRequest& req) {
+       .entryCount = bindGroupEntries.size(),
+       .entries = bindGroupEntries.data(),
+   };
+-  const auto bindGroup = g_device.CreateBindGroup(&bindGroupDescriptor);
++  const auto bindGroup = webgpu::create_bind_group(g_device, bindGroupDescriptor);
+ 
+   const std::array colorAttachments{
+       wgpu::RenderPassColorAttachment{
+diff --git a/lib/webgpu/gpu.cpp b/lib/webgpu/gpu.cpp
+index 9317d24..610355c 100644
+--- a/lib/webgpu/gpu.cpp
++++ b/lib/webgpu/gpu.cpp
+@@ -27,6 +27,7 @@
+ #include "../internal.hpp"
+ #include "../window.hpp"
+ #include "gpu_prof.hpp"
++#include "sampler_keeper.hpp"
+ 
+ #ifdef WEBGPU_DAWN
+ #include "../dawn/TracyPlatform.hpp"
+@@ -624,7 +625,7 @@ wgpu::BindGroup create_copy_bind_group(const TextureWithSampler& source) {
+       .entryCount = bindGroupEntries.size(),
+       .entries = bindGroupEntries.data(),
+   };
+-  return g_device.CreateBindGroup(&bindGroupDescriptor);
++  return create_bind_group(g_device, bindGroupDescriptor);
+ }
+ 
+ ResampleUniformBlock resample_uniform(uint32_t width, uint32_t height) noexcept {
+@@ -660,7 +661,7 @@ void resample(const wgpu::CommandEncoder& encoder, const TextureWithSampler& sou
+       .entryCount = bindGroupEntries.size(),
+       .entries = bindGroupEntries.data(),
+   };
+-  const auto bindGroup = g_device.CreateBindGroup(&bindGroupDescriptor);
++  const auto bindGroup = create_bind_group(g_device, bindGroupDescriptor);
+ 
+   const std::array attachments{
+       wgpu::RenderPassColorAttachment{
+@@ -1067,6 +1068,8 @@ void shutdown() {
+   g_depthBuffer = {};
+   g_normalBuffer = {};
+   g_graphicsConfig.normalBuffer = false;
++  Log.info("Sampler keeper: {} sampler sets kept", sampler_keeper_count());
++  shutdown_sampler_keeper();
+   g_queue = {};
+   g_device = {};
+   g_adapter = {};
+diff --git a/lib/webgpu/sampler_keeper.cpp b/lib/webgpu/sampler_keeper.cpp
+new file mode 100644
+index 0000000..bc2e130
+--- /dev/null
++++ b/lib/webgpu/sampler_keeper.cpp
+@@ -0,0 +1,129 @@
++#include "sampler_keeper.hpp"
++
++#include <algorithm>
++#include <array>
++#include <cstdint>
++#include <map>
++#include <mutex>
++#include <utility>
++#include <vector>
++
++// Dawn's D3D12 backend shares the CPU descriptors of a bind group's samplers between all bind groups
++// that use the same samplers in the same order: SamplerHeapCache, an unsynchronised absl hash set of
++// SamplerHeapCacheEntry. A bind group is created under Dawn's device lock (GetOrCreate: find, insert),
++// but releasing one (wgpu*Release) never takes that lock: when the last bind group with a sampler set
++// goes away, ~SamplerHeapCacheEntry erases the entry from the set on whatever thread released it. With
++// Aurora creating bind groups on the GX processor thread and the render worker, and releasing them on
++// those and the recording thread, an erase can run at the same time as another thread's find/insert or
++// erase, which corrupts the set; a later find then probes for ever (a stuck report: the FIFO thread at
++// 100% CPU in raw_hash_set<SamplerHeapCacheEntry*>::find_large under SamplerHeapCache::GetOrCreate, from
++// wgpuDeviceCreateBindGroup), or the heap breaks. Dawn (encounter/dawn 1155e0ed) has the same code
++// upstream; the other state a release touches (bind group slab allocators, staging descriptor
++// allocators, object lists) is behind its own mutexes.
++//
++// Workaround without changing Dawn: an entry is only erased when its last reference goes. For every
++// distinct sampler set we keep one extra bind group (with a layout of just those samplers, created under
++// Dawn's lock like any other) for as long as the device lives, so no entry made for Aurora's bind groups
++// is ever erased, and the set is only ever changed under Dawn's lock. Cost: one small bind group per
++// distinct sampler combination (no textures or buffers are kept; samplers are cached for ever anyway).
++// Other backends ignore it (no shared sampler entries there).
++
++namespace aurora::webgpu {
++namespace {
++
++// WebGPU's maxSamplersPerShaderStage default; bind groups with more samplers aren't kept.
++constexpr size_t MaxKeptSamplers = 16;
++
++std::mutex g_mutex;
++std::array<wgpu::BindGroupLayout, MaxKeptSamplers + 1> g_layouts;
++std::map<std::vector<WGPUSampler>, wgpu::BindGroup> g_keepers;
++
++const wgpu::BindGroupLayout& layout_for(const wgpu::Device& device, size_t count) {
++  auto& layout = g_layouts[count];
++  if (!layout) {
++    std::array<wgpu::BindGroupLayoutEntry, MaxKeptSamplers> entries{};
++    for (size_t i = 0; i < count; ++i) {
++      entries[i] = {
++          .binding = static_cast<uint32_t>(i),
++          .visibility = wgpu::ShaderStage::Fragment,
++          // Filtering accepts every sampler but comparison ones (Aurora makes none).
++          .sampler = {.type = wgpu::SamplerBindingType::Filtering},
++      };
++    }
++    const wgpu::BindGroupLayoutDescriptor descriptor{
++        .label = "Sampler keeper layout",
++        .entryCount = count,
++        .entries = entries.data(),
++    };
++    layout = device.CreateBindGroupLayout(&descriptor);
++  }
++  return layout;
++}
++
++} // namespace
++
++size_t keep_sampler_set(const wgpu::Device& device, const WGPUBindGroupDescriptor& descriptor) {
++  if (!device || descriptor.entryCount == 0) {
++    return 0;
++  }
++  // Dawn orders a layout's samplers by binding number (SortBindingsCompare), so the set is the samplers
++  // sorted by binding.
++  std::array<std::pair<uint32_t, WGPUSampler>, MaxKeptSamplers> samplers;
++  size_t count = 0;
++  for (size_t i = 0; i < descriptor.entryCount; ++i) {
++    const auto& entry = descriptor.entries[i];
++    if (entry.sampler == nullptr) {
++      continue;
++    }
++    if (count == MaxKeptSamplers) {
++      return 0;
++    }
++    samplers[count++] = {entry.binding, entry.sampler};
++  }
++  if (count == 0) {
++    return 0;
++  }
++  std::sort(samplers.begin(), samplers.begin() + count,
++            [](const auto& a, const auto& b) { return a.first < b.first; });
++  std::vector<WGPUSampler> key(count);
++  for (size_t i = 0; i < count; ++i) {
++    key[i] = samplers[i].second;
++  }
++
++  std::lock_guard lock{g_mutex};
++  if (g_keepers.contains(key)) {
++    return 0;
++  }
++  std::array<wgpu::BindGroupEntry, MaxKeptSamplers> entries{};
++  for (size_t i = 0; i < count; ++i) {
++    entries[i].binding = static_cast<uint32_t>(i);
++    entries[i].sampler = wgpu::Sampler{key[i]}; // adds a reference
++  }
++  const wgpu::BindGroupDescriptor keeperDescriptor{
++      .label = "Sampler keeper",
++      .layout = layout_for(device, count),
++      .entryCount = count,
++      .entries = entries.data(),
++  };
++  g_keepers.emplace(std::move(key), device.CreateBindGroup(&keeperDescriptor));
++  return g_keepers.size();
++}
++
++wgpu::BindGroup create_bind_group(const wgpu::Device& device, const wgpu::BindGroupDescriptor& descriptor) {
++  auto bindGroup = device.CreateBindGroup(&descriptor);
++  keep_sampler_set(device, *reinterpret_cast<const WGPUBindGroupDescriptor*>(&descriptor));
++  return bindGroup;
++}
++
++void shutdown_sampler_keeper() {
++  std::lock_guard lock{g_mutex};
++  g_keepers.clear();
++  g_layouts.fill({});
++}
++
++size_t sampler_keeper_count() {
++  std::lock_guard lock{g_mutex};
++  return g_keepers.size();
++}
++
++} // namespace aurora::webgpu
+diff --git a/lib/webgpu/sampler_keeper.hpp b/lib/webgpu/sampler_keeper.hpp
+new file mode 100644
+index 0000000..3eb761e
+--- /dev/null
++++ b/lib/webgpu/sampler_keeper.hpp
+@@ -0,0 +1,21 @@
++#pragma once
++
++#include <cstddef>
++
++#include <webgpu/webgpu_cpp.h>
++
++namespace aurora::webgpu {
++
++// Works around a Dawn D3D12 race (see sampler_keeper.cpp): call keep_sampler_set right after creating a
++// bind group that has samplers, before the bind group can be released, or create it with create_bind_group.
++// Returns the number of sets kept when this call added one, else 0.
++size_t keep_sampler_set(const wgpu::Device& device, const WGPUBindGroupDescriptor& descriptor);
++wgpu::BindGroup create_bind_group(const wgpu::Device& device, const wgpu::BindGroupDescriptor& descriptor);
++
++// Releases the kept bind groups (device shutdown, when no other thread uses Dawn any more).
++void shutdown_sampler_keeper();
++
++// Number of distinct sampler sets kept (tests, logs).
++size_t sampler_keeper_count();
++
++} // namespace aurora::webgpu

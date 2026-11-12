@@ -1,0 +1,76 @@
+diff --git a/include/aurora/gfx.h b/include/aurora/gfx.h
+index 94504b1..13e9432 100644
+--- a/include/aurora/gfx.h
++++ b/include/aurora/gfx.h
+@@ -33,6 +33,13 @@ float aurora_get_fps();
+ 
+ void aurora_enable_vsync(bool enabled);
+ 
++/**
++ * Frame pacing hooks, called on the render worker for the primary surface: `before` right before a picture is
++ * handed to the window (it may wait, to present at an even rhythm), `after` right after Present returned (for
++ * measuring). Either may be NULL. Keep them short: they run on every present.
++ */
++void aurora_set_present_hooks(void (*before)(void), void (*after)(void));
++
+ #ifdef __cplusplus
+ }
+ #endif
+diff --git a/lib/gfx/frame.cpp b/lib/gfx/frame.cpp
+index 82e25ea..2baa0f3 100644
+--- a/lib/gfx/frame.cpp
++++ b/lib/gfx/frame.cpp
+@@ -719,7 +719,19 @@ void gpu_synchronize() { render_worker::synchronize(); }
+ 
+ void synchronize() { render_worker::synchronize(); }
+ 
++std::atomic<void (*)(void)> g_beforePresentHook{nullptr}; // aurora_set_present_hooks
++std::atomic<void (*)(void)> g_afterPresentHook{nullptr};
++
++void before_present() noexcept {
++  if (const auto hook = g_beforePresentHook.load(std::memory_order_acquire)) {
++    hook();
++  }
++}
++
+ void after_present() noexcept {
++  if (const auto hook = g_afterPresentHook.load(std::memory_order_acquire)) {
++    hook();
++  }
+   const auto now = PresentClock::now();
+   const int64_t nowNs = timestamp_ns(now);
+   const int64_t previousPresentNs = g_lastPresentNs.exchange(nowNs, std::memory_order_acq_rel);
+@@ -751,3 +763,7 @@ float calculate_fps() noexcept {
+ 
+ const AuroraStats* aurora_get_stats() { return &aurora::gfx::detail::resources().stats; }
+ float aurora_get_fps() { return aurora::gfx::calculate_fps(); }
++void aurora_set_present_hooks(void (*before)(void), void (*after)(void)) {
++  aurora::gfx::g_beforePresentHook.store(before, std::memory_order_release);
++  aurora::gfx::g_afterPresentHook.store(after, std::memory_order_release);
++}
+diff --git a/lib/gfx/frame.hpp b/lib/gfx/frame.hpp
+index 9e1152c..de13f3d 100644
+--- a/lib/gfx/frame.hpp
++++ b/lib/gfx/frame.hpp
+@@ -37,6 +37,7 @@ bool begin_frame();
+ void end_frame(EndFrameCallback callback);
+ uint32_t current_frame() noexcept;
+ void gpu_synchronize();
++void before_present() noexcept; // aurora_set_present_hooks
+ void after_present() noexcept;
+ float calculate_fps() noexcept;
+ } // namespace aurora::gfx
+diff --git a/lib/gfx/present_target.cpp b/lib/gfx/present_target.cpp
+index ee33ca3..0fa2a09 100644
+--- a/lib/gfx/present_target.cpp
++++ b/lib/gfx/present_target.cpp
+@@ -405,6 +405,9 @@ void submit(const Request& request) {
+     webgpu::g_queue.Submit(1, &buffer);
+   }
+   wgpu::ConvertibleStatus status = wgpu::Status::Error;
++  if (request.primary) {
++    before_present();
++  }
+   {
+     ZoneScopedN("Present");
+     status = target.surface.Present();

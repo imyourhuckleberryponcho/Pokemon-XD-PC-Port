@@ -1,0 +1,164 @@
+diff --git a/include/dolphin/gx/GXGeometry.h b/include/dolphin/gx/GXGeometry.h
+index 0c6fde7..18ff3e2 100644
+--- a/include/dolphin/gx/GXGeometry.h
++++ b/include/dolphin/gx/GXGeometry.h
+@@ -33,6 +33,9 @@ void GXSetLineWidth(u8 width, GXTexOffset texOffsets);
+ void GXSetPointSize(u8 pointSize, GXTexOffset texOffsets);
+ void GXEnableTexOffsets(GXTexCoordID coord, GXBool line_enable, GXBool point_enable);
+ #ifdef TARGET_PC
++// Size for arrays whose size the caller doesn't know (the GameCube form of GXSetArray): each draw
++// uploads up to the highest index it uses, as the hardware reads only the entries it's asked for.
++#define GX_ARRAY_SIZE_UNKNOWN 0xFFFFFFFFu
+ void GXSetArray(GXAttr attr, const void* data, u32 size, u8 stride, bool le);
+ #define GXSETARRAY(attr, data, size, stride, le) GXSetArray((attr), (data), (size), (stride), (le))
+ #else
+diff --git a/lib/gx/command_processor.cpp b/lib/gx/command_processor.cpp
+index dbf26b7..fc5b9c1 100644
+--- a/lib/gx/command_processor.cpp
++++ b/lib/gx/command_processor.cpp
+@@ -1,5 +1,6 @@
+ #include "command_processor.hpp"
+ 
++#include "../gfx/hash.hpp"
+ #include "../gfx/recording.hpp"
+ #include "../internal.hpp"
+ #include "dolphin/gd/GDGeometry.h"
+@@ -144,6 +146,31 @@ struct DrawCache {
+ };
+ DrawCache sDrawCache;
+ 
++// Vertex arrays copied to the GPU this frame, by address, length and contents. Games invalidate the vertex
++// cache (GXInvalidateVtxCache) before most draws, which drops every array's cached copy; copying them all
++// again for each draw overflowed the frame's storage buffer in busy scenes, though the data rarely changes.
++// Unchanged data reuses this frame's copy; changed data (CPU-written vertices) is copied again.
++struct ArrayUploadKey {
++  const void* data;
++  u32 length;
++  u64 hash;
++  bool operator==(const ArrayUploadKey&) const = default;
++};
++struct ArrayUploadKeyHash {
++  size_t operator()(const ArrayUploadKey& k) const noexcept { return static_cast<size_t>(k.hash ^ k.length); }
++};
++std::unordered_map<ArrayUploadKey, gfx::Range, ArrayUploadKeyHash> sArrayUploads;
++
++gfx::Range push_array(const void* data, u32 length) {
++  const ArrayUploadKey key{data, length, xxh3_hash_s(data, length)};
++  if (const auto it = sArrayUploads.find(key); it != sArrayUploads.end()) {
++    return it->second;
++  }
++  const auto range = gfx::push_storage(static_cast<const uint8_t*>(data), length);
++  sArrayUploads.emplace(key, range);
++  return range;
++}
++
+ FogRangeLutKey fog_range_lut_key() noexcept {
+   const auto& state = g_gxState.fog;
+   const f32 logicalWidth = std::max(g_gxState.logicalViewport.width, 1.f);
+@@ -263,7 +290,7 @@ ProcessResult process(const u8* data, u32 size) noexcept {
+       const u32 srcOffset = static_cast<u32>(srcArrayIdx) * array.stride;
+       const u32 srcSize = static_cast<u32>(len) * sizeof(u32);
+       AURORA_ASSERT(array.data != nullptr, "indexed XF load from unmapped array {}", arrayType);
+-      AURORA_ASSERT(srcOffset <= array.size && srcSize <= array.size - srcOffset,
++      AURORA_ASSERT(array.size == GX_ARRAY_SIZE_UNKNOWN || (srcOffset <= array.size && srcSize <= array.size - srcOffset),
+                     "indexed XF load outside array {}: offset={}, size={}, array size={}", arrayType, srcOffset,
+                     srcSize, array.size);
+       auto const* srcData = static_cast<const u8*>(array.data) + srcOffset;
+@@ -379,6 +406,55 @@ static u32 calc_vtx_size(GXVtxFmt fmt) noexcept {
+   return vtxSize;
+ }
+ 
++// Arrays set with GX_ARRAY_SIZE_UNKNOWN: upload as much as this draw's indices reach. Returns true if
++// an upload changed (the draw then can't be merged into the previous one, which used the old upload).
++static bool upload_unsized_arrays(GXVtxFmt fmt, const u8* vtx, u16 vtxCount, u32 vtxSize) noexcept {
++  bool changed = false;
++  const auto& vtxFmt = g_gxState.vtxFmts[fmt];
++  u32 offset = 0;
++  for (int i = GX_VA_PNMTXIDX; i <= GX_VA_TEX7; ++i) {
++    const auto attr = static_cast<GXAttr>(i);
++    const auto& attrFmt = vtxFmt.attrs[i];
++    const auto desc = g_gxState.vtxDesc[i];
++    if (desc == GX_NONE) {
++      continue;
++    }
++    if (desc == GX_DIRECT) {
++      offset += comp_type_size(attr, attrFmt.type) * comp_cnt_count(attr, attrFmt.cnt);
++      continue;
++    }
++    const u32 idxSize = desc == GX_INDEX16 ? 2 : 1;
++    const u32 numIdx = i == GX_VA_NRM && attrFmt.cnt == GX_NRM_NBT3 ? 3 : 1;
++    auto& array = g_gxState.arrays[i];
++    if (array.size == GX_ARRAY_SIZE_UNKNOWN && array.data != nullptr) {
++      const u32 skip = idxSize == 2 ? 0xFFFF : 0xFF; // a position index of all ones skips the vertex
++      u32 maxIdx = 0;
++      bool any = false;
++      for (u32 v = 0; v < vtxCount; ++v) {
++        const u8* p = vtx + v * vtxSize + offset;
++        for (u32 k = 0; k < numIdx; ++k) {
++          const u32 idx = idxSize == 2 ? (static_cast<u32>(p[2 * k]) << 8 | p[2 * k + 1]) : p[k];
++          if (i == GX_VA_POS && idx == skip) {
++            continue;
++          }
++          maxIdx = std::max(maxIdx, idx);
++          any = true;
++        }
++      }
++      if (any) {
++        const u32 elemSize = std::max<u32>(comp_type_size(attr, attrFmt.type) * comp_cnt_count(attr, attrFmt.cnt), 1);
++        const u32 need = maxIdx * array.stride + elemSize;
++        if (need > array.cachedRange.size) {
++          array.cachedRange = push_array(array.data, need);
++          changed = true;
++        }
++      }
++    }
++    offset += idxSize * numIdx;
++  }
++  return changed;
++}
++
+ static void push_gx_draw(GXPrimitive prim, GXVtxFmt fmt, u16 vtxCount, gfx::Range vertRange, gfx::Range idxRange,
+                          u32 numIndices) noexcept {
+   auto& state = g_gxState;
+@@ -391,7 +467,9 @@ static void push_gx_draw(GXPrimitive prim, GXVtxFmt fmt, u16 vtxCount, gfx::Rang
+     }
+     auto& array = state.arrays[i];
+     if (array.cachedRange.size == 0) {
+-      array.cachedRange = gfx::push_storage(static_cast<const uint8_t*>(array.data), array.size);
++      // (unknown size: upload_unsized_arrays has normally uploaded it; if no vertex used it, one entry)
++      const u32 size = array.size == GX_ARRAY_SIZE_UNKNOWN ? std::max<u32>(array.stride, 4) : array.size;
++      array.cachedRange = push_array(array.data, size);
+     }
+     immediates.arrayStart[i - GX_VA_POS] = array.cachedRange.offset;
+   }
+@@ -503,6 +581,10 @@ static void draw_prim(GXPrimitive prim, GXVtxFmt fmt, u16 vtxCount, ByteReader&
+   if (totalVtxBytes > reader.remaining())
+     UNLIKELY { handle_draw_overrun(totalVtxBytes, reader); }
+ 
++  if (upload_unsized_arrays(fmt, reader.data() + reader.offset(), vtxCount, vtxSize)) {
++    g_gxState.dirty |= DirtyImmediates;
++  }
++
+   const bool cleanState = g_gxState.dirty == 0 && fmt == sDrawCache.lastDrawFmt && sDrawCache.lineMode == 0 &&
+                           prim != GX_LINES && prim != GX_LINESTRIP && prim != GX_POINTS;
+   auto* lastDraw = cleanState ? gfx::get_last_draw_command<DrawData>() : nullptr;
+@@ -807,6 +889,7 @@ void clear_draw_cache() noexcept {
+   sDrawCache.uniformRange = {};
+   sDrawCache.fogRange = {};
+   sDrawCache.hasFogRange = false;
++  sArrayUploads.clear();
+ }
+ 
+ } // namespace aurora::gx::fifo
+diff --git a/lib/gx/command_processor.hpp b/lib/gx/command_processor.hpp
+index fb9fe15..ace4d8e 100644
+--- a/lib/gx/command_processor.hpp
++++ b/lib/gx/command_processor.hpp
+@@ -3,6 +3,7 @@
+ #include "../internal.hpp"
+ 
+ #include <cstdint>
++#include <unordered_map> // (command_processor.cpp's upload cache)
+ 
+ namespace aurora::gx::fifo {
+ 

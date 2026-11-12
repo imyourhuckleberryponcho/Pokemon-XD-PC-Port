@@ -1,0 +1,16 @@
+diff --git a/lib/gx/shader.cpp b/lib/gx/shader.cpp
+index 2d10095..7e56f2a 100644
+--- a/lib/gx/shader.cpp
++++ b/lib/gx/shader.cpp
+@@ -568,6 +568,11 @@ std::string vtx_attr(const ShaderConfig& config, GXAttr attr) {
+     if (attr == GX_VA_CLR0 || attr == GX_VA_CLR1) {
+       return "vec4f(0.0, 0.0, 0.0, 0.0)"s;
+     }
++    if (attr >= GX_VA_TEX0 && attr <= GX_VA_TEX7) {
++      // A texgen reading a texture coordinate the vertex format doesn't send: the hardware reads (0, 0)
++      // (as Dolphin's vertex shader: coord (0, 0, 1, 1)). XD's particle display lists do this.
++      return "vec2f(0.0, 0.0)"s;
++    }
+     UNLIKELY FATAL("unmapped vtx attr {}", underlying(attr));
+   }
+   if (attr == GX_VA_POS) {

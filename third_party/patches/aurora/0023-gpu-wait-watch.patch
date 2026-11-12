@@ -1,0 +1,436 @@
+diff --git a/cmake/aurora_gx.cmake b/cmake/aurora_gx.cmake
+index a4adc13..51fb1b3 100644
+--- a/cmake/aurora_gx.cmake
++++ b/cmake/aurora_gx.cmake
+@@ -1,5 +1,6 @@
+ add_library(aurora_gx STATIC
+         lib/gfx/clear.cpp
++        lib/gfx/device_watch.cpp
+         lib/gfx/efb.cpp
+         lib/gfx/encoding.cpp
+         lib/gfx/frame.cpp
+diff --git a/include/aurora/gfx.h b/include/aurora/gfx.h
+index 13e9432..c4cfcbf 100644
+--- a/include/aurora/gfx.h
++++ b/include/aurora/gfx.h
+@@ -28,6 +28,14 @@ typedef struct {
+   uint32_t lastTextureUploadSize;
+ } AuroraStats;
+ 
++/**
++ * Testing what a program does when the GPU goes away. `removeDevice`: the driver removes the device, as a GPU
++ * reset does (D3D12 only; elsewhere, and when false, Dawn is told the device is lost).
++ */
++void aurora_debug_lose_device(bool removeDevice);
++/** Testing: the render worker stops at its next item for `seconds` (0: for good), as a worker stuck in a driver. */
++void aurora_debug_stall_render_worker(unsigned seconds);
++
+ const AuroraStats* aurora_get_stats();
+ float aurora_get_fps();
+ 
+diff --git a/lib/gfx/device_watch.cpp b/lib/gfx/device_watch.cpp
+new file mode 100644
+index 0000000..9a344fc
+--- /dev/null
++++ b/lib/gfx/device_watch.cpp
+@@ -0,0 +1,124 @@
++// Is the GPU device still there? Asked by threads that wait for the render worker or the GPU (frame.cpp,
++// SlowWait), without going through Dawn's device lock: when the device is lost while the render worker is
++// inside a Dawn call (waiting for a fence that a reset GPU never signals, a present...), Dawn itself may
++// never get to notice, and a wait for the next frame slot would last forever.
++#include "device_watch.hpp"
++
++#include "render_worker.hpp"
++#include "../internal.hpp"
++#include "../webgpu/gpu.hpp"
++
++#include <aurora/gfx.h>
++
++#include <chrono>
++#include <thread>
++
++#include <fmt/format.h>
++
++#include <dawn/native/DawnNative.h>
++
++#ifdef _WIN32
++#ifndef NOMINMAX
++#define NOMINMAX
++#endif
++#include <dawn/native/D3D12Backend.h>
++#include <dawn/native/D3D11Backend.h>
++#endif
++
++namespace aurora::gfx::device_watch {
++namespace {
++constexpr Module Log{"aurora::gfx"};
++
++#ifdef _WIN32
++const char* hresult_name(HRESULT hr) {
++  switch (static_cast<uint32_t>(hr)) {
++  case 0x887A0005u:
++    return "DXGI_ERROR_DEVICE_REMOVED: the driver was reset or updated, or the graphics card went away";
++  case 0x887A0006u:
++    return "DXGI_ERROR_DEVICE_HUNG: the graphics card stopped responding";
++  case 0x887A0007u:
++    return "DXGI_ERROR_DEVICE_RESET: the graphics card was reset";
++  case 0x887A0020u:
++    return "DXGI_ERROR_DRIVER_INTERNAL_ERROR: the graphics driver failed";
++  case 0x887A0001u:
++    return "DXGI_ERROR_INVALID_CALL";
++  default:
++    return "unknown reason";
++  }
++}
++#endif
++} // namespace
++
++std::string lost_reason() noexcept {
++  const auto& device = webgpu::g_device;
++  if (!device) {
++    return {};
++  }
++  if (dawn::native::IsDeviceLost(device.Get())) {
++    return "Dawn reports the device lost";
++  }
++#ifdef _WIN32
++  HRESULT hr = S_OK;
++  if (webgpu::g_backendType == wgpu::BackendType::D3D12) {
++    if (const auto d3d = dawn::native::d3d12::GetD3D12Device(device.Get())) {
++      hr = d3d->GetDeviceRemovedReason();
++    }
++  } else if (webgpu::g_backendType == wgpu::BackendType::D3D11) {
++    if (const auto d3d = dawn::native::d3d11::GetD3D11Device(device.Get())) {
++      hr = d3d->GetDeviceRemovedReason();
++    }
++  }
++  if (FAILED(hr)) {
++    return fmt::format("the device was removed (0x{:08X} {})", static_cast<uint32_t>(hr), hresult_name(hr));
++  }
++#endif
++  return {};
++}
++
++void Watch::check(const char* waitingFor, double waitedSeconds) {
++  const auto lost = lost_reason();
++  if (lost.empty()) {
++    m_lostSince = -1.0;
++    return;
++  }
++  if (m_lostSince < 0.0) {
++    m_lostSince = waitedSeconds;
++  }
++  const bool dawnKnows = webgpu::g_device && dawn::native::IsDeviceLost(webgpu::g_device.Get());
++  if (waitedSeconds - m_lostSince >= (dawnKnows ? 10.0 : 1.0)) {
++    FATAL("Device lost: {} (found while waiting {:.1f} s for {})", lost, waitedSeconds, waitingFor);
++  }
++}
++
++} // namespace aurora::gfx::device_watch
++
++void aurora_debug_lose_device(bool removeDevice) {
++  using namespace aurora;
++  const auto& device = webgpu::g_device;
++  if (!device) {
++    return;
++  }
++#ifdef _WIN32
++  if (removeDevice && webgpu::g_backendType == wgpu::BackendType::D3D12) {
++    if (const auto d3d = dawn::native::d3d12::GetD3D12Device(device.Get())) {
++      Microsoft::WRL::ComPtr<ID3D12Device5> d3d5;
++      if (SUCCEEDED(d3d.As(&d3d5))) {
++        d3d5->RemoveDevice();
++        return;
++      }
++    }
++  }
++#endif
++  device.ForceLoss(wgpu::DeviceLostReason::Unknown, "aurora_debug_lose_device");
++}
++
++void aurora_debug_stall_render_worker(unsigned seconds) {
++  aurora::gfx::render_worker::enqueue_work([seconds] {
++    if (seconds == 0) {
++      for (;;) {
++        std::this_thread::sleep_for(std::chrono::hours{1});
++      }
++    }
++    std::this_thread::sleep_for(std::chrono::seconds{seconds});
++  });
++}
+diff --git a/lib/gfx/device_watch.hpp b/lib/gfx/device_watch.hpp
+new file mode 100644
+index 0000000..c40cdb8
+--- /dev/null
++++ b/lib/gfx/device_watch.hpp
+@@ -0,0 +1,21 @@
++#pragma once
++
++#include <string>
++
++namespace aurora::gfx::device_watch {
++// Empty while the GPU device works; else why it doesn't (lost, removed by the driver...). Safe from any
++// thread, also while another thread is blocked inside Dawn.
++std::string lost_reason() noexcept;
++
++// For a thread that waits for the worker or the GPU, called now and then while it waits: ends the program with
++// a "Device lost" error (FATAL) when the device is gone and Dawn's own device-lost callback (which does the
++// same) hasn't, or can't: at once when only the driver knows (Dawn never noticed, e.g. its thread is stuck
++// in the driver), after 10 s when Dawn knows (its callback is then reporting it; one report, not two).
++class Watch {
++public:
++  void check(const char* waitingFor, double waitedSeconds);
++
++private:
++  double m_lostSince = -1.0;
++};
++} // namespace aurora::gfx::device_watch
+diff --git a/lib/gfx/frame.cpp b/lib/gfx/frame.cpp
+index 79e9d10..67b24e0 100644
+--- a/lib/gfx/frame.cpp
++++ b/lib/gfx/frame.cpp
+@@ -1,5 +1,6 @@
+ #include "frame.hpp"
+ 
++#include "device_watch.hpp"
+ #include "pipeline_cache.hpp"
+ #include "readback/readback.hpp"
+ #include "recording.hpp"
+@@ -205,6 +206,54 @@ void wait_for_gpu_progress(std::chrono::nanoseconds sleepDuration) {
+   std::this_thread::sleep_for(sleepDuration);
+ }
+ 
++const char* map_state_name(BufferMapState state) {
++  switch (state) {
++  case BufferMapState::Unmapped:
++    return "unmapped";
++  case BufferMapState::Mapping:
++    return "mapping";
++  case BufferMapState::Mapped:
++    return "mapped";
++  }
++  return "?";
++}
++
++// A wait for the render worker or the GPU (a frame slot, a staging buffer) that takes seconds is never normal.
++// From 1 s on, the device is checked (without Dawn's lock: device_watch), and a lost one ends the program with
++// the same "Device lost" error as Dawn's own callback, instead of a wait that would never end; every 5 s the
++// wait says what everything is doing.
++struct SlowWait {
++  const char* what;
++  PresentClock::time_point start = PresentClock::now();
++  PresentClock::time_point nextDeviceCheck = start + std::chrono::seconds{1};
++  PresentClock::time_point nextReport = start + std::chrono::seconds{5};
++  device_watch::Watch device;
++
++  void check() {
++    const auto now = PresentClock::now();
++    if (now < nextDeviceCheck) {
++      return;
++    }
++    nextDeviceCheck = now + std::chrono::milliseconds{250};
++    device.check(what, std::chrono::duration<double>(now - start).count());
++    if (now < nextReport) {
++      return;
++    }
++    nextReport = now + std::chrono::seconds{5};
++    const auto worker = render_worker::state();
++    std::string staging;
++    for (size_t i = 0; i < StagingBufferCount; ++i) {
++      staging += fmt::format("{}{}", i ? "," : "", map_state_name(g_mappingStates[i].load(std::memory_order_acquire)));
++    }
++    Log.warn("Waiting {:.0f} s for {}: frame slots free {}/{}, staging free {}/{} ({}); render worker: {} for "
++             "{:.0f} ms (frame {}), {} pending, {} queued, {} done; process-events request {}",
++             std::chrono::duration<double>(now - start).count(), what, g_frameSlots.free_count(), FrameSlotCount,
++             g_stagingSlots.free_count(), StagingBufferCount, staging, render_worker::item_type_name(worker.itemType),
++             worker.busyMs, worker.frameId, worker.pending, worker.queued, worker.finished,
++             g_processEventsQueued.load(std::memory_order_acquire) ? "queued" : "none");
++  }
++};
++
+ void pace_frame_start() {
+   ZoneScopedN("Frame start pacing");
+   if (g_frameSlots.free_count() == FrameSlotCount) {
+@@ -606,6 +655,7 @@ void shutdown() {
+ bool wait_for_staging_buffer(size_t slot) {
+   ZoneScopedN("Wait for buffer map");
+   map_staging_buffer(slot);
++  SlowWait slow{"a staging buffer to be mapped"};
+   while (true) {
+     const auto mappingState = g_mappingStates[slot].load(std::memory_order_acquire);
+     if (mappingState == BufferMapState::Mapped) {
+@@ -615,12 +665,14 @@ bool wait_for_staging_buffer(size_t slot) {
+       return false;
+     }
+     wait_for_gpu_progress(std::chrono::milliseconds{1});
++    slow.check();
+   }
+ }
+ 
+ size_t acquire_frame_slot() {
+   ZoneScopedN("Acquire frame slot");
+   const auto waitStart = PresentClock::now();
++  SlowWait slow{"a frame slot (the render worker finishing a frame)"};
+   while (true) {
+     if (const auto slot = g_frameSlots.try_acquire()) {
+       const auto waitDuration = PresentClock::now() - waitStart;
+@@ -629,11 +681,13 @@ size_t acquire_frame_slot() {
+       return *slot;
+     }
+     wait_for_gpu_progress(std::chrono::microseconds{100});
++    slow.check();
+   }
+ }
+ 
+ std::optional<size_t> acquire_mapped_staging_buffer() {
+   ZoneScopedN("Acquire mapped staging buffer");
++  SlowWait slow{"a free staging buffer"};
+   while (true) {
+     if (auto slot = g_stagingSlots.try_acquire()) {
+       if (wait_for_staging_buffer(*slot)) {
+@@ -643,6 +697,7 @@ std::optional<size_t> acquire_mapped_staging_buffer() {
+       return std::nullopt;
+     }
+     wait_for_gpu_progress(std::chrono::microseconds{100});
++    slow.check();
+   }
+ }
+ 
+diff --git a/lib/gfx/render_worker.cpp b/lib/gfx/render_worker.cpp
+index 69bb5c9..a5f5e00 100644
+--- a/lib/gfx/render_worker.cpp
++++ b/lib/gfx/render_worker.cpp
+@@ -10,6 +10,9 @@
+ 
+ #include <tracy/Tracy.hpp>
+ 
++#include "device_watch.hpp"
++#include "../internal.hpp"
++
+ namespace aurora::gfx::render_worker {
+ namespace {
+ constexpr size_t QueueCapacity = 256;
+@@ -37,6 +40,51 @@ void complete_sync(const std::shared_ptr<SyncState>& sync) {
+   sync->cv.notify_all();
+ }
+ 
++constexpr Module Log{"aurora::gfx::render_worker"};
++
++// The item being run (render_worker::state).
++std::atomic_int g_currentType = -1;
++std::atomic_uint64_t g_currentFrame = 0;
++std::atomic_int64_t g_currentSinceNs = 0;
++std::atomic_uint64_t g_finishedItems = 0;
++
++int64_t steady_ns() {
++  return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch())
++      .count();
++}
++
++// synchronize(): not for ever. A lost GPU device ends the program with an error instead (as in frame.cpp,
++// SlowWait), and a long wait says what the worker is doing.
++void wait_checking_device(std::unique_lock<std::mutex>& lock, SyncState& sync) {
++  const auto start = std::chrono::steady_clock::now();
++  auto nextReport = start + std::chrono::seconds{5};
++  device_watch::Watch device;
++  while (!sync.cv.wait_for(lock, std::chrono::seconds{1}, [&] { return sync.complete; })) {
++    const auto now = std::chrono::steady_clock::now();
++    const double waited = std::chrono::duration<double>(now - start).count();
++    device.check("the render worker to finish its work", waited);
++    if (now >= nextReport) {
++      nextReport = now + std::chrono::seconds{5};
++      const auto s = state();
++      Log.warn("Waiting {:.0f} s for the render worker to finish its work: it runs {} for {:.0f} ms (frame {}), {} "
++               "pending, {} queued, {} done",
++               waited, item_type_name(s.itemType), s.busyMs, s.frameId, s.pending, s.queued, s.finished);
++    }
++  }
++}
++
++struct CurrentItem {
++  explicit CurrentItem(const QueueItem& item) {
++    g_currentFrame.store(item.frameId, std::memory_order_relaxed);
++    g_currentSinceNs.store(steady_ns(), std::memory_order_relaxed);
++    g_currentType.store(static_cast<int>(item.type), std::memory_order_release);
++  }
++  ~CurrentItem() {
++    g_currentType.store(-1, std::memory_order_release);
++    g_finishedItems.fetch_add(1, std::memory_order_relaxed);
++  }
++};
++
+ void worker_main(std::stop_token token) {
+   g_workerThreadId = std::this_thread::get_id();
+ 
+@@ -50,6 +98,7 @@ void worker_main(std::stop_token token) {
+       continue;
+     }
+ 
++    const CurrentItem current{*item};
+     if (item->work) {
+       ZoneScopedN("QueueItem work");
+       item->work();
+@@ -274,6 +323,7 @@ void synchronize() {
+       .sync = sync,
+   });
+   std::unique_lock lock{sync->mutex};
++  wait_checking_device(lock, *sync);
+   sync->cv.wait(lock, [&] { return sync->complete; });
+ }
+ 
+@@ -289,4 +339,34 @@ bool is_worker_thread() noexcept { return g_workerThreadId == std::this_thread::
+ 
+ bool is_idle() noexcept { return g_pendingItems.load(std::memory_order_acquire) == 0; }
+ 
++WorkerState state() noexcept {
++  WorkerState s;
++  s.itemType = g_currentType.load(std::memory_order_acquire);
++  s.frameId = g_currentFrame.load(std::memory_order_relaxed);
++  if (s.itemType >= 0) {
++    s.busyMs = static_cast<double>(steady_ns() - g_currentSinceNs.load(std::memory_order_relaxed)) / 1e6;
++  }
++  s.pending = g_pendingItems.load(std::memory_order_acquire);
++  s.queued = g_queue.size();
++  s.finished = g_finishedItems.load(std::memory_order_relaxed);
++  return s;
++}
++
++const char* item_type_name(int type) noexcept {
++  switch (type) {
++  case static_cast<int>(ItemType::BeginFrame):
++    return "begin frame";
++  case static_cast<int>(ItemType::EncodePass):
++    return "encode pass";
++  case static_cast<int>(ItemType::EndFrame):
++    return "end frame (submit, present)";
++  case static_cast<int>(ItemType::Sync):
++    return "sync/work";
++  case static_cast<int>(ItemType::Shutdown):
++    return "shutdown";
++  default:
++    return "nothing (idle)";
++  }
++}
++
+ } // namespace aurora::gfx::render_worker
+diff --git a/lib/gfx/render_worker.hpp b/lib/gfx/render_worker.hpp
+index 8a41573..a6be979 100644
+--- a/lib/gfx/render_worker.hpp
++++ b/lib/gfx/render_worker.hpp
+@@ -87,4 +87,16 @@ void free_retired();
+ bool is_worker_thread() noexcept;
+ bool is_idle() noexcept;
+ 
++// What the worker is doing, for messages about a wait that takes too long (frame.cpp).
++struct WorkerState {
++  int itemType = -1;          // ItemType of the item it is running, -1 = none (waiting for work)
++  uint64_t frameId = 0;       // that item's frame
++  double busyMs = 0.0;        // how long it has been running it
++  size_t pending = 0;         // items enqueued and not finished (running one included)
++  size_t queued = 0;          // items waiting in the queue
++  uint64_t finished = 0;      // items finished since start
++};
++WorkerState state() noexcept;
++const char* item_type_name(int type) noexcept;
++
+ } // namespace aurora::gfx::render_worker

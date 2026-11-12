@@ -1,0 +1,9 @@
+* text=auto eol=lf
+*.bat text eol=crlf
+*.png binary
+*.ttf binary
+*.ico binary
+# Aurora patches are applied byte for byte and their SHA-1 decides whether the Aurora checkout is reset and patched
+# again (CMakeLists.txt): never convert their line endings (0004 holds CRLF lines; a normalised copy in a worktree
+# gave another hash, and two source trees sharing one Aurora folder then reset it under each other, 2026-11-10).
+third_party/patches/aurora/*.patch -text

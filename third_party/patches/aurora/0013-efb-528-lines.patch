@@ -1,0 +1,219 @@
+diff --git a/lib/dolphin/gx/GXFrameBuffer.cpp b/lib/dolphin/gx/GXFrameBuffer.cpp
+index 85c29e7..03f6cdf 100644
+--- a/lib/dolphin/gx/GXFrameBuffer.cpp
++++ b/lib/dolphin/gx/GXFrameBuffer.cpp
+@@ -18,7 +18,7 @@ aurora::Vec2<uint32_t> scale_copy_dst(u32 logicalWidth, u32 logicalHeight) {
+   }
+ 
+   const auto [logicalFbWidth, logicalFbHeight] = aurora::gx::logical_fb_size();
+-  const auto [targetWidth, targetHeight] = aurora::gfx::get_render_target_size();
++  const auto [targetWidth, targetHeight] = aurora::gfx::get_render_target_display_size();
+   if (logicalFbWidth == 0 || logicalFbHeight == 0 || targetWidth == 0 || targetHeight == 0) {
+     return {logicalWidth, logicalHeight};
+   }
+diff --git a/lib/gfx/efb.cpp b/lib/gfx/efb.cpp
+index 6764311..0d773e4 100644
+--- a/lib/gfx/efb.cpp
++++ b/lib/gfx/efb.cpp
+@@ -32,6 +32,18 @@ AuroraWindowSize display_size(uint32_t width, uint32_t height, float scale) {
+   };
+ }
+ 
++// The GameCube's EFB holds up to 528 lines, also when the display shows only 480 (NTSC): games render
++// textures into the lines below the picture (XD's 512x512 battle shadow map). Those lines are never shown.
++constexpr uint32_t EfbMaxLines = 528;
++
++uint32_t texture_height(uint32_t visibleHeight, uint32_t baseHeight) {
++  if (baseHeight == 0 || baseHeight >= EfbMaxLines) {
++    return visibleHeight;
++  }
++  return static_cast<uint32_t>(
++      std::ceil(static_cast<double>(visibleHeight) * static_cast<double>(EfbMaxLines) / baseHeight));
++}
++
+ } // namespace
+ 
+ AuroraWindowSize calculate_size(AuroraWindowSize size, uint32_t baseWidth, uint32_t baseHeight,
+@@ -180,7 +192,8 @@ State prepare_frame(bool commit) {
+     size = calculate_size(size, baseWidth, baseHeight, g_scale, g_aspectFit);
+   }
+ 
+-  webgpu::resize_efb(size.fb_width, size.fb_height);
++  // The EFB textures get the hardware's hidden lines below the display: size.fb_height stays the displayed part.
++  webgpu::resize_efb(size.fb_width, texture_height(size.fb_height, baseHeight));
+   auto state = capture_state();
+   state.size = size;
+   state.xfb = target;
+diff --git a/lib/gfx/recording.cpp b/lib/gfx/recording.cpp
+index 7d0a8cf..05ff7fc 100644
+--- a/lib/gfx/recording.cpp
++++ b/lib/gfx/recording.cpp
+@@ -578,6 +578,8 @@ struct PresentPool {
+ std::array<PresentPool, FrameSlotCount> g_presentPools;
+ 
+ webgpu::TextureWithSampler g_xfb;
++// g_xfb holds a display copy (GXCopyDisp); until the first one, the EFB's displayed lines (finish).
++bool g_xfbFromCopyDisp = false;
+ 
+ const webgpu::TextureWithSampler& acquire_xfb(uint32_t width, uint32_t height, wgpu::TextureFormat format) {
+   if (!g_xfb.texture || g_xfb.size.width != width || g_xfb.size.height != height || g_xfb.format != format) {
+@@ -757,6 +759,7 @@ void shutdown_recording() {
+     pool = {};
+   }
+   g_xfb = {};
++  g_xfbFromCopyDisp = false;
+   g_recorder.currentRenderPass = UINT32_MAX;
+   g_offscreenCache.clear();
+   g_recorder.offscreenColor = {};
+@@ -956,6 +959,17 @@ Vec2<uint32_t> get_render_target_size() noexcept {
+   return {windowSize.fb_width, windowSize.fb_height};
+ }
+ 
++Vec2<uint32_t> get_render_target_display_size() noexcept {
++  auto size = get_render_target_size();
++  if (g_recorder.active() && !g_recorder.inOffscreen && g_recorder.currentRenderPass < current_render_passes().size()) {
++    const auto displayHeight = current_frame_packet().efb.size.fb_height;
++    if (displayHeight != 0 && displayHeight < size.y) {
++      size.y = displayHeight;
++    }
++  }
++  return size;
++}
++
+ void set_viewport(const Viewport& cmd) noexcept {
+   if (cmd != g_recorder.cachedViewport) {
+     push_command(CommandType::SetViewport, Command::Data{.setViewport = cmd});
+@@ -1088,6 +1102,7 @@ void copy_disp(ClipRect rect, bool clearColor, bool clearAlpha, bool clearDepth,
+     prevPass.xfbDst =
+         acquire_xfb(static_cast<uint32_t>(right - left), static_cast<uint32_t>(bottom - top), color.format).texture;
+     prevPass.xfbRect = {.x = left, .y = top, .width = right - left, .height = bottom - top};
++    g_xfbFromCopyDisp = true;
+   }
+   enqueue_pass(current_frame_packet(), g_recorder.currentRenderPass);
+   resume_pass_after_copy(prevPass, rect, clearColor, clearAlpha, clearDepth, clearColorValue, clearDepthValue);
+@@ -1318,8 +1333,10 @@ bool readback::capture_color(StreamHandle stream, uint64_t key, uint32_t* widthO
+   if (color.format != wgpu::TextureFormat::RGBA8Unorm && color.format != wgpu::TextureFormat::BGRA8Unorm) {
+     return false;
+   }
++  // Only the displayed lines, not the EFB's hidden ones below them.
++  const auto height = get_render_target_display_size().y;
+ 
+-  const auto bytes = uint64_t{color.size.width} * color.size.height * 4;
++  const auto bytes = uint64_t{color.size.width} * height * 4;
+   if (bytes > UINT32_MAX) {
+     return false;
+   }
+@@ -1335,16 +1352,16 @@ bool readback::capture_color(StreamHandle stream, uint64_t key, uint32_t* widthO
+ 
+   job->colorTexture = pass.copySourceTexture;
+   job->colorWidth = color.size.width;
+-  job->colorHeight = color.size.height;
++  job->colorHeight = height;
+   job->colorRowPitch = AURORA_ALIGN(color.size.width * 4, 256);
+   job->colorFormat = color.format;
+   job->packet->imageWidth = color.size.width;
+-  job->packet->imageHeight = color.size.height;
++  job->packet->imageHeight = height;
+   if (widthOut) {
+     *widthOut = color.size.width;
+   }
+   if (heightOut) {
+-    *heightOut = color.size.height;
++    *heightOut = height;
+   }
+ 
+   pass.presentConsumer = true;
+@@ -1365,6 +1382,7 @@ ReadbackCapture readback_capture() noexcept {
+       .offscreen = g_recorder.inOffscreen,
+       .width = size.width,
+       .height = size.height,
++      .displayHeight = get_render_target_display_size().y,
+   };
+ }
+ 
+@@ -1477,6 +1495,16 @@ void finish() {
+   AURORA_ASSERT(!g_recorder.inOffscreen, "finish called while offscreen rendering is active");
+   if (g_recorder.currentRenderPass != UINT32_MAX) {
+     auto& frame = current_frame_packet();
++    // Without a display copy the EFB itself is shown (xfb_present_source). Its texture also holds the hidden
++    // lines below the display (efb.cpp), so show only the displayed ones: copy them out like a GXCopyDisp.
++    auto& pass = current_render_passes()[g_recorder.currentRenderPass];
++    const auto& color = pass.colorAttachments[SceneColorAttachmentIndex];
++    const auto displayHeight = get_render_target_display_size().y;
++    if (!g_xfbFromCopyDisp && !pass.xfbDst && pass.copySourceTexture && displayHeight < color.size.height) {
++      pass.xfbDst = acquire_xfb(color.size.width, displayHeight, color.format).texture;
++      pass.xfbRect = {.x = 0, .y = 0, .width = static_cast<int32_t>(color.size.width),
++                      .height = static_cast<int32_t>(displayHeight)};
++    }
+     frame.uniforms.append_zeroes(gx::MaxUniformSize);
+     enqueue_pass(frame, g_recorder.currentRenderPass);
+     g_recorder.currentRenderPass = UINT32_MAX;
+diff --git a/lib/gfx/recording.hpp b/lib/gfx/recording.hpp
+index 15f52cd..18253e8 100644
+--- a/lib/gfx/recording.hpp
++++ b/lib/gfx/recording.hpp
+@@ -122,6 +122,9 @@ void clear_rect(ClipRect rect, bool clearColor, bool clearAlpha, bool clearDepth
+                 float clearDepthValue);
+ uint32_t align_uniform(uint32_t value);
+ Vec2<uint32_t> get_render_target_size() noexcept;
++// The part of the render target that GX's logical frame buffer maps onto: for the EFB its displayed lines
++// (its texture also holds the hidden lines below them, efb.cpp), for an offscreen target all of it.
++Vec2<uint32_t> get_render_target_display_size() noexcept;
+ void set_viewport(const Viewport& viewport) noexcept;
+ void set_scissor(const ClipRect& scissor) noexcept;
+ void push_debug_group(std::string label);
+@@ -132,6 +135,7 @@ struct ReadbackCapture {
+   bool offscreen = false;
+   uint32_t width = 0;
+   uint32_t height = 0;
++  uint32_t displayHeight = 0; // height without the EFB's hidden lines (get_render_target_display_size)
+ };
+ ReadbackCapture readback_capture() noexcept;
+ bool push_readback_op(std::shared_ptr<readback::Job> job, bool efbSource);
+diff --git a/lib/gx/gx.cpp b/lib/gx/gx.cpp
+index 490de4c..8591d1e 100644
+--- a/lib/gx/gx.cpp
++++ b/lib/gx/gx.cpp
+@@ -241,7 +241,8 @@ gfx::Viewport map_logical_viewport(const gfx::Viewport& logicalViewport) noexcep
+   }
+ 
+   const auto [logicalFbWidth, logicalFbHeight] = logical_fb_size();
+-  const auto [targetWidth, targetHeight] = gfx::get_render_target_size();
++  // Scaled by the displayed part: the EFB's hidden lines below it continue at the same scale.
++  const auto [targetWidth, targetHeight] = gfx::get_render_target_display_size();
+   if (logicalFbWidth == 0 || logicalFbHeight == 0 || targetWidth == 0 || targetHeight == 0) {
+     return logicalViewport;
+   }
+@@ -264,13 +265,16 @@ gfx::ClipRect map_logical_scissor(const gfx::ClipRect& logicalScissor) noexcept
+   }
+ 
+   const auto [logicalFbWidth, logicalFbHeight] = logical_fb_size();
++  // Scaled by the displayed part, clamped to the whole target: the EFB's hidden lines below the display
++  // are drawn into and copied from like the rest (the hardware's EFB has 528 lines).
++  const auto [displayWidth, displayHeight] = gfx::get_render_target_display_size();
+   const auto [targetWidth, targetHeight] = gfx::get_render_target_size();
+-  if (logicalFbWidth == 0 || logicalFbHeight == 0 || targetWidth == 0 || targetHeight == 0) {
++  if (logicalFbWidth == 0 || logicalFbHeight == 0 || displayWidth == 0 || displayHeight == 0) {
+     return logicalScissor;
+   }
+ 
+-  const float scaleX = static_cast<float>(targetWidth) / static_cast<float>(logicalFbWidth);
+-  const float scaleY = static_cast<float>(targetHeight) / static_cast<float>(logicalFbHeight);
++  const float scaleX = static_cast<float>(displayWidth) / static_cast<float>(logicalFbWidth);
++  const float scaleY = static_cast<float>(displayHeight) / static_cast<float>(logicalFbHeight);
+ 
+   const float left = static_cast<float>(logicalScissor.x) * scaleX;
+   const float top = static_cast<float>(logicalScissor.y) * scaleY;
+diff --git a/lib/gx/readback.cpp b/lib/gx/readback.cpp
+index d7bedda..bebd9d1 100644
+--- a/lib/gx/readback.cpp
++++ b/lib/gx/readback.cpp
+@@ -222,7 +222,7 @@ void handle_capture_peeks(ByteReader& reader) {
+       .totalWords = header.count,
+       .scaleNumX = native ? 1 : capture.width,
+       .scaleDenX = native ? 1 : logical.x,
+-      .scaleNumY = native ? 1 : capture.height,
++      .scaleNumY = native ? 1 : capture.displayHeight,
+       .scaleDenY = native ? 1 : logical.y,
+       .targetWidth = capture.width,
+       .targetHeight = capture.height,

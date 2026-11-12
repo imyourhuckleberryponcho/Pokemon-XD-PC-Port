@@ -1,0 +1,16 @@
+diff --git a/lib/dolphin/pad/pad.cpp b/lib/dolphin/pad/pad.cpp
+--- a/lib/dolphin/pad/pad.cpp
++++ b/lib/dolphin/pad/pad.cpp
+@@ -257,6 +257,12 @@ void PADControlMotor(const u32 chan, const u32 cmd) {
+ 
+   const auto instance = aurora::gamepad::get_instance_for_player(chan);
+   if (controller->m_isGameCube) {
++    // A GameCube controller's motor is only on or off: a profile with no strength (rumble switched
++    // off) keeps it off.
++    if (cmd == PAD_MOTOR_RUMBLE && controller->m_rumbleIntensityLow == 0 && controller->m_rumbleIntensityHigh == 0) {
++      aurora::gamepad::controller_rumble(instance, 0, 1, 0);
++      return;
++    }
+     if (cmd == PAD_MOTOR_STOP) {
+       aurora::gamepad::controller_rumble(instance, 0, 1, 0);
+     } else if (cmd == PAD_MOTOR_RUMBLE) {

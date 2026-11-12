@@ -1,0 +1,458 @@
+diff --git a/include/dolphin/gx/GXAurora.h b/include/dolphin/gx/GXAurora.h
+--- a/include/dolphin/gx/GXAurora.h
++++ b/include/dolphin/gx/GXAurora.h
+@@ -223,6 +223,55 @@ void AuroraGXSync(void);
+  */
+ void AuroraSetDrawsBlocking(bool blocking);
+ 
++/**
++ * Frame replay (photo modes). The tap sees every command the command processor has handled, in stream order, on
++ * the thread that processes them. A chunk ends right after each display copy (GXCopyDisp, or the raw BP copy with
++ * the display bit), and `displayCopy` says so, so a frame's commands can be kept and written into the command
++ * stream again later. NULL: no tap.
++ */
++typedef void (*AuroraCommandTap)(const void* data, u32 size, GXBool displayCopy);
++void AuroraSetCommandTap(AuroraCommandTap tap);
++
++/**
++ * Draws perspective scenes as seen from another camera (photo modes). While `active`, every draw with a
++ * perspective projection and a viewport of at least `minViewportWidth` (logical pixels) - with `sceneOnly`, only
++ * those whose projection is `sceneProj` - gets `view` (a 3x4 row-major matrix: from the original camera's view
++ * space to the new one's) applied after its position matrix, its rotation applied to the normals and to the
++ * lights, and its projection's x and y scaled by `zoom`. With `hide2D`, the other draws over such a viewport
++ * (orthographic, or another perspective projection than the scene's) that sample a texture other than an EFB copy
++ * (menus, text, on-screen displays) are skipped. Copied; NULL: off. Setting it also starts a new list of the
++ * perspective projections drawn (AuroraGetViewOverrideProjections).
++ */
++typedef struct {
++  GXBool active;
++  GXBool hide2D;
++  GXBool sceneOnly;
++  f32 view[3][4];
++  f32 zoom;
++  f32 minViewportWidth;
++  f32 sceneProj[4][4];
++} AuroraViewOverride;
++void AuroraSetViewOverride(const AuroraViewOverride* override);
++/** The vertical field of view (degrees) of the last projection the override applied to; 0 if none. */
++f32 AuroraGetViewOverrideFovY(void);
++/** A perspective projection drawn (over a large viewport) since the override was set: how many draws used it and
++ * the number of the first of them (all draws counted). */
++typedef struct {
++  f32 proj[4][4];
++  u32 draws;
++  u32 firstDraw;
++} AuroraViewProjection;
++/** Copies up to `max` of them, in order of first use; returns how many there are. */
++u32 AuroraGetViewOverrideProjections(AuroraViewProjection* out, u32 max);
++
++/**
++ * A copy of the command processor's state (matrices, vertex formats, TEV...), and putting one back (which frees
++ * it). For drawing other commands in between (a replayed frame) and then carrying on where the stream was.
++ * Both wait until the commands written so far have been processed. EFB copies made in between are kept.
++ */
++void* AuroraSaveGXState(void);
++void AuroraRestoreGXState(void* saved);
++
+ /**
+  * Sets the actual render viewport in native framebuffer coordinates.
+  * Overrides the automatically scaled values set by the logical GXSetViewport.
+diff --git a/lib/dolphin/gx/GXAurora.cpp b/lib/dolphin/gx/GXAurora.cpp
+--- a/lib/dolphin/gx/GXAurora.cpp
++++ b/lib/dolphin/gx/GXAurora.cpp
+@@ -9,6 +9,7 @@
+ 
+ #include "../../gfx/readback/readback.hpp"
+ #include "../../gx/fifo.hpp"
++#include "../../gx/command_processor.hpp" // AuroraRestoreGXState
+ #include "../../gx/readback.hpp"
+ 
+ static void GXWriteString(const char* label) {
+@@ -63,6 +64,36 @@ void AuroraSetDrawsBlocking(bool blocking) {
+   GX_WRITE_U8(blocking);
+ }
+ 
++void AuroraSetCommandTap(AuroraCommandTap tap) { aurora::gx::fifo::set_command_tap(tap); }
++
++void AuroraSetViewOverride(const AuroraViewOverride* override) { aurora::gx::set_view_override(override); }
++
++f32 AuroraGetViewOverrideFovY(void) { return aurora::gx::view_override_fov_y(); }
++
++u32 AuroraGetViewOverrideProjections(AuroraViewProjection* out, u32 max) {
++  return aurora::gx::view_override_projections(out, max);
++}
++
++void* AuroraSaveGXState(void) {
++  aurora::gx::fifo::drain();
++  return new aurora::gx::GXState(aurora::gx::g_gxState);
++}
++
++void AuroraRestoreGXState(void* saved) {
++  if (saved == nullptr) {
++    return;
++  }
++  aurora::gx::fifo::drain();
++  auto* state = static_cast<aurora::gx::GXState*>(saved);
++  auto copies = std::move(aurora::gx::g_gxState.copyTextures); // (the newest EFB copies stay)
++  aurora::gx::g_gxState = *state;
++  aurora::gx::g_gxState.copyTextures = std::move(copies);
++  aurora::gx::g_gxState.dirty = aurora::gx::DirtyAll;
++  aurora::gx::g_gxState.clearVtxSizeCache();
++  aurora::gx::fifo::clear_draw_cache();
++  delete state;
++}
++
+ void GXSetViewportRender(f32 left, f32 top, f32 wd, f32 ht, f32 nearz, f32 farz) {
+   GX_WRITE_AURORA(GX_AURORA_LOAD_VIEWPORT_RENDER);
+   GX_WRITE_F32(left);
+diff --git a/lib/gx/command_processor.cpp b/lib/gx/command_processor.cpp
+--- a/lib/gx/command_processor.cpp
++++ b/lib/gx/command_processor.cpp
+@@ -249,11 +249,32 @@ u8 line_mode_for_prim(GXPrimitive prim) noexcept {
+ static void handle_draw(u8 cmd, ByteReader& reader) noexcept;
+ static void handle_aurora(ByteReader& reader) noexcept;
+ 
++// Command taps (photo modes, fifo.hpp set_command_tap): a display copy was made, and how deep process() is (a
++// display list called from the stream runs in a nested call). Chunks end after the top-level command that made
++// the copy.
++static bool sCopiedDisplay = false;
++static int sProcessDepth = 0;
++
++bool take_display_copy_flag() noexcept {
++  const bool copied = sCopiedDisplay;
++  sCopiedDisplay = false;
++  return copied;
++}
++
+ ProcessResult process(const u8* data, u32 size) noexcept {
+   ZoneScoped;
+   ByteReader reader{{data, size}};
++  struct Depth {
++    Depth() { ++sProcessDepth; }
++    ~Depth() { --sProcessDepth; }
++  } depth;
+ 
+   while (!reader.empty()) {
++    if (sCopiedDisplay && sProcessDepth == 1 && reader.offset() != 0)
++      UNLIKELY { // (a display list called just before made a display copy)
++        sCopiedDisplay = false;
++        return {static_cast<u32>(reader.offset()), false, true};
++      }
+     const u8 cmd = reader.read<u8>();
+     u8 opcode = cmd & CP_OPCODE_MASK;
+ 
+@@ -267,6 +288,13 @@ ProcessResult process(const u8* data, u32 size) noexcept {
+       if (reg_get(value, 8, 24) == GX_BP_REG_DRAWDONE) {
+         return {static_cast<u32>(reader.offset()), true};
+       }
++      if (reg_get(value, 8, 24) == 0x52 && reg_get(value, 1, 14) != 0 && has_command_tap()) {
++        sCopiedDisplay = true;
++        if (sProcessDepth == 1) {
++          sCopiedDisplay = false;
++          return {static_cast<u32>(reader.offset()), false, true};
++        }
++      }
+       break;
+     }
+ 
+@@ -721,6 +749,12 @@ static void draw_prim(GXPrimitive prim, GXVtxFmt fmt, u16 vtxCount, ByteReader&
+                           prim != GX_LINES && prim != GX_LINESTRIP && prim != GX_POINTS;
+   auto* lastDraw = cleanState ? gfx::get_last_draw_command<DrawData>() : nullptr;
+   const bool canMerge = lastDraw != nullptr && lastDraw->instanceCount == 1;
++  // Photo modes: 2D hidden (AuroraSetViewOverride).
++  if (view_override_hides_draw())
++    UNLIKELY {
++      reader.take(totalVtxBytes);
++      return;
++    }
+ 
+   // Push raw vertex data to buffer. Merged draws must remain contiguous with the previous range.
+   const auto vertexData = reader.take(totalVtxBytes);
+@@ -989,7 +1023,7 @@ void handle_aurora(ByteReader& reader) noexcept {
+     const u32 totalVtxBytes = vtxCount * vtxSize;
+     const auto vertexData = reader.take(totalVtxBytes);
+     const gfx::Range vertRange = gfx::push_verts(vertexData.data(), vertexData.size(), 4);
+-    if (indexCount != 0) {
++    if (indexCount != 0 && !view_override_hides_draw()) {
+       push_gx_draw(prim, fmt, vtxCount, vertRange, idxRange, indexCount);
+     }
+   } else if (subCmd == GX_AURORA_DEBUG_GROUP_PUSH) {
+diff --git a/lib/gx/command_processor.hpp b/lib/gx/command_processor.hpp
+--- a/lib/gx/command_processor.hpp
++++ b/lib/gx/command_processor.hpp
+@@ -10,10 +10,14 @@ namespace aurora::gx::fifo {
+ struct ProcessResult {
+   uint32_t bytesProcessed;
+   bool drawDone;
++  bool displayCopy = false; // (only while a command tap is set: fifo.hpp set_command_tap)
+ };
+ 
+ // Process GX FIFO commands until the next draw done event or end of buffer
+ ProcessResult process(const uint8_t* data, uint32_t size) noexcept;
+ void clear_draw_cache() noexcept;
++// Command taps (photo modes): whether a display copy was made since the last call (and clears it).
++bool take_display_copy_flag() noexcept;
++bool has_command_tap() noexcept; // fifo.cpp
+ 
+ } // namespace aurora::gx::fifo
+diff --git a/lib/gx/fifo.cpp b/lib/gx/fifo.cpp
+--- a/lib/gx/fifo.cpp
++++ b/lib/gx/fifo.cpp
+@@ -36,6 +36,7 @@ std::mutex sBufferMutex;
+ std::atomic<uint32_t> sWorkerWake{0};
+ thread::Thread sWorkerThread;
+ std::atomic<DrawDoneCallback> sDrawDoneCallback{nullptr};
++std::atomic<CommandTap> sCommandTap{nullptr};
+ 
+ void dispatch_draw_done() noexcept {
+   if (const auto callback = sDrawDoneCallback.load(std::memory_order_acquire); callback != nullptr) {
+@@ -60,6 +61,9 @@ void process_to(uint64_t target, std::memory_order order) noexcept {
+       const auto start = static_cast<uint32_t>(processed - sStreamBase);
+       const auto size = static_cast<uint32_t>(target - processed);
+       result = process(detail::sBufferData + start, size);
++      if (const auto tap = sCommandTap.load(std::memory_order_acquire); tap != nullptr && result.bytesProcessed > 0) {
++        tap(detail::sBufferData + start, result.bytesProcessed, result.displayCopy || take_display_copy_flag());
++      }
+     }
+     AURORA_ASSERT(result.bytesProcessed > 0 && result.bytesProcessed <= target - processed,
+                   "FIFO processor made invalid progress: processed {} of {} remaining bytes", result.bytesProcessed,
+@@ -191,6 +195,10 @@ DrawDoneCallback set_draw_done_callback(DrawDoneCallback callback) noexcept {
+   return sDrawDoneCallback.exchange(callback, std::memory_order_acq_rel);
+ }
+ 
++void set_command_tap(CommandTap tap) noexcept { sCommandTap.store(tap, std::memory_order_release); }
++
++bool has_command_tap() noexcept { return sCommandTap.load(std::memory_order_relaxed) != nullptr; }
++
+ void finish_draw() noexcept {
+   if (!sFrameActive || sProcessingMode == ProcessingMode::Drain || detail::sInDisplayList) {
+     return;
+diff --git a/lib/gx/fifo.hpp b/lib/gx/fifo.hpp
+--- a/lib/gx/fifo.hpp
++++ b/lib/gx/fifo.hpp
+@@ -104,6 +104,10 @@ void begin_display_list(uint8_t* buf, uint32_t size);
+ uint32_t end_display_list();
+ bool in_display_list();
+ 
++// Photo modes (AuroraSetCommandTap): sees every processed chunk; chunks end at display copies.
++using CommandTap = void (*)(const void* data, uint32_t size, bool displayCopy);
++void set_command_tap(CommandTap tap) noexcept;
++
+ // Ensure all buffered commands have been processed.
+ void drain();
+ 
+diff --git a/lib/gx/gx.cpp b/lib/gx/gx.cpp
+--- a/lib/gx/gx.cpp
++++ b/lib/gx/gx.cpp
+@@ -672,4 +672,117 @@ void shutdown() noexcept {
+   g_gxState.loadedTluts.fill({});
+   texture::shutdown();
+ }
++
++namespace {
++// Set between frames (after the command stream has been processed), read while processing.
++AuroraViewOverride s_viewOverride{};
++Mat3x4<float> s_overrideView{};
++std::atomic<float> s_overrideFovY{0.f};
++// The perspective projections over a large viewport seen since the override was set, in order of first use.
++constexpr u32 MaxOverrideProjections = 16;
++std::array<AuroraViewProjection, MaxOverrideProjections> s_projections{};
++u32 s_projectionCount = 0;
++u32 s_drawCount = 0;
++
++bool same_projection(const Mat4x4<float>& p, const f32 (&q)[4][4]) noexcept {
++  for (int r = 0; r < 4; ++r) {
++    for (int c = 0; c < 4; ++c) {
++      const float a = p[r][c], b = q[r][c];
++      if (std::fabs(a - b) > 1e-5f * std::max(1.f, std::max(std::fabs(a), std::fabs(b)))) {
++        return false;
++      }
++    }
++  }
++  return true;
++}
++
++// Whether the current draw is one the camera applies to: perspective over a large viewport and, with sceneOnly,
++// the scene's own projection (games draw on-screen displays with perspective layers of their own too).
++bool is_scene_draw() noexcept {
++  if (g_gxState.projType != GX_PERSPECTIVE || g_gxState.logicalViewport.width < s_viewOverride.minViewportWidth) {
++    return false;
++  }
++  return !s_viewOverride.sceneOnly || same_projection(g_gxState.proj, s_viewOverride.sceneProj);
++}
++} // namespace
++
++void set_view_override(const AuroraViewOverride* override) noexcept {
++  s_viewOverride = override != nullptr ? *override : AuroraViewOverride{};
++  if (override != nullptr) {
++    const auto& v = override->view;
++    s_overrideView = {{v[0][0], v[0][1], v[0][2], v[0][3]},
++                      {v[1][0], v[1][1], v[1][2], v[1][3]},
++                      {v[2][0], v[2][1], v[2][2], v[2][3]}};
++  }
++  s_projectionCount = 0;
++  s_drawCount = 0;
++}
++
++float view_override_fov_y() noexcept { return s_overrideFovY.load(std::memory_order_relaxed); }
++
++u32 view_override_projections(AuroraViewProjection* out, u32 max) noexcept {
++  const u32 n = std::min(max, s_projectionCount);
++  for (u32 i = 0; i < n; ++i) {
++    out[i] = s_projections[i];
++  }
++  return s_projectionCount;
++}
++
++const Mat3x4<float>* view_override_for_draw(float* zoom) noexcept {
++  if (!s_viewOverride.active || !is_scene_draw()) {
++    return nullptr;
++  }
++  const float p11 = g_gxState.proj.m1[1];
++  if (p11 > 0.f) {
++    s_overrideFovY.store(2.f * std::atan(1.f / p11) * 57.2957795f, std::memory_order_relaxed);
++  }
++  *zoom = s_viewOverride.zoom > 0.f ? s_viewOverride.zoom : 1.f;
++  return &s_overrideView;
++}
++
++bool view_override_hides_draw() noexcept {
++  const auto& state = g_gxState;
++  if (!s_viewOverride.active) {
++    return false;
++  }
++  const u32 order = s_drawCount++;
++  const bool large = state.logicalViewport.width >= s_viewOverride.minViewportWidth;
++  if (large && state.projType == GX_PERSPECTIVE) {
++    u32 i = 0;
++    for (; i < s_projectionCount; ++i) {
++      if (same_projection(state.proj, s_projections[i].proj)) {
++        break;
++      }
++    }
++    if (i == s_projectionCount && i < MaxOverrideProjections) {
++      auto& p = s_projections[s_projectionCount++];
++      for (int r = 0; r < 4; ++r) {
++        for (int c = 0; c < 4; ++c) {
++          p.proj[r][c] = state.proj[r][c];
++        }
++      }
++      p.draws = 0;
++      p.firstDraw = order;
++    }
++    if (i < MaxOverrideProjections) {
++      s_projections[i].draws++;
++    }
++  }
++  // 2D to hide: orthographic, or another perspective layer than the scene's, sampling a texture that isn't an EFB
++  // copy, over a large viewport.
++  if (!s_viewOverride.hide2D || !large || (state.projType == GX_PERSPECTIVE && is_scene_draw())) {
++    return false;
++  }
++  for (u32 i = 0; i < state.numTevStages; ++i) {
++    const auto map = state.tevStages[i].texMapId;
++    if ((map & 0xFF) == GX_TEXMAP_NULL || (map & 0x100) != 0 || (map & 0xFF) >= MaxTextures) {
++      continue;
++    }
++    const void* data = state.loadedTextures[map & 0xFF].data;
++    if (data != nullptr && !state.copyTextures.contains(data)) {
++      return true;
++    }
++  }
++  return false;
++}
+ } // namespace aurora::gx
+diff --git a/lib/gx/gx.hpp b/lib/gx/gx.hpp
+--- a/lib/gx/gx.hpp
++++ b/lib/gx/gx.hpp
+@@ -588,4 +588,14 @@ u8 comp_type_size(GXAttr attr, GXCompType type) noexcept;
+ u8 comp_cnt_count(GXAttr attr, GXCompCnt cnt) noexcept;
+ 
+ constexpr bool efb_has_alpha(GXPixelFmt format) noexcept { return format == GX_PF_RGBA6_Z24; }
++
++// Photo modes (AuroraSetViewOverride): another camera for perspective draws, 2D hidden.
++void set_view_override(const AuroraViewOverride* override) noexcept;
++float view_override_fov_y() noexcept;
++u32 view_override_projections(AuroraViewProjection* out, u32 max) noexcept;
++// The override for the current draw: its view matrix, or nullptr when it doesn't apply (off, orthographic,
++// a small viewport). Also notes the projection's field of view.
++const Mat3x4<float>* view_override_for_draw(float* zoom) noexcept;
++// Called for every draw while the override is on (notes its projection): whether it is 2D to hide.
++bool view_override_hides_draw() noexcept;
+ } // namespace aurora::gx
+diff --git a/lib/gx/shader_info.cpp b/lib/gx/shader_info.cpp
+--- a/lib/gx/shader_info.cpp
++++ b/lib/gx/shader_info.cpp
+@@ -13,6 +13,35 @@ constexpr Module Log{"aurora::gx"};
+ 
+ bool is_alpha_bump_channel(GXChannelID id) { return id == GX_ALPHA_BUMP || id == GX_ALPHA_BUMPN; }
+ 
++// Photo modes: view (3x4, affine) * m (3x4). Without `translate` only view's rotation (normal matrices).
++Mat3x4<float> view_mul(const Mat3x4<float>& view, const Mat3x4<float>& m, bool translate) {
++  const Vec4<float>* v[3] = {&view.m0, &view.m1, &view.m2};
++  const Vec4<float>* r[3] = {&m.m0, &m.m1, &m.m2};
++  Mat3x4<float> out;
++  Vec4<float>* o[3] = {&out.m0, &out.m1, &out.m2};
++  for (int i = 0; i < 3; ++i) {
++    for (int j = 0; j < 4; ++j) {
++      float s = (*v[i])[0] * (*r[0])[j] + (*v[i])[1] * (*r[1])[j] + (*v[i])[2] * (*r[2])[j];
++      if (j == 3 && translate) {
++        s += (*v[i])[3];
++      }
++      (*o[i])[j] = s;
++    }
++  }
++  return out;
++}
++
++// Photo modes: a light (view space) as seen from the new camera: its position moved, its direction turned.
++Light view_light(const Mat3x4<float>& view, Light light) {
++  const Vec4<float>* v[3] = {&view.m0, &view.m1, &view.m2};
++  const Vec4<float> p = light.pos, d = light.dir;
++  for (int i = 0; i < 3; ++i) {
++    light.pos[i] = (*v[i])[0] * p[0] + (*v[i])[1] * p[1] + (*v[i])[2] * p[2] + (*v[i])[3];
++    light.dir[i] = (*v[i])[0] * d[0] + (*v[i])[1] * d[1] + (*v[i])[2] * d[2];
++  }
++  return light;
++}
++
+ Light normalize_light_dir(Light light) {
+   const double x = light.dir[0];
+   const double y = light.dir[1];
+@@ -498,10 +527,17 @@ static void fill_uniform(ByteBuffer& buf, const ShaderInfo& info) noexcept {
+   } else {
+     proj.m2 = proj.m2 + proj.m3;
+   }
++  // Photo modes (AuroraSetViewOverride): another camera; the field of view scaled by zoom.
++  float zoom = 1.f;
++  const Mat3x4<float>* view = view_override_for_draw(&zoom);
++  if (view != nullptr) {
++    proj.m0[0] *= zoom;
++    proj.m1[1] *= zoom;
++  }
+   buf.append(proj);
+ 
+   for (int i = 0; i < MaxPnMtx; i++) {
+-    buf.append(g_gxState.pnMtx[i].pos);
++    buf.append(view != nullptr ? view_mul(*view, g_gxState.pnMtx[i].pos, true) : g_gxState.pnMtx[i].pos);
+   }
+ 
+   for (int i = 0; i < MaxTexMtx; i++) {
+@@ -509,7 +545,7 @@ static void fill_uniform(ByteBuffer& buf, const ShaderInfo& info) noexcept {
+   }
+ 
+   for (int i = 0; i < MaxPnMtx; i++) {
+-    buf.append(g_gxState.pnMtx[i].nrm);
++    buf.append(view != nullptr ? view_mul(*view, g_gxState.pnMtx[i].nrm, false) : g_gxState.pnMtx[i].nrm);
+   }
+ 
+   for (int i = 0; i < info.loadsTevReg.size(); ++i) {
+@@ -521,7 +557,7 @@ static void fill_uniform(ByteBuffer& buf, const ShaderInfo& info) noexcept {
+     // Lights
+     static_assert(sizeof(g_gxState.lights) == 80 * GX::MaxLights);
+     for (const auto& light : g_gxState.lights) {
+-      buf.append(normalize_light_dir(light));
++      buf.append(normalize_light_dir(view != nullptr ? view_light(*view, light) : light));
+     }
+     // Light state for all channels
+     for (int i = 0; i < 4; ++i) {

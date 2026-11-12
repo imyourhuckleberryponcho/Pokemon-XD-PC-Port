@@ -1,0 +1,100 @@
+diff --git a/include/dolphin/gx/GXDispList.h b/include/dolphin/gx/GXDispList.h
+index b9a664d..ca63bcb 100644
+--- a/include/dolphin/gx/GXDispList.h
++++ b/include/dolphin/gx/GXDispList.h
+@@ -10,6 +10,9 @@ extern "C" {
+ void GXBeginDisplayList(void* list, u32 size);
+ u32 GXEndDisplayList(void);
+ void GXCallDisplayList(const void* list, u32 nbytes);
++/* Aurora (port patch): the hardware's call command for a list in main memory, read when the decoder gets
++ * there; lists elsewhere are copied in as by GXCallDisplayList. */
++void GXCallDisplayListAt(const void* list, u32 nbytes);
+ 
+ #ifdef __cplusplus
+ }
+diff --git a/lib/dolphin/gx/GXDispList.cpp b/lib/dolphin/gx/GXDispList.cpp
+index 5bf9460..59dc079 100644
+--- a/lib/dolphin/gx/GXDispList.cpp
++++ b/lib/dolphin/gx/GXDispList.cpp
+@@ -7,6 +7,13 @@
+ 
+ static __GXData_struct sSavedGXData;
+ 
++// Where the game's main memory is (dolphin/os); a weak reference, see lib/gx/regs.cpp.
++#if defined(_MSC_VER)
++extern void* MEM1Start;
++#else
++extern void* MEM1Start __attribute__((weak));
++#endif
++
+ extern "C" {
+ void GXBeginDisplayList(void* list, u32 size) {
+   CHECK(!aurora::gx::fifo::in_display_list(), "Display list began twice!");
+@@ -62,4 +69,25 @@ void GXCallDisplayList(const void* data, u32 nbytes) {
+   aurora::gx::fifo::publish();
+ }
+ 
++// The hardware's "call display list" command (0x40, address, size) for a list in the game's main memory:
++// the decoder runs the list when it reaches the command (lib/gx/command_processor.cpp), as the chip reads
++// it from memory then. Lists elsewhere are copied in, as GXCallDisplayList does.
++void GXCallDisplayListAt(const void* data, u32 nbytes) {
++  const uintptr_t offset = reinterpret_cast<uintptr_t>(data) - reinterpret_cast<uintptr_t>(MEM1Start);
++  if (&MEM1Start == nullptr || MEM1Start == nullptr || offset >= 0x1800000 || nbytes > 0x1800000 - offset) {
++    GXCallDisplayList(data, nbytes);
++    return;
++  }
++  if (__gx->dirtyState != 0) {
++    __GXSetDirtyState();
++  }
++  if (*reinterpret_cast<u32*>(&__gx->vNum) != 0) {
++    __GXSendFlushPrim();
++  }
++  aurora::gx::fifo::write_u8(GX_CMD_CALL_DL);
++  aurora::gx::fifo::write_u32(0x80000000u | static_cast<u32>(offset));
++  aurora::gx::fifo::write_u32(nbytes);
++  aurora::gx::fifo::publish();
++}
++
+ }
+diff --git a/lib/gx/command_processor.cpp b/lib/gx/command_processor.cpp
+index 0c09ffd..2e90b51 100644
+--- a/lib/gx/command_processor.cpp
++++ b/lib/gx/command_processor.cpp
+@@ -20,6 +20,13 @@
+ #include <span>
+ #include <vector>
+ 
++// Where the game's main memory is (dolphin/os); a weak reference, see lib/gx/regs.cpp.
++#if defined(_MSC_VER)
++extern void* MEM1Start;
++#else
++extern void* MEM1Start __attribute__((weak));
++#endif
++
+ namespace aurora::gx::fifo {
+ namespace {
+ constexpr Module Log{"aurora::gx::fifo"};
+@@ -302,9 +309,20 @@ ProcessResult process(const u8* data, u32 size) noexcept {
+     }
+ 
+     case CP_CMD_CALL_DL: {
+-      // Call display list: 8 bytes (address + size)
+-      Log.warn("Ignoring nested GX_CMD_CALL_DL");
+-      reader.skip(8);
++      // Call display list: address + size. A list in the game's main memory (GXCallDisplayListAt) is run
++      // now, when the chip would read it; the hardware doesn't follow a call inside a called list.
++      static bool sInCalledList = false;
++      const u32 address = reader.read<u32>();
++      const u32 length = reader.read<u32>();
++      const u32 offset = address & 0x01FFFFFF;
++      if (sInCalledList || &MEM1Start == nullptr || MEM1Start == nullptr || offset >= 0x1800000 ||
++          length > 0x1800000 - offset) {
++        Log.warn("Ignoring GX_CMD_CALL_DL 0x{:08X} ({} bytes)", address, length);
++        break;
++      }
++      sInCalledList = true;
++      process(static_cast<const u8*>(MEM1Start) + offset, length);
++      sInCalledList = false;
+       break;
+     }
+ 

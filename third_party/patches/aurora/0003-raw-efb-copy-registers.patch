@@ -1,0 +1,134 @@
+diff --git a/lib/gx/regs.cpp b/lib/gx/regs.cpp
+index 8c53e79..8271673 100644
+--- a/lib/gx/regs.cpp
++++ b/lib/gx/regs.cpp
+@@ -6,6 +6,17 @@
+ #include <bit>
+ #include <cmath>
+ 
++// Where the game's main memory is (dolphin/os). aurora_gx doesn't depend on aurora_os, so this is a
++// weak reference: programs without aurora_os get nullptr, and raw-register texture copies then have no
++// destination.
++extern void* MEM1Start;
++#if defined(_MSC_VER)
++void* aurora_gx_noMEM1 = nullptr;
++#pragma comment(linker, "/alternatename:?MEM1Start@@3PEAXEA=?aurora_gx_noMEM1@@3PEAXEA")
++#else
++extern void* MEM1Start __attribute__((weak));
++#endif
++
+ namespace aurora::gx::fifo {
+ namespace {
+ constexpr Module Log{"aurora::gx::fifo"};
+@@ -274,10 +285,99 @@ void bp_clear_bg(u8, u32 value) noexcept {
+ 
+ void bp_clear_depth(u8, u32 value) noexcept { g_gxState.clearDepth = reg_get(value, 24, 0); }
+ 
++// EFB copy set-up written as raw BP registers (games with their own GX layer write these instead of
++// calling GXSetTexCopySrc/Dst and GXCopyTex, which send Aurora's own commands). Used by the next copy
++// trigger only if the game wrote them since the last copy, so Aurora's own copy path is unchanged.
++struct RawCopy {
++  u32 src = 0;  // 0x49: left (bits 0-9), top (10-19)
++  u32 size = 0; // 0x4A: width - 1, height - 1
++  u32 dest = 0; // 0x4B: physical address >> 5
++  bool pending = false;
++} s_rawCopy;
++
++void bp_copy_src(u8, u32 value) noexcept {
++  s_rawCopy.src = value;
++  s_rawCopy.pending = true;
++}
++void bp_copy_size(u8, u32 value) noexcept {
++  s_rawCopy.size = value;
++  s_rawCopy.pending = true;
++}
++void bp_copy_dest(u8, u32 value) noexcept {
++  s_rawCopy.dest = value;
++  s_rawCopy.pending = true;
++}
++
++// The texture format of a copy, from the trigger word as GXSetTexCopyDst packs it: format & 7 in bits
++// 4-6, format bit 3 in bit 3, bits 15-16 = 3 for intensity formats. Z formats aren't in the word: the
++// game switches the EFB to Z24 for them.
++GXTexFmt decode_copy_fmt(u32 value) noexcept {
++  const u32 fmt = reg_get(value, 3, 4) | reg_get(value, 1, 3) << 3;
++  if (g_gxState.pixelFmt == GX_PF_Z24) {
++    switch (fmt) {
++    case 0x0: return GX_CTF_Z4;
++    case 0x1: return GX_TF_Z8;
++    case 0x6: return GX_TF_Z24X8;
++    case 0x9: return GX_CTF_Z8M;
++    case 0xA: return GX_CTF_Z8L;
++    case 0xB: return GX_TF_Z16; // GXSetTexCopyDst writes Z16 as 0xB
++    case 0xC: return GX_CTF_Z16L;
++    default: break;
++    }
++  }
++  if (reg_get(value, 2, 15) == 3) {
++    switch (fmt) {
++    case 0x0: return GX_TF_I4;
++    case 0x1: return GX_TF_I8;
++    case 0x2: return GX_TF_IA4;
++    case 0x3: return GX_TF_IA8;
++    case 0x6: return GX_CTF_YUVA8;
++    default: break;
++    }
++  }
++  switch (fmt) {
++  case 0x0: return GX_CTF_R4;
++  case 0x2: return GX_CTF_RA4;
++  case 0x3: return GX_CTF_RA8;
++  case 0x4: return GX_TF_RGB565;
++  case 0x5: return GX_TF_RGB5A3;
++  case 0x6: return GX_TF_RGBA8;
++  case 0x7: return GX_CTF_A8;
++  case 0x8: return GX_CTF_R8;
++  case 0x9: return GX_CTF_G8;
++  case 0xA: return GX_CTF_B8;
++  case 0xB: return GX_CTF_RG8;
++  case 0xC: return GX_CTF_GB8;
++  default: return GX_TF_RGBA8;
++  }
++}
++
+ // EFB copy trigger (0x52)
+ void bp_efb_copy(u8, u32 value) noexcept {
+   const bool clear = reg_get(value, 1, 11) != 0;
+-  if (reg_get(value, 1, 14) != 0) {
++  const bool display = reg_get(value, 1, 14) != 0;
++  if (s_rawCopy.pending) {
++    s_rawCopy.pending = false;
++    const s32 left = static_cast<s32>(reg_get(s_rawCopy.src, 10, 0));
++    const s32 top = static_cast<s32>(reg_get(s_rawCopy.src, 10, 10));
++    const s32 width = static_cast<s32>(reg_get(s_rawCopy.size, 10, 0)) + 1;
++    const s32 height = static_cast<s32>(reg_get(s_rawCopy.size, 10, 10)) + 1;
++    if (display) {
++      g_gxState.dispCopySrc = {left, top, width, height};
++    } else {
++      const bool half = reg_get(value, 1, 9) != 0; // box filter: half size in both directions
++      g_gxState.texCopySrc = {left, top, width, height};
++      g_gxState.texCopyDstWidth = half ? static_cast<u32>(width) / 2 : static_cast<u32>(width);
++      g_gxState.texCopyDstHeight = half ? static_cast<u32>(height) / 2 : static_cast<u32>(height);
++      g_gxState.texCopyFmt = decode_copy_fmt(value);
++      g_gxState.texCopyDstWide = true;
++      // The game's own pointer to the destination: physical address in main memory.
++      const void* mem1 = &MEM1Start != nullptr ? MEM1Start : nullptr;
++      g_gxState.texCopyDest =
++          mem1 != nullptr ? static_cast<const u8*>(mem1) + (reg_get(s_rawCopy.dest, 21, 0) << 5) : nullptr;
++    }
++  }
++  if (display) {
+     copy_disp(clear);
+   } else {
+     copy_tex(g_gxState.texCopyDest, clear);
+@@ -546,6 +646,10 @@ constexpr auto kBpRegs = [] {
+   regs[0x4F] = {bp_clear_ra};
+   regs[0x50] = {bp_clear_bg};
+   regs[0x51] = {bp_clear_depth};
++  regs[0x49] = {bp_copy_src, 0, /* alwaysHandle */ true};
++  regs[0x4A] = {bp_copy_size, 0, /* alwaysHandle */ true};
++  regs[0x4B] = {bp_copy_dest, 0, /* alwaysHandle */ true};
++  regs[0x4D] = {}; // copy stride: follows from the destination size
+   regs[0x52] = {bp_efb_copy, 0, /* alwaysHandle */ true};
+   regs[0x59] = {bp_scissor};
+   regs[0x64] = {}; // TLUT load address; bp_tlut_load reads from shadow

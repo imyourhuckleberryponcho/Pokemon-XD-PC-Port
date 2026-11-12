@@ -1,0 +1,8 @@
+// The launcher's resources: everything in xd.rc, plus the other styles of the program icon (original art from
+// tools/make_icon.py), which the launcher offers as icon choices (games/xd/launcher/xd_launcher.cpp, ownIcons).
+#include "xd.rc"
+
+2 ICON "xd_icon_shadow.ico"
+3 ICON "xd_icon_minimal.ico"
+4 ICON "xd_icon_swirl.ico"
+5 ICON "xd_icon_light.ico"

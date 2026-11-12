@@ -1,0 +1,25 @@
+diff --git a/lib/dolphin/gx/GXTexture.cpp b/lib/dolphin/gx/GXTexture.cpp
+--- a/lib/dolphin/gx/GXTexture.cpp
++++ b/lib/dolphin/gx/GXTexture.cpp
+@@ -5,6 +5,8 @@
+ #include "dolphin/gx/GXAurora.h"
+ 
+ #include <algorithm>
++#include <cstring>
++#include <new>
+ 
+ #include "tracy/Tracy.hpp"
+ 
+@@ -57,7 +59,11 @@
+ 
+ void init_texobj_common(GXTexObj_& obj, const void* data, u16 width, u16 height, u32 format, GXTexWrapMode wrapS,
+                         GXTexWrapMode wrapT, GXBool mipmap) {
+-  obj = {};
++  // Padding bytes too: `obj = {}` copied a temporary whose padding was whatever was on the stack, and texture
++  // objects often live in the game's memory, which then differed from run to run. (Built in place: the
++  // defaults are member stores, which leave the zeroed padding alone.)
++  std::memset(&obj, 0, sizeof(obj));
++  new (&obj) GXTexObj_();
+   obj.mWidth = width;
+   obj.mHeight = height;
+   obj.mFormat = format;

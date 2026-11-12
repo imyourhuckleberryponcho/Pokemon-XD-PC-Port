@@ -1,0 +1,29 @@
+# generated
+snapshot/
+build/
+dist/
+out/
+*.partial/
+
+# game data - never commit
+*.iso
+*.gcm
+*.rvz
+*.ciso
+*.gcz
+*.wbfs
+*.dol
+*.elf
+*.sav
+*.gci
+*.raw
+iso/
+extracted/
+
+
+# local shortcuts to the launcher
+*.lnk
+
+# Python bytecode caches
+__pycache__/
+*.pyc

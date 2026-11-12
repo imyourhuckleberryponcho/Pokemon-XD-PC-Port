@@ -1,0 +1,117 @@
+diff --git a/include/aurora/texture.hpp b/include/aurora/texture.hpp
+--- a/include/aurora/texture.hpp
++++ b/include/aurora/texture.hpp
+@@ -97,6 +97,20 @@
+ 
+ bool has_replacement(const GXTexObj* obj, const GXTlutObj* tlut = nullptr);
+ 
++/// Watches textures as they are resolved, so a program can make replacements from the texture's own picture
++/// (e.g. repaint part of it). While an observer is set, source keys are built for every texture resolved and
++/// `wants` is asked with each; for a key it wants, `decoded` gets the base level as RGBA8 (width * height * 4
++/// bytes) and may register a replacement for that key right away: the lookup that follows finds it. Both run on
++/// whichever thread resolves textures, without Aurora's registry lock held: they must be thread safe and may only
++/// call register_replacement / unregister_replacement(s) of aurora::texture. A null `wants` removes the observer.
++struct SourceObserver {
++  bool (*wants)(void* userData, const TextureSourceKey& key) = nullptr;
++  void (*decoded)(void* userData, const TextureSourceKey& key, const uint8_t* rgba, uint32_t width,
++                  uint32_t height) = nullptr;
++  void* userData = nullptr;
++};
++void set_source_observer(SourceObserver observer);
++
+ } // namespace aurora::texture
+ 
+ #endif
+diff --git a/lib/gfx/texture_replacement.cpp b/lib/gfx/texture_replacement.cpp
+--- a/lib/gfx/texture_replacement.cpp
++++ b/lib/gfx/texture_replacement.cpp
+@@ -20,6 +20,7 @@
+ 
+ #include <algorithm>
+ #include <array>
++#include <atomic>
+ #include <charconv>
+ #include <chrono>
+ #include <condition_variable>
+@@ -141,6 +142,11 @@
+ uint64_t s_nextRegistrationId = 1;
+ uint64_t s_nextSequence = 1;
+ uint32_t s_sourceEntryCount = 0;
++
++// set_source_observer: the observer (under its own lock, never held while it runs) and whether one is set.
++std::mutex s_observerMutex;
++SourceObserver s_observer;
++std::atomic<bool> s_observerSet{false};
+ 
+ std::mutex s_jobMutex;
+ std::condition_variable s_jobCv;
+@@ -1579,6 +1585,15 @@
+   wait_for_virtual_reads(waitStates);
+ }
+ 
++void set_source_observer(SourceObserver observer) {
++  {
++    std::lock_guard lk(s_observerMutex);
++    s_observer = observer.wants != nullptr ? observer : SourceObserver{};
++    s_observerSet.store(observer.wants != nullptr, std::memory_order_release);
++  }
++  gx::clear_static_texture_cache(); // textures already in use are resolved again, so the observer sees them
++}
++
+ ReplacementRegistration register_virtual_replacement(std::string_view path, VirtualFileSource source,
+                                                      ReplacementOptions options) {
+   if (source.read == nullptr) {
+@@ -1835,9 +1850,43 @@
+   return find_replacement_for_key_locked(pointerKey);
+ }
+ 
++// set_source_observer: ask the observer about this texture and, if it wants it, hand it the decoded picture.
++void notify_source_observer(const GXTexObj_& obj, const TextureSourceKey& sourceKey) noexcept {
++  if (!s_observerSet.load(std::memory_order_acquire)) {
++    return;
++  }
++  SourceObserver observer;
++  {
++    std::lock_guard lk(s_observerMutex);
++    observer = s_observer;
++  }
++  if (observer.wants == nullptr || observer.decoded == nullptr || !observer.wants(observer.userData, sourceKey) ||
++      !obj.has_data()) {
++    return;
++  }
++  const ArrayRef texData{static_cast<const uint8_t*>(obj.data), UINT32_MAX};
++  gfx::ConvertedTexture pixels;
++  if (gx::is_palette_format(obj.format())) {
++    const GXTlutObj_* tlut = get_loaded_tlut(obj);
++    if (tlut == nullptr) {
++      return;
++    }
++    pixels = gfx::convert_texture_palette(obj.format(), obj.width(), obj.height(), 1, texData, tlut->format,
++                                          tlut->numEntries, tlut_bytes(*tlut));
++  } else {
++    pixels = gfx::convert_texture(obj.format(), obj.width(), obj.height(), 1, texData);
++  }
++  const uint64_t rgbaBytes = gfx::calc_texture_size(wgpu::TextureFormat::RGBA8Unorm, obj.width(), obj.height(), 1);
++  if (pixels.data.empty() || pixels.format != wgpu::TextureFormat::RGBA8Unorm || pixels.data.size() < rgbaBytes) {
++    return;
++  }
++  observer.decoded(observer.userData, sourceKey, pixels.data.data(), obj.width(), obj.height());
++}
++
+ std::optional<ReplacementResult> find_source_replacement(const GXTexObj_& obj,
+                                                          const TextureSourceKey& sourceKey) noexcept {
+   ZoneScoped;
++  notify_source_observer(obj, sourceKey);
+   std::lock_guard lk(s_registryMutex);
+   if (s_sourceEntryCount == 0 && !g_config.allowTextureDumps) {
+     return std::nullopt;
+@@ -1846,6 +1895,9 @@
+ }
+ 
+ bool should_build_source_key() noexcept {
++  if (s_observerSet.load(std::memory_order_acquire)) {
++    return true;
++  }
+   std::lock_guard lk(s_registryMutex);
+   return s_sourceEntryCount != 0 || g_config.allowTextureDumps;
+ }

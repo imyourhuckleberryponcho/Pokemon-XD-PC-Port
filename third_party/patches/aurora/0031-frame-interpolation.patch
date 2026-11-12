@@ -1,0 +1,556 @@
+diff --git a/include/dolphin/gx/GXAurora.h b/include/dolphin/gx/GXAurora.h
+--- a/include/dolphin/gx/GXAurora.h
++++ b/include/dolphin/gx/GXAurora.h
+@@ -271,6 +271,47 @@
+  */
+ void* AuroraSaveGXState(void);
+ void AuroraRestoreGXState(void* saved);
++
++/**
++ * In-between pictures (frame interpolation by replaying a kept picture's commands, see AuroraSetCommandTap).
++ * RECORD: for every draw whose transforms are sent to the GPU, the decoder notes what the draw is (primitive,
++ * vertex layout, vertex arrays, textures, its indices) and its projection and position/normal matrices; a list
++ * per picture (ending at the display copy), the last two whole pictures kept ("previous" and "current").
++ * REPLAY: nothing is noted, the kept lists stay. Each perspective draw processed meanwhile that is also found in
++ * the PREVIOUS picture (same identity, same occurrence; only while both pictures have equally many draws of that
++ * identity, or all of them share one set of transforms) and didn't jump gets its projection and position/normal
++ * matrices blended: previous * (1 - blend) + its own * blend. blend >= 1: nothing is blended (the picture exactly
++ * as its commands say). Everything else (orthographic draws, new objects, jumps) is drawn as its commands say.
++ * Call only when the command stream has been processed (AuroraSaveGXState does that). Nothing changes while OFF.
++ */
++typedef enum {
++  AURORA_INTERP_OFF = 0,
++  AURORA_INTERP_RECORD = 1,
++  AURORA_INTERP_REPLAY = 2,
++} AuroraInterpMode;
++void AuroraInterpSetMode(AuroraInterpMode mode, f32 blend);
++/** The last two whole pictures compared (RECORD): how many transform sets the current one has, how many of them
++ * are perspective, found in the previous picture, changed at all, and changed too much to blend (a cut, a
++ * teleport). `usable`: an in-between picture makes sense (most perspective draws found, something moved, few
++ * jumps). `pictures`: whole pictures recorded so far; `pending`: draws decoded since the last display copy (0: the
++ * EFB holds nothing of the next picture yet). Waits until the commands written so far are processed. */
++typedef struct {
++  u32 pictures;
++  u32 draws;
++  u32 perspective;
++  u32 matched;
++  u32 moved;
++  u32 jumped;
++  u32 pending;
++  GXBool usable;
++} AuroraInterpInfo;
++void AuroraInterpGetInfo(AuroraInterpInfo* out);
++/** Perspective draws blended / drawn as they are in the replay that the last AuroraInterpSetMode call ended. */
++void AuroraInterpGetReplayCounts(u32* blended, u32* plain);
++/** How full the frame being drawn is: the fullest of its vertex, uniform, index and storage buffers (0..1; a
++ * full one stops the program). Before drawing a kept picture again in the same frame. Waits for the commands
++ * written so far. */
++f32 AuroraGetFrameBufferUse(void);
+ 
+ /**
+  * Sets the actual render viewport in native framebuffer coordinates.
+diff --git a/lib/dolphin/gx/GXAurora.cpp b/lib/dolphin/gx/GXAurora.cpp
+--- a/lib/dolphin/gx/GXAurora.cpp
++++ b/lib/dolphin/gx/GXAurora.cpp
+@@ -6,6 +6,7 @@
+ #include "gx.hpp"
+ #include "../../window.hpp"
+ #include "../../gfx/efb.hpp"
++#include "../../gfx/recording.hpp" // AuroraGetFrameBufferUse
+ 
+ #include "../../gfx/readback/readback.hpp"
+ #include "../../gx/fifo.hpp"
+@@ -90,9 +91,35 @@
+   aurora::gx::g_gxState.copyTextures = std::move(copies);
+   aurora::gx::g_gxState.dirty = aurora::gx::DirtyAll;
+   aurora::gx::g_gxState.clearVtxSizeCache();
+-  aurora::gx::fifo::clear_draw_cache();
++  // The saved state's vertex arrays point into the frame it was saved in: uploaded again when next used. What
++  // this frame has uploaded so far stays known, so a picture drawn after a replay of it doesn't fill the frame's
++  // buffers twice (in-between pictures).
++  for (auto& array : aurora::gx::g_gxState.arrays) {
++    array.cachedRange = {};
++  }
++  aurora::gx::fifo::clear_draw_cache(true);
+   delete state;
+ }
++
++void AuroraInterpSetMode(AuroraInterpMode mode, f32 blend) {
++  aurora::gx::fifo::drain();
++  aurora::gx::interp_set_mode(mode, blend);
++  // No transforms reused from before the switch. (The vertex arrays uploaded in this frame stay known: a picture
++  // drawn again in the same frame uses them again instead of filling the frame's buffers twice.)
++  aurora::gx::g_gxState.dirty = aurora::gx::DirtyAll;
++}
++
++f32 AuroraGetFrameBufferUse(void) {
++  aurora::gx::fifo::drain();
++  return aurora::gfx::frame_buffer_use();
++}
++
++void AuroraInterpGetInfo(AuroraInterpInfo* out) {
++  aurora::gx::fifo::drain();
++  aurora::gx::interp_info(out);
++}
++
++void AuroraInterpGetReplayCounts(u32* blended, u32* plain) { aurora::gx::interp_replay_counts(blended, plain); }
+ 
+ void GXSetViewportRender(f32 left, f32 top, f32 wd, f32 ht, f32 nearz, f32 farz) {
+   GX_WRITE_AURORA(GX_AURORA_LOAD_VIEWPORT_RENDER);
+diff --git a/lib/gx/command_processor.cpp b/lib/gx/command_processor.cpp
+--- a/lib/gx/command_processor.cpp
++++ b/lib/gx/command_processor.cpp
+@@ -287,6 +287,9 @@
+       handle_bp(value);
+       if (reg_get(value, 8, 24) == GX_BP_REG_DRAWDONE) {
+         return {static_cast<u32>(reader.offset()), true};
++      }
++      if (reg_get(value, 8, 24) == 0x52 && reg_get(value, 1, 14) != 0) {
++        interp_end_picture(); // in-between pictures: this picture's list of draws is whole (nothing when off)
+       }
+       if (reg_get(value, 8, 24) == 0x52 && reg_get(value, 1, 14) != 0 && has_command_tap()) {
+         sCopiedDisplay = true;
+@@ -770,6 +773,24 @@
+ 
+   // Push raw vertex data to buffer. Merged draws must remain contiguous with the previous range.
+   const auto vertexData = reader.take(totalVtxBytes);
++  // In-between pictures (AuroraInterpSetMode): what this draw is, so the same draw is found in the next picture.
++  // Its primitive, vertex layout and vertex arrays; with indexed positions also its indices (the mesh itself:
++  // they don't change while the model moves). Not its textures (animated ones change every picture).
++  if (!canMerge && interp_active())
++    UNLIKELY {
++      const auto& state = g_gxState;
++      const bool indexed = state.vtxDesc[GX_VA_POS] == GX_INDEX8 || state.vtxDesc[GX_VA_POS] == GX_INDEX16;
++      HashType id = indexed ? xxh3_hash_s(vertexData.data(), vertexData.size(), 1) : 1;
++      id = xxh3_hash_s(state.vtxDesc.data(), sizeof(state.vtxDesc), id);
++      for (int i = GX_VA_POS; i <= GX_VA_TEX7; ++i) {
++        if (state.vtxDesc[i] == GX_INDEX8 || state.vtxDesc[i] == GX_INDEX16) {
++          id = xxh3_hash_s(&state.arrays[i].data, sizeof(void*), id);
++        }
++      }
++      const u32 shape[3] = {static_cast<u32>(prim), static_cast<u32>(fmt), indexed ? vtxCount : 0u};
++      id = xxh3_hash_s(shape, sizeof(shape), id);
++      interp_set_draw(id != 0 ? id : 1);
++    }
+   gfx::Range vertRange = gfx::push_verts(vertexData.data(), vertexData.size(), canMerge ? 0 : 4);
+ 
+   // Try to merge with previous draw call
+@@ -1035,6 +1056,7 @@
+     const u32 totalVtxBytes = vtxCount * vtxSize;
+     const auto vertexData = reader.take(totalVtxBytes);
+     const gfx::Range vertRange = gfx::push_verts(vertexData.data(), vertexData.size(), 4);
++    interp_set_draw(0); // (in-between pictures: not a draw that can be told apart)
+     if (indexCount != 0 && !view_override_hides_draw()) {
+       push_gx_draw(prim, fmt, vtxCount, vertRange, idxRange, indexCount);
+     }
+@@ -1064,12 +1086,14 @@
+   }
+ }
+ 
+-void clear_draw_cache() noexcept {
++void clear_draw_cache(bool keepArrays) noexcept {
+   sDrawCache.bindGeneration = 0;
+   sDrawCache.uniformRange = {};
+   sDrawCache.fogRange = {};
+   sDrawCache.hasFogRange = false;
+-  sArrayUploads.clear();
++  if (!keepArrays) {
++    sArrayUploads.clear();
++  }
+ }
+ 
+ } // namespace aurora::gx::fifo
+diff --git a/lib/gx/gx.cpp b/lib/gx/gx.cpp
+--- a/lib/gx/gx.cpp
++++ b/lib/gx/gx.cpp
+@@ -11,6 +11,7 @@
+ #include "../gfx/recording.hpp"
+ #include "../gfx/resource_cache.hpp"
+ #include "../gfx/texture.hpp"
++#include "../gfx/hash.hpp" // in-between pictures
+ #include "gx_fmt.hpp"
+ 
+ #include <absl/container/flat_hash_map.h>
+@@ -828,4 +829,252 @@
+   }
+   return false;
+ }
++
++// ── In-between pictures (AuroraInterpSetMode, GXAurora.h) ───────────────────────────────────────────────
++// Written while commands are decoded (the FIFO worker, or the caller's thread when draining); the mode and
++// the comparison are read and set by the caller only after a drain, so the two never run at once. The
++// comparison's numbers are also behind a lock (they may be asked for at any time).
++namespace {
++struct InterpRecord {
++  u64 id = 0;         // what the draw is + which occurrence of it in the picture
++  u64 identity = 0;   // what the draw is
++  u16 used = 0;       // the position matrices the draw can use (bit per slot)
++  bool perspective = false;
++  InterpTransforms t;
++};
++// All the draws of a picture that look the same to the decoder (one identity): how many, and whether they all had
++// the same transforms (then it doesn't matter which is paired with which).
++struct InterpKind {
++  u32 count = 0;
++  u64 transforms = 0;
++  bool allSame = true;
++};
++struct InterpPicture {
++  std::vector<InterpRecord> records;
++  absl::flat_hash_map<u64, u32> byId;
++  absl::flat_hash_map<u64, InterpKind> kinds; // by identity
++  void clear() {
++    records.clear();
++    byId.clear();
++    kinds.clear();
++  }
++};
++InterpPicture s_interpPictures[3];
++InterpPicture* s_interpBuilding = &s_interpPictures[0];
++InterpPicture* s_interpCurrent = &s_interpPictures[1];
++InterpPicture* s_interpPrevious = &s_interpPictures[2];
++absl::flat_hash_map<u64, u32> s_interpOccurrences; // per picture being decoded: identity -> times seen
++AuroraInterpMode s_interpMode = AURORA_INTERP_OFF;
++float s_interpBlend = 1.f;
++u64 s_interpDraw = 0;
++std::atomic<u32> s_interpPending{0}; // draws decoded since the last display copy (RECORD)
++u32 s_interpBlended = 0, s_interpPlain = 0;         // in the replay going on
++u32 s_interpLastBlended = 0, s_interpLastPlain = 0; // in the replay before the last mode switch
++std::mutex s_interpInfoMutex;
++AuroraInterpInfo s_interpInfo{};
++
++inline const float* flat(const Mat3x4<float>& m) { return reinterpret_cast<const float*>(&m); }
++
++// Compares one draw's transforms in two pictures: 0 the same, 1 changed, 2 changed too much to blend (more than
++// about 35 degrees of turn, or a move of more than a third of its distance from the camera: a cut or a teleport,
++// or two different objects that only look the same to the decoder).
++int interp_compare(const InterpRecord& a, const InterpRecord& b) {
++  int result = 0;
++  if (std::memcmp(&a.t.proj, &b.t.proj, sizeof a.t.proj) != 0) {
++    result = 1;
++    const float* p = reinterpret_cast<const float*>(&a.t.proj);
++    const float* q = reinterpret_cast<const float*>(&b.t.proj);
++    for (int i = 0; i < 16; ++i) {
++      if (std::fabs(p[i] - q[i]) > 0.25f * std::max(std::fabs(p[i]), std::fabs(q[i])) + 1e-3f) {
++        return 2;
++      }
++    }
++  }
++  const u16 used = a.used & b.used;
++  for (u32 slot = 0; slot < MaxPnMtx; ++slot) {
++    if ((used & (1u << slot)) == 0) {
++      continue;
++    }
++    const float* p = flat(a.t.pn[slot].pos);
++    const float* q = flat(b.t.pn[slot].pos);
++    if (std::memcmp(p, q, sizeof(Mat3x4<float>)) == 0) {
++      continue;
++    }
++    result = std::max(result, 1);
++    float turn = 0.f, size = 0.f, move = 0.f, distP = 0.f, distQ = 0.f;
++    for (int r = 0; r < 3; ++r) {
++      for (int c = 0; c < 3; ++c) {
++        const float d = p[r * 4 + c] - q[r * 4 + c];
++        turn += d * d;
++        size += q[r * 4 + c] * q[r * 4 + c];
++      }
++      const float d = p[r * 4 + 3] - q[r * 4 + 3];
++      move += d * d;
++      distP += p[r * 4 + 3] * p[r * 4 + 3];
++      distQ += q[r * 4 + 3] * q[r * 4 + 3];
++    }
++    const float reach = 0.35f * std::sqrt(std::max(distP, distQ)) + 1.f;
++    if (turn > 0.25f * size || move > reach * reach) {
++      return 2;
++    }
++  }
++  return result;
++}
++
++u64 interp_next_id() {
++  const u32 occurrence = s_interpOccurrences[s_interpDraw]++;
++  return xxh3_hash(occurrence, s_interpDraw);
++}
++
++// Draws of one identity are paired by their turn in the picture (first with first...). That is only safe when
++// both pictures have equally many of them, or when in each picture they all share one set of transforms (particles
++// and sprites drawn through the camera's matrix): otherwise one appeared or vanished and the turns no longer say
++// which is which.
++bool interp_pairing_safe(const InterpPicture& previous, const InterpPicture& current, u64 identity) {
++  const auto a = previous.kinds.find(identity);
++  const auto b = current.kinds.find(identity);
++  if (a == previous.kinds.end() || b == current.kinds.end()) {
++    return false;
++  }
++  return a->second.count == b->second.count || (a->second.allSame && b->second.allSame);
++}
++
++void interp_fill(InterpRecord& rec) {
++  const auto& state = g_gxState;
++  rec.perspective = state.projType == GX_PERSPECTIVE;
++  rec.used = state.vtxDesc[GX_VA_PNMTXIDX] != GX_NONE ? static_cast<u16>((1u << MaxPnMtx) - 1)
++                                                      : static_cast<u16>(1u << (state.currentPnMtx % MaxPnMtx));
++  rec.t.proj = state.proj;
++  rec.t.pn = state.pnMtx;
++}
++} // namespace
++
++void interp_set_mode(AuroraInterpMode mode, float blend) noexcept {
++  if (mode == AURORA_INTERP_OFF || (mode == AURORA_INTERP_RECORD && s_interpMode == AURORA_INTERP_OFF)) {
++    for (auto& picture : s_interpPictures) {
++      picture.clear();
++    }
++    std::lock_guard lock{s_interpInfoMutex};
++    s_interpInfo = {};
++  }
++  s_interpMode = mode;
++  s_interpBlend = blend;
++  s_interpOccurrences.clear();
++  s_interpLastBlended = s_interpBlended;
++  s_interpLastPlain = s_interpPlain;
++  s_interpBlended = s_interpPlain = 0;
++  if (mode == AURORA_INTERP_RECORD) {
++    s_interpBuilding->clear(); // (a picture is recorded from its first draw: switch at a picture's end)
++    s_interpPending.store(0, std::memory_order_relaxed);
++  }
++}
++
++bool interp_active() noexcept { return s_interpMode != AURORA_INTERP_OFF; }
++
++void interp_set_draw(u64 identity) noexcept {
++  s_interpDraw = identity;
++  if (s_interpMode == AURORA_INTERP_RECORD) {
++    s_interpPending.fetch_add(1, std::memory_order_relaxed);
++  }
++}
++
++const InterpTransforms* interp_for_uniform(float* blend) noexcept {
++  if (s_interpMode == AURORA_INTERP_OFF) {
++    return nullptr;
++  }
++  if (s_interpMode == AURORA_INTERP_RECORD) {
++    auto& rec = s_interpBuilding->records.emplace_back();
++    interp_fill(rec);
++    if (s_interpDraw != 0) {
++      rec.id = interp_next_id();
++      rec.identity = s_interpDraw;
++      s_interpBuilding->byId.try_emplace(rec.id, static_cast<u32>(s_interpBuilding->records.size() - 1));
++      u64 transforms = xxh3_hash_s(&rec.t.proj, sizeof(rec.t.proj), rec.used);
++      for (u32 slot = 0; slot < MaxPnMtx; ++slot) {
++        if ((rec.used & (1u << slot)) != 0) {
++          transforms = xxh3_hash_s(&rec.t.pn[slot].pos, sizeof(rec.t.pn[slot].pos), transforms);
++        }
++      }
++      InterpKind& kind = s_interpBuilding->kinds[s_interpDraw];
++      if (kind.count++ == 0) {
++        kind.transforms = transforms;
++      } else if (kind.transforms != transforms) {
++        kind.allSame = false;
++      }
++    }
++    return nullptr;
++  }
++  // REPLAY (of the current picture's commands): the same draw in the previous picture.
++  if (s_interpDraw == 0) {
++    return nullptr;
++  }
++  const u64 id = interp_next_id();
++  if (s_interpBlend >= 1.f || g_gxState.projType != GX_PERSPECTIVE) {
++    return nullptr;
++  }
++  const auto it = s_interpPrevious->byId.find(id);
++  if (it == s_interpPrevious->byId.end() || !interp_pairing_safe(*s_interpPrevious, *s_interpCurrent, s_interpDraw)) {
++    ++s_interpPlain;
++    return nullptr;
++  }
++  const InterpRecord& prev = s_interpPrevious->records[it->second];
++  InterpRecord now;
++  interp_fill(now);
++  if (!prev.perspective || interp_compare(prev, now) != 1) {
++    ++s_interpPlain; // the same (nothing to blend) or a jump
++    return nullptr;
++  }
++  ++s_interpBlended;
++  *blend = s_interpBlend;
++  return &prev.t;
++}
++
++void interp_end_picture() noexcept {
++  if (s_interpMode != AURORA_INTERP_RECORD) {
++    return;
++  }
++  AuroraInterpInfo info{};
++  info.draws = static_cast<u32>(s_interpBuilding->records.size());
++  for (const InterpRecord& rec : s_interpBuilding->records) {
++    if (!rec.perspective) {
++      continue;
++    }
++    ++info.perspective;
++    if (rec.id == 0) {
++      continue;
++    }
++    const auto it = s_interpCurrent->byId.find(rec.id);
++    if (it == s_interpCurrent->byId.end() || !s_interpCurrent->records[it->second].perspective ||
++        !interp_pairing_safe(*s_interpCurrent, *s_interpBuilding, rec.identity)) {
++      continue;
++    }
++    ++info.matched;
++    const int change = interp_compare(s_interpCurrent->records[it->second], rec);
++    if (change == 1) {
++      ++info.moved;
++    } else if (change == 2) {
++      ++info.jumped;
++    }
++  }
++  info.usable = info.moved > 0 && info.matched * 2 >= info.perspective && info.jumped * 4 <= info.matched;
++  std::swap(s_interpPrevious, s_interpCurrent); // previous <- current <- building
++  std::swap(s_interpCurrent, s_interpBuilding);
++  s_interpBuilding->clear();
++  s_interpOccurrences.clear();
++  s_interpPending.store(0, std::memory_order_relaxed);
++  std::lock_guard lock{s_interpInfoMutex};
++  info.pictures = s_interpInfo.pictures + 1;
++  s_interpInfo = info;
++}
++
++void interp_info(AuroraInterpInfo* out) noexcept {
++  std::lock_guard lock{s_interpInfoMutex};
++  *out = s_interpInfo;
++  out->pending = s_interpPending.load(std::memory_order_relaxed);
++}
++
++void interp_replay_counts(u32* blended, u32* plain) noexcept {
++  *blended = s_interpLastBlended;
++  *plain = s_interpLastPlain;
++}
+ } // namespace aurora::gx
+diff --git a/lib/gx/gx.hpp b/lib/gx/gx.hpp
+--- a/lib/gx/gx.hpp
++++ b/lib/gx/gx.hpp
+@@ -610,4 +610,21 @@
+ const Mat3x4<float>* view_override_for_draw(float* zoom) noexcept;
+ // Called for every draw while the override is on (notes its projection): whether it is 2D to hide.
+ bool view_override_hides_draw() noexcept;
++
++// In-between pictures (AuroraInterpSetMode, GXAurora.h).
++struct InterpTransforms {
++  Mat4x4<float> proj;
++  std::array<PnMtx, MaxPnMtx> pn;
++};
++void interp_set_mode(AuroraInterpMode mode, float blend) noexcept;
++bool interp_active() noexcept;
++// What the draw being decoded is (0: unknown, never blended); command_processor.cpp, before its transforms are sent.
++void interp_set_draw(u64 identity) noexcept;
++// A draw's transforms are being sent to the GPU. RECORD: noted (returns nullptr). REPLAY: the previous picture's
++// transforms for the same draw when it is to be blended (with `blend`: the weight of the current ones), else nullptr.
++const InterpTransforms* interp_for_uniform(float* blend) noexcept;
++// The display copy was decoded: the picture's list is whole.
++void interp_end_picture() noexcept;
++void interp_info(AuroraInterpInfo* out) noexcept;
++void interp_replay_counts(u32* blended, u32* plain) noexcept;
+ } // namespace aurora::gx
+diff --git a/lib/gx/shader_info.cpp b/lib/gx/shader_info.cpp
+--- a/lib/gx/shader_info.cpp
++++ b/lib/gx/shader_info.cpp
+@@ -12,6 +12,19 @@
+ constexpr Module Log{"aurora::gx"};
+ 
+ bool is_alpha_bump_channel(GXChannelID id) { return id == GX_ALPHA_BUMP || id == GX_ALPHA_BUMPN; }
++
++// In-between pictures: a * (1 - t) + b * t, element by element.
++template <typename M>
++M interp_mix(const M& a, const M& b, float t) {
++  M out;
++  const float* p = reinterpret_cast<const float*>(&a);
++  const float* q = reinterpret_cast<const float*>(&b);
++  float* o = reinterpret_cast<float*>(&out);
++  for (size_t i = 0; i < sizeof(M) / sizeof(float); ++i) {
++    o[i] = p[i] + (q[i] - p[i]) * t;
++  }
++  return out;
++}
+ 
+ // Photo modes: view (3x4, affine) * m (3x4). Without `translate` only view's rotation (normal matrices).
+ Mat3x4<float> view_mul(const Mat3x4<float>& view, const Mat3x4<float>& m, bool translate) {
+@@ -518,7 +531,13 @@
+       buf.append<u32>(line_texcoord_mask());
+     }
+   }
++  // In-between pictures (AuroraInterpSetMode): the draw's transforms noted, or blended with the previous picture's.
++  float interpBlend = 1.f;
++  const InterpTransforms* interp = interp_for_uniform(&interpBlend);
+   auto proj = g_gxState.proj;
++  if (interp != nullptr) {
++    proj = interp_mix(interp->proj, proj, interpBlend);
++  }
+   // Widescreen: a full-width viewport's x row is scaled (gx.hpp, WideMap). 1 when off.
+   if (const float wideScale = wide_projection_scale(); wideScale != 1.f) {
+     proj.m0 = proj.m0 * Vec4{wideScale, wideScale, wideScale, wideScale};
+@@ -538,7 +557,9 @@
+   buf.append(proj);
+ 
+   for (int i = 0; i < MaxPnMtx; i++) {
+-    buf.append(view != nullptr ? view_mul(*view, g_gxState.pnMtx[i].pos, true) : g_gxState.pnMtx[i].pos);
++    const Mat3x4<float> pos =
++        interp != nullptr ? interp_mix(interp->pn[i].pos, g_gxState.pnMtx[i].pos, interpBlend) : g_gxState.pnMtx[i].pos;
++    buf.append(view != nullptr ? view_mul(*view, pos, true) : pos);
+   }
+ 
+   for (int i = 0; i < MaxTexMtx; i++) {
+@@ -546,7 +567,9 @@
+   }
+ 
+   for (int i = 0; i < MaxPnMtx; i++) {
+-    buf.append(view != nullptr ? view_mul(*view, g_gxState.pnMtx[i].nrm, false) : g_gxState.pnMtx[i].nrm);
++    const Mat3x4<float> nrm =
++        interp != nullptr ? interp_mix(interp->pn[i].nrm, g_gxState.pnMtx[i].nrm, interpBlend) : g_gxState.pnMtx[i].nrm;
++    buf.append(view != nullptr ? view_mul(*view, nrm, false) : nrm);
+   }
+ 
+   for (int i = 0; i < info.loadsTevReg.size(); ++i) {
+diff --git a/lib/gfx/recording.cpp b/lib/gfx/recording.cpp
+--- a/lib/gfx/recording.cpp
++++ b/lib/gfx/recording.cpp
+@@ -654,6 +654,17 @@
+   };
+ }
+ } // namespace
++
++// How full the frame being recorded is: the fullest of its vertex, uniform, index and storage buffers (0..1).
++float frame_buffer_use() noexcept {
++  if (!g_recorder.active()) {
++    return 0.f;
++  }
++  const auto& frame = g_recorder.frame();
++  const auto part = [](size_t used, uint64_t size) { return static_cast<float>(used) / static_cast<float>(size); };
++  return std::max({part(frame.verts.size(), VertexBufferSize), part(frame.uniforms.size(), UniformBufferSize),
++                   part(frame.indices.size(), IndexBufferSize), part(frame.storage.size(), StorageBufferSize)});
++}
+ 
+ namespace detail {
+ 
+diff --git a/lib/gfx/recording.hpp b/lib/gfx/recording.hpp
+--- a/lib/gfx/recording.hpp
++++ b/lib/gfx/recording.hpp
+@@ -45,6 +45,8 @@
+ }
+ 
+ namespace aurora::gfx {
++// (in-between pictures, AuroraGetFrameBufferUse) How full the frame being recorded is, 0..1.
++float frame_buffer_use() noexcept;
+ struct ColorPassDescriptor {
+   const char* label = nullptr;
+   wgpu::TextureView colorView;
+diff --git a/lib/gx/command_processor.hpp b/lib/gx/command_processor.hpp
+--- a/lib/gx/command_processor.hpp
++++ b/lib/gx/command_processor.hpp
+@@ -15,7 +15,8 @@
+ 
+ // Process GX FIFO commands until the next draw done event or end of buffer
+ ProcessResult process(const uint8_t* data, uint32_t size) noexcept;
+-void clear_draw_cache() noexcept;
++// keepArrays: the vertex arrays uploaded in this frame stay known (they are found by address, size and content).
++void clear_draw_cache(bool keepArrays = false) noexcept;
+ // Command taps (photo modes): whether a display copy was made since the last call (and clears it).
+ bool take_display_copy_flag() noexcept;
+ bool has_command_tap() noexcept; // fifo.cpp

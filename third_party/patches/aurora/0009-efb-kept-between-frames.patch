@@ -1,0 +1,18 @@
+diff --git a/lib/gfx/recording.cpp b/lib/gfx/recording.cpp
+index c2e51f5..7d0a8cf 100644
+--- a/lib/gfx/recording.cpp
++++ b/lib/gfx/recording.cpp
+@@ -681,6 +681,13 @@ void begin_recording(FramePacket& packet, size_t frameSlot) {
+   set_efb_targets(pass);
+   pass.colorAttachments[SceneColorAttachmentIndex].clearValue = gx::g_gxState.clearColor;
+   pass.clearDepthValue = gx::clear_depth_value();
++  // The EFB keeps its contents from one frame to the next, as the hardware's does: only an EFB copy with
++  // clear (or a clear the game draws) empties it. A frame can end between the game's last draw and its
++  // GXCopyDisp, and the copy must still see the picture. (A new EFB texture starts zeroed.)
++  for (uint32_t i = 0; i < pass.colorAttachmentCount; ++i) {
++    pass.colorAttachments[i].clear = false;
++  }
++  pass.clearDepth = false;
+   g_recorder.currentRenderPass = 0;
+   g_recorder.cachedViewport = gx::map_logical_viewport(gx::g_gxState.logicalViewport);
+   g_recorder.cachedScissor = gx::map_logical_scissor(gx::g_gxState.logicalScissor);

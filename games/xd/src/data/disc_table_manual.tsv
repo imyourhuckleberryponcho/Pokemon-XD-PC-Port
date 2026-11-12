@@ -1,0 +1,44 @@
+# Where the tables the symbol list can't place by name are in main.dol: worked out on the decompilation's side
+# (2026-11-08, its list table_symbols.tsv: each a byte-identical object of the original),
+# read by tools/gen_disc_tables.py --addresses before its own matching. Names and addresses only, no data.
+# A table listed twice (two statics of one name in one function) is the 1st/2nd one in the source.
+# file<TAB>table<TAB>address<TAB>size<TAB>game symbol<TAB>section
+game/flashmenuTest.cpp	spritePos	0x804E7E68	0x8	spritePos	.sdata
+game/flashmenuTest.cpp	spriteIDs	0x804E7E70	0x8	spriteIDs	.sdata
+game/maximum/GSAPI/baselib/robj.cpp	HSD_RObj_80406E74	0x80419068	0xC	type$1015	.data
+game/maximum/GSAPI/baselib/state.cpp	HSD_StateInvalidate::invalidate_funcs	0x804192B8	0x40	invalidate_funcs$1093	.data
+game/maximum/GSAPI/baselib/texpdag.cpp	HSD_TExpSchedule::c_in	0x80419690	0x10	in$636	.data
+game/maximum/GSAPI/baselib/texpdag.cpp	HSD_TExpSchedule::a_in	0x804196A0	0x10	in$638	.data
+game/maximum/GSAPI/baselib/texpdag.cpp	HSD_TExpSchedule::args	0x804196B0	0x10	in$648	.data
+game/menuBingo.cpp	kOrder	0x802EB9F4	0x10	kOrder	.rodata
+game/menuCB_BattleResult.cpp	_menuCB_BattleResultTaisen::msgA	0x8032EAFC	0xC	msgA$14	.data
+game/menuCB_BattleResult.cpp	_menuCB_BattleResultTaisen::msgB	0x804E7F48	0x8	lbl_804E7F48	.sdata
+game/menuCB_externDB.cpp	MENU_ITEM_TOOL_TUNAIDE01_SETUMEI_Tbl	0x802EB774	0x10	MENU_ITEM_TOOL_TUNAIDE01_SETUMEI_Tbl	.rodata
+game/menuFight.cpp	menuFightButtonIwaza1p::waza_no	0x804E7ECC	0x8	waza_no$2832	.sdata
+game/menuFight.cpp	menuFightButtonIwaza1p::waza_no	0x804EA72C	0x4	waza_no$3039	.sbss
+game/menuPcBoxNew.cpp	tutorialPokemonSetup::pokemonTbl	0x803C59CC	0x24	_pokemonTbl$2164	.data
+game/menuPcBoxNew.cpp	tutorialPokemonSetup::darkPokemonTbl	0x804E7FDC	0x4	_darkPokemonTbl$2163	.sdata
+game/menuPocketTool.cpp	GSgfxColAu8_Black	0x804EC010	0x4	GSgfxColAu8_Black	.sdata2
+game/menuPocketTool.cpp	alphaFadeDraw::xy	0x80428260	0x20	xy$2179	.bss
+game/menuPocketTool.cpp	alphaFadeDraw::xy	0x80322460	0x20	xy$2446	.data
+game/menuPokemon.cpp	spriteTbl	0x802EA408	0x1C	spriteTbl	.rodata
+game/menuPokemonChange.cpp	menuStateChange::tbl0	0x804E80A8	0x4	tbl$2390	.sdata
+game/menuPokemonChange.cpp	menuStateChange::tbl1	0x804E80AC	0x8	tbl$2392	.sdata
+game/menuPokemonChange.cpp	menuStateChange::tbl2	0x803CD1C0	0xC	tbl$2394	.data
+game/menuPokemonChange.cpp	menuStateChange::tbl3	0x803CD1CC	0x18	tbl$2397	.data
+game/menuPokemonChange.cpp	menuStateChange::tbl4	0x803CD1E4	0x10	tbl$2399	.data
+game/menuPokemonChange.cpp	menuStateChange::tbl5	0x803CD1F4	0x10	tbl$2401	.data
+game/menuReliveHall.cpp	relivehallAisyou2ColorTbl	0x8032E548	0xC	relivehallAisyou2ColorTbl	.data
+game/pxdvs/GSAPI/GSmsg/GSmsg.cpp	lbl_802F2B88	0x802F2B88	0x200	lbl_802F2B88	.rodata
+game/pxdvs/app/fight/fightSeq/fightSeq.cpp	SoubiItemWazaTypePowUpTbl	0x802F9110	0x22	SoubiItemWazaTypePowUpTbl	.rodata
+game/pxdvs/app/fight/fightSeq/fightSeq.cpp	fight_seq_status_id	0x802F9230	0xE	fight_seq_status_id	.rodata
+game/pxdvs/app/menu/cursorBios.cpp	sSetPosInvalid	0x804ED718	0x4	@17	.sdata2
+game/pxdvs/app/menu/cursorBios.cpp	sGetPosInvalid	0x804ED71C	0x4	@23	.sdata2
+game/pxdvs/app/pokemon/pokemonEvolution.cpp	shedinjaName	0x802F37C0	0xC	shedinjaName	.rodata
+game/pxdvs/app/reliveHall/reliveHall.cpp	debugPokemonSetup::darkRateTbl	0x8041A814	0x50	_darkRateTbl$2279	.data
+game/pxdvs/app/reliveHall/reliveHall.cpp	debugPokemonSetup::tempMaxTbl2294	0x804E8680	0x8	tempMaxTbl$2294	.sdata
+game/pxdvs/app/reliveHall/reliveHall.cpp	debugPokemonSetup::tempMaxTbl2298	0x804E8688	0x6	tempMaxTbl$2298	.sdata
+game/pxdvs/app/reliveHall/reliveHall.cpp	debugPokemonSetup::dptbl	0x8041A864	0x12	dptbl$2301	.data
+game/pxdvs/app/reliveHall/reliveHall.cpp	debugPokemonSetup::tempMaxTbl2317	0x804E8690	0x8	tempMaxTbl$2317	.sdata
+game/pxdvs/app/reliveHall/reliveHall.cpp	debugPokemonSetup::dptbl2	0x8041A878	0x12	dptbl$2324	.data
+game/pxdvs/app/script/appScript.cpp	emptyPrintBuffer	0x802F4AB8	0x100	emptyPrintBuffer	.rodata
