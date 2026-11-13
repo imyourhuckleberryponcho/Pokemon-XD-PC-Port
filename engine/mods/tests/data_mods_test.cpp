@@ -305,6 +305,66 @@ int main(int argc, char** argv) {
     check(r.entries.empty() && r.changes.size() == 3 && m.empty(), "numbers set to what the disc has: no entry replaced");
   }
 
+  {
+    DataCatalog cat = catalog;
+    cat.tables[0].addable = true;
+    cat.tables[0].addMax = 3;
+    cat.tables[0].addFirstId = 6;
+    cat.tables[0].idList = "thing";
+    cat.tables[0].textFields = {"value"};
+    cat.addedTextGroup = 5;
+    for (NameList& l : cat.lists) {
+      if (l.name == "colour") l.limit = 5;
+      if (l.name == "thing") l.limit = 4;
+    }
+    std::vector<Message> m;
+    const DataApplyResult r = ApplyDataMods(
+        cat,
+        {{"a", "A", "data/a.json",
+          "{ \"add\": { \"things\": {\n"
+          "    \"Delta Two\": { \"copy\": \"Beta\", \"level\": 77, \"kind\": \"Blue\", \"text\": { \"value\": \"Delta the Second\" } },\n"
+          "    \"Eps\": { \"copy\": \"Delta Two\", \"level\": 78, \"pair\": [\"Blue\", \"Red\"] },\n"
+          "    \"Alpha\": { \"copy\": 1 },\n"
+          "    \"Late\": { \"copy\": \"Eps\", \"level\": 79 },\n"
+          "    \"Over\": { \"copy\": 0 }\n"
+          "} } }"},
+         {"b", "B", "data/b.json",
+          "{ \"things\": { \"Eps\": { \"flags.b\": 7, \"kind\": 9 }, \"Alpha\": { \"kind\": \"Delta Two\" } } }"}},
+        read, m);
+    check(r.entries.empty(), "added rows change no archive entry");
+    check(r.added.size() == 3 && r.added[0].key == "Delta Two" && r.added[0].id == 6 && r.added[0].row == 6 && r.added[1].id == 7 && r.added[2].id == 8,
+          "rows get numbers after the table's end, never below addFirstId, in load order (6, 7, 8)");
+    check(r.added.size() == 3 && r.added[0].copyOf == 1 && r.added[1].copyOf == 1, "a copy of an added row remembers the disc row it began as");
+    check(r.added.size() == 3 && r.added[0].bytes[2] == 77 && r.added[1].bytes[2] == 78 && r.added[2].bytes[2] == 79,
+          "each row has its own fields set (levels 77, 78, 79)");
+    check(r.added.size() == 3 && r.added[1].bytes[1] == 1 && r.added[1].bytes[8] == 1 && r.added[1].bytes[9] == 0,
+          "a row copying an added row takes its bytes (kind 1) and then its own fields (pair Blue, Red)");
+    check(r.addedTexts.size() == 1 && r.addedTexts[0].key == (5u << 20 | 1) && r.addedTexts[0].text == "Delta the Second" &&
+              r.added.size() == 3 && r.added[0].bytes[4] == 0 && r.added[0].bytes[5] == 0x50 && r.added[0].bytes[6] == 0 && r.added[0].bytes[7] == 1,
+          "a row's text gets a message number in the added group, written into the row's text field");
+    check(has_message(m, Message::Level::Problem, "the new row \"Alpha\" has the name of thing #0"), "a new row can't have a name the game already has");
+    check(has_message(m, Message::Level::Problem, "mods can add at most 3 rows to things; \"Over\" is left out"), "too many rows refused");
+    check(has_message(m, Message::Level::Problem, "kind is colour #9, but the game's colour numbers end at #4"),
+          "a number past the table's end that no mod added is refused (the game dropped such a Pokemon silently)");
+    check(!has_message(m, Message::Level::Problem, "colour #3") && !has_message(m, Message::Level::Problem, "colour #1"), "numbers inside the table are fine");
+    check(has_message(m, Message::Level::Problem, "no colour is called \"Delta Two\""), "an added name only joins the list of its own table");
+    check(r.added.size() == 3 && (r.added[1].bytes[3] & 0x1F) == 7, "a data file can edit a row an earlier file added, by its name");
+  }
+  {
+    std::vector<Message> m;
+    const DataApplyResult r = ApplyDataMods(
+        catalog, {{"a", "A", "data/a.json", "{ \"add\": { \"things\": { \"X\": { \"copy\": 0 } }, \"nothing\": {} } }"}}, read, m);
+    check(r.added.empty() && has_message(m, Message::Level::Problem, "which can't get new rows") &&
+              has_message(m, Message::Level::Problem, "adds rows to the table \"nothing\", which the game doesn't have"),
+          "adding to a table that can't grow, or doesn't exist: refused");
+    const auto digests = AddedRowsDigests({AddedRow{"things", 6, 6, 1, "X", "m", "M", "", {}}, AddedRow{"things", 7, 7, 1, "Y", "m", "M", "", {}}});
+    const auto other = AddedRowsDigests({AddedRow{"things", 7, 7, 1, "X", "m", "M", "", {}}, AddedRow{"things", 6, 6, 1, "Y", "m", "M", "", {}}});
+    check(digests.size() == 1 && other.size() == 1 && digests.begin()->second != other.begin()->second,
+          "the mod's digest changes when its rows' numbers change (another load order)");
+    check(AddedRowsJson({AddedRow{"things", 6, 6, 1, "X \"q\"", "m", "M", "", {}}}).find("\"name\": \"X \\\"q\\\"\"") != std::string::npos,
+          "the mod -> numbers map is JSON with the names escaped");
+  }
+
   const fs::path mods = root / "mods", list = root / "mods.ini";
   int built = 0;
   LoadOptions opt{mods, list, disc.View()};

@@ -170,6 +170,11 @@ bool ReadSave(const std::vector<uint8_t>& file, Save& out, ReadReport& report, s
 
 Pokemon ParsePokemon(const uint8_t* p, ByteOrder order);
 
+struct TableCounts {
+  uint32_t species = 0, moves = 0, items = 0;
+};
+std::vector<std::string> UnknownIds(const Save& save, const TableCounts& counts);
+
 }
 
 #endif

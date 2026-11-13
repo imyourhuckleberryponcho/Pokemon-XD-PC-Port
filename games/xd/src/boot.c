@@ -88,10 +88,12 @@ void PortXD_ButtonIconsUpdate(void);
 void PortXD_SettingsSwitchesUpdate(void);
 void PortXD_LoadSettings(void);
 bool PortXD_LoadMods(void);
+void PortXD_Gen4MainTables(void);
 void PortXD_ReadTrainerLevels(void);
 void PortXD_PlaythroughBoot(void);
 void PortXD_PlaythroughFrame(void);
 const char* PortXD_PlaythroughHeader(void);
+int PortXD_SaveBoundToOtherRows(char* text, size_t size);
 const char* PortXD_ActiveMods(void);
 const char* PortXD_ExtraAssetsText(void);
 bool PortInput_LoadScript(const char* script);
@@ -105,7 +107,7 @@ uint32_t PortVI_GetFlipCount(void);
 void PortXD_Screenshot(void* hwnd, uint32_t field, uint32_t gameFrame);
 void PortXD_BugReport(void* hwnd, uint32_t field, uint32_t gameFrame);
 void PortXD_BugReportPoll(void);
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 void PortXD_GamePictureFrame(void);
 #endif
 void PortXD_BugReportSetInfo(const char* lines);
@@ -285,7 +287,7 @@ static void frame_hook(void) {
   handle_events();
   begin_frame();
   PortFrameRate_AfterBegin();
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
   PortXD_GamePictureFrame();
 #endif
   PortXD_HeapCheckFrame();
@@ -582,6 +584,7 @@ int aurora_main(int argc, char** argv) {
     PortXD_DiscFailed(discPath);
     return 1;
   }
+  PortXD_Gen4MainTables();
   char gameId[8];
   snprintf(gameId, sizeof gameId, "%s", PortDisc_GameId());
   PortDisc_Close();
@@ -615,6 +618,24 @@ int aurora_main(int argc, char** argv) {
       }
       PortCARD_SetUnplugged(true);
       fprintf(stderr, "[card] this copy plays without the memory card\n");
+    }
+  }
+  {
+    char bound[1600];
+    if (PortXD_SaveBoundToOtherRows(bound, sizeof bound)) {
+      fprintf(stderr, "[playthrough] CONTINUE refused, the card is not read: %s\n", bound);
+      if (testRun || !interactive) {
+        PortCARD_SetUnplugged(true);
+      } else {
+        char message[1900];
+        snprintf(message, sizeof message, "%s\n\nYou can quit and switch the mods on again (same mods, same order), or play without "
+                 "the memory card (no save can be loaded or written this time).", bound);
+        if (PortMessage_Ask(PORT_MESSAGE_WARNING, "Pok\xC3\xA9mon XD", message, "Quit", "Play without the card", true)) {
+          return 5;
+        }
+        PortCARD_SetUnplugged(true);
+      }
+      fprintf(stderr, "[card] no memory card inserted for this run (the save is bound to mod rows that are not loaded)\n");
     }
   }
   {

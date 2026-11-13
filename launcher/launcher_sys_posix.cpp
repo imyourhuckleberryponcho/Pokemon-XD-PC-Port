@@ -442,13 +442,18 @@ bool ToRecycleBin(const fs::path& folder, std::string& error) {
 }
 
 const char* ProgramsFolderName() { return "applications menu"; }
+#if defined(__APPLE__)
+bool ShortcutsHere() { return false; }
+#else
+bool ShortcutsHere() { return true; }
+#endif
 bool HasIcons() { return false; }
 
 bool MakeShortcut(const fs::path& folder, const std::string& name, const std::string& description,
                   const fs::path& target, const fs::path& iconFile, std::string& message) {
 #if defined(__APPLE__)
   (void)folder, (void)name, (void)description, (void)target, (void)iconFile;
-  message = "Shortcuts aren't there on the Mac yet.";
+  message = "On the Mac the app is its own shortcut: drag Pokemon XD to the Dock or into Applications.";
   return false;
 #else
   std::error_code ec;
@@ -482,6 +487,24 @@ bool MakeShortcut(const fs::path& folder, const std::string& name, const std::st
     return false;
   }
   chmod(link.c_str(), 0755);
+  if (folder == KnownFolder(Folder::Desktop, false)) {
+    const pid_t pid = fork();
+    if (pid == 0) {
+      const int null = open("/dev/null", O_RDWR);
+      if (null >= 0) {
+        dup2(null, 0);
+        dup2(null, 1);
+        dup2(null, 2);
+      }
+      execlp("gio", "gio", "set", link.c_str(), "metadata::trusted", "true", static_cast<char*>(nullptr));
+      _exit(127);
+    } else if (pid > 0) {
+      int status = 0;
+      for (int waited = 0; waitpid(pid, &status, WNOHANG) == 0 && waited < 3000; waited += 20) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+      }
+    }
+  }
   message = "Shortcut made: " + Utf8(link) +
             ". If your desktop shows it with a warning sign, right-click it and choose \"Allow launching\".";
   return true;

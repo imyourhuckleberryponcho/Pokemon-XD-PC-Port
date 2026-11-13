@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cstdlib>
 #include <cstdio>
 #include <fstream>
 #include <map>
@@ -18,7 +19,7 @@ namespace {
 
 constexpr uint32_t kAbilityWonderGuard = 25, kAbilityForecast = 59;
 constexpr uint32_t kNationalLugia = 249;
-constexpr uint32_t kNationalLast = 386;
+constexpr uint32_t kNationalLast = 386, kNationalLastGen4 = 493;
 constexpr uint32_t kMoveStruggle = 165;
 constexpr uint32_t kItemKindTm = 4;
 constexpr uint32_t kMoveEffectOhko = 38;
@@ -33,7 +34,7 @@ constexpr uint32_t kLevelsByStrength = 5;
 er::Schema MakeSchema() {
   er::Schema s;
   s.prefix = "XDR";
-  s.version = 4;
+  s.version = 5;
   const std::vector<std::string> onOff = {"off", "on"};
   s.switches = {
       {"wild", "Randomize Poke Spot Pokemon", onOff},
@@ -59,6 +60,7 @@ er::Schema MakeSchema() {
       {"wild.scope", "Poke Spots: scope", {"each spot its own", "same swap everywhere"}, 4},
       {"wild.types", "Poke Spots: keep the type theme", {"off", "similar types"}, 4},
       {"wild_levels", "Poke Spot Pokemon: levels", {"kept", "+10%", "+20%", "+30%", "+50%"}, 4},
+      {"gen4", "Include Gen 4 Pokemon", onOff, 5},
   };
   return s;
 }
@@ -87,12 +89,42 @@ public:
     }
     return true;
   }
+  void UseGen4(const std::vector<Gen4Species>* g) { gen4_ = g; }
+  bool Gen4() const { return gen4_ != nullptr; }
+  uint32_t DiscCount(const std::string& table) const {
+    const em::DataTable* t = T(table);
+    return t != nullptr ? t->count : 0;
+  }
+  const Gen4Species* Virtual(const std::string& table, uint32_t entry) const {
+    if (gen4_ == nullptr || table != "pokemon_data") return nullptr;
+    for (const Gen4Species& g : *gen4_) {
+      if (g.id == entry) return &g;
+    }
+    return nullptr;
+  }
   uint32_t Count(const std::string& table) const {
     const em::DataTable* t = T(table);
+    if (gen4_ != nullptr && table == "pokemon_data" && t != nullptr) {
+      uint32_t last = t->count;
+      for (const Gen4Species& g : *gen4_) last = std::max(last, g.id + 1);
+      return last;
+    }
     return t != nullptr ? t->count : 0;
   }
   uint32_t Get(const std::string& table, uint32_t entry, const std::string& field, uint32_t element = 0) const {
     const em::DataTable* t = T(table);
+    if (t != nullptr && entry >= t->count) {
+      if (const Gen4Species* g = Virtual(table, entry)) {
+        if (field == "numZukan" || field == "numPokemon") return g->dex;
+        if (field == "basisStatus") return element < 6 ? g->stats[element] : 0;
+        if (field == "zokuseiDataId") return element < 2 ? g->types[element] : 0;
+        if (field == "tokuseiDataId") return element < 2 ? g->abilities[element] : 0;
+        if (field == "sinka.pokemonDataId") return element < 5 ? g->evolves[element] : 0;
+        if (field == "waza.level") return element < 20 ? g->level[element] : 0;
+        if (field == "waza.dataId") return element < 20 ? g->move[element] : 0;
+        return 0;
+      }
+    }
     if (t == nullptr || t->places.empty() || entry >= t->count) return 0;
     const em::DataField* f = F(*t, field);
     if (f == nullptr || element >= f->count) return 0;
@@ -109,6 +141,9 @@ public:
     return em::ReadDataField(it->second.data() + at, *f, element);
   }
   std::string Name(const std::string& list, uint32_t v) const {
+    if (list == "species") {
+      if (const Gen4Species* g = Virtual("pokemon_data", v)) return g->name;
+    }
     if (const em::NameList* l = cat_.FindList(list)) {
       for (const auto& [n, num] : l->names) {
         if (num == v) return n;
@@ -133,6 +168,7 @@ public:
   }
 
 private:
+  const std::vector<Gen4Species>* gen4_ = nullptr;
   const em::DataCatalog& cat_;
   const em::EntryReader& read_;
   mutable std::map<std::pair<std::string, std::string>, std::vector<uint8_t>> cache_;
@@ -159,6 +195,11 @@ bool ReadSpecies(const Tables& t, Species& sp, std::string& error) {
   std::iota(sp.family.begin(), sp.family.end(), 0u);
   std::set<uint32_t> visitors;
   for (uint32_t i = 0; i < t.Count("esabapokemondata_EX"); i++) visitors.insert(t.Get("esabapokemondata_EX", i, "id"));
+  if (t.Gen4()) {
+    for (uint32_t s = 1; s < n; s++) {
+      if (const Gen4Species* g = t.Virtual("pokemon_data", s)) sp.legendary[s] = g->legendary;
+    }
+  }
   if (const em::DataTable* lt = t.T("legendPokemonData"); lt != nullptr && !lt->fields.empty()) {
     for (uint32_t i = 0; i < lt->count; i++) {
       const uint32_t s = t.Get("legendPokemonData", i, lt->fields[0].name);
@@ -173,7 +214,7 @@ bool ReadSpecies(const Tables& t, Species& sp, std::string& error) {
     const uint32_t nat = t.Get("pokemon_data", s, "numZukan");
     sp.national[s] = nat;
     if (nat == kNationalLugia && sp.lugia == 0) sp.lugia = s;
-    if (nat == 0 || nat > kNationalLast || total == 0 || visitors.count(s) != 0 || !seenNational.insert(nat).second) continue;
+    if (nat == 0 || nat > (t.Gen4() ? kNationalLastGen4 : kNationalLast) || total == 0 || visitors.count(s) != 0 || !seenNational.insert(nat).second) continue;
     sp.pool.push_back(s);
   }
   auto root = [&](uint32_t x) {
@@ -540,7 +581,9 @@ void Abilities(const Tables& t, const Species& sp, const er::Settings& s, Result
   er::Rng rng = er::Rng::Stream(s.seed, "abilities");
   const bool family = s.Get(GetSchema(), "abilities.family") != 0;
   std::set<uint32_t> inUse;
+  const uint32_t discSpecies = t.DiscCount("pokemon_data");
   for (uint32_t x : sp.pool) {
+    if (x >= discSpecies) continue;
     for (uint32_t k = 0; k < 2; k++) inUse.insert(t.Get("pokemon_data", x, "tokuseiDataId", k));
   }
   std::vector<uint32_t> abilities;
@@ -550,6 +593,7 @@ void Abilities(const Tables& t, const Species& sp, const er::Settings& s, Result
   if (abilities.empty()) return;
   std::map<uint32_t, std::array<uint32_t, 2>> byFamily;
   for (uint32_t x : sp.pool) {
+    if (x >= discSpecies) continue;
     std::array<uint32_t, 2> pick{};
     auto it = family ? byFamily.find(sp.family[x]) : byFamily.end();
     if (it != byFamily.end()) {
@@ -576,10 +620,17 @@ void TmCompat(const Tables& t, const Species& sp, const er::Settings& s, Result&
   const em::DataField* f = pd != nullptr ? t.F(*pd, "wazaMcn") : nullptr;
   if (f == nullptr) return;
   for (uint32_t tm = 0; tm < f->count; tm++) {
-    uint32_t learners = 0;
-    for (uint32_t x : sp.pool) learners += t.Get("pokemon_data", x, "wazaMcn", tm) != 0 ? 1 : 0;
-    const uint32_t percent = static_cast<uint32_t>(learners * 100ull / sp.pool.size());
-    for (uint32_t x : sp.pool) r.mod.Set("pokemon_data", x, Field("wazaMcn", tm), rng.Chance(percent) ? 1 : 0);
+    uint32_t learners = 0, species = 0;
+    const uint32_t discSpecies = t.DiscCount("pokemon_data");
+    for (uint32_t x : sp.pool) {
+      if (x >= discSpecies) continue;
+      species++;
+      learners += t.Get("pokemon_data", x, "wazaMcn", tm) != 0 ? 1 : 0;
+    }
+    const uint32_t percent = static_cast<uint32_t>(learners * 100ull / std::max(species, 1u));
+    for (uint32_t x : sp.pool) {
+      if (x < discSpecies) r.mod.Set("pokemon_data", x, Field("wazaMcn", tm), rng.Chance(percent) ? 1 : 0);
+    }
     r.mod.spoiler.push_back("TM " + std::to_string(tm + 1) + ": learned by about " + std::to_string(percent) + "% of species");
   }
 }
@@ -1074,11 +1125,96 @@ void ApplyStyle(er::Settings& s, Style style) {
   s.Set(sc, "tm_moves", chaos ? 1 : 2);
 }
 
+namespace {
+std::vector<Gen4Species> sGen4;
+}
+
+void SetGen4Species(std::vector<Gen4Species> species) { sGen4 = std::move(species); }
+
+bool LoadGen4Species(const std::filesystem::path& file, std::string& error) {
+  std::ifstream in(file);
+  if (!in) {
+    error = "cannot read " + file.string();
+    return false;
+  }
+  std::vector<Gen4Species> all;
+  std::string line;
+  while (std::getline(in, line)) {
+    if (line.rfind("sp ", 0) != 0) continue;
+    std::vector<std::vector<uint32_t>> parts(1);
+    std::string word;
+    size_t at = 3;
+    std::vector<std::string> words;
+    for (size_t i = at; i <= line.size(); i++) {
+      if (i == line.size() || line[i] == ' ') {
+        if (!word.empty()) words.push_back(word);
+        word.clear();
+      } else {
+        word += line[i];
+      }
+    }
+    for (const std::string& w : words) {
+      if (w == "|") parts.emplace_back();
+      else parts.back().push_back(static_cast<uint32_t>(std::strtoul(w.c_str(), nullptr, 10)));
+    }
+    if (parts.size() != 6 || parts[0].size() != 9 || parts[1].size() != 2 || parts[2].size() != 2 || parts[3].size() != 5 ||
+        parts[4].size() != 20 || parts[5].size() != 20) {
+      error = "a line of " + file.string() + " is not as expected";
+      return false;
+    }
+    Gen4Species g;
+    g.id = parts[0][0], g.dex = parts[0][1], g.legendary = parts[0][2] != 0;
+    for (int k = 0; k < 6; k++) g.stats[k] = parts[0][3 + k];
+    for (int k = 0; k < 2; k++) g.types[k] = parts[1][k], g.abilities[k] = parts[2][k];
+    for (int k = 0; k < 5; k++) g.evolves[k] = parts[3][k];
+    for (int k = 0; k < 20; k++) g.level[k] = parts[4][k], g.move[k] = parts[5][k];
+    g.name = "Gen4#" + std::to_string(g.dex);
+    all.push_back(g);
+  }
+  {
+    std::ifstream tin(file.parent_path() / "tables.txt");
+    std::map<uint32_t, std::string> names;
+    while (std::getline(tin, line)) {
+      uint32_t dex = 0, id = 0;
+      char name[64] = {};
+      if (std::sscanf(line.c_str(), "species %u %u %63s", &dex, &id, name) == 3 && name[0] != '#') names[id] = name;
+    }
+    for (Gen4Species& g : all) {
+      const auto it = names.find(g.id);
+      if (it != names.end()) {
+        g.name = it->second;
+        for (char& c : g.name) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+      }
+    }
+  }
+  if (all.size() < 100) {
+    error = file.string() + " lists too few species";
+    return false;
+  }
+  sGen4 = std::move(all);
+  return true;
+}
+
+bool CodeIncludesGen4(const std::string& code) {
+  er::Settings s;
+  bool seedOnly = false;
+  std::string error;
+  ApplyStyle(s, Style::Classic);
+  return er::DecodeCode(GetSchema(), code, s, seedOnly, error) && s.Get(GetSchema(), "gen4") != 0;
+}
+
 bool Generate(const em::DataCatalog& catalog, const em::EntryReader& read, const er::Settings& s, Result& out, std::string& error) {
   const auto& sc = GetSchema();
   out = Result{};
   out.code = er::EncodeCode(sc, s);
   Tables t(catalog, read);
+  if (s.Get(sc, "gen4")) {
+    if (sGen4.empty()) {
+      error = "\"Include Gen 4 Pokemon\" is on, but the Gen 4 files are not made (they come from your Pokemon Battle Revolution disc)";
+      return false;
+    }
+    t.UseGen4(&sGen4);
+  }
   Species sp;
   if (!ReadSpecies(t, sp, error)) return false;
   if (!t.Need("story_trainers", {"darkPokemonFlags", "pokemonDataID"}, error) ||

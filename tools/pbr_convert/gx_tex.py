@@ -186,6 +186,34 @@ def resize(img, w, h):
     return (np.clip(np.concatenate([rgb, al], axis=-1), 0, 1) * 255 + 0.5).astype(np.uint8)
 
 
+def decode_c14x2(w, h, data, pal_format):
+    """Palette picture (GX C14X2: one 16-bit index per pixel in 4x4 tiles; the palette, 16-bit colours, follows the
+    pixels in the same block: Regigigas's body) -> uint8 [h, w, 4] RGBA. pal_format: 0 IA8, 1 RGB565, 2 RGB5A3."""
+    tx, ty = (w + 3) // 4, (h + 3) // 4
+    n = tx * ty * 16
+    idx = np.frombuffer(data[:n * 2], dtype='>u2').astype(np.int32) & 0x3FFF
+    pal = np.frombuffer(data[n * 2:], dtype='>u2').astype(np.int32)
+    if len(pal) == 0:
+        raise ValueError('palette picture without a palette')
+    v = pal[np.minimum(idx, len(pal) - 1)]
+    rgba = np.zeros(v.shape + (4,), dtype=np.uint8)
+    if pal_format == 1:
+        rgba[..., :3] = _565(v)
+        rgba[..., 3] = 255
+    elif pal_format == 2:
+        opaque = (v & 0x8000) != 0
+        r5, g5, b5 = (v >> 10) & 31, (v >> 5) & 31, v & 31
+        a3, r4, g4, b4 = (v >> 12) & 7, (v >> 8) & 15, (v >> 4) & 15, v & 15
+        rgba[..., 0] = np.where(opaque, (r5 << 3) | (r5 >> 2), r4 * 17)
+        rgba[..., 1] = np.where(opaque, (g5 << 3) | (g5 >> 2), g4 * 17)
+        rgba[..., 2] = np.where(opaque, (b5 << 3) | (b5 >> 2), b4 * 17)
+        rgba[..., 3] = np.where(opaque, 255, (a3 << 5) | (a3 << 2) | (a3 >> 1))
+    else:
+        rgba[..., 0] = rgba[..., 1] = rgba[..., 2] = v & 0xFF
+        rgba[..., 3] = v >> 8
+    return _untile(rgba.reshape(tx * ty, 4, 4, 4), w, h, 4, 4)
+
+
 def _selftest():
     rng = np.random.default_rng(1)
     ok = True

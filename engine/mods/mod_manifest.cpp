@@ -156,6 +156,23 @@ bool ParseManifest(std::string_view json, Manifest& out, std::string& error) {
       !IntField(root, "priority", out.priority, error) || !IntField(root, "format", format, error)) {
     return false;
   }
+  {
+    const auto it = root.fields.find("scripts");
+    if (it != root.fields.end() && it->second.kind != Value::Kind::Null) {
+      if (it->second.kind != Value::Kind::Bool) {
+        error = "\"scripts\" must be true or false";
+        return false;
+      }
+      out.scripts = it->second.boolean;
+    }
+  }
+  if (!IntField(root, "script_api", out.scriptApi, error)) {
+    return false;
+  }
+  if (out.scriptApi > kScriptApi) {
+    error = "made for a newer script interface than this port has (script_api " + std::to_string(out.scriptApi) + ")";
+    return false;
+  }
   std::string applies;
   if (!TextField(root, "applies", applies, error)) {
     return false;

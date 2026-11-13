@@ -162,6 +162,13 @@ mod list.
   really is that game (its header, through the same disc reader as the Disc page; a wrong game says which game it is
   and which one is needed), the path remembered in settings.ini as `system.extra_disc.pbr` (hidden from the Settings
   page), and **Make models**.
+- **Gen 4 pack in the same Make** (2026-11-12): the source row has a second output (`ExtraSource::secondFolder`, `{out2}` in the
+  arguments, `extra_assets\pbr_gen4`), so Make runs `pbr_models ... --out <extra_assets\pbr> --gen4-pack <extra_assets\pbr_gen4>`: the
+  388 models and the Gen 4 pack (docs/GEN4.md, docs/PBR_CONVERTER_CPP.md) with no Python. The progress bar fills twice (the models,
+  then the 106 Gen 4 models; `progress` lines both times), then one `done` line. The page shows a second status line, "Gen 4 Pokemon:
+  ready (107 species) / not made yet / out of date" (`ComputeSecondStatus`: `gen4.json` has the right id and the version the game
+  wants, `secondVersion`; also "out of date" while the models are). Cancel / a failed run also remove `<out2>.tmp`. The game looks
+  in `<data folder>\extra_assets\pbr_gen4` (games/xd/src/gen4_pack.cpp: no change needed there).
 - **Make models** runs the converter program shipped next to the game, `<game folder>\pbr_models\pbr_models.exe`, on a
   thread (the window never freezes): `pbr_models.exe --pbr-disc <that disc> --xd-disc <your XD disc> --out <data
   folder>\extra_assets\pbr` (`--out` is just a folder to make). It prints `progress <done> <total> <model name>` lines (the progress bar), then
@@ -445,7 +452,11 @@ always asks before downloading.
 - **Go back**: switches `game_folder.txt` back to the previous folder (kept); the version left is then skipped.
 - Only in the player's folder (a launcher in `game\` or `game-<version>\` under "Pokemon XD.exe"); a build folder
   can check but not install. Data kept inside the game folder (portable mode in `game\`) is refused with a message.
-- Code: `engine/update` (manifest, Monocypher Ed25519, WinHTTP, BCrypt SHA-256, zip via zlib, folders),
+- Same on Linux and the Mac since 0.4.1 (docs/UPDATER.md "On each system"): Linux installs `game-<version>/` from a
+  tar.gz exactly as Windows does (the start script reads `game_folder.txt`); the Mac unpacks the new `Pokemon XD.app`
+  beside the old one and a small helper swaps it in when the launcher closes. One signed `update.json` lists all
+  three systems' files and keeps the old top fields for 0.4.0.
+- Code: `engine/update` (manifest, Monocypher Ed25519, WinHTTP or curl, SHA-256, zip via zlib, tar.gz, folders),
   `launcher_app.cpp` (`DrawUpdateCard`, `DrawUpdateWindows`), XD's names in `xd_launcher.cpp` (`SetUpUpdates`), the
   starter (`starter.cpp`). Tests: `update_test.exe`, `python tools/test_updater.py --build <bin>` (local feed).
 
@@ -471,10 +482,10 @@ What is different, and what the player sees:
 
 | Windows | Linux |
 |---|---|
-| Updates card: check, install, go back | only "Version x.y.z": no updater (no signed Linux update exists; the launcher has no update address there and never goes online) |
+| Updates card: check, install, go back | as on Windows since 0.4.1 (download through the system's `curl`; tar.gz; `tools/test_updater_posix.py --system linux`) |
 | Icon chooser (program's styles, pictures from the disc) | one line: choosing another icon "isn't there on this system yet"; window and shortcuts show `icon.png` next to the program (the program's own icon) |
 | Backgrounds: from the disc's pictures + drawn by the game | from the disc's pictures only (the game has no hidden render mode on Linux) |
-| Shaders prepared before the first Play | not done (the game compiles them as it meets them, as the Linux game always did); `XD_LAUNCHER_SHADERS=1` tries it, untested |
+| Shaders prepared before the first Play | done as on Windows since 0.4.1 (WSL, software Vulkan: 5363 pipelines in 113 s; never on a real GPU); `XD_LAUNCHER_SHADERS=0` leaves it out |
 | "Open folder" opens Explorer | `xdg-open`; a desktop without it gets a small window with the folder's path and "Copy the path" |
 | Deleted saves go to the recycle bin | to the desktop's trash (freedesktop.org: `~/.local/share/Trash`, with its info file so the file manager can put it back); on another drive than the saves: refused with a message, never deleted |
 | Start menu / desktop shortcut (.lnk) | "applications menu" (`~/.local/share/applications`) / desktop shortcut: a `.desktop` file starting `Pokemon XD.sh`; some desktops ask to "Allow launching" first |
@@ -488,7 +499,10 @@ started by `play` is muted and off screen).
 
 Built (x86_64, Rosetta 2) and packaged as the main program of `Pokemon XD.app`, which starts the game
 (`Contents/MacOS/xd`) when Play is pressed; never run on a Mac yet. Differences from Linux: `open` for folders, the
-Finder (osascript, else `~/.Trash`) for deleted saves, Arial as the fall-back font, no shortcut buttons, no updater.
+Finder (osascript, else `~/.Trash`) for deleted saves, Arial as the fall-back font, no shortcut buttons (the Icon
+page says the app is its own shortcut). The updater is there since 0.4.1 (the app is swapped by a helper;
+docs/UPDATER.md; never run on a real Mac). Since 0.4.1 the game on the Mac also writes F10 / F12 / crash
+bundles (docs/PARITY.md).
 `XD_NO_LAUNCHER=1` starts the game directly. docs/MAC.md "Launcher on the Mac": what the workflow checks, what is
 untested.
 

@@ -300,6 +300,7 @@ bool MakeShortcut(const fs::path& folder, const std::string& name, const std::st
 }
 
 const char* ProgramsFolderName() { return "Start menu"; }
+bool ShortcutsHere() { return true; }
 bool HasIcons() { return true; }
 
 icon::Image ReadIcoSize(const fs::path& file, int size) {

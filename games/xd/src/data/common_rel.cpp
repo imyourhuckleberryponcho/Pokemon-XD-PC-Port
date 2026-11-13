@@ -78,7 +78,7 @@ const FieldDesc kPokemonDataFields[] = {
     {"height", FIELD_U16, 1, 0x08, PD(height)},
     {"weight", FIELD_U16, 1, 0x0A, PD(weight)},
     {"voice", FIELD_U16, 1, 0x0C, PD(voice)},
-    {"unk1", FIELD_U8, 2, 0x0E, PD(unk1)},
+    {"nakigoeId", FIELD_U16, 1, 0x0E, PD(unk1)},
     {"shout", FIELD_U16, 1, 0x10, PD(shout)},
     {"numPokemon", FIELD_U16, 1, 0x12, PD(numPokemon)},
     {"numZukan", FIELD_U16, 1, 0x14, PD(numZukan)},
@@ -851,6 +851,223 @@ void patch_section_addresses(Loaded* l) {
   }
 }
 
+struct AddedRowCopy {
+  std::string table;
+  uint32_t id = 0, row = 0, copyOf = 0;
+  std::vector<uint8_t> bytes;
+};
+std::vector<AddedRowCopy> sAddedRows;
+uint32_t sCounts[3] = {0, 0, 0};
+
+XDRelGlobalValue* global_named(XDCommonTables* out, const char* name) {
+  for (uint32_t g = 0; g < out->numGlobals; g++) {
+    if (std::strcmp(out->globals[g].name, name) == 0) return &out->globals[g];
+  }
+  return nullptr;
+}
+
+bool apply_added_rows(Loaded* l, XDCommonTables* out, const RelPrologStore* stores, int n, std::string& problem) {
+  const auto store_of = [&](const std::string& name) -> const RelPrologStore* {
+    for (int i = 0; i < n; i++) {
+      if (name == relglobal_name(stores[i].dolAddress)) return &stores[i];
+    }
+    return nullptr;
+  };
+  if (store_of("pokemon_data") == nullptr && store_of("waza_data") == nullptr && store_of("item_data_prime") == nullptr) {
+    return true;
+  }
+  const auto grow = [&](const char* name, uint32_t newCount, const std::string& kind, uint32_t AddedRowCopy::*place) -> bool {
+    const TableDesc* desc = described(name);
+    XDRelGlobalValue* table = global_named(out, name);
+    XDRelGlobalValue* number = global_named(out, (std::string(name) + "_number").c_str());
+    const RelPrologStore* at = store_of(name);
+    if (desc == nullptr || table == nullptr || number == nullptr || at == nullptr) {
+      problem = std::string("data mods add rows to ") + name + ", but the module has no such table";
+      return false;
+    }
+    const uint32_t oldCount = *static_cast<uint32_t*>(number->value);
+    if (newCount <= oldCount) return true;
+    auto* rows = static_cast<uint8_t*>(PortMem_LowAlloc(static_cast<size_t>(newCount) * desc->pcSize, 16));
+    std::memset(rows, 0, static_cast<size_t>(newCount) * desc->pcSize);
+    std::memcpy(rows, table->value, static_cast<size_t>(oldCount) * desc->pcSize);
+    for (const AddedRowCopy& r : sAddedRows) {
+      if (r.table != kind) continue;
+      const uint32_t index = r.*place;
+      if (r.bytes.size() != desc->gcSize || r.copyOf >= oldCount) {
+        problem = std::string("a row added to ") + name + " has the wrong size or copies a row that isn't the disc's";
+        return false;
+      }
+      l->section = at->section;
+      const uint32_t unresolved = DataTable_Convert(desc, r.bytes.data(), at->offset + r.copyOf * desc->gcSize, 1,
+                                                    rows + static_cast<size_t>(index) * desc->pcSize, resolve, l);
+      if (unresolved != 0) {
+        problem = std::string("a row added to ") + name + " has " + std::to_string(unresolved) + " address fields that don't convert";
+        return false;
+      }
+    }
+    table->value = rows;
+    *static_cast<uint32_t*>(number->value) = newCount;
+    std::fprintf(stderr, "[mods] %s grown: %u -> %u rows\n", name, oldCount, newCount);
+    return true;
+  };
+  uint32_t species = 0, moves = 0, itemRows = 0, itemIds = 0;
+  for (const AddedRowCopy& r : sAddedRows) {
+    if (r.table == "pokemon_data") species = std::max(species, r.row + 1);
+    else if (r.table == "waza_data") moves = std::max(moves, r.row + 1);
+    else if (r.table == "item_data_prime") {
+      itemRows = std::max(itemRows, r.row + 1);
+      itemIds = std::max(itemIds, r.id + 1);
+    } else {
+      problem = "data mods add rows to " + r.table + ", which the port can't grow";
+      return false;
+    }
+  }
+  if (species != 0 && !grow("pokemon_data", species, "pokemon_data", &AddedRowCopy::row)) return false;
+  if (moves != 0 && !grow("waza_data", moves, "waza_data", &AddedRowCopy::row)) return false;
+  if (itemRows != 0) {
+    if (!grow("item_data_prime", itemRows, "item_data_prime", &AddedRowCopy::row)) return false;
+    XDRelGlobalValue* index = global_named(out, "item_data_index");
+    XDRelGlobalValue* number = global_named(out, "item_data_index_number");
+    if (index == nullptr || number == nullptr) {
+      problem = "data mods add items, but the module has no item_data_index";
+      return false;
+    }
+    const uint32_t oldCount = *static_cast<uint32_t*>(number->value);
+    if (itemIds > oldCount) {
+      auto* ids = static_cast<uint16_t*>(PortMem_LowAlloc(static_cast<size_t>(itemIds) * 2, 16));
+      std::memset(ids, 0, static_cast<size_t>(itemIds) * 2);
+      std::memcpy(ids, index->value, static_cast<size_t>(oldCount) * 2);
+      for (const AddedRowCopy& r : sAddedRows) {
+        if (r.table == "item_data_prime") ids[r.id] = static_cast<uint16_t>(r.row);
+      }
+      index->value = ids;
+      *static_cast<uint32_t*>(number->value) = itemIds;
+      std::fprintf(stderr, "[mods] item_data_index grown: %u -> %u ids\n", oldCount, itemIds);
+    }
+  }
+  return true;
+}
+
+struct ExtraRowCopy {
+  std::string table;
+  uint32_t row = 0, count = 1;
+  int32_t copyOf = -1;
+  std::vector<uint32_t> sets;
+};
+std::vector<ExtraRowCopy> sExtraRows;
+
+bool apply_extra_rows(Loaded* l, XDCommonTables* out, const RelPrologStore* stores, int n, std::string& problem) {
+  std::vector<std::string> done;
+  for (const ExtraRowCopy& first : sExtraRows) {
+    if (std::find(done.begin(), done.end(), first.table) != done.end()) continue;
+    done.push_back(first.table);
+    const TableDesc* desc = described(first.table.c_str());
+    XDRelGlobalValue* table = global_named(out, first.table.c_str());
+    XDRelGlobalValue* number = global_named(out, (first.table + "_number").c_str());
+    const RelPrologStore* at = nullptr;
+    for (int i = 0; i < n; i++) {
+      if (first.table == relglobal_name(stores[i].dolAddress)) at = &stores[i];
+    }
+    if (at == nullptr) {
+      std::fprintf(stderr, "[gen4] %s: not among this module's tables, no rows added here\n", first.table.c_str());
+      continue;
+    }
+    if (desc == nullptr || table == nullptr || number == nullptr) {
+      problem = "the Gen 4 pack adds rows to " + first.table + ", which the port can't grow";
+      return false;
+    }
+    const uint32_t oldCount = *static_cast<uint32_t*>(number->value);
+    uint32_t newCount = oldCount;
+    for (const ExtraRowCopy& r : sExtraRows) {
+      if (r.table == first.table) newCount = (r.row == 0xFFFFFFFFu ? newCount : std::max(newCount, r.row)) + r.count;
+    }
+    auto* rows = static_cast<uint8_t*>(PortMem_LowAlloc(static_cast<size_t>(newCount) * desc->pcSize, 16));
+    std::memset(rows, 0, static_cast<size_t>(newCount) * desc->pcSize);
+    std::memcpy(rows, table->value, static_cast<size_t>(oldCount) * desc->pcSize);
+    uint32_t expected = oldCount;
+    for (const ExtraRowCopy& r : sExtraRows) {
+      if (r.table != first.table) continue;
+      if (r.row != 0xFFFFFFFFu && r.row != expected) {
+        problem = "the Gen 4 pack adds a row " + std::to_string(r.row) + " to " + first.table + ", but the disc's table has " +
+                  std::to_string(oldCount) + " rows (next expected " + std::to_string(expected) + ")";
+        return false;
+      }
+      for (uint32_t k = 0; k < r.count; k++, expected++) {
+        std::vector<uint8_t> gc(desc->gcSize, 0);
+        uint32_t from = 0;
+        if (r.copyOf >= 0) {
+          if (static_cast<uint32_t>(r.copyOf) >= oldCount ||
+              at->offset + (static_cast<uint64_t>(r.copyOf) + 1) * desc->gcSize > l->sectionCopies[at->section].size()) {
+            problem = "the Gen 4 pack copies a row of " + first.table + " that isn't the disc's";
+            return false;
+          }
+          from = static_cast<uint32_t>(r.copyOf);
+          std::memcpy(gc.data(), l->sectionCopies[at->section].data() + at->offset + static_cast<size_t>(from) * desc->gcSize,
+                      desc->gcSize);
+        }
+        for (size_t s = 0; s + 2 < r.sets.size(); s += 3) {
+          const uint32_t off = r.sets[s], size = r.sets[s + 1], value = r.sets[s + 2];
+          if (off + size > gc.size() || (size != 1 && size != 2 && size != 4)) {
+            problem = "the Gen 4 pack sets bytes outside a row of " + first.table;
+            return false;
+          }
+          for (uint32_t b = 0; b < size; b++) gc[off + b] = static_cast<uint8_t>(value >> (8 * (size - 1 - b)));
+        }
+        l->section = at->section;
+        const uint32_t unresolved = DataTable_Convert(desc, gc.data(), at->offset + from * desc->gcSize, 1,
+                                                      rows + static_cast<size_t>(expected) * desc->pcSize, resolve, l);
+        if (unresolved != 0) {
+          problem = "a row the Gen 4 pack adds to " + first.table + " has address fields that don't convert";
+          return false;
+        }
+      }
+    }
+    table->value = rows;
+    *static_cast<uint32_t*>(number->value) = newCount;
+    if (first.table.rfind("esabapokemondata_E", 0) == 0) {
+      if (XDRelGlobalValue* top = global_named(out, (first.table + "_top").c_str())) {
+        EsaTable* record = static_cast<EsaTable*>(top->value);
+        record->entries = reinterpret_cast<EsaEntry*>(rows);
+        if (record->head != nullptr) record->head->count = newCount;
+      }
+    }
+    std::fprintf(stderr, "[gen4] %s grown: %u -> %u rows\n", first.table.c_str(), oldCount, newCount);
+  }
+  return true;
+}
+
+}
+
+extern "C" bool PortXD_CommonTableCounts(uint32_t* species, uint32_t* moves, uint32_t* items) {
+  if (sCounts[0] == 0 || sCounts[1] == 0 || sCounts[2] == 0) return false;
+  *species = sCounts[0], *moves = sCounts[1], *items = sCounts[2];
+  return true;
+}
+
+extern "C" void PortXD_SetAddedRows(const XDAddedRow* rows, size_t count) {
+  sAddedRows.clear();
+  for (size_t i = 0; i < count; i++) {
+    AddedRowCopy c;
+    c.table = rows[i].table;
+    c.id = rows[i].id;
+    c.row = rows[i].row;
+    c.copyOf = rows[i].copyOf;
+    c.bytes.assign(rows[i].bytes, rows[i].bytes + rows[i].size);
+    sAddedRows.push_back(std::move(c));
+  }
+}
+
+extern "C" void PortXD_SetExtraRows(const XDExtraRow* rows, size_t count) {
+  sExtraRows.clear();
+  for (size_t i = 0; i < count; i++) {
+    ExtraRowCopy c;
+    c.table = rows[i].table;
+    c.row = rows[i].row;
+    c.count = rows[i].count;
+    c.copyOf = rows[i].copyOf;
+    c.sets.assign(rows[i].sets, rows[i].sets + rows[i].nSets * 3);
+    sExtraRows.push_back(std::move(c));
+  }
 }
 
 extern "C" void PortXD_SetMainProgramMap(const XDMainProgramAddress* map, size_t count) {
@@ -1013,7 +1230,39 @@ extern "C" bool PortXD_ConvertCommonRel(const uint8_t* relFile, size_t relSize, 
       out->pokemon_data_number = *static_cast<uint32_t*>(out->globals[g].value);
     }
   }
+  if (!sExtraRows.empty()) {
+    std::string problem;
+    if (!apply_extra_rows(l, out, stores, n, problem)) {
+      delete l;
+      return fail(error, errorSize, problem);
+    }
+  }
+  if (!sAddedRows.empty()) {
+    std::string problem;
+    if (!apply_added_rows(l, out, stores, n, problem)) {
+      delete l;
+      return fail(error, errorSize, problem);
+    }
+    for (uint32_t g = 0; g < out->numGlobals; g++) {
+      if (std::strcmp(out->globals[g].name, "pokemon_data") == 0) {
+        out->pokemon_data = static_cast<PokemonData*>(out->globals[g].value);
+      } else if (std::strcmp(out->globals[g].name, "pokemon_data_number") == 0) {
+        out->pokemon_data_number = *static_cast<uint32_t*>(out->globals[g].value);
+      }
+    }
+  }
   out->tablesFound = (uint32_t)n;
+  {
+    const auto count = [&](const char* name) -> uint32_t {
+      XDRelGlobalValue* g = global_named(out, name);
+      return g != nullptr ? *static_cast<uint32_t*>(g->value) : 0;
+    };
+    if (count("pokemon_data_number") != 0 && count("waza_data_number") != 0 && count("item_data_index_number") != 0) {
+      sCounts[0] = count("pokemon_data_number");
+      sCounts[1] = count("waza_data_number");
+      sCounts[2] = count("item_data_index_number");
+    }
+  }
   patch_section_addresses(l);
   (void)l;
   return true;

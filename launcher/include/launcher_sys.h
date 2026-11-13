@@ -61,6 +61,7 @@ const char* HomeFolderExample();
 bool MakeShortcut(const std::filesystem::path& folder, const std::string& name, const std::string& description,
                   const std::filesystem::path& target, const std::filesystem::path& iconFile, std::string& message);
 const char* ProgramsFolderName();
+bool ShortcutsHere();
 bool HasIcons();
 
 icon::Image ReadIcoSize(const std::filesystem::path& file, int size);

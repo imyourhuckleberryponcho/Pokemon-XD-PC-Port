@@ -1,6 +1,8 @@
 add_library(engine_formats STATIC formats/lzss_fsys.c formats/fsys_build.c formats/rel.c formats/data_table.c)
 target_include_directories(engine_formats PUBLIC formats/include)
 
+add_subdirectory(formats/pbr)
+
 if (WIN32)
   add_library(engine_gs STATIC gs/gsthread_fibers.cpp)
 else () # Linux: the same functions on ucontext, stacks below 2 GB (docs/LINUX.md)
@@ -66,6 +68,34 @@ target_link_libraries(data_mods_test PRIVATE engine_mods)
 target_compile_options(data_mods_test PRIVATE ${XD_FLAG_UTF8})
 aurora_copy_runtime_dlls(data_mods_test)
 
+add_library(lua54 STATIC
+  ${PROJECT_SOURCE_DIR}/third_party/lua/src/lapi.c ${PROJECT_SOURCE_DIR}/third_party/lua/src/lauxlib.c
+  ${PROJECT_SOURCE_DIR}/third_party/lua/src/lbaselib.c ${PROJECT_SOURCE_DIR}/third_party/lua/src/lcode.c
+  ${PROJECT_SOURCE_DIR}/third_party/lua/src/lctype.c ${PROJECT_SOURCE_DIR}/third_party/lua/src/ldebug.c
+  ${PROJECT_SOURCE_DIR}/third_party/lua/src/ldo.c ${PROJECT_SOURCE_DIR}/third_party/lua/src/ldump.c
+  ${PROJECT_SOURCE_DIR}/third_party/lua/src/lfunc.c ${PROJECT_SOURCE_DIR}/third_party/lua/src/lgc.c
+  ${PROJECT_SOURCE_DIR}/third_party/lua/src/llex.c ${PROJECT_SOURCE_DIR}/third_party/lua/src/lmathlib.c
+  ${PROJECT_SOURCE_DIR}/third_party/lua/src/lmem.c ${PROJECT_SOURCE_DIR}/third_party/lua/src/lobject.c
+  ${PROJECT_SOURCE_DIR}/third_party/lua/src/lopcodes.c ${PROJECT_SOURCE_DIR}/third_party/lua/src/lparser.c
+  ${PROJECT_SOURCE_DIR}/third_party/lua/src/lstring.c ${PROJECT_SOURCE_DIR}/third_party/lua/src/lstrlib.c
+  ${PROJECT_SOURCE_DIR}/third_party/lua/src/ltable.c ${PROJECT_SOURCE_DIR}/third_party/lua/src/ltm.c
+  ${PROJECT_SOURCE_DIR}/third_party/lua/src/lundump.c ${PROJECT_SOURCE_DIR}/third_party/lua/src/lvm.c
+  ${PROJECT_SOURCE_DIR}/third_party/lua/src/lzio.c
+  script/lua_state_fixed_seed.c script/lua_table_fixed_pivot.c) # (lstate.c and ltablib.c: through these two)
+target_include_directories(lua54 PUBLIC ${PROJECT_SOURCE_DIR}/third_party/lua/src)
+if (MSVC)
+  target_compile_options(lua54 PRIVATE /W0)
+else ()
+  target_compile_options(lua54 PRIVATE -w)
+endif ()
+
+add_library(engine_script STATIC script/script_host.cpp)
+target_include_directories(engine_script PUBLIC script/include)
+target_link_libraries(engine_script PUBLIC lua54)
+
+add_executable(script_test script/tests/script_test.cpp)
+target_link_libraries(script_test PRIVATE engine_script)
+
 add_library(engine_playthrough STATIC playthrough/playthrough.cpp)
 target_include_directories(engine_playthrough PUBLIC playthrough/include PRIVATE mods)
 target_link_libraries(engine_playthrough PUBLIC engine_mods engine_settings)
@@ -89,10 +119,12 @@ target_link_libraries(engine_settings_ui PUBLIC engine_settings engine_controls 
 add_library(monocypher STATIC ${PROJECT_SOURCE_DIR}/third_party/monocypher/monocypher.c
   ${PROJECT_SOURCE_DIR}/third_party/monocypher/optional/monocypher-ed25519.c)
 target_include_directories(monocypher PUBLIC ${PROJECT_SOURCE_DIR}/third_party/monocypher)
+set(XD_UPDATE_COMMON update/update_manifest.cpp update/update_install.cpp update/update_util.cpp update/update_sha256.cpp
+    update/update_tar.cpp update/update_mac.cpp)
 if (WIN32)
-  add_library(engine_update STATIC update/update_manifest.cpp update/update_fetch.cpp update/update_install.cpp)
-else () # Linux / Mac: no downloads yet (update/update_fetch_none.cpp answers "couldn't"); the launcher shows no updater
-  add_library(engine_update STATIC update/update_manifest.cpp update/update_fetch_none.cpp update/update_install.cpp)
+  add_library(engine_update STATIC ${XD_UPDATE_COMMON} update/update_fetch.cpp)
+else () # Linux / Mac: downloads through the system's curl (update/update_fetch_posix.cpp)
+  add_library(engine_update STATIC ${XD_UPDATE_COMMON} update/update_fetch_posix.cpp)
 endif ()
 target_include_directories(engine_update PUBLIC update/include)
 target_link_libraries(engine_update PRIVATE monocypher ZLIB::ZLIB)

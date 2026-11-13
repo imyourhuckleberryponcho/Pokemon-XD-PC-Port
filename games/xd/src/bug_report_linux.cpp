@@ -1,4 +1,4 @@
-#if defined(__linux__)
+#if defined(__linux__) || defined(__APPLE__)
 #include "xd_user_folder.h"
 
 #include <crash_report.h>
@@ -372,12 +372,14 @@ std::string sTestCrashKind;
 
 extern "C" {
 
+#if !defined(__APPLE__)
 ImTextureID __real_aurora_imgui_add_texture(uint32_t width, uint32_t height, const void* rgba8);
 ImTextureID __wrap_aurora_imgui_add_texture(uint32_t width, uint32_t height, const void* rgba8) {
   const ImTextureID id = __real_aurora_imgui_add_texture(width, height, rgba8);
   PortShot_LinuxNoteTexture(static_cast<uint64_t>(id), width, height, rgba8);
   return id;
 }
+#endif
 
 void PortXD_GamePictureFrame(void) { PortShot_LinuxFrame(); }
 

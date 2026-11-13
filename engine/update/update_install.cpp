@@ -1,10 +1,12 @@
-#include "update.h"
+#include "update_internal.h"
 
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
-#include <bcrypt.h>
+#else
+#include <sys/stat.h>
+#include <unistd.h>
 #endif
 
 #include <zlib.h>
@@ -19,14 +21,11 @@ namespace fs = std::filesystem;
 
 namespace {
 
-std::string Utf8(const fs::path& p) {
-  const std::u8string u8 = p.u8string();
-  return std::string(reinterpret_cast<const char*>(u8.data()), u8.size());
-}
-
-fs::path PathOf(const std::string& utf8) {
-  return fs::path(std::u8string(reinterpret_cast<const char8_t*>(utf8.data()), utf8.size()));
-}
+using detail::Utf8;
+using detail::PathOf;
+using detail::RemoveFolder;
+using detail::HoldsPlayerData;
+using detail::SafeName;
 
 struct File {
   std::FILE* f = nullptr;
@@ -57,91 +56,6 @@ uint32_t U32(const uint8_t* p) {
          (static_cast<uint32_t>(p[3]) << 24);
 }
 
-bool SafeName(std::string name, std::string& out) {
-  for (char& c : name) {
-    if (c == '\\') {
-      c = '/';
-    }
-  }
-  out.clear();
-  if (name.empty() || name.front() == '/' || name.find(':') != std::string::npos) {
-    return false;
-  }
-  size_t start = 0;
-  while (start < name.size()) {
-    size_t end = name.find('/', start);
-    if (end == std::string::npos) {
-      end = name.size();
-    }
-    const std::string part = name.substr(start, end - start);
-    if (part.empty() || part == "." || part == "..") {
-      return false;
-    }
-    for (unsigned char c : part) {
-      if (c < 0x20 || c == '<' || c == '>' || c == '"' || c == '|' || c == '?' || c == '*') {
-        return false;
-      }
-    }
-    if (part.back() == '.' || part.back() == ' ') {
-      return false;
-    }
-    if (!out.empty()) {
-      out += '/';
-    }
-    out += part;
-    start = end + 1;
-  }
-  return !out.empty();
-}
-
-bool RemoveFolder(const fs::path& folder) {
-  std::error_code ec;
-  fs::remove_all(folder, ec);
-  return !fs::exists(folder, ec);
-}
-
-bool HoldsPlayerData(const fs::path& folder) {
-  std::error_code ec;
-  return fs::exists(folder / L"data_location.json", ec) || fs::exists(folder / L"portable", ec);
-}
-
-}
-
-bool Sha256File(const fs::path& file, std::string& hex, std::string& error) {
-#if !defined(_WIN32)
-  (void)file, (void)hex;
-  error = "checking a download isn't there on this system yet";
-  return false;
-#else
-  hex.clear();
-  File in(file, L"rb");
-  if (in.f == nullptr) {
-    error = "the downloaded package isn't there";
-    return false;
-  }
-  BCRYPT_ALG_HANDLE alg = nullptr;
-  BCRYPT_HASH_HANDLE hash = nullptr;
-  bool ok = BCRYPT_SUCCESS(BCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA256_ALGORITHM, nullptr, 0)) &&
-            BCRYPT_SUCCESS(BCryptCreateHash(alg, &hash, nullptr, 0, nullptr, 0, 0));
-  std::vector<uint8_t> buffer(1 << 16);
-  for (size_t n; ok && (n = std::fread(buffer.data(), 1, buffer.size(), in.f)) > 0;) {
-    ok = BCRYPT_SUCCESS(BCryptHashData(hash, buffer.data(), static_cast<ULONG>(n), 0));
-  }
-  uint8_t digest[32];
-  ok = ok && std::ferror(in.f) == 0 && BCRYPT_SUCCESS(BCryptFinishHash(hash, digest, sizeof digest, 0));
-  if (hash != nullptr) {
-    BCryptDestroyHash(hash);
-  }
-  if (alg != nullptr) {
-    BCryptCloseAlgorithmProvider(alg, 0);
-  }
-  if (!ok) {
-    error = "the downloaded package couldn't be read";
-    return false;
-  }
-  hex = HexEncode(digest, sizeof digest);
-  return true;
-#endif
 }
 
 bool ExtractZip(const fs::path& zip, const fs::path& folder, std::string& error, const std::function<bool()>& stop) {
@@ -189,6 +103,7 @@ bool ExtractZip(const fs::path& zip, const fs::path& folder, std::string& error,
     bool directory;
     uint16_t method, flags;
     uint32_t crc, packed, unpacked, offset;
+    uint32_t unixMode;
   };
   std::vector<Entry> entries;
   uint64_t totalUnpacked = 0;
@@ -200,6 +115,7 @@ bool ExtractZip(const fs::path& zip, const fs::path& folder, std::string& error,
     }
     Entry e{};
     e.flags = U16(&dir[p + 8]);
+    e.unixMode = (U16(&dir[p + 4]) >> 8) == 3 ? (U32(&dir[p + 38]) >> 16) : 0;
     e.method = U16(&dir[p + 10]);
     e.crc = U32(&dir[p + 16]);
     e.packed = U32(&dir[p + 20]);
@@ -219,6 +135,10 @@ bool ExtractZip(const fs::path& zip, const fs::path& folder, std::string& error,
     if (!SafeName(raw, e.name)) {
       error = "the package holds a file name that isn't allowed: " + raw;
       return false;
+    }
+    if (e.name == "__MACOSX" || e.name.rfind("__MACOSX/", 0) == 0 || e.name == ".DS_Store" ||
+        (e.name.size() > 10 && e.name.compare(e.name.size() - 10, 10, "/.DS_Store") == 0)) {
+      continue;
     }
     if ((e.flags & 1) != 0 || (e.method != 0 && e.method != 8) || e.packed == 0xFFFFFFFF || e.unpacked == 0xFFFFFFFF) {
       error = "the package holds a file this version can't unpack: " + e.name;
@@ -243,6 +163,10 @@ bool ExtractZip(const fs::path& zip, const fs::path& folder, std::string& error,
     if (e.directory) {
       fs::create_directories(out, ec);
       continue;
+    }
+    if (detail::AncestorIsLink(folder, e.name)) {
+      error = "the package writes through a link: " + e.name;
+      return false;
     }
     fs::create_directories(out.parent_path(), ec);
     uint8_t local[30];
@@ -313,6 +237,17 @@ bool ExtractZip(const fs::path& zip, const fs::path& folder, std::string& error,
     target.f = nullptr;
     if (!ok || written != e.unpacked || crc != e.crc) {
       error = "the package is damaged: " + e.name + " doesn't unpack correctly";
+      return false;
+    }
+    if (detail::IsLinkMode(e.unixMode)) {
+      const std::string text = detail::ReadSmallFile(out);
+      fs::remove(out, ec);
+      if (text.empty() || !detail::MakeUnpackedLink(folder, e.name, text, error)) {
+        error = error.empty() ? "the package holds an empty link: " + e.name : error;
+        return false;
+      }
+    } else if (!detail::FinishUnpackedFile(out, e.unixMode)) {
+      error = "a file's permissions couldn't be set: " + e.name;
       return false;
     }
   }
@@ -393,6 +328,18 @@ bool WritePointer(const fs::path& root, const std::string& current, const std::s
   return true;
 }
 
+bool PackageIsTarGz() {
+#if defined(_WIN32) || defined(__APPLE__)
+  return false;
+#else
+  return true;
+#endif
+}
+
+fs::path GameFolderPath(const Layout& l, const std::string& name) {
+  return l.macApp ? detail::MacProgramFolder(l, name) : l.root / PathOf(name);
+}
+
 std::string FolderVersion(const fs::path& folder) {
   File in(folder / kVersionFile, L"rb");
   if (in.f == nullptr) {
@@ -426,6 +373,9 @@ bool FolderUsable(const fs::path& folder, const std::vector<std::string>& requir
 Layout FindLayout(const fs::path& programFolder, const std::string& starterName) {
   Layout l;
   std::error_code ec;
+  if (detail::LooksLikeMacApp(programFolder)) {
+    return detail::FindMacLayout(programFolder);
+  }
   const fs::path own = fs::weakly_canonical(programFolder, ec);
   l.running = Utf8(own.filename());
   l.root = own.parent_path();
@@ -472,6 +422,9 @@ bool Install(const InstallRequest& r, std::string& installed, std::string& error
     error = "the downloaded package is not the one the publisher signed (its SHA-256 differs)";
     return false;
   }
+  if (l.macApp) {
+    return detail::InstallMacApp(r, installed, error, stop);
+  }
   const std::string name = std::string(kFirstFolder) + "-" + m.version;
   if (!IsGameFolderName(name)) {
     error = "the version isn't usable as a folder name: " + m.version;
@@ -493,7 +446,7 @@ bool Install(const InstallRequest& r, std::string& installed, std::string& error
     return false;
   }
   std::string why;
-  if (!ExtractZip(r.package, partial, why, stop)) {
+  if (!(PackageIsTarGz() ? ExtractTarGz(r.package, partial, why, stop) : ExtractZip(r.package, partial, why, stop))) {
     return fail(why);
   }
   std::vector<std::string> required = r.requiredFiles;
@@ -533,6 +486,9 @@ bool GoBack(const Layout& l, const std::vector<std::string>& requiredFiles, std:
   if (!l.valid) {
     error = l.why;
     return false;
+  }
+  if (l.macApp) {
+    return detail::GoBackMac(l, requiredFiles, error);
   }
   if (l.previous.empty() || !FolderUsable(l.root / PathOf(l.previous), requiredFiles)) {
     error = "there is no previous version to go back to";

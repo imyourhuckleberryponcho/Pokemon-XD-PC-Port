@@ -431,7 +431,7 @@ bool IsLowerHex(std::string_view s, size_t length) {
 }
 
 bool ParseSignedManifest(std::string_view fileText, std::string_view publicKeyHex, std::string_view product,
-                         Manifest& out, std::string& error) {
+                         Manifest& out, std::string& error, std::string_view system) {
   out = Manifest();
   if (fileText.size() > kMaxManifestBytes) {
     error = "the update information is too large";
@@ -473,8 +473,8 @@ bool ParseSignedManifest(std::string_view fileText, std::string_view publicKeyHe
             "changed after signing";
     return false;
   }
-  const auto text = [&](const char* name, std::string& into, bool required) {
-    const Json* v = manifest->Member(name);
+  const auto text = [&](const Json* from, const char* name, std::string& into, bool required) {
+    const Json* v = from->Member(name);
     if (v == nullptr) {
       return !required;
     }
@@ -491,9 +491,9 @@ bool ParseSignedManifest(std::string_view fileText, std::string_view publicKeyHe
     return false;
   }
   Manifest m;
-  if (!text("product", m.product, true) || !text("version", m.version, true) || !text("url", m.url, true) ||
-      !text("sha256", m.sha256, true) || !text("date", m.date, false) || !text("notes", m.notes, false)) {
-    error = "the update information is missing something (product, version, url, sha256)";
+  if (!text(manifest, "product", m.product, true) || !text(manifest, "version", m.version, true) ||
+      !text(manifest, "date", m.date, false) || !text(manifest, "notes", m.notes, false)) {
+    error = "the update information is missing something (product, version)";
     return false;
   }
   if (m.product != product) {
@@ -505,11 +505,35 @@ bool ParseSignedManifest(std::string_view fileText, std::string_view publicKeyHe
     error = "the update information's version isn't readable: " + m.version;
     return false;
   }
+  const Json* source = manifest;
+  const Json* systems = manifest->Member("systems");
+  if (systems != nullptr) {
+    if (systems->kind != Json::Kind::Object) {
+      error = "the update information's list of systems isn't readable";
+      return false;
+    }
+    source = systems->Member(system);
+    if (source != nullptr && source->kind != Json::Kind::Object) {
+      error = "the update information's entry for " + std::string(system) + " isn't readable";
+      return false;
+    }
+  } else if (system != "windows") {
+    source = nullptr;
+  }
+  if (source == nullptr) {
+    m.hasPackage = false;
+    out = std::move(m);
+    return true;
+  }
+  if (!text(source, "url", m.url, true) || !text(source, "sha256", m.sha256, true)) {
+    error = "the update information is missing something (url, sha256)";
+    return false;
+  }
   if (!IsLowerHex(m.sha256, 64)) {
     error = "the update information's SHA-256 isn't readable";
     return false;
   }
-  const Json* size = manifest->Member("size");
+  const Json* size = source->Member("size");
   if (size == nullptr || size->kind != Json::Kind::Number || !size->integer || size->number <= 0 ||
       static_cast<uint64_t>(size->number) > kMaxPackageBytes) {
     error = "the update information's package size isn't usable";
@@ -523,6 +547,16 @@ bool ParseSignedManifest(std::string_view fileText, std::string_view publicKeyHe
   }
   out = std::move(m);
   return true;
+}
+
+std::string_view CurrentSystem() {
+#if defined(_WIN32)
+  return "windows";
+#elif defined(__APPLE__)
+  return "mac";
+#else
+  return "linux";
+#endif
 }
 
 }

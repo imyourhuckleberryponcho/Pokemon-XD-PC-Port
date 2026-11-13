@@ -108,6 +108,13 @@ bundle_needs "$APP/Contents/MacOS/xd" "@executable_path/../Frameworks"
 if [ -f "$APP/Contents/MacOS/xd_launcher" ]; then
   bundle_needs "$APP/Contents/MacOS/xd_launcher" "@executable_path/../Frameworks"
 fi
+# The Battle Revolution converter (since 0.4.1 the C++ program, engine/formats/pbr): Contents/Resources/pbr_models/
+# pbr_models, so its libraries are two folders up from it (the launcher runs it by its real path).
+if [ -x "$BIN/pbr_models" ]; then
+  mkdir -p "$APP/Contents/Resources/pbr_models"
+  cp "$BIN/pbr_models" "$APP/Contents/Resources/pbr_models/pbr_models"
+  bundle_needs "$APP/Contents/Resources/pbr_models/pbr_models" "@executable_path/../../Frameworks"
+fi
 # (libraries of libraries: the list grows while it is worked through)
 DONE=0
 while [ "$DONE" -lt "$(wc -l < "$TODO" | tr -d ' ')" ]; do
@@ -117,7 +124,7 @@ done
 rm -f "$TODO" "$TODO.needs"
 # Nothing may still point into a package manager's folders (a player's Mac has none).
 LEFT=0
-for f in "$APP/Contents/MacOS/xd" "$APP/Contents/MacOS/xd_launcher" "$FW"/*.dylib; do
+for f in "$APP/Contents/MacOS/xd" "$APP/Contents/MacOS/xd_launcher" "$APP/Contents/Resources/pbr_models/pbr_models" "$FW"/*.dylib; do
   [ -f "$f" ] || continue
   echo "  $(basename "$f") asks for:"
   needs_of "$f" | sed 's/^/      /'
@@ -146,7 +153,10 @@ fi
 # live in Resources, Contents/MacOS gets a link (a real folder there is refused by the signing).
 # UNTESTED on a Mac. It is left out, with a note in the log, when it was not built.
 PBR_MODELS_DIR="${PBR_MODELS_DIR:-$ROOT/build/pbr_models_dist_mac/pbr_models}"
-if [ -x "$PBR_MODELS_DIR/pbr_models" ]; then
+if [ -x "$APP/Contents/Resources/pbr_models/pbr_models" ]; then
+  ln -s "../Resources/pbr_models" "$APP/Contents/MacOS/pbr_models"
+  echo "  pbr_models: included (the C++ converter, from $BIN)"
+elif [ -x "$PBR_MODELS_DIR/pbr_models" ]; then
   cp -R "$PBR_MODELS_DIR" "$APP/Contents/Resources/pbr_models"
   ln -s "../Resources/pbr_models" "$APP/Contents/MacOS/pbr_models"
   echo "  pbr_models: included (from $PBR_MODELS_DIR)"

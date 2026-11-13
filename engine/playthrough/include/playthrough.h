@@ -22,8 +22,15 @@ struct ModUse {
   mods::Applies applies = mods::Applies::NewPlaythrough;
 };
 
+struct AddedRowRef {
+  std::string mod, table, name;
+  uint32_t id = 0;
+  bool operator==(const AddedRowRef& o) const { return mod == o.mod && table == o.table && name == o.name && id == o.id; }
+};
+
 struct Setup {
   Engine engine = Engine::Faithful;
+  std::vector<AddedRowRef> addedRows;
   std::vector<ModUse> mods;
   std::string randomizer, randomizerVersion, seed;
   std::vector<std::string> challenges;
@@ -63,6 +70,8 @@ struct Check {
   bool Ok() const { return worldProblems.empty() && notes.empty(); }
 };
 Check Compare(const Setup& setup, const std::vector<mods::ModFolder>& found);
+
+std::vector<std::string> BoundProblems(const Setup& setup, const std::vector<AddedRowRef>& now);
 
 std::vector<std::string> WorldModIds(const Setup& setup);
 

@@ -69,7 +69,11 @@ If it does not work
 - Tell us your Mac model and macOS version (Apple menu > About This Mac).
 - Nothing is ever sent by the program itself.
 
-Not in this build yet (they exist on Windows): updates (download a new version yourself), the launcher's icon
+Updates: the launcher asks once whether it may check, shows what is new and asks before downloading; the new app is
+unpacked beside this one and put in place when you press "Restart now" (the app must sit in a folder you can write
+to, such as Applications, not on a disk image). Not tried on a real Mac yet.
+
+Not in this build yet (they exist on Windows): the launcher's icon
 chooser and shortcut buttons, screenshots and bug-report bundles from inside the game (F10/F12), the window icon made
 from your disc.
 Settings can be changed in the game's own SETTINGS page, or in settings.ini in the folder above.

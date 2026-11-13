@@ -28,7 +28,7 @@ MAC_TARGETS="settings_test controls_test memcard_test save_backups_test gen3_sav
   xd_settings xd_data_mods xd_save_convert xd_mods_check
   os_threads_test gc_memory_test gx_fifo_test card_timing_test input_record_test game_clock_test
   keyboard_defaults_test controls_apply_test button_art_test low_arena_test dsp_equiv_test
-  xd_launcher xd"
+  xd_launcher pbr_models xd"
 EXTRA_ARGS=""
 [ -n "${XD_SNAPSHOT_OVERRIDE:-}" ] && EXTRA_ARGS="$EXTRA_ARGS -DXD_SNAPSHOT_OVERRIDE=$XD_SNAPSHOT_OVERRIDE"
 [ "${XD_BUILD_GAME:-1}" = 0 ] && EXTRA_ARGS="$EXTRA_ARGS -DXD_BUILD_GAME=OFF"

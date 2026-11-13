@@ -591,6 +591,7 @@ class App {
     extra::MakeJob job;
     std::mutex mutex;
     extra::Status status;
+    extra::SecondStatus second;
     bool converterFound = false;
     bool looked = false;
     std::thread looker;
@@ -615,6 +616,9 @@ class App {
   bool ExtraBusy() const;
   void DrawExtraPage();
   fs::path ExtraFolder(const GameInfo::ExtraSource& s) const { return game_.settingsFolder / "extra_assets" / PathOf(s.id); }
+  fs::path ExtraFolder2(const GameInfo::ExtraSource& s) const {
+    return s.secondFolder.empty() ? fs::path() : game_.settingsFolder / "extra_assets" / PathOf(s.secondFolder);
+  }
 
   void LoadSettings();
   void SaveSettingsIfChanged();
@@ -1405,12 +1409,12 @@ std::string App::FolderVersionOf(const std::string& folder) {
   if (folder == layout_.running) {
     return game_.updates.version;
   }
-  return eu::FolderVersion(layout_.root / PathOf(folder));
+  return eu::FolderVersion(eu::GameFolderPath(layout_, folder));
 }
 
 std::string App::NewestInstalled() {
   const std::string next = layout_.valid && layout_.current != layout_.running &&
-                                   eu::FolderUsable(layout_.root / PathOf(layout_.current), game_.updates.requiredFiles)
+                                   eu::FolderUsable(eu::GameFolderPath(layout_, layout_.current), game_.updates.requiredFiles)
                                ? FolderVersionOf(layout_.current)
                                : std::string();
   return eu::IsNewer(next, game_.updates.version) ? next : game_.updates.version;
@@ -1453,6 +1457,11 @@ void App::StartUpdateCheck(bool manual) {
       message = "Couldn't check for updates: " + error + ".";
     } else if (!eu::ParseSignedManifest(text, u.publicKey, u.product, m, error)) {
       message = "The update information was refused: " + error + ".";
+    } else if (!m.hasPackage) {
+      phase = UpdateWork::Phase::UpToDate;
+      message = "You have the newest version (" + have + ").";
+      Log("updates: the information names version " + m.version + " but has no package for " +
+          std::string(eu::CurrentSystem()) + " yet");
     } else if (eu::IsNewer(m.version, have)) {
       phase = UpdateWork::Phase::Available;
       message = "Version " + m.version + " is available (you have " + have + ").";
@@ -1495,7 +1504,7 @@ void App::StartUpdateInstall() {
   up_.busy = true;
   up_.thread = std::thread([this, m, layout] {
     const GameInfo::Updates& u = game_.updates;
-    const fs::path zip = u.stagingFolder / PathOf("update-" + m.version + ".zip");
+    const fs::path zip = u.stagingFolder / PathOf("update-" + m.version + (eu::PackageIsTarGz() ? ".tar.gz" : ".zip"));
     eu::FetchOptions options;
     options.maxBytes = m.size;
     options.userAgent = u.product + "/" + u.version;
@@ -1526,7 +1535,10 @@ void App::StartUpdateInstall() {
     if (ok) {
       up_.phase = UpdateWork::Phase::Installed;
       up_.installed = installed;
-      up_.message = "Version " + m.version + " is installed. It starts the next time you open " + game_.title + ".";
+      up_.message = layout.macApp
+                        ? "Version " + m.version + " is ready. It is put in place when you restart " + game_.title +
+                              " (the app is replaced after this window closes, then opens again)."
+                        : "Version " + m.version + " is installed. It starts the next time you open " + game_.title + ".";
     } else {
       up_.phase = UpdateWork::Phase::Failed;
       up_.message = (error == "stopped" ? std::string("The update was cancelled") :
@@ -1567,6 +1579,7 @@ void App::SkipUpdate() {
 bool App::GoBackVersion(std::string& error) {
   FindVersions();
   const std::string leaving = FolderVersionOf(layout_.current), back = FolderVersionOf(layout_.previous);
+  const bool setAside = layout_.macApp && layout_.current == "pending";
   if (!eu::GoBack(layout_, game_.updates.requiredFiles, error)) {
     Log("updates: go back refused: " + error);
     return false;
@@ -1579,14 +1592,29 @@ bool App::GoBackVersion(std::string& error) {
     SaveUpdaterState();
   }
   FindVersions();
-  versionNote_ = "Version " + back + " starts the next time you open " + game_.title + " (version " + leaving +
-                 " stays installed).";
+  versionNote_ = setAside ? "The waiting update (version " + leaving + ") was set aside: version " + back + " stays."
+                 : layout_.macApp ? "Version " + back + " is put in place when you restart " + game_.title + " (version " +
+                                        leaving + " is kept)."
+                                  : "Version " + back + " starts the next time you open " + game_.title + " (version " +
+                                        leaving + " stays installed).";
   Log("updates: " + versionNote_);
   return true;
 }
 
 void App::RestartLauncher() {
   if (!layout_.valid || gameRunning_) {
+    return;
+  }
+  if (layout_.macApp) {
+    std::string why;
+    if (eu::MacApplyPending(layout_, why)) {
+      Log("updates: restarting through the update helper");
+      quit_ = true;
+    } else if (!why.empty()) {
+      versionNote_ = "The restart didn't work: " + why + ". Close this window and open " + game_.title + " again.";
+    } else {
+      versionNote_ = "Nothing is waiting to be put in place.";
+    }
     return;
   }
   const fs::path starter = layout_.root / PathOf(game_.updates.starterName);
@@ -1679,7 +1707,7 @@ void App::DrawUpdateCard() {
     } else if (!versionNote_.empty()) {
       Dim(versionNote_);
     }
-    if (!layout_.previous.empty() && eu::FolderUsable(layout_.root / PathOf(layout_.previous), u.requiredFiles)) {
+    if (!layout_.previous.empty() && eu::FolderUsable(eu::GameFolderPath(layout_, layout_.previous), u.requiredFiles)) {
       const std::string v = FolderVersionOf(layout_.previous);
       const std::string label = eu::IsNewer(v, FolderVersionOf(layout_.current))
                                     ? "Use version " + v + " again..."
@@ -1781,8 +1809,10 @@ void App::DrawUpdateWindows() {
       if (m.version == skipVersion_) {
         Dim("You chose to skip this version earlier.");
       }
-      Dim("Installed next to the version you have, which stays for \"Go back\". Your saves, settings and mods are "
-          "not touched.");
+      Dim(layout_.macApp ? "The new app waits beside the one you have and is put in place when you restart; the "
+                           "version you have is kept for \"Go back\". Your saves, settings and mods are not touched."
+                         : "Installed next to the version you have, which stays for \"Go back\". Your saves, settings "
+                           "and mods are not touched.");
       if (!layout_.valid) {
         ImGui::TextColored(kWarn, "%s", layout_.why.c_str());
       }
@@ -2415,13 +2445,20 @@ void App::ExtraLook(int index) {
         found ? extra::QueryVersion(converter, game_.settingsFolder / "extra_assets" / PathOf(src.id + "_version.txt"), 5000)
               : std::string();
     const extra::Status status = extra::ComputeStatus(ExtraFolder(src), src.manifestId, found, version);
+    extra::SecondStatus second;
+    if (!src.secondFolder.empty()) {
+      second = extra::ComputeSecondStatus(ExtraFolder2(src), src.secondManifestFile, src.secondManifestId, src.secondVersion,
+                                          src.secondProvides, status.kind == extra::Status::Kind::OutOfDate);
+    }
     {
       std::lock_guard<std::mutex> lock(state.mutex);
       state.status = status;
+      state.second = second;
       state.converterFound = found;
       state.looked = true;
     }
-    Log("extra: " + src.id + ": " + status.text + (found ? "" : " (no converter at " + Utf8(converter) + ")") +
+    Log("extra: " + src.id + ": " + status.text + (src.secondFolder.empty() ? std::string() : "; " + second.text) +
+        (found ? "" : " (no converter at " + Utf8(converter) + ")") +
         (version.empty() ? std::string() : " (converter " + version + ")"));
     state.looking = false;
   });
@@ -2466,8 +2503,9 @@ void App::ExtraMake(int index) {
   extra::MakeRequest request;
   request.converter = converter;
   request.outFolder = ExtraFolder(src);
+  request.outFolder2 = ExtraFolder2(src);
   request.logFile = game_.settingsFolder / "extra_assets" / PathOf(src.id + ".log");
-  request.arguments = extra::ConverterArguments(src, disc, gameDisc, request.outFolder);
+  request.arguments = extra::ConverterArguments(src, disc, gameDisc, request.outFolder, request.outFolder2);
   std::string error;
   st.note.clear();
   if (!st.job.Start(request, error)) {
@@ -2526,10 +2564,12 @@ void App::DrawExtraPage() {
     ImGui::PushID(i);
     BeginCard("##extra");
     extra::Status status;
+    extra::SecondStatus second;
     bool looked, converterFound;
     {
       std::lock_guard<std::mutex> lock(st.mutex);
       status = st.status;
+      second = st.second;
       looked = st.looked;
       converterFound = st.converterFound;
     }
@@ -2543,6 +2583,13 @@ void App::DrawExtraPage() {
                                                                                    : kDim;
       ImGui::TextColored(colour, "%s", status.text.c_str());
       if (!status.detail.empty()) Dim(status.detail);
+      if (!src.secondFolder.empty()) {
+        ImGui::TextColored(second.kind == extra::SecondStatus::Kind::Ready       ? kGood
+                           : second.kind == extra::SecondStatus::Kind::OutOfDate ? kWarn
+                                                                                 : kDim,
+                           "%s", second.text.c_str());
+        if (!second.detail.empty()) Dim(second.detail);
+      }
     }
     Dim("From a " + src.name + " disc. " + src.how);
     ImGui::Dummy(ImVec2(0, 4 * scale_));
@@ -2848,12 +2895,17 @@ void App::DrawIconSection() {
         "your data folder).");
   }
   ImGui::Dummy(ImVec2(0, 4 * scale_));
-  if (ImGui::Button((std::string("Create ") + sys::ProgramsFolderName() + " shortcut").c_str())) {
-    Shortcut(false);
-  }
-  ImGui::SameLine();
-  if (ImGui::Button("Create desktop shortcut")) {
-    Shortcut(true);
+  if (!sys::ShortcutsHere()) {
+    Dim("There is no shortcut to make on this system: drag the Pokemon XD app to the Dock, or keep it in "
+        "Applications.");
+  } else {
+    if (ImGui::Button((std::string("Create ") + sys::ProgramsFolderName() + " shortcut").c_str())) {
+      Shortcut(false);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Create desktop shortcut")) {
+      Shortcut(true);
+    }
   }
   if (!shortcutMessage_.empty()) {
     ImGui::PushStyleColor(ImGuiCol_Text, shortcutOk_ ? kGood : kWarn);
@@ -4892,6 +4944,15 @@ int App::Run() {
     StartWorker("");
   }
   FindVersions();
+  if (layout_.macApp && layout_.valid) {
+    std::string why;
+    if (eu::MacApplyPending(layout_, why)) {
+      Log("updates: an update was waiting: the update helper puts it in place, then opens the app");
+      quit_ = true;
+    } else if (!why.empty()) {
+      Log("updates: " + why);
+    }
+  }
   Log("version " + (game_.updates.version.empty() ? std::string("?") : game_.updates.version) + " (" +
       (layout_.valid ? "player's folder, " + layout_.running : std::string("not in a player's folder")) + "); updates " +
       (game_.updates.Active() ? "available" : "not set up in this build"));

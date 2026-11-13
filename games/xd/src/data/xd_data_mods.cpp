@@ -809,6 +809,37 @@ bool BuildDataCatalog(const em::EntryReader& read, em::DataCatalog& out, std::st
   }
 
   for (em::DataTable& t : out.tables) {
+    if (t.name == "pokemon_data") {
+      t.addable = true;
+      t.addMax = 256;
+      t.idList = "species";
+      t.textFields = {"name", "typeName", "doc"};
+      t.primaryText = "name";
+    } else if (t.name == "waza_data") {
+      t.addable = true;
+      t.addFirstId = 375;
+      t.addMax = 256;
+      t.idList = "move";
+      t.textFields = {"name", "doc"};
+      t.primaryText = "name";
+    } else if (t.name == "item_data_prime" && table_named(out, "item_data_index") != nullptr) {
+      t.addable = true;
+      t.addMax = 256;
+      t.idList = "item";
+      t.idTable = "item_data_index";
+      t.textFields = {"name", "doc"};
+      t.primaryText = "name";
+    }
+  }
+  for (em::NameList& l : out.lists) {
+    const char* table = l.name == "species" ? "pokemon_data" : l.name == "move" ? "waza_data" : l.name == "item" ? "item_data_index" : nullptr;
+    if (table != nullptr) {
+      if (const em::DataTable* t = table_named(out, table)) l.limit = t->count;
+    }
+  }
+  out.addedTextGroup = kAddedTextGroup;
+
+  for (em::DataTable& t : out.tables) {
     for (const Alias& a : kAliases) {
       if (t.name == a.table) t.aliases.push_back(a.alias);
     }
@@ -817,6 +848,46 @@ bool BuildDataCatalog(const em::EntryReader& read, em::DataCatalog& out, std::st
         if (matches(v.table, t.name) && f.name == v.field) f.values = v.list;
       }
     }
+  }
+  return true;
+}
+
+bool BuildMessageBank(uint32_t group, const std::vector<std::pair<uint32_t, std::string>>& texts, const uint8_t* like,
+                      std::vector<uint8_t>& out, std::string& error) {
+  std::vector<std::vector<uint8_t>> encoded(texts.size());
+  size_t total = 0x10 + texts.size() * 8;
+  for (size_t i = 0; i < texts.size(); i++) {
+    if (texts[i].first >> 20 != group || (i != 0 && (texts[i].first & 0xFFFFF) <= (texts[i - 1].first & 0xFFFFF))) {
+      error = "the texts' numbers are not in order in group " + std::to_string(group);
+      return false;
+    }
+    if (!text_encode(texts[i].second, encoded[i])) {
+      error = "the text \"" + texts[i].second + "\" has a character or a {control code} the game's text can't hold";
+      return false;
+    }
+    total += encoded[i].size();
+  }
+  out.assign(total, 0);
+  const auto put16 = [&](size_t at, uint32_t v) {
+    out[at] = static_cast<uint8_t>(v >> 8);
+    out[at + 1] = static_cast<uint8_t>(v);
+  };
+  const auto put32 = [&](size_t at, uint32_t v) {
+    put16(at, v >> 16);
+    put16(at + 2, v & 0xFFFF);
+  };
+  put16(0, group);
+  put16(4, static_cast<uint32_t>(texts.size()));
+  if (like != nullptr) {
+    out[3] = like[3];
+    out[6] = like[6], out[7] = like[7];
+  }
+  size_t at = 0x10 + texts.size() * 8;
+  for (size_t i = 0; i < texts.size(); i++) {
+    put32(0x10 + i * 8, texts[i].first & 0xFFFFF);
+    put32(0x10 + i * 8 + 4, static_cast<uint32_t>(at));
+    std::copy(encoded[i].begin(), encoded[i].end(), out.begin() + at);
+    at += encoded[i].size();
   }
   return true;
 }

@@ -69,6 +69,20 @@ int main(int argc, char** argv) {
         "round trip: every field (quotes, accents and backslashes too)");
   check(ep::ToJson(back) == ep::ToJson(modded), "round trip: the same text again");
   {
+    ep::Setup bound = modded;
+    bound.addedRows = {{"zorb", "pokemon_data", "Zorblat \"Z\"", 415}, {"zorb", "waza_data", "Zap Test", 375}};
+    ep::Setup again;
+    std::string err;
+    check(ep::FromJson(ep::ToJson(bound), again, err) && again.addedRows == bound.addedRows, "added rows: written and read back (quotes too)");
+    check(ep::BoundProblems(bound, bound.addedRows).empty() && ep::BoundProblems(modded, {}).empty(), "added rows: the same rows, or none needed: no problem");
+    const auto missing = ep::BoundProblems(bound, {});
+    check(missing.size() == 2 && missing[0].find("is not on") != std::string::npos, "added rows: the mod is not on: refused, one reason per row");
+    const auto moved = ep::BoundProblems(bound, {{"zorb", "pokemon_data", "Zorblat \"Z\"", 416}, {"zorb", "waza_data", "Zap Test", 375}});
+    check(moved.size() == 1 && moved[0].find("now gives") != std::string::npos, "added rows: another number (another load order): refused");
+    const auto gone = ep::BoundProblems(bound, {{"zorb", "waza_data", "Zap Test", 375}});
+    check(gone.size() == 1 && gone[0].find("no longer adds") != std::string::npos, "added rows: the mod is on but the row is gone: refused");
+  }
+  {
     ep::Setup run = modded;
     check(!run.Failed() && ep::ToJson(run).find("challenge_log") == std::string::npos, "no challenge log: not failed, not written");
     run.challengeLog = {"2026-11-09 18:40: lost: species 135 fainted (Nuzlocke), moved to the PC"};

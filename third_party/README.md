@@ -9,6 +9,7 @@ Outside libraries (Aurora, SDL, Dear ImGui) and the launcher's font, each with i
 | Borealis | https://github.com/encounter/borealis | commit `8e9427fab92c1935a5d6bacadc6053c687f10c1e` (2026-10-28) | MIT |
 | RenderDoc in-app API header | `renderdoc/renderdoc_app.h`, from RenderDoc 1.47 (https://renderdoc.org) | 1.47.0 | MIT |
 | Inter (font) | https://github.com/rsms/inter, release `Inter-4.1.zip` (`extras/ttf`) | 4.1 | SIL Open Font License 1.1 (`fonts/inter/OFL.txt`) |
+| Lua | https://www.lua.org, `lua-5.4.8.tar.gz` (sha256 4f18ddae154e793e46eeab727c59ef1c0c0c2b744e7b94219710d76f530629ae) | 5.4.8 | MIT (`lua/LICENCE.md`) |
 | Monocypher | https://monocypher.org, `monocypher-4.0.2.tar.gz` (SHA-512 checked against the site's `.sha512`) | 4.0.2 | BSD 2-clause or CC0 (`monocypher/LICENCE.md`) |
 
 `monocypher/` holds four unchanged files of Monocypher (`src/monocypher.c/.h`, `src/optional/monocypher-ed25519.c/.h`)
@@ -16,6 +17,14 @@ and its licence. The launcher's updater uses only its Ed25519 signature check (w
 was published by the port's publisher (docs/UPDATER.md; engine/update). Small, audited, widely used, no other
 dependencies. To update: replace the four files from a newer release, rebuild, run `update_test.exe` (it checks
 RFC 8032's test vectors).
+
+`lua/src` holds the 25 C files and their headers of Lua 5.4.8 that the script sandbox needs, **unchanged** (the interpreter
+lua.c, the compiler `luac.c` and the libraries for files, the OS, DLLs, debug, coroutines and UTF-8 are left out on purpose:
+the mods' scripts must have no way to reach the PC). `engine/script` builds them as `lua54` and decides the two things that
+would make a script's result differ from run to run (the string-hash seed and `table.sort`'s random pivot) in two small
+wrapper files that `#include` Lua's `lstate.c` / `ltablib.c`. To update: replace the files from a newer 5.4.x tarball,
+rebuild, run `script_test`. See docs/MODDING_NEXT.md part B.
+
 
 `fonts/inter/` holds three files of the Inter font family (Inter-Regular, Inter-SemiBold, InterDisplay-Bold), the
 launcher's font. The build copies them and the licence into a `fonts` folder next to the launcher

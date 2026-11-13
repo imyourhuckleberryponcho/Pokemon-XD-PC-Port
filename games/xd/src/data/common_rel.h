@@ -34,6 +34,27 @@ typedef struct {
 } XDMainProgramAddress;
 void PortXD_SetMainProgramMap(const XDMainProgramAddress* map, size_t count);
 
+typedef struct {
+  const char* table;
+  uint32_t id;
+  uint32_t row;
+  uint32_t copyOf;
+  const uint8_t* bytes;
+  size_t size;
+} XDAddedRow;
+void PortXD_SetAddedRows(const XDAddedRow* rows, size_t count);
+
+typedef struct {
+  const char* table;
+  uint32_t row;
+  uint32_t count;
+  int32_t copyOf;
+  const uint32_t* sets;
+  size_t nSets;
+} XDExtraRow;
+void PortXD_SetExtraRows(const XDExtraRow* rows, size_t count);
+bool PortXD_CommonTableCounts(uint32_t* species, uint32_t* moves, uint32_t* items);
+
 bool PortXD_ConvertCommonRel(const uint8_t* relFile, size_t relSize, XDCommonTables* out, char* error, size_t errorSize);
 
 bool PortXD_LoadCommonRel(XDCommonTables* out, char* error, size_t errorSize);

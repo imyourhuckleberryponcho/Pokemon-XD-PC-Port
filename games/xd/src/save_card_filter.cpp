@@ -1,7 +1,15 @@
 #include <dolphin/card.h>
 #include <xd_save_convert.h>
 
+#include "data/common_rel.h"
+
+#include <port_message.h>
+
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <string>
 #include <vector>
 
 namespace {
@@ -19,6 +27,39 @@ bool ReadStored(const CARDFileInfo* fi, std::vector<uint8_t>& stored, s32* resul
   stored.assign(xd::save::kFileSize, 0);
   *result = CARDRead(fi, stored.data(), static_cast<s32>(stored.size()), 0);
   return *result == CARD_RESULT_READY;
+}
+
+uint64_t sGuardHash = 0;
+bool sGuardChecked = false;
+
+void GuardUnknownIds(const std::vector<uint8_t>& stored) {
+  uint32_t species = 0, moves = 0, items = 0;
+  if (!PortXD_CommonTableCounts(&species, &moves, &items)) return;
+  uint64_t h = 1469598103934665603ull;
+  for (uint8_t b : stored) h = (h ^ b) * 1099511628211ull;
+  if (sGuardChecked && h == sGuardHash) return;
+  xd::save::Save save;
+  xd::save::ReadReport report;
+  std::string error;
+  if (xd::save::ReadSave(stored, save, report, error)) {
+    const std::vector<std::string> unknown = xd::save::UnknownIds(save, {species, moves, items});
+    if (!unknown.empty()) {
+      std::string text = "This save holds Pokemon, moves or items that this game does not have (the game has " +
+                         std::to_string(species) + " Pokemon, " + std::to_string(moves) + " moves, " + std::to_string(items) +
+                         " items):\n\n";
+      for (const std::string& u : unknown) text += "  " + u + "\n";
+      text += "\nIt was probably saved with a mod that adds Pokemon, moves or items. Start the game with that mod switched on "
+              "(same mods, same order). Nothing was read into the game and nothing on the card was changed. The game stops here.";
+      std::fprintf(stderr, "[save guard] STOP: %s\n", text.c_str());
+      std::fflush(stderr);
+      PortMessage_Show(PORT_MESSAGE_ERROR, "Pokemon XD - this save needs its mods", text.c_str());
+      std::fprintf(stderr, "[save guard] exit code 6\n");
+      std::fflush(stderr);
+      std::_Exit(6);
+    }
+  }
+  sGuardHash = h;
+  sGuardChecked = true;
 }
 
 uint32_t sSaveWrites = 0;
@@ -40,6 +81,7 @@ int PortXD_SaveCardRead(const CARDFileInfo* fi, void* addr, s32 length, s32 offs
   if (!ReadStored(fi, stored, result)) {
     return 1;
   }
+  GuardUnknownIds(stored);
   const std::vector<uint8_t> view = xd::save::GameViewOf(stored);
   std::memcpy(addr, view.data() + offset, static_cast<size_t>(length));
   return 1;

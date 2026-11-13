@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <mutex>
+#include <utility>
 #include <vector>
 
 extern "C" {
@@ -34,6 +35,45 @@ uint32_t sPictures = 0;
 std::atomic<bool> sReplaying{false};
 bool sTapOn = false;
 
+struct ListCopies {
+  struct Entry {
+    uint32_t address, length;
+    size_t offset;
+  };
+  std::vector<uint8_t> bytes;
+  std::vector<Entry> entries;
+  void clear() {
+    bytes.clear();
+    entries.clear();
+  }
+};
+ListCopies sCurrentLists, sLastLists, sFrameLists;
+std::vector<AuroraCalledList> sReplayLists;
+
+void ListTap(uint32_t address, const void* data, uint32_t length) {
+  if (sReplaying.load(std::memory_order_acquire)) {
+    return;
+  }
+  std::lock_guard<std::mutex> lock(sTapLock);
+  const auto* bytes = static_cast<const uint8_t*>(data);
+  sCurrentLists.entries.push_back({address, length, sCurrentLists.bytes.size()});
+  sCurrentLists.bytes.insert(sCurrentLists.bytes.end(), bytes, bytes + length);
+}
+
+void BeginListReplay() {
+  sReplayLists.clear();
+  sReplayLists.reserve(sFrameLists.entries.size());
+  for (const auto& e : sFrameLists.entries) {
+    sReplayLists.push_back({e.address, e.length, sFrameLists.bytes.data() + e.offset});
+  }
+  AuroraSetCalledListReplay(sReplayLists.data(), static_cast<uint32_t>(sReplayLists.size()));
+}
+
+void EndListReplay() {
+  AuroraSetCalledListReplay(nullptr, 0);
+  sReplayLists.clear();
+}
+
 std::vector<uint8_t> sFrame;
 bool sActive = false;
 bool sRedrawing = false;
@@ -50,6 +90,8 @@ void Tap(const void* data, u32 size, GXBool displayCopy) {
   if (displayCopy) {
     sLast.swap(sCurrent);
     sCurrent.clear();
+    sLastLists = std::move(sCurrentLists);
+    sCurrentLists.clear();
     sPictures++;
   }
 }
@@ -62,6 +104,7 @@ void PortFreeze_Capture(void) {
   if (sTapOn) return;
   sTapOn = true;
   AuroraSetCommandTap(Tap);
+  AuroraSetCalledListTap(ListTap);
 }
 
 bool PortFreeze_Ready(int* waitHooks) {
@@ -90,6 +133,7 @@ bool PortFreeze_Begin(void) {
   {
     std::lock_guard<std::mutex> lock(sTapLock);
     sFrame = sLast;
+    sFrameLists = sLastLists;
   }
   if (sFrame.empty()) {
     return false;
@@ -97,11 +141,13 @@ bool PortFreeze_Begin(void) {
   sActive = true;
   sSpeed = aurora::time::scale();
   aurora::time::set_scale(0.0f);
+  PortAudio_SetFrozen(true);
   PortMenuMusic_Begin(PortMenuMusic_TakeNext());
   PortRunStatus_SetWaitingForPlayer(true);
   sSavedState = AuroraSaveGXState();
   sReplaying.store(true, std::memory_order_release);
   PortGX_ReplayBegin();
+  BeginListReplay();
   return true;
 }
 
@@ -114,7 +160,7 @@ void PortFreeze_Write(const void* data, size_t size) {
   if (size > 0) PortGX_ReplayWrite(data, static_cast<uint32_t>(size));
 }
 
-#if defined(__linux__)
+#if defined(__linux__) || defined(__APPLE__)
 extern "C" bool PortShot_LinuxFrozenDraw(const uint8_t* frame, size_t size);
 void PortFreeze_DrawPicture(void) {
   if (sActive && PortShot_LinuxFrozenDraw(sFrame.data(), sFrame.size())) return;
@@ -137,10 +183,12 @@ void PortFreeze_Present(void (*pump)(void)) {
 void PortFreeze_End(void) {
   if (!sActive) return;
   PortGX_ReplayEnd();
+  EndListReplay();
   sReplaying.store(false, std::memory_order_release);
   AuroraRestoreGXState(sSavedState);
   sSavedState = nullptr;
   PortMenuMusic_End();
+  PortAudio_SetFrozen(false);
   aurora::time::set_scale(sSpeed);
   PortRunStatus_SetWaitingForPlayer(false);
   sActive = false;
@@ -159,18 +207,21 @@ bool PortFreeze_RedrawBegin(void) {
   {
     std::lock_guard<std::mutex> lock(sTapLock);
     sFrame = sLast;
+    sFrameLists = sLastLists;
   }
   if (sFrame.empty()) return false;
   sRedrawing = true;
   sSavedState = AuroraSaveGXState();
   sReplaying.store(true, std::memory_order_release);
   PortGX_ReplayBegin();
+  BeginListReplay();
   return true;
 }
 
 void PortFreeze_RedrawEnd(void) {
   if (!sRedrawing) return;
   PortGX_ReplayEnd();
+  EndListReplay();
   sReplaying.store(false, std::memory_order_release);
   AuroraRestoreGXState(sSavedState);
   sSavedState = nullptr;

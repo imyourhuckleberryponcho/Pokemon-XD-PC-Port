@@ -32,6 +32,18 @@ Third pass (2026-11-12):
 - untextured materials keep PBR's colours; brightness-only sheets (I4 / I8) are blended and tinted;
 - pictures: sides at most 256 and whole blocks, file cap 600 KB (pictures halved down to 128, then animation
   keys thinned); more than 80 drawing pieces = coarser skin weights (gx_tex.py: our GX picture codec).
+
+Frozen pass (2026-11-12, docs/PBR_CONVERTER_FROZEN.md):
+- joint PAIRS: Maya's segment scale compensate makes a bone's 3x3 diag(1/parent scale) * R * S, a shear that no single
+  T*R*S joint holds (Buneary's ears, 50 % of the height out). A model whose converted pose is more than POSE_TOL_PCT
+  (1 %) of its height from the source is made again with every bone whose 3x3 a single joint holds worse than
+  SHEAR_TOL as TWO joints: the first holds the translation and the compensating scale diag(1/parent scale), the second
+  the rotation and the bone's own scale. Exact (the factors are the file's own channels, so no SVD and no sign or
+  near-degenerate-scale ambiguity), children / meshes / skin weights / inverse bind stay on the second joint. The
+  game numbers joints depth first, so the pair's first joint sits just before its second: joint numbers = jn[node]
+  (a table, no longer node + 2). Models within the tolerance are not touched (byte-identical to before).
+- more than MAX_REFLECT_PIECES drawing pieces with a reflection layer = coarser skin weights (the graphics layer never
+  gives such a picture back; Ditto and Dialga).
 """
 import math
 import os
@@ -179,6 +191,48 @@ def pick_actions(sdr, xd_pkx, xd_frames, log):
             log('NOTE: an XD animation (section %d) has no PBR action of its length: PBR\'s "%s" plays there' % (s, cands[0][1]))
         else:
             log('WRONG: an XD animation used by section %d has no PBR action to stand in: nothing plays there' % s)
+    return [pick.get(i) for i in range(len(xd_frames))], how, users
+
+
+def pick_actions_named(sdr, xd_pkx, xd_frames, by_slot, log):
+    """Models with no XD counterpart: XD slot -> PBR action number, by the NAME of the action the stand-in's own
+    pair plays in that slot (by_slot: slot -> PBR action name, from pick_actions on the stand-in's PBR model; the
+    two games' names for the same actions agree). A name this model lacks: the action that fits what the sections
+    using the slot are for (the same role lists pick_actions falls back to)."""
+    names = {}
+    for i, a in enumerate(sdr.actions):
+        if not a[0].startswith('tx_'):
+            names.setdefault(a[0], i)
+    users = {}
+    for s_ in range(len(xd_pkx.sections)):
+        for mo, (kind, idx) in enumerate(xd_pkx.section_motions(s_)[1]):
+            if kind and 0 <= idx < len(xd_frames):
+                users.setdefault(idx, []).append((s_, mo))
+    pick, how, taken = {}, {}, set()
+    for slot in range(len(xd_frames)):
+        nm = by_slot.get(slot)
+        if nm in names:
+            pick[slot], how[slot] = names[nm], 'name'
+            taken.add(names[nm])
+    for slot in range(len(xd_frames)):
+        if slot in pick or slot not in users:
+            continue
+        us = sorted(users[slot], key=lambda sm: ROLE_ORDER.index(sm[0]) if sm[0] in ROLE_ORDER else 99)
+        sec, mo = us[0]
+        want = ROLE_NAMES[10] if sec == 9 and mo >= 1 else ROLE_NAMES.get(sec, ('wait',))
+        if by_slot.get(slot) in PHYSICAL:
+            want = PHYSICAL + tuple(w for w in want if w not in PHYSICAL)
+        cands = [names[w] for w in want if w in names]
+        if sec in (2, 3, 4, 5, 7):
+            cands = [c for c in cands if c not in taken] or cands
+        if cands:
+            pick[slot], how[slot] = cands[0], 'role'
+            taken.add(cands[0])
+            log('NOTE: no PBR action called "%s" (what the stand-in plays in slot %d): "%s" plays there' % (
+                by_slot.get(slot), slot, sdr.actions[cands[0]][0]))
+        else:
+            log('WRONG: slot %d (section %d) has no PBR action to stand in ("%s" missing): nothing plays there' % (
+                slot, sec, by_slot.get(slot)))
     return [pick.get(i) for i in range(len(xd_frames))], how, users
 
 
@@ -364,11 +418,41 @@ def _layer_placement(tx, l, slid):
         tx.trans = (tr[0], tr[1], 0.0)
 
 
-def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under_joint', tol_scale=1.0, xd_full=None):
+class StopConversion(Exception):
+    """Raised by convert(stats=...) once the measurements are in (survey runs: nothing is written)."""
+
+
+POSE_TOL_PCT = 1.0      # a model whose converted pose is further than this (% of its height) from the source gets
+                        # its sheared bones held by pairs of joints (see convert)
+SHEAR_TOL = 0.003       # ... every bone whose 3x3 a single joint holds worse than this (fraction of its size)
+
+
+def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under_joint', tol_scale=1.0, xd_full=None,
+            stats=None, gen4=None, pairs=None, _info=None):
+    """pairs: None = automatic: converted with one joint per PBR node first; when the converted pose is more than
+    POSE_TOL_PCT of the height away from the source (Maya's segment scale compensate shear, which a T*R*S joint
+    cannot hold: Buneary's ears), the model is made again with every bone that has such a shear (> SHEAR_TOL) as a PAIR
+    of joints. A set of node numbers = exactly those nodes paired (empty = none). Models within the tolerance are
+    not touched."""
+    if pairs is None:
+        buf, info = [], {}
+        res = convert(sdr, xd_pkx, xd_model, step, buf.append, compensate, tol_scale, xd_full, stats, gen4, frozenset(), info)
+        if not info.get('need'):
+            for l in buf:
+                log(l)
+            return res
+        log('INFO: pose %.2f %% of the height from the source with one joint per bone: %d sheared bone(s) become a pair of joints'
+            % (info['pct'], len(info['need'])))
+        return convert(sdr, xd_pkx, xd_model, step, log, compensate, tol_scale, xd_full, stats, gen4, frozenset(info['need']))
     import numpy as np
     import pbr_eval
     from model import pose_at
     ev = pbr_eval.Eval(sdr, compensate)
+    if gen4 is not None and gen4.get('comp_t'):
+        ev.comp_t = True
+    # gen4: a Pokemon with no XD model (docs/GEN4.md): xd_pkx / xd_model are a STAND-IN's; gen4 = {'pick_names':
+    # slot -> action name, 'roles': XD joint -> (PBR node name, place in the body)} from the stand-in's own pair
+    # (gen4.py)
     odd = sorted(set(n.kind for n in sdr.nodes if n.kind not in (0, 2, 3, 6)))
     if odd:
         log('NOTE: node kind %s (not known what it is): kept as a plain joint' % odd)
@@ -377,9 +461,9 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
     # (XD's skeleton root is joint 0 itself in two thirds of its models, joint 1 to 4 in most others: ours is
     # always joint 1, holding whatever XD has between joint 0 and its skeleton root)
     from model import mat_decompose
-    x0 = xd_model.joints[0]
+    x0 = xd_model.joints[0] if gen4 is None else Joint()
     x1 = Joint()
-    if xd_model.skeleton_root > 0:
+    if xd_model.skeleton_root > 0 and gen4 is None:
         xs = xd_model.world_static()
         xm1 = mat_mul(mat_inv(xs[0]), xs[xd_model.skeleton_root])
         x1.scale, x1.rot, x1.pos = mat_decompose(xm1)
@@ -410,13 +494,35 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
         j.rot, j.scale, j.pos = src.rot, src.scale, src.pos
         m.joints.append(j)
     m.skeleton_root = 1
-    base = 2
     spose = ev.sample(None)
-    s0, r0, t0 = pbr_eval.decompose(spose, ev)
+    s0, r0, t0 = pbr_eval.decompose(spose, ev, pairs=pairs)
+    # Joint numbers (the game numbers a model's joints depth first, and XD's tables and our tracks go by those
+    # numbers): node i is joint jn[i]; a node held by a PAIR of joints has the pair's first joint (translation,
+    # compensating scale) just before it, ja[i] = jn[i] - 1, and children, meshes and skin weights stay on jn[i]
+    # (the second joint: rotation, the node's own scale). pl = the paired nodes; extended entry nn + k = ja of pl[k].
+    pl = sorted(pairs)
+    nn = len(sdr.nodes)
+    jn, ja, j_ = [], {}, 2
+    for i in range(nn):
+        if i in pairs:
+            ja[i] = j_
+            j_ += 1
+        jn.append(j_)
+        j_ += 1
+    node_of = {j: i for i, j in enumerate(jn)}
+    ext_joint = list(jn) + [ja[i] for i in pl]       # extended entry -> joint number
     for i, n in enumerate(sdr.nodes):
+        par = jn[n.parent] if n.parent >= 0 else 1
+        if i in pairs:
+            j = Joint()
+            j.parent = par
+            k = pl.index(i)
+            j.scale, j.rot, j.pos = tuple(s0[0, nn + k]), tuple(r0[0, nn + k]), tuple(t0[0, nn + k])
+            m.joints.append(j)
+            par = ja[i]
         j = Joint()
         j.name = n.name
-        j.parent = base + n.parent if n.parent >= 0 else 1
+        j.parent = par
         j.scale, j.rot, j.pos = tuple(s0[0, i]), tuple(r0[0, i]), tuple(t0[0, i])
         if n.inv_bind is not None:
             j.inv_bind = list(n.inv_bind)
@@ -436,6 +542,11 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
         if t['format'] is None:
             raise ValueError('texture format code 0x%X not known' % t['code'])
         im.width, im.height, im.format, im.data = t['width'], t['height'], t['format'], t['data']
+        if im.format == 10:
+            # a palette picture (Regigigas's body): drawn out into colours, kept as RGB5A3
+            import gx_tex
+            im.data = gx_tex.encode_rgb5a3(gx_tex.decode_c14x2(im.width, im.height, im.data, t['palette_format']))
+            im.format = 5
         if im.format in (8, 9, 10):
             raise ValueError('palette texture: not handled')
         want = hsd_read.image_bytes(im.width, im.height, im.format)
@@ -701,7 +812,7 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
         for part in pm['parts']:
             me = Mesh()
             me.rigid = pm['weights'] is None
-            me.joint = base + i if me.rigid else holder[i]
+            me.joint = jn[i] if me.rigid else holder[i]
             me.material = part['material']
             me.name = n.name
             index = {}
@@ -718,7 +829,7 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
                     w = None
                     if not me.rigid:
                         w = quantise_weights(pm['weights'][pi] or {n.number: 1.0}, step)
-                        w = tuple((base + sdr.by_number[j], x) for j, x in w)
+                        w = tuple((jn[sdr.by_number[j]], x) for j, x in w)
                         combos.add(w)
                     v = Vertex(tuple(pos), tuple(nrm), tuple(uv) if uv else None, None, w, uvx)
                     k = v.key()
@@ -754,7 +865,30 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
     log('skin: %d different weight combinations at step %g' % (len(combos), step))
     # --- which PBR action plays in which XD slot ---
     xd_frames = [int(round(a.end())) for a in xd_model.animations]
-    pick, how, users = pick_actions(sdr, xd_pkx, xd_frames, log)
+    if gen4 is None:
+        pick, how, users = pick_actions(sdr, xd_pkx, xd_frames, log)
+    else:
+        pick, how, users = pick_actions_named(sdr, xd_pkx, xd_frames, gen4['pick_names'], log)
+    if stats is not None:
+        stats['pick_names'] = {i: sdr.actions[a][0] for i, a in enumerate(pick) if a is not None}
+        stats['pick_times'] = {i: (sdr.actions[a][2], sdr.actions[a][3]) for i, a in enumerate(pick) if a is not None}
+    # Retiming (no-counterpart models): an action the stand-in plays in a slot is stretched so that its HIT lands at
+    # the stand-in's hit and it ends when the stand-in's does (PBR's action table: start, hit, end), because XD's
+    # move scripts time their effects against the slot, not against the model
+    tmaps = {}
+    if gen4 is not None:
+        for slot, a in enumerate(pick):
+            tgt = gen4['pick_times'].get(slot)
+            if a is None or how.get(slot) != 'name' or a in tmaps or not tgt:
+                continue
+            hs, es = tgt
+            hg, eg = sdr.actions[a][2], sdr.actions[a][3]
+            if hs <= 0.05 or hg <= 0.05 or hs >= es - 0.05 or hg >= eg - 0.05:
+                k = eg / es
+                fn = (lambda t, k=k: t * k)
+            else:
+                fn = (lambda t, hs=hs, es=es, hg=hg, eg=eg: t * hg / hs if t <= hs else hg + (t - hs) * (eg - hg) / (es - hs))
+            tmaps[a] = (max(int(round(es * FPS)), 1), fn)
     # --- eyes: XD's face records (sleep, wake up, blink) name an animation slot each; that slot gets PBR's tx_
     # action of the same kind (its body stays as it is: only the picture slides) ---
     names = [x[0] for x in sdr.actions]
@@ -784,9 +918,24 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
         r[:3, :] = np.array(mat_srt(scale, x1.rot, x1.pos)).reshape(3, 4)
         return j0m @ r
 
-    poses = {a: ev.sample(a) for a in sorted(set(x for x in pick if x is not None))}
+    poses = {a: (ev.sample(a, tmaps[a][0], tmaps[a][1]) if a in tmaps else ev.sample(a))
+             for a in sorted(set(x for x in pick if x is not None))}
     idle_act = pick[idle_slot] if pick else None
     xb = xd_model.animations[idle_slot].bounds if xd_model.animations else None
+    if stats is not None and idle_act is not None:
+        # survey hook (changes nothing in the output): PBR's native idle box (its own top nodes, no XD transform) and
+        # XD's idle box, mean extent per axis over the frames
+        po = poses[idle_act]
+        bo = pbr_eval.boxes(ev.points(np.eye(4)[None, None] @ ev.world(po.local), po.visible))
+        stats['pbr_native'] = tuple(float(x) for x in (bo[:, 3:] - bo[:, :3]).mean(axis=0))
+        stats['pbr_native_box'] = tuple(float(x) for x in bo.mean(axis=0))
+        if xb:
+            xbn_ = np.array(xb)
+            stats['xd_idle'] = tuple(float(x) for x in (xbn_[:, 3:] - xbn_[:, :3]).mean(axis=0))
+            stats['xd_idle_box'] = tuple(float(x) for x in xbn_.mean(axis=0))
+        stats['idle_action'] = sdr.actions[idle_act][0]
+        if stats.get('stop'):
+            raise StopConversion()
     if idle_act is not None and xb and (any(abs(v) > 1e-4 for v in tuple(x1.rot) + tuple(x1.pos))
                                         or any(abs(v - 1) > 1e-4 for v in x1.scale)):
         # XD's transform above its skeleton, or none? PBR's top nodes may hold part of it already (Entei: XD's
@@ -814,7 +963,9 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
             x1 = plain
             m.joints[1].rot, m.joints[1].pos = x1.rot, x1.pos
     scale1 = tuple(x1.scale)
-    if idle_act is not None and xb:
+    if gen4 is not None:
+        log("INFO: size: PBR's own (its units are XD's: median XD/PBR idle box 1.005 over the 387 shared models)")
+    elif idle_act is not None and xb:
         po = poses[idle_act]
         ours = pbr_eval.boxes(ev.points(root_matrix(scale1)[None, None] @ ev.world(po.local), po.visible))
         xbn = np.array(xb)
@@ -829,15 +980,14 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
     m.joints[1].scale = scale1
     root = root_matrix(scale1)
     # --- every used action sampled, taken apart, and checked against the source ---
-    nn = ev.n
     data = {}
     worst = (0.0, '', 0)
     height = None
     for a, po in poses.items():
-        s, r, t = pbr_eval.decompose(po, ev)
+        s, r, t = pbr_eval.decompose(po, ev, pairs=pairs)
         rw = root[None, None] @ ev.world(po.local)
         ref = ev.points(rw, None)
-        got = ev.points(root[None, None] @ ev.world(pbr_eval.compose(s, r, t)), None)
+        got = ev.points(root[None, None] @ ev.world(pbr_eval.compose_local(s, r, t, nn, pairs)), None)
         bx = pbr_eval.boxes(ev.points(rw, po.visible))
         if height is None or a == idle_act:
             height = float(max((bx[0, 3:] - bx[0, :3]).max(), 1e-6))
@@ -849,10 +999,18 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
         data[a] = [s, r, t, po.visible, bx]
     if height:
         pct = 100.0 * worst[0] / height
+        if _info is not None and not pairs and pct > POSE_TOL_PCT:
+            err = np.zeros(nn)
+            for a in poses:
+                err = np.maximum(err, pbr_eval.shear_error(poses[a], ev))
+            need = [int(i) for i in np.nonzero(err > SHEAR_TOL)[0]]
+            if need:
+                _info['need'], _info['pct'] = need, pct
+                return None, None
         log('CHECK: converted pose against the source, largest distance %.2f %% of the height (%s frame %d)' % (pct, worst[1], worst[2]))
         if pct > 3.0:
             log('WRONG: pose differs from the source by more than 3 %% of the height (scale compensation shear)')
-        if xb and idle_act is not None:
+        if xb and idle_act is not None and gen4 is None:
             ob = data[idle_act][4]
             xbn = np.array(xb)
             nfr = min(len(ob), len(xbn))
@@ -879,7 +1037,8 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
             log('NOTE: "%s" carries the body %.0f %% of its height away and XD\'s animation stays in place: travel taken out' % (
                 sdr.actions[a][0], 100.0 * own / height))
     # --- channels to write: whatever differs from the static value in any used action ---
-    chan = np.zeros((nn, 3, 3), dtype=bool)
+    ne = nn + len(pl)
+    chan = np.zeros((ne, 3, 3), dtype=bool)
     stat = (s0[0], r0[0], t0[0])
     tols = tuple(x * tol_scale for x in (0.001, 0.0003, 0.001))
     switched = np.zeros(nn, dtype=bool)
@@ -911,7 +1070,8 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
                 tracks = []
                 for c in blocks.get(a) or []:
                     if c.what == 0x14 and c.axis in (1, 2) and c.values:
-                        vals = [-round(c.at(f / FPS), 4) for f in range(frames + 1)]
+                        tm = tmaps[a][1] if a in tmaps else (lambda t: t)
+                        vals = [-round(c.at(tm(f / FPS)), 4) for f in range(frames + 1)]
                         tracks.append(Track(T_TRAU if c.axis == 1 else T_TRAV, step_keys(vals)))
                 if tracks and (mi, layer) in layer_tex:
                     ao = AnimObj()
@@ -960,17 +1120,17 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
         frames = s.shape[0] - 1
         an.materials = material_anims(a, frames)
         arrs = (s, r, t)
-        for i in range(nn):
+        for i in range(ne):
             ao = AnimObj()
             ao.end = float(frames)
             for w in range(3):
                 for ax in range(3):
                     if chan[i, w, ax]:
                         ao.tracks.append(Track(kinds[w] + ax, keys_of([float(x) for x in arrs[w][:, i, ax]], tols[w])))
-            if i in vis_nodes and i not in holder:
+            if i < nn and i in vis_nodes and i not in holder:
                 ao.tracks.append(Track(11, vis_keys(vis[:, i])))
             if ao.tracks:
-                an.joints[base + i] = ao
+                an.joints[ext_joint[i]] = ao
         for i in vis_nodes:
             if i in holder:
                 ao = AnimObj()
@@ -1006,8 +1166,35 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
     xw = pose_at(xd_model, xd_model.animations[idle_slot] if xd_model.animations else None, 0.0)
     ipose = poses[idle_act] if idle_act is not None else spose
     iw = root[None, None] @ ev.world(ipose.local[:1])
-    cands = [(base + i, iw[0, i, :3, 3]) for i, n in enumerate(sdr.nodes) if n.kind in (0, 2)]
+    cands = [(jn[i], iw[0, i, :3, 3]) for i, n in enumerate(sdr.nodes) if n.kind in (0, 2)]
     cpos = np.array([c[1] for c in cands])
+
+    # Roles (docs/GEN4.md): an XD attachment joint is the PBR effect point (ef_*, fixed names in every PBR model)
+    # nearest to it on the stand-in's own pair; a model with no XD counterpart takes the point of the same name, or
+    # else the one at the same place in the body (position as a fraction of the bones' box).
+    body = [(jn[i], iw[0, i, :3, 3]) for i, n in enumerate(sdr.nodes) if n.kind == 2 or n.name.startswith('ef_')]
+    bpos = np.array([c[1] for c in body]) if body else np.zeros((1, 3))
+    blo, bext = bpos.min(axis=0), np.maximum(bpos.max(axis=0) - bpos.min(axis=0), 1e-6)
+    efs = [(j, q) for j, q in body if m.joints[j].name.startswith('ef_')] or body
+
+    def norm(p):
+        q = (np.asarray(p) - blo) / bext
+        return (float(q[0]) - 0.5, float(q[1]), float(q[2]) - 0.5)   # x, z about the middle, y from the feet
+
+    def role_of(p):
+        j = min(efs, key=lambda c: float(((c[1] - p) ** 2).sum()))[0]
+        return (m.joints[j].name, norm(iw_pos(j)))
+
+    def iw_pos(j):
+        return iw[0, node_of[j], :3, 3]
+
+    def gen4_node(xj):
+        nm, nr = gen4['roles'][xj]
+        for j, q in efs + body:
+            if m.joints[j].name == nm:
+                return j
+        nr = np.array(nr)
+        return min(efs, key=lambda c: float(((np.array(norm(c[1])) - nr) ** 2).sum()))[0]
 
     def remap(xj):
         if xj < 0:
@@ -1017,18 +1204,22 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
         if xj == 0 or xj == xd_model.skeleton_root:
             return 0 if xj == 0 else 1
         p = np.array([xw[xj][3], xw[xj][7], xw[xj][11]])
+        if gen4 is not None:
+            return gen4_node(xj)
+        if stats is not None:
+            stats.setdefault('roles', {})[xj] = role_of(p)
         return cands[int(((cpos - p[None]) ** 2).sum(axis=1).argmin())][0]
 
     # Camera-facing pieces (2026-11-12): XD marks the joints of its flat cards as billboards (HSD joint flags
     # 0xE00: Jumpluff's three puffs, Gastly's aura); PBR's file has no such mark that was found. Each XD billboard
     # joint -> our nearest rigid textured mesh node in the idle pose, which gets the same billboard kind (seen
     # edge-on, Jumpluff's puffs looked squashed).
-    mesh_nodes = [(base + i, iw[0, i, :3, 3]) for i, n in enumerate(sdr.nodes)
+    mesh_nodes = [(jn[i], iw[0, i, :3, 3]) for i, n in enumerate(sdr.nodes)
                   if n.kind == 3 and n.mesh is not None and n.mesh['weights'] is None and not n.name.startswith('col_')
                   and any(sdr.materials[p_['material']]['texture'] is not None for p_ in n.mesh['parts'])]
     for xj, jt in enumerate(xd_model.joints):
         bb = (jt.flags or 0) & 0xE00
-        if bb and mesh_nodes and xj < len(xw):
+        if bb and mesh_nodes and xj < len(xw) and gen4 is None:
             p = np.array([xw[xj][3], xw[xj][7], xw[xj][11]])
             d = [float(((q - p) ** 2).sum()) for _, q in mesh_nodes]
             k = int(np.argmin(d))
@@ -1063,6 +1254,8 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
             h[rec + 2:rec + 0x12] = b'\xff' * 16
             log('face record %d: part kind -> whole model (slot %d)' % (r, h[rec + 0x12]))
     pkx.header = bytes(h)
+    if stats is not None and stats.get('stop_roles'):
+        raise StopConversion()
     if xd_full is not None:
         graft_xd_pieces(m, xd_full, xd_full.graft, idle_slot, alpha, log, step)
     m.image_classes = alpha
@@ -1073,6 +1266,8 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
 MAX_SIDE = 256          # XD's own battle models: no picture side above 256 (Battle Revolution has 512)
 FILE_CAP = 600 * 1024   # XD's largest own battle model is 542 KB; two to four share the battle heap
 MAX_POBJ = 80           # drawing pieces (HSD polygon objects) a model may have; see convert_file
+MAX_REFLECT_PIECES = 54  # ... of which this many drawn with a reflection layer: Ditto drew at 48, Kusaihana (Bellossom) at 54,
+                         # Ditto at 57 / 59 / 66 never came back from the graphics layer (docs/GEN4.md 10.5, shine_fault.md)
 
 
 def _po2(n):
@@ -1353,9 +1548,7 @@ def graft_xd_pieces(m, xd, regions, idle_slot, alpha, log, step):
         len(mine), sum(len(xd.meshes[k].verts) for k in picked)))
 
 
-NO_REFLECTION = {
-    'metamon': "with it the picture never came back from the graphics card (cause not found yet)",
-}
+NO_REFLECTION = {}      # (Ditto and Dialga were in here until the piece budget MAX_REFLECT_PIECES was found)
 
 KEEP_XD = {
 }
@@ -1386,7 +1579,7 @@ class KeepXD(Exception):
     pass
 
 
-def convert_file(sdr_path, xd_path, out, log=print, step=0.1, compensate='joint8_under_joint', cap=FILE_CAP):
+def convert_file(sdr_path, xd_path, out, log=print, step=0.1, compensate='joint8_under_joint', cap=FILE_CAP, gen4=None):
     name = os.path.splitext(os.path.basename(out))[0]
     if name in KEEP_XD:
         raise KeepXD('XD\'s own model is kept: ' + KEEP_XD[name])
@@ -1411,11 +1604,13 @@ def convert_file(sdr_path, xd_path, out, log=print, step=0.1, compensate='joint8
         # card, at 51 it draws; 77 pieces were seen working (2026-11-12).
         st = step
         while True:
-            model, pkx = convert(sdr, xd_pkx, xd_model, st, (lambda s: None) if quiet else log, compensate, tol_scale, xd_full)
+            model, pkx = convert(sdr, xd_pkx, xd_model, st, (lambda s: None) if quiet else log, compensate, tol_scale, xd_full,
+                                 gen4=gen4)
             archive, report = hsd_write.write_archive(model)
-            if report.get('pobj', 0) <= MAX_POBJ or st >= 0.34:
+            if (report.get('pobj', 0) <= MAX_POBJ and report.get('reflect_pieces', 0) <= MAX_REFLECT_PIECES) or st >= 0.34:
                 break
-            log('INFO: %d drawing pieces: skin weights redone in steps of %g' % (report['pobj'], round(st + 0.05, 2)))
+            log('INFO: %d drawing pieces (%d with a reflection layer): skin weights redone in steps of %g' % (
+                report['pobj'], report.get('reflect_pieces', 0), round(st + 0.05, 2)))
             st = round(st + 0.05, 2)
             quiet = True
         fit_textures(model, model.image_classes, log)

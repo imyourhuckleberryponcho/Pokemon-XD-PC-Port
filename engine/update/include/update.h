@@ -18,6 +18,8 @@ bool ParseVersion(std::string_view text, std::vector<uint32_t>& parts);
 int CompareVersions(std::string_view a, std::string_view b);
 bool IsNewer(std::string_view candidate, std::string_view current);
 
+std::string_view CurrentSystem();
+
 struct Manifest {
   std::string product;
   std::string version;
@@ -26,10 +28,11 @@ struct Manifest {
   std::string url;
   uint64_t size = 0;
   std::string sha256;
+  bool hasPackage = true;
 };
 
 bool ParseSignedManifest(std::string_view fileText, std::string_view publicKeyHex, std::string_view product,
-                         Manifest& out, std::string& error);
+                         Manifest& out, std::string& error, std::string_view system = CurrentSystem());
 
 bool HexDecode(std::string_view hex, std::vector<uint8_t>& out);
 std::string HexEncode(const uint8_t* data, size_t size);
@@ -46,10 +49,14 @@ bool FetchToString(const std::string& url, const FetchOptions& options, std::str
 bool FetchToFile(const std::string& url, const std::filesystem::path& file, const FetchOptions& options,
                  std::string& error);
 
+std::string Sha256Hex(std::string_view data);
 bool Sha256File(const std::filesystem::path& file, std::string& hex, std::string& error);
 
 bool ExtractZip(const std::filesystem::path& zip, const std::filesystem::path& folder, std::string& error,
                 const std::function<bool()>& stop = {});
+
+bool ExtractTarGz(const std::filesystem::path& archive, const std::filesystem::path& folder, std::string& error,
+                  const std::function<bool()>& stop = {});
 
 inline constexpr const char* kPointerFile = "game_folder.txt";
 inline constexpr const char* kFirstFolder = "game";
@@ -58,14 +65,21 @@ inline constexpr const char* kVersionFile = "version.txt";
 bool IsGameFolderName(std::string_view name);
 
 struct Layout {
+  bool macApp = false;
   bool valid = false;
   std::string why;
+  std::filesystem::path appPath;
   std::filesystem::path root;
   std::string running;
   std::string current;
   std::string previous;
 };
 Layout FindLayout(const std::filesystem::path& programFolder, const std::string& starterName);
+std::filesystem::path GameFolderPath(const Layout& layout, const std::string& name);
+bool MacApplyPending(const Layout& layout, std::string& error);
+std::string MacHelperScript(const std::filesystem::path& app, const std::filesystem::path& pending,
+                            const std::filesystem::path& previous, long waitForPid, bool openAfter);
+std::filesystem::path MacStateFolder(const Layout& layout);
 bool ReadPointer(const std::filesystem::path& root, std::string& current, std::string& previous);
 bool WritePointer(const std::filesystem::path& root, const std::string& current, const std::string& previous,
                   std::string& error);
@@ -78,6 +92,7 @@ struct InstallRequest {
   std::filesystem::path package;
   std::vector<std::string> requiredFiles;
 };
+bool PackageIsTarGz();
 bool Install(const InstallRequest& request, std::string& installed, std::string& error,
              const std::function<bool()>& stop = {});
 bool GoBack(const Layout& layout, const std::vector<std::string>& requiredFiles, std::string& error);

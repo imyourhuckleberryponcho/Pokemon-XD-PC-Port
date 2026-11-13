@@ -3,6 +3,9 @@
 #include "xd_user_folder.h"
 #include "xd_playthrough_files.h"
 #include "xd_randomizer.h"
+#include "xd_added_rows.h"
+#include "xd_gen4.h"
+#include "xd_scripts.h"
 
 #include <mods.h>
 #include <mods_disc.h>
@@ -21,6 +24,8 @@
 namespace xd::pt {
 bool BootWorldMods(std::vector<std::string>& ids);
 std::string BootRandomizer();
+bool BootGen4();
+bool BootGen4Spots();
 void RandomizerMade(const std::string& code);
 void AfterModsLoaded(const engine::mods::LoadResult& result, const std::filesystem::path& modsFolder,
                      const std::filesystem::path& listFile, const engine::mods::DiscView& disc);
@@ -78,14 +83,26 @@ extern "C" bool PortXD_LoadMods(void) {
   options.looksOrSound = xd::playthrough::LooksOrSound;
   options.usePlaythroughMods = xd::pt::BootWorldMods(options.playthroughMods);
   const std::string randomizerCode = xd::pt::BootRandomizer();
-  if (!randomizerCode.empty()) {
-    options.generateData = [randomizerCode](const em::DataCatalog& catalog, const em::EntryReader& read,
-                                            std::vector<em::DataModFile>& out, std::string& error) {
+  std::vector<em::DataModFile> gen4Files;
+  xd::gen4::Prepare(xd::pt::BootGen4(), xd::pt::BootGen4Spots(), options, gen4Files);
+  if (!randomizerCode.empty() || !gen4Files.empty()) {
+    options.generateData = [randomizerCode, gen4Files](const em::DataCatalog& catalog, const em::EntryReader& read,
+                                                       std::vector<em::DataModFile>& out, std::string& error) {
       namespace xr = xd::randomizer;
+      for (const em::DataModFile& f : gen4Files) out.push_back(f);
+      if (randomizerCode.empty()) return true;
       engine::randomizer::Settings s;
       xr::ApplyStyle(s, xr::Style::Classic);
       bool seedOnly = false;
       if (!engine::randomizer::DecodeCode(xr::GetSchema(), randomizerCode, s, seedOnly, error)) return false;
+      if (xr::CodeIncludesGen4(randomizerCode)) {
+        if (!xd::gen4::Loaded()) {
+          error = "this randomizer code includes the Gen 4 Pokemon, but their files are not available (made from your Pokemon "
+                  "Battle Revolution disc on the launcher's Extra assets page)";
+          return false;
+        }
+        if (!xr::LoadGen4Species(xd::gen4::PackFolder() / L"randomizer.txt", error)) return false;
+      }
       xr::Result r;
       if (!xr::Generate(catalog, read, s, r, error)) return false;
       out.push_back({xr::kModId, "Randomizer", "data/randomizer.json", r.GameJson("randomizer " + r.code)});
@@ -157,6 +174,12 @@ extern "C" bool PortXD_LoadMods(void) {
     sExtraText = "Battle Revolution models: on, " + std::to_string(result.extraLayers.front().files) + " files";
   }
   std::fprintf(stderr, "[extra assets] %s\n", sExtraText.c_str());
+  xd::gen4::AfterLoad(result);
+  xd::added::Install(result);
+  xd::scripts::Install(result);
+  if (const std::string scripts = xd::scripts::ActiveText(); !scripts.empty()) {
+    sActive += (sActive.empty() ? "" : "; ") + scripts;
+  }
   return true;
 }
 

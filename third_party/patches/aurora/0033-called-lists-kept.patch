@@ -1,0 +1,129 @@
+diff --git a/lib/gx/command_processor.cpp b/lib/gx/command_processor.cpp
+--- a/lib/gx/command_processor.cpp
++++ b/lib/gx/command_processor.cpp
+@@ -18,6 +18,7 @@
+ #include <tracy/Tracy.hpp>
+ 
+ #include <algorithm>
++#include <atomic>
+ #include <cmath>
+ #include <cstdint>
+ #include <span>
+@@ -33,6 +34,12 @@
+ namespace aurora::gx::fifo {
+ namespace {
+ constexpr Module Log{"aurora::gx::fifo"};
++
++// Called lists kept with a kept picture (GXAurora.h AuroraSetCalledListTap).
++std::atomic<AuroraCalledListTap> sCalledListTap{nullptr};
++const AuroraCalledList* sReplayLists = nullptr;
++uint32_t sReplayCount = 0;
++uint32_t sReplayNext = 0;
+ 
+ u16 prepare_idx_buffer(ByteBuffer& buf, GXPrimitive prim, u16 vtxStart, u16 vtxCount) noexcept {
+   u16 numIndices = 0;
+@@ -354,8 +361,22 @@
+         Log.warn("Ignoring GX_CMD_CALL_DL 0x{:08X} ({} bytes)", address, length);
+         break;
+       }
++      const u8* listData = static_cast<const u8*>(MEM1Start) + offset;
++      if (sReplayLists != nullptr) {
++        // A kept picture drawn again: the list as it was when the picture was first decoded.
++        for (uint32_t n = 0; n < sReplayCount; ++n) {
++          const uint32_t i = (sReplayNext + n) % sReplayCount;
++          if (sReplayLists[i].address == address && sReplayLists[i].length == length) {
++            listData = static_cast<const u8*>(sReplayLists[i].data);
++            sReplayNext = i + 1;
++            break;
++          }
++        }
++      } else if (const auto tap = sCalledListTap.load(std::memory_order_acquire); tap != nullptr) {
++        tap(address, listData, length);
++      }
+       sInCalledList = true;
+-      process(static_cast<const u8*>(MEM1Start) + offset, length);
++      process(listData, length);
+       sInCalledList = false;
+       break;
+     }
+@@ -1156,4 +1177,12 @@
+   }
+ }
+ 
++void set_called_list_tap(AuroraCalledListTap tap) noexcept { sCalledListTap.store(tap, std::memory_order_release); }
++
++void set_called_list_replay(const AuroraCalledList* lists, uint32_t count) noexcept {
++  sReplayLists = count > 0 ? lists : nullptr;
++  sReplayCount = count;
++  sReplayNext = 0;
++}
++
+ } // namespace aurora::gx::fifo
+diff --git a/lib/gx/command_processor.hpp b/lib/gx/command_processor.hpp
+--- a/lib/gx/command_processor.hpp
++++ b/lib/gx/command_processor.hpp
+@@ -1,6 +1,8 @@
+ #pragma once
+ 
+ #include "../internal.hpp"
++
++#include "dolphin/gx/GXAurora.h"
+ 
+ #include <cstdint>
+ #include <unordered_map> // (command_processor.cpp's upload cache)
+@@ -19,6 +21,9 @@
+ void clear_draw_cache(bool keepArrays = false) noexcept;
+ // Command taps (photo modes): whether a display copy was made since the last call (and clears it).
+ bool take_display_copy_flag() noexcept;
++// AuroraSetCalledListTap / AuroraSetCalledListReplay (GXAurora.h): called lists kept with a picture's commands.
++void set_called_list_tap(AuroraCalledListTap tap) noexcept;
++void set_called_list_replay(const AuroraCalledList* lists, uint32_t count) noexcept;
+ bool has_command_tap() noexcept; // fifo.cpp
+ 
+ } // namespace aurora::gx::fifo
+diff --git a/lib/dolphin/gx/GXAurora.cpp b/lib/dolphin/gx/GXAurora.cpp
+--- a/lib/dolphin/gx/GXAurora.cpp
++++ b/lib/dolphin/gx/GXAurora.cpp
+@@ -66,6 +66,12 @@
+ }
+ 
+ void AuroraSetCommandTap(AuroraCommandTap tap) { aurora::gx::fifo::set_command_tap(tap); }
++
++void AuroraSetCalledListTap(AuroraCalledListTap tap) { aurora::gx::fifo::set_called_list_tap(tap); }
++
++void AuroraSetCalledListReplay(const AuroraCalledList* lists, u32 count) {
++  aurora::gx::fifo::set_called_list_replay(lists, count);
++}
+ 
+ void AuroraSetViewOverride(const AuroraViewOverride* override) { aurora::gx::set_view_override(override); }
+ 
+diff --git a/include/dolphin/gx/GXAurora.h b/include/dolphin/gx/GXAurora.h
+--- a/include/dolphin/gx/GXAurora.h
++++ b/include/dolphin/gx/GXAurora.h
+@@ -231,6 +231,26 @@
+  */
+ typedef void (*AuroraCommandTap)(const void* data, u32 size, GXBool displayCopy);
+ void AuroraSetCommandTap(AuroraCommandTap tap);
++
++/**
++ * Display lists called from main memory (GX_CMD_CALL_DL) are not part of the command stream the tap sees: the
++ * decoder reads them from the game's memory when it reaches the call. A picture kept and drawn again later would
++ * read whatever the game keeps there NOW (a list it built in a buffer it has freed or reused since: text, pointer
++ * tables, another effect's list). So each called list's bytes are handed to a second tap, in call order, and a replay
++ * takes them from a copy instead of from memory.
++ * AuroraSetCalledListTap: `tap` sees every list run from memory (address, bytes; not while a replay is set). NULL: none.
++ * AuroraSetCalledListReplay: while `lists` is not NULL, a CALL_DL takes its bytes from this array (the next entry at
++ * or after the one used last, with the same address and length; wrapping round once; else from memory as before).
++ * The array must stay valid until it is set to NULL again; call both only with the command stream drained.
++ */
++typedef void (*AuroraCalledListTap)(u32 address, const void* data, u32 length);
++typedef struct {
++  u32 address;
++  u32 length;
++  const void* data;
++} AuroraCalledList;
++void AuroraSetCalledListTap(AuroraCalledListTap tap);
++void AuroraSetCalledListReplay(const AuroraCalledList* lists, u32 count);
+ 
+ /**
+  * Draws perspective scenes as seen from another camera (photo modes). While `active`, every draw with a

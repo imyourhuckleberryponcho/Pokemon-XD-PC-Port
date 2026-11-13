@@ -1,7 +1,11 @@
+#if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
 #include <wincodec.h>
+#else
+#include <png.h>
+#endif
 
 #include <dolphin/gx.h>
 #include <dolphin/mtx.h>
@@ -128,13 +132,42 @@ void finish(int code) {
   std::_Exit(code);
 }
 
+#if defined(_WIN32)
+constexpr const char* kSep = "\\";
 std::wstring Widen(const std::string& s) {
   std::wstring w(s.size() + 1, L'\0');
   const int n = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, w.data(), (int)w.size());
   w.resize(n > 0 ? n - 1 : 0);
   return w;
 }
+std::filesystem::path PathOf(const std::string& utf8) { return std::filesystem::path(Widen(utf8)); }
+#else
+constexpr const char* kSep = "/";
+std::filesystem::path PathOf(const std::string& utf8) {
+  return std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(utf8.data()), utf8.size()));
+}
+#endif
 
+#if !defined(_WIN32)
+bool WritePng(const std::string& path, int width, int height, const std::vector<uint8_t>& rgba) {
+  const std::filesystem::path final = PathOf(path);
+  std::filesystem::path temp = final;
+  temp += ".part";
+  png_image image{};
+  image.version = PNG_IMAGE_VERSION;
+  image.width = static_cast<png_uint_32>(width);
+  image.height = static_cast<png_uint_32>(height);
+  image.format = PNG_FORMAT_RGBA;
+  bool ok = png_image_write_to_file(&image, temp.c_str(), 0, rgba.data(), width * 4, nullptr) != 0;
+  std::error_code ec;
+  if (ok) {
+    std::filesystem::rename(temp, final, ec);
+    ok = !ec;
+  }
+  if (!ok) std::filesystem::remove(temp, ec);
+  return ok;
+}
+#else
 bool WritePng(const std::string& path, int width, int height, const std::vector<uint8_t>& rgba) {
   std::vector<uint8_t> bgra(rgba.size());
   for (size_t i = 0; i + 3 < rgba.size(); i += 4) {
@@ -166,6 +199,7 @@ bool WritePng(const std::string& path, int width, int height, const std::vector<
   if (!ok) DeleteFileW(temp.c_str());
   return ok;
 }
+#endif
 
 std::vector<float> Unblend(const std::vector<uint8_t>& black, const std::vector<uint8_t>& white, int n) {
   std::vector<float> out(static_cast<size_t>(n) * 4);
@@ -365,7 +399,7 @@ void MakeSky(Job& job, std::initializer_list<Figure> figures) {
       }
     }
   }
-  const std::string file = sBgDir + "\\" + job.name + ".png";
+  const std::string file = sBgDir + kSep + job.name + ".png";
   if (!WritePng(file, job.width, job.height, job.rgba)) {
     job.failed = true, job.note = "could not write " + file;
   } else {
@@ -516,7 +550,7 @@ void Collect(uint32_t frame) {
     job.rgba.assign(sPixels[0].begin() + static_cast<size_t>(top) * width * 4,
                     sPixels[0].begin() + static_cast<size_t>(top + outH) * width * 4);
     for (size_t i = 3; i < job.rgba.size(); i += 4) job.rgba[i] = 255;
-    const std::string file = sBgDir + "\\" + job.name + ".png";
+    const std::string file = sBgDir + kSep + job.name + ".png";
     if (!WritePng(file, job.width, job.height, job.rgba)) {
       job.failed = true, job.note = "could not write " + file;
     } else {
@@ -526,8 +560,8 @@ void Collect(uint32_t frame) {
     return;
   }
   if (std::getenv("XD_RENDER_ICON_RAW") != nullptr) {
-    WritePng(sIconDir + "\\" + job.name + (job.refined ? "_raw2" : "_raw1") + "_black.png", (int)width, (int)height, sPixels[0]);
-    WritePng(sIconDir + "\\" + job.name + (job.refined ? "_raw2" : "_raw1") + "_white.png", (int)width, (int)height, sPixels[1]);
+    WritePng(sIconDir + kSep + job.name + (job.refined ? "_raw2" : "_raw1") + "_black.png", (int)width, (int)height, sPixels[0]);
+    WritePng(sIconDir + kSep + job.name + (job.refined ? "_raw2" : "_raw1") + "_white.png", (int)width, (int)height, sPixels[1]);
   }
   const auto premul = Unblend(sPixels[0], sPixels[1], (int)(width * height));
   // The logo: only the top of the title picture (PRESS START and the copyright lines are below it).
@@ -550,7 +584,7 @@ void Collect(uint32_t frame) {
     return;
   }
   job.width = job.height = sSize;
-  const std::string file = sIconDir + "\\" + job.name + ".png";
+  const std::string file = sIconDir + kSep + job.name + ".png";
   if (WritePng(file, sSize, sSize, job.rgba)) {
     job.note = note;
     std::fprintf(stderr, "[render icon] wrote %s (%s)\n", file.c_str(), note.c_str());
@@ -729,7 +763,7 @@ std::string Folder(const char* env, const char* fallback) {
   const char* dir = std::getenv(env);
   std::string path = dir != nullptr && dir[0] != '\0' ? dir : std::string(PortUser_FolderUtf8("Pokemon XD")) + fallback;
   std::error_code error;
-  std::filesystem::create_directories(std::filesystem::path(Widen(path)), error);
+  std::filesystem::create_directories(PathOf(path), error);
   return path;
 }
 
@@ -740,7 +774,11 @@ extern "C" bool PortXD_RenderIconPrepare(void) {
   if (spec == nullptr || spec[0] == '\0') return false;
   auto setDefault = [](const char* name, const char* value) {
     const char* now = std::getenv(name);
+#if defined(_WIN32)
     if (now == nullptr || now[0] == '\0') _putenv_s(name, value);
+#else
+    if (now == nullptr || now[0] == '\0') setenv(name, value, 1);
+#endif
   };
   setDefault("XD_NO_MESSAGE_BOXES", "1");
   setDefault("XD_WINDOW_OFFSCREEN", "1");
@@ -770,9 +808,13 @@ extern "C" void PortXD_RenderIconStart(void) {
   }
   const char* size = std::getenv("XD_RENDER_ICON_SIZE");
   if (size != nullptr && size[0] != '\0') sSize = std::clamp(std::atoi(size), 16, 2048);
-  sIconDir = Folder("XD_RENDER_ICON_DIR", "\\icons\\rendered");
-  sBgDir = Folder("XD_RENDER_BG_DIR", "\\backgrounds\\rendered");
-  sReport = _wfopen(Widen(sIconDir + "\\render_icon.txt").c_str(), L"w");
+  sIconDir = Folder("XD_RENDER_ICON_DIR", (std::string(kSep) + "icons" + kSep + "rendered").c_str());
+  sBgDir = Folder("XD_RENDER_BG_DIR", (std::string(kSep) + "backgrounds" + kSep + "rendered").c_str());
+#if defined(_WIN32)
+  sReport = _wfopen(Widen(sIconDir + kSep + "render_icon.txt").c_str(), L"w");
+#else
+  sReport = std::fopen((sIconDir + kSep + "render_icon.txt").c_str(), "w");
+#endif
   if (sReport != nullptr) {
     std::fprintf(sReport, "# Pictures rendered from the game on this PC (xd.exe, XD_RENDER_ICON).\n"
                           "game %s\nsize %d (models drawn at %d)\n", PortDisc_GameId(), sSize, sSize * 2);

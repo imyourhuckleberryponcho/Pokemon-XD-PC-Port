@@ -130,10 +130,11 @@ fs::path ConverterPath(const Source& source, const fs::path& programFolder) {
 }
 
 std::vector<std::string> ConverterArguments(const Source& source, const std::string& disc, const std::string& gameDisc,
-                                            const fs::path& out) {
+                                            const fs::path& out, const fs::path& out2) {
   std::vector<std::string> args;
   for (std::string a : source.converterArguments) {
-    const std::pair<const char*, std::string> fills[] = {{"{disc}", disc}, {"{game_disc}", gameDisc}, {"{out}", Utf8(out)}};
+    const std::pair<const char*, std::string> fills[] = {
+        {"{disc}", disc}, {"{game_disc}", gameDisc}, {"{out}", Utf8(out)}, {"{out2}", Utf8(out2)}};
     for (const auto& [key, value] : fills) {
       for (size_t at = a.find(key); at != std::string::npos; at = a.find(key, at + value.size())) {
         a.replace(at, std::strlen(key), value);
@@ -188,6 +189,56 @@ Status ComputeStatus(const fs::path& modFolder, const std::string& expectedModId
     st.text = "Ready: " + std::to_string(st.models) + (st.models == 1 ? " model" : " models");
     if (!converterFound) st.detail = "The converter isn't next to the game any more, so they can't be made again.";
   }
+  return st;
+}
+
+namespace {
+long long JsonNumber(const std::string& json, const std::string& key) {
+  const size_t k = json.find("\"" + key + "\"");
+  if (k == std::string::npos) return -1;
+  size_t i = json.find(':', k);
+  if (i == std::string::npos) return -1;
+  i++;
+  while (i < json.size() && std::isspace(static_cast<unsigned char>(json[i]))) i++;
+  if (i >= json.size() || !std::isdigit(static_cast<unsigned char>(json[i]))) return -1;
+  return std::strtoll(json.c_str() + i, nullptr, 10);
+}
+std::string JsonString(const std::string& json, const std::string& key) {
+  const size_t k = json.find("\"" + key + "\"");
+  if (k == std::string::npos) return {};
+  size_t i = json.find(':', k);
+  if (i == std::string::npos) return {};
+  i = json.find('"', i);
+  if (i == std::string::npos) return {};
+  const size_t e = json.find('"', i + 1);
+  return e == std::string::npos ? std::string() : json.substr(i + 1, e - i - 1);
+}
+}
+
+SecondStatus ComputeSecondStatus(const fs::path& folder, const std::string& manifestFile, const std::string& expectedId,
+                                 int wantedVersion, const std::string& provides, bool firstOutOfDate) {
+  SecondStatus st;
+  std::ifstream in(folder / manifestFile, std::ios::binary);
+  const std::string json((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  if (!in || JsonString(json, "id") != expectedId) {
+    st.kind = SecondStatus::Kind::NotMade;
+    st.text = provides + ": not made yet";
+    st.detail = "It is made together with the models: choose the disc below and press Make.";
+    return st;
+  }
+  const long long version = JsonNumber(json, "version");
+  st.species = static_cast<int>(std::max<long long>(0, JsonNumber(json, "species")));
+  if (version != wantedVersion || firstOutOfDate) {
+    st.kind = SecondStatus::Kind::OutOfDate;
+    st.text = provides + ": out of date, make again";
+    st.detail = version != wantedVersion
+                    ? "It was made for another version of the game (pack " + std::to_string(version) + "; now " +
+                          std::to_string(wantedVersion) + "), so the game won't use it until it is made again."
+                    : "It was made by an older version of the converter. It still works; make it again to get the improvements.";
+    return st;
+  }
+  st.kind = SecondStatus::Kind::Ready;
+  st.text = provides + ": ready" + (st.species > 0 ? " (" + std::to_string(st.species) + " species)" : std::string());
   return st;
 }
 
@@ -308,6 +359,7 @@ bool MakeJob::Start(const MakeRequest& request, std::string& error) {
   fs::create_directories(request.logFile.parent_path(), ec);
   fs::create_directories(request.outFolder.parent_path(), ec);
   RemoveLeftovers(request.outFolder);
+  if (!request.outFolder2.empty()) RemoveLeftovers(request.outFolder2);
   sys::StartRequest start;
   start.program = request.converter;
   start.arguments = request.arguments;
@@ -380,12 +432,14 @@ void MakeJob::Run(MakeRequest request, void* processPointer) {
   }
   if (cancelled) {
     RemoveLeftovers(request.outFolder);
+    if (!request.outFolder2.empty()) RemoveLeftovers(request.outFolder2);
     result.phase = Phase::Cancelled;
     result.message = "Stopped. Nothing was changed.";
   } else if (code == 0 && sawDone) {
     result.phase = Phase::Done;
   } else {
     RemoveLeftovers(request.outFolder);
+    if (!request.outFolder2.empty()) RemoveLeftovers(request.outFolder2);
     if (code == 2) {
       result.phase = Phase::WrongDisc;
       result.message = errorText.empty() ? "One of the discs is not the one the converter needs." : errorText;

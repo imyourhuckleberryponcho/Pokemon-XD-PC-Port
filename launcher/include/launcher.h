@@ -126,6 +126,11 @@ struct GameInfo {
     std::string converterFolder;
     std::string converterOverrideEnv;
     std::vector<std::string> converterArguments;
+    std::string secondFolder;
+    std::string secondManifestFile;
+    std::string secondManifestId;
+    std::string secondProvides;
+    int secondVersion = 0;
   };
   struct ExtraAssets {
     std::vector<ExtraSource> sources;

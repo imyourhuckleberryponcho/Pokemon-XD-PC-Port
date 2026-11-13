@@ -3,6 +3,8 @@
 #include "../src/dol_tables.h"
 #include "../src/xd_user_folder.h"
 
+#include <xd_save.h>
+
 #include <data_table.h>
 #include <gs_formats.h>
 #include <mods.h>
@@ -359,7 +361,7 @@ int show_text(const em::DataCatalog& cat, const char* fromText, const char* toTe
   return 0;
 }
 
-int run_mods(const fs::path& modsFolder, const fs::path& listFile) {
+int run_mods(const fs::path& modsFolder, const fs::path& listFile, bool printIds) {
   em::LoadOptions options;
   options.modsFolder = modsFolder;
   options.listFile = listFile;
@@ -376,6 +378,41 @@ int run_mods(const fs::path& modsFolder, const fs::path& listFile) {
     std::printf("[mods] %s%s\n", kLabel[static_cast<int>(m.level)], m.text.c_str());
   }
   std::printf("mods on: %s\n", result.active.empty() ? "none" : result.ActiveText().c_str());
+  if (!result.addedRows.empty()) {
+    if (printIds) {
+      std::printf("%s", em::AddedRowsJson(result.addedRows).c_str());
+      return sOk ? 0 : 1;
+    }
+    std::printf("%zu row(s) added by data mods (the mod -> numbers map: --ids):\n", result.addedRows.size());
+    std::vector<XDAddedRow> rows;
+    for (const em::AddedRow& r : result.addedRows) {
+      std::printf("  %s \"%s\" = %s #%u (entry %u, a copy of #%u)   [%s, %s]\n", r.table.c_str(), r.key.c_str(),
+                  r.table == "pokemon_data" ? "species" : r.table == "waza_data" ? "move" : "item", r.id, r.row, r.copyOf, r.mod.c_str(),
+                  r.where.c_str());
+      rows.push_back({r.table.c_str(), r.id, r.row, r.copyOf, r.bytes.data(), r.bytes.size()});
+    }
+    for (const em::AddedText& t : result.addedTexts) std::printf("  text %u (%s): \"%s\"\n", t.key, t.label.c_str(), t.text.c_str());
+    std::vector<uint8_t> original;
+    if (read_disc_entry("common.fsys", "common_rel", original)) {
+      auto plain = std::make_unique<XDCommonTables>(), grown = std::make_unique<XDCommonTables>();
+      PortXD_SetAddedRows(nullptr, 0);
+      const bool a = convert(original, *plain);
+      PortXD_SetAddedRows(rows.data(), rows.size());
+      const bool b = convert(original, *grown);
+      PortXD_SetAddedRows(nullptr, 0);
+      if (a && b) {
+        const auto count = [](const XDCommonTables& t, const char* name) {
+          for (uint32_t i = 0; i < t.numGlobals; i++) {
+            if (std::strcmp(t.globals[i].name, name) == 0) return *static_cast<const uint32_t*>(t.globals[i].value);
+          }
+          return 0u;
+        };
+        for (const char* n : {"pokemon_data_number", "waza_data_number", "item_data_prime_number", "item_data_index_number"}) {
+          std::printf("  %s: %u -> %u\n", n, count(*plain, n), count(*grown, n));
+        }
+      }
+    }
+  }
   if (result.dataChanges.empty() || result.catalog == nullptr) {
     std::printf("no data changes: the game reads its tables exactly as on the disc\n");
     return sOk ? 0 : 1;
@@ -435,6 +472,47 @@ std::string json_of(const std::map<std::string, std::map<uint32_t, std::map<std:
     s += "}";
   }
   return s + "\n}\n";
+}
+
+int check_saves(const std::vector<std::string>& files) {
+  std::vector<uint8_t> original;
+  if (!read_disc_entry("common.fsys", "common_rel", original)) return 1;
+  auto tables = std::make_unique<XDCommonTables>();
+  PortXD_SetAddedRows(nullptr, 0);
+  if (!convert(original, *tables)) return 1;
+  uint32_t species = 0, moves = 0, items = 0;
+  if (!PortXD_CommonTableCounts(&species, &moves, &items)) return 1;
+  std::printf("the game has %u species, %u moves, %u item numbers\n", species, moves, items);
+  int bad = 0;
+  for (const std::string& f : files) {
+    std::FILE* in = std::fopen(f.c_str(), "rb");
+    if (in == nullptr) {
+      std::printf("%s: can't be opened\n", f.c_str());
+      continue;
+    }
+    std::vector<uint8_t> bytes;
+    uint8_t buffer[65536];
+    for (size_t n; (n = std::fread(buffer, 1, sizeof buffer, in)) > 0;) bytes.insert(bytes.end(), buffer, buffer + n);
+    std::fclose(in);
+    if (bytes.size() == xd::save::kFileSize + 0x40) bytes.erase(bytes.begin(), bytes.begin() + 0x40);
+    xd::save::Save save;
+    xd::save::ReadReport report;
+    std::string error;
+    if (!xd::save::ReadSave(bytes, save, report, error)) {
+      std::printf("%s: not read as a save (%s)\n", f.c_str(), error.c_str());
+      continue;
+    }
+    const auto unknown = xd::save::UnknownIds(save, {species, moves, items});
+    if (unknown.empty()) {
+      std::printf("%s: ok (party %s)\n", f.c_str(), save.party[0].species != 0 ? "has Pokemon" : "empty");
+    } else {
+      bad++;
+      std::printf("%s: STOP\n", f.c_str());
+      for (const std::string& u : unknown) std::printf("    %s\n", u.c_str());
+    }
+  }
+  std::printf("%d of %zu save(s) would be stopped\n", bad, files.size());
+  return bad == 0 ? 0 : 3;
 }
 
 int selftest(const em::DataCatalog& cat) {
@@ -551,9 +629,14 @@ int main(int argc, char** argv) {
     return 1;
   }
   const std::string mode = argv[2];
-  if (mode == "--mods") {
+  if (mode == "--check-saves") {
+    std::vector<std::string> files;
+    for (int i = 3; i < argc; i++) files.push_back(argv[i]);
+    return check_saves(files);
+  }
+  if (mode == "--mods" || mode == "--ids") {
     const fs::path user = xd::SettingsFolder();
-    return run_mods(argc >= 4 ? fs::path(argv[3]) : user / L"mods", argc >= 5 ? fs::path(argv[4]) : user / em::kListFile);
+    return run_mods(argc >= 4 ? fs::path(argv[3]) : user / L"mods", argc >= 5 ? fs::path(argv[4]) : user / em::kListFile, mode == "--ids");
   }
   const auto cat = disc_catalog();
   if (cat == nullptr) return 1;

@@ -13,7 +13,7 @@ This repository contains **no game assets, ROMs, ISOs or executables**, and none
 You need your own legally obtained copy of the game (USA, `GXXE01`); the port reads everything from your disc
 image while it runs.
 
-## Status: public beta — version 0.4.0
+## Status: public beta — version 0.4.1
 
 **Playable from New Game into the story, with known bugs.** It is not finished: expect crashes, stalls and
 graphics differences, and keep backups of saves you care about. Downloads are on the [Releases](../../releases)
@@ -27,6 +27,19 @@ page, one per system:
 
 **Found a bug, or want to help test?** Join the [Discord](https://discord.gg/XVbDVXH4Pn) — see
 *Reporting a bug* below.
+
+New in 0.4.1:
+
+- **Gen 4 Pokémon** (107, Turtwig to Arceus) for a new playthrough: own Pokémon Battle Revolution? The launcher's
+  **Extra assets** page now also makes a Gen 4 pack from your disc; choose **Gen 4 Pokémon and rules** on the New Game
+  screen. Own models, faces, cries, level-up moves and evolutions; their moves and abilities work as in Diamond and
+  Pearl. Leafeon and Glaceon by stone, held-item evolutions, the Linking Cord for trade evolutions, and all those items
+  plus TM51-TM92 as Poké Coupon prizes. Off by default: without it the game is exactly as before.
+- **Gen 4 Pokémon at the Poké Spots** (added to each spot, in theme; the Sinnoh starters as rare finds) and a
+  randomizer option **Include Gen 4 Pokémon**.
+- The Battle Revolution converter is built into the program (no Python), updates on Linux and the Mac, script mods
+  and mods that add new Pokémon, moves and items.
+- Fixed: a crash in some move animations at 60 fps; a rare crash when closing the window on Windows.
 
 New in 0.4.0:
 

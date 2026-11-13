@@ -375,15 +375,64 @@ private:
     return std::any_of(std::begin(kNames), std::end(kNames), [&](const char* n) { return lower == n; });
   }
 
+  void CollectScripts(const FoundMod& mod) {
+    std::error_code ec;
+    const fs::path folder = mod.folder / "scripts";
+    if (!mod.manifest.scripts) {
+      if (fs::is_directory(folder, ec)) {
+        Say(Message::Level::Warning, "The mod \"" + mod.manifest.name +
+                                         "\" has a \"scripts\" folder but its mod.json does not say \"scripts\": true; the scripts are not used.");
+      }
+      return;
+    }
+    std::vector<std::pair<std::string, fs::path>> found;
+    if (fs::is_directory(folder, ec)) {
+      for (auto it = fs::directory_iterator(folder, ec); !ec && it != fs::directory_iterator(); it.increment(ec)) {
+        if (!it->is_regular_file(ec)) continue;
+        const std::string name = Utf8(it->path().filename());
+        if (Lower(Utf8(it->path().extension())) != ".lua") {
+          Say(Message::Level::Warning, "The mod \"" + mod.manifest.name + "\" has \"scripts/" + name + "\": only .lua files are read; ignored.");
+          continue;
+        }
+        found.emplace_back(name, it->path());
+      }
+    }
+    std::sort(found.begin(), found.end());
+    if (found.empty()) {
+      Say(Message::Level::Warning, "The mod \"" + mod.manifest.name + "\" says \"scripts\": true but has no scripts/*.lua.");
+      return;
+    }
+    if (found.size() > kMaxScriptFiles) {
+      Say(Message::Level::Problem, "The mod \"" + mod.manifest.name + "\" has more than " + std::to_string(kMaxScriptFiles) +
+                                       " script files; its scripts are not used.");
+      return;
+    }
+    std::vector<ScriptFile> files;
+    for (const auto& [name, path] : found) {
+      std::error_code sizeEc;
+      const auto size = fs::file_size(path, sizeEc);
+      std::string text;
+      if (sizeEc || size > kMaxScriptFileBytes || !ReadAll(path, text)) {
+        Say(Message::Level::Problem, "The mod \"" + mod.manifest.name + "\": scripts/" + name + " could not be read or is bigger than " +
+                                         std::to_string(kMaxScriptFileBytes / 1024) + " KB; the mod's scripts are not used.");
+        return;
+      }
+      files.push_back({mod.manifest.id, "scripts/" + name, std::move(text)});
+    }
+    for (ScriptFile& f : files) mResult.scripts.push_back(std::move(f));
+  }
+
   size_t CollectFiles(const FoundMod& mod, bool quiet = false) {
     size_t used = 0;
     const std::string& id = mod.manifest.id;
     const auto whole = FilesIn(mod, mod.folder / "files");
     const auto entries = FilesIn(mod, mod.folder / "fsys");
     std::error_code ec;
-    if (!quiet && whole.empty() && entries.empty() && !fs::is_directory(mod.folder / "data", ec)) {
+    if (!quiet && whole.empty() && entries.empty() && !fs::is_directory(mod.folder / "data", ec) &&
+        !(mod.manifest.scripts && fs::is_directory(mod.folder / "scripts", ec))) {
       Say(Message::Level::Warning, "The mod \"" + mod.manifest.name + "\" is on but has no files in \"files\", \"fsys\" or \"data\".");
     }
+    CollectScripts(mod);
     for (const auto& [rel, path] : whole) {
       if (mDiscFiles.find(Lower(rel)) == mDiscFiles.end() && IsSystemName(rel)) {
         Say(Message::Level::Warning, "The mod \"" + mod.manifest.name + "\" has \"files/" + rel +
@@ -592,6 +641,16 @@ private:
                                   (mResult.program.empty() ? std::string() : std::string(", tables in the program changed")) +
                                   (applied.texts.empty() ? std::string() : ", " + std::to_string(applied.texts.size()) + " message text(s) rewritten"));
     mResult.dataChanges = std::move(applied.changes);
+    mResult.addedRows = std::move(applied.added);
+    mResult.addedTexts = std::move(applied.addedTexts);
+    mResult.addedTextGroup = catalog->addedTextGroup;
+    if (!mResult.addedRows.empty()) {
+      std::string list;
+      for (const AddedRow& r : mResult.addedRows) {
+        list += (list.empty() ? "" : ", ") + r.key + " (" + r.table + " #" + std::to_string(r.id) + ")";
+      }
+      Say(Message::Level::Info, "Data mods add " + std::to_string(mResult.addedRows.size()) + " row(s): " + list);
+    }
   }
 
   std::string NameOf(const std::string& id) const {
@@ -864,6 +923,9 @@ AppliesVerdict CheckApplies(const ModFolder& mod, const LooksOrSound& looks, con
     std::sort(out.begin(), out.end());
     return out;
   };
+  if (mod.manifest.scripts) {
+    return downgrade("it runs scripts (scripts/)");
+  }
   for (const std::string& f : filesIn(mod.folder / "data")) {
     if (Lower(fs::path(f).extension().string()) == ".json") {
       return downgrade("it changes the game's tables (data/" + f + ")");

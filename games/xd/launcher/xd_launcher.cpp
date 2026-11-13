@@ -546,11 +546,6 @@ void SetUpUpdates(launcher::GameInfo::Updates& u, const fs::path& own) {
     u.version = XD_PORT_VERSION;
   }
   u.product = "pokemon-xd-pc";
-#if !defined(_WIN32)
-  u.starterName = "Pokemon XD.sh";
-  u.requiredFiles = {"xd_launcher", "xd"};
-  return;
-#else
   u.feedUrl = XD_UPDATE_FEED_URL;
   u.publicKey = XD_UPDATE_PUBLIC_KEY;
   const char* feed = std::getenv("XD_UPDATE_FEED");
@@ -567,8 +562,12 @@ void SetUpUpdates(launcher::GameInfo::Updates& u, const fs::path& own) {
     }
   }
   u.stagingFolder = xd::UserFolder() / L"updates";
+#if defined(_WIN32)
   u.starterName = "Pokemon XD.exe";
   u.requiredFiles = {"xd_launcher.exe", "xd.exe"};
+#else
+  u.starterName = "Pokemon XD.sh";
+  u.requiredFiles = {"xd_launcher", "xd"};
 #endif
 }
 
@@ -836,26 +835,16 @@ int main(int argc, char** argv) {
   game.appId = "PokemonXD.PCPort";
   game.readDiscPictures = ReadDiscPictures;
   sGameProgram = game.program;
-#if defined(_WIN32)
   if (const char* render = std::getenv("XD_LAUNCHER_RENDER"); render == nullptr || std::strcmp(render, "0") != 0) {
     game.renderPictures = RenderPictures;
   }
-#else
-  (void)RenderPictures;
-#endif
   {
     const char* shaders = std::getenv("XD_LAUNCHER_SHADERS");
     const char* render = std::getenv("XD_LAUNCHER_RENDER");
     const bool off = shaders != nullptr ? std::strcmp(shaders, "0") == 0 : (render != nullptr && std::strcmp(render, "0") == 0);
-#if defined(_WIN32)
     if (!off) {
       game.prepareShaders = PrepareShaders;
     }
-#else
-    if (!off && shaders != nullptr && std::strcmp(shaders, "1") == 0) {
-      game.prepareShaders = PrepareShaders;
-    }
-#endif
   }
   game.ownIcons = {{"original", "XD (the program's own)", 1}, {"original_shadow", "XD, shadow aura", 2},
                    {"original_minimal", "XD, minimal", 3}, {"original_swirl", "XD, shadow swirl", 4},

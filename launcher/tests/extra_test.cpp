@@ -142,6 +142,29 @@ static void TestStatus(const fs::path& root) {
   CHECK(st.kind == K::Ready && st.models == 0 && st.text == "Ready: 0 models");
 }
 
+static void TestSecond(const fs::path& root) {
+  const fs::path pack = root / "second" / "pbr_gen4";
+  using K = ex::SecondStatus::Kind;
+  ex::SecondStatus st = ex::ComputeSecondStatus(pack, "gen4.json", "battle-revolution-gen4", 1, "Gen 4 Pokemon", false);
+  CHECK(st.kind == K::NotMade && st.text == "Gen 4 Pokemon: not made yet" && !st.detail.empty());
+  Write(pack / "gen4.json", "{\n \"id\": \"battle-revolution-gen4\",\n \"version\": 1,\n \"species\": 107\n}");
+  st = ex::ComputeSecondStatus(pack, "gen4.json", "battle-revolution-gen4", 1, "Gen 4 Pokemon", false);
+  CHECK(st.kind == K::Ready && st.species == 107 && st.text == "Gen 4 Pokemon: ready (107 species)");
+  st = ex::ComputeSecondStatus(pack, "gen4.json", "battle-revolution-gen4", 2, "Gen 4 Pokemon", false);
+  CHECK(st.kind == K::OutOfDate && !st.detail.empty());
+  st = ex::ComputeSecondStatus(pack, "gen4.json", "battle-revolution-gen4", 1, "Gen 4 Pokemon", true);
+  CHECK(st.kind == K::OutOfDate && st.text.find("out of date") != std::string::npos);
+  st = ex::ComputeSecondStatus(pack, "gen4.json", "another-pack", 1, "Gen 4 Pokemon", false);
+  CHECK(st.kind == K::NotMade);
+  Write(pack / "gen4.json", "{ not json");
+  CHECK(ex::ComputeSecondStatus(pack, "gen4.json", "battle-revolution-gen4", 1, "Gen 4 Pokemon", false).kind == K::NotMade);
+  launcher::GameInfo::ExtraSource s = PbrSource();
+  s.converterArguments.push_back("--gen4-pack");
+  s.converterArguments.push_back("{out2}");
+  const auto args = ex::ConverterArguments(s, "p.iso", "x.iso", fs::path("C:\\data\\extra_assets\\pbr"), fs::path("C:\\data\\extra_assets\\pbr_gen4"));
+  CHECK(args.size() == 8 && args[6] == "--gen4-pack" && args[7] == "C:\\data\\extra_assets\\pbr_gen4");
+}
+
 static void TestDiscCheck() {
   launcher::GameInfo::ExtraAssets assets;
   assets.identifyDisc = [](const std::string& path, std::string& id, std::string& title, std::string& error) {
@@ -297,6 +320,7 @@ int main(int argc, char** argv) {
   TestLines();
   TestTable();
   TestStatus(root);
+  TestSecond(root);
   TestDiscCheck();
   if (fs::is_regular_file(standin, ec)) {
     TestMake(standin, root);

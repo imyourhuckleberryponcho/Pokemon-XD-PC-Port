@@ -43,11 +43,19 @@ struct DataTable {
   std::vector<DataPlace> places;
   std::vector<DataField> fields;
   std::string entryNames;
+  bool addable = false;
+  uint32_t addFirstId = 0;
+  uint32_t addMax = 0;
+  std::string idList;
+  std::string idTable;
+  std::vector<std::string> textFields;
+  std::string primaryText;
 };
 
 struct NameList {
   std::string name;
   std::vector<std::pair<std::string, uint32_t>> names;
+  uint32_t limit = 0;
 };
 
 struct TextStore {
@@ -62,6 +70,7 @@ struct DataCatalog {
   std::vector<DataTable> tables;
   std::vector<NameList> lists;
   TextStore text;
+  uint32_t addedTextGroup = 0;
   std::string toolHint;
 
   const DataTable* FindTable(std::string_view name) const;
@@ -95,11 +104,32 @@ struct TextChange {
   std::string mod, where;
 };
 
+struct AddedRow {
+  std::string table;
+  uint32_t id = 0;
+  uint32_t row = 0;
+  uint32_t copyOf = 0;
+  std::string key;
+  std::string mod, modName;
+  std::string where;
+  std::vector<uint8_t> bytes;
+};
+struct AddedText {
+  uint32_t key = 0;
+  std::string text;
+  std::string mod, label;
+};
+
 struct DataApplyResult {
   std::map<std::pair<std::string, std::string>, std::vector<uint8_t>> entries;
   std::vector<DataChange> changes;
   std::vector<TextChange> texts;
+  std::vector<AddedRow> added;
+  std::vector<AddedText> addedTexts;
 };
+
+std::string AddedRowsJson(const std::vector<AddedRow>& rows);
+std::map<std::string, uint64_t> AddedRowsDigests(const std::vector<AddedRow>& rows);
 
 DataApplyResult ApplyDataMods(const DataCatalog& catalog, const std::vector<DataModFile>& files, const EntryReader& read,
                               std::vector<Message>& messages);

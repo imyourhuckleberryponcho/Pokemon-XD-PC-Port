@@ -114,18 +114,21 @@ void run(HANDLE mainThread, double seconds) {
     const PortAudioStats& a = now.audio;
     const PortAudioStats& b = before.audio;
     const double gapMs = static_cast<double>(a.outShortBytes - b.outShortBytes) / 4.0 * 1000.0 / 32028.0;
+    const double frozenMs = static_cast<double>(a.frozenQuietBytes - b.frozenQuietBytes) / 4.0 * 1000.0 / 32028.0;
+    char frozen[96] = "";
+    if (frozenMs >= 1.0) std::snprintf(frozen, sizeof(frozen), " (+ %.0f ms of quiet while a menu held the game)", frozenMs);
     const uint32_t pieces = a.aiBlocks - b.aiBlocks;
     const double pieceMs = pieces > 0 ? static_cast<double>(a.aiHandlerNs - b.aiHandlerNs) / 1e6 / pieces : 0.0;
     const double chipMs = pieces > 0 ? static_cast<double>(a.dspNs - b.dspNs) / 1e6 / pieces : 0.0;
     std::fprintf(stderr,
                  "[pc load] %.0f s: PC %.0f%% busy (the game %.0f%%, other programs %.0f%%) of %u processors; the "
                  "game's main thread computed %.0f%% of the time; %s; %s; %.1f game frames a second; sound: %u pieces, "
-                 "%u dropped, %u gaps heard (%.0f ms), queue found empty %u times; making a piece (5 ms of sound) "
+                 "%u dropped, %u gaps heard (%.0f ms)%s, queue found empty %u times; making a piece (5 ms of sound) "
                  "took %.2f ms, of it the sound chip %.2f ms (%.0f of its instructions); pieces came up to %u ms "
                  "apart; sound reserve %u ms (raised %u times)\n",
                  wall, pcBusy, gameShare, others, processors, mainShare, speed, power,
                  static_cast<double>(now.frames - before.frames) / wall, pieces,
-                 a.aiBlocksDropped - b.aiBlocksDropped, a.outShortTimes - b.outShortTimes, gapMs,
+                 a.aiBlocksDropped - b.aiBlocksDropped, a.outShortTimes - b.outShortTimes, gapMs, frozen,
                  a.aiUnderruns - b.aiUnderruns, pieceMs, chipMs,
                  pieces > 0 ? static_cast<double>(a.dspInstructions - b.dspInstructions) / pieces : 0.0,
                  a.longestWaitMs, a.reserveMs,

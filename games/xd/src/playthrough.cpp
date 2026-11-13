@@ -1,6 +1,8 @@
 #include "xd_playthrough.h"
+#include "xd_added_rows.h"
 #include "xd_battles_won.h"
 #include "xd_challenges.h"
+#include "xd_gen4.h"
 
 #include "xd_playthrough_files.h"
 #include "xd_randomizer.h"
@@ -94,6 +96,12 @@ std::string sKeyAtNewGame;
 
 std::vector<std::string> sContinueProblems, sContinueNotes;
 bool sContinueAccepted = false;
+
+std::vector<ep::AddedRowRef> CurrentAddedRows() {
+  std::vector<ep::AddedRowRef> now;
+  for (const em::AddedRow& r : xd::added::Rows()) now.push_back({r.mod, r.table, r.key, r.id});
+  return now;
+}
 ep::Engine sPlayersEngine = ep::Engine::Faithful;
 bool sAsk = false;
 bool sEngineAnswered = false;
@@ -426,8 +434,37 @@ std::string BootRandomizer() {
 
 void RandomizerMade(const std::string& code) { sLoadedRandomizer = code; }
 
+namespace {
+bool HasRule(const std::vector<std::string>& rules, const char* id) { return std::find(rules.begin(), rules.end(), id) != rules.end(); }
+bool HasGen4(const std::vector<std::string>& rules) { return HasRule(rules, "gen4_rules"); }
+bool HasGen4Spots(const std::vector<std::string>& rules) { return HasGen4(rules) && HasRule(rules, "gen4_spots"); }
+}
+
+bool BootGen4() {
+  if (EnvIs("XD_REQUIRE_ORIGINAL", "1")) return false;
+  if (HasGen4(xd::challenges::TestSwitch())) return true;
+  if (xd::randomizer::CodeIncludesGen4(BootRandomizer())) return true;
+  if (sRestarted) return HasGen4(sRestartSetup.challenges);
+  if (sCardState == CardState::Setup) return HasGen4(sCardSetup.challenges);
+  return false;
+}
+
+bool BootGen4Spots() {
+  if (EnvIs("XD_REQUIRE_ORIGINAL", "1")) return false;
+  if (HasGen4Spots(xd::challenges::TestSwitch())) return true;
+  if (sRestarted) return HasGen4Spots(sRestartSetup.challenges);
+  if (sCardState == CardState::Setup) return HasGen4Spots(sCardSetup.challenges);
+  return false;
+}
+
 bool NeedsRestart(const ep::Setup& setup) {
   if (RandomizerOf(setup) != sLoadedRandomizer) return true;
+  if ((HasGen4(setup.challenges) || HasGen4(xd::challenges::TestSwitch())) && xd::gen4::PackPresent() != xd::gen4::Loaded()) return true;
+  if (!HasGen4(setup.challenges) && !HasGen4(xd::challenges::TestSwitch()) && !xd::randomizer::CodeIncludesGen4(RandomizerOf(setup)) &&
+      xd::gen4::Loaded()) {
+    return true;
+  }
+  if (xd::gen4::Loaded() && (HasGen4Spots(setup.challenges) || HasGen4Spots(xd::challenges::TestSwitch())) != xd::gen4::SpotsLoaded()) return true;
   std::vector<std::string> want, have;
   for (const ep::ModUse& m : setup.mods) want.push_back(Lower(m.id));
   for (const ep::ModUse& m : sLoaded) have.push_back(Lower(m.id));
@@ -453,6 +490,7 @@ void Begin(const ep::Setup& setup, const std::string& settingsChanged) {
   sPending = true;
   sPendingSetup = setup;
   sPendingSetup.mods = sLoaded;
+  sPendingSetup.addedRows = CurrentAddedRows();
   SetRandomizer(sPendingSetup, sLoadedRandomizer);
   sPendingSetup.chosenBy = sScreen ? "screen" : "run";
   sKeyAtNewGame = sCardId.found ? sCardId.key : std::string();
@@ -627,6 +665,18 @@ bool TitleInputImpl(PADStatus* status, int select, u16 newButtons) {
 
 extern "C" {
 
+int PortXD_SaveBoundToOtherRows(char* text, size_t size) {
+  if (sCardState != CardState::Setup || sCardSetup.addedRows.empty()) return 0;
+  const std::vector<std::string> bound = ep::BoundProblems(sCardSetup, CurrentAddedRows());
+  if (bound.empty()) return 0;
+  std::string out = "The save on the memory card holds Pokemon, moves or items that mods added, and their numbers would mean other "
+                    "things without the same mods: ";
+  for (size_t i = 0; i < bound.size() && i < 3; i++) out += (i > 0 ? "; " : "") + bound[i];
+  out += ". Nothing on the card is read or changed.";
+  std::snprintf(text, size, "%s", out.c_str());
+  return 1;
+}
+
 const char* PortXD_PlaythroughHeader(void) {
   static std::string text;
   text = "playthrough on the memory card: " + CardLabel();
@@ -679,6 +729,7 @@ void PortXD_PlaythroughSaveWritten(const uint8_t* file, size_t size) {
     if (!fs::exists(f, ec)) {
       ep::Setup s = xd::pt::SetupOf(EngineNow(), {}, sLoadedRandomizer, xd::challenges::TestSwitch());
       s.mods = sLoaded;
+      s.addedRows = CurrentAddedRows();
       s.trainer = id.trainer;
       s.trainerId = id.trainerId;
       s.secretId = id.secretId;

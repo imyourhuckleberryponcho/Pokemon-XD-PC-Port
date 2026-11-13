@@ -237,7 +237,7 @@ class Writer:
         self.m = model
         self.b = Builder()
         self.b.new(32, 32)       # nothing of ours sits at offset 0 (a pointer of 0 reads as "none" in tools)
-        self.report = {'pobj': 0, 'most_envelopes': 0, 'display_list_bytes': 0, 'track_bytes': 0, 'texture_bytes': 0}
+        self.report = {'pobj': 0, 'reflect_pieces': 0, 'most_envelopes': 0, 'display_list_bytes': 0, 'track_bytes': 0, 'texture_bytes': 0}
 
     def floats(self, values, align=4):
         return self.b.add(struct.pack('>%df' % len(values), *values), align)
@@ -422,6 +422,10 @@ class Writer:
                 o.ptr(0x14, tab)
             pobjs.append(o)
             self.report['pobj'] += 1
+            # pieces drawn with a reflection (sphere-map) layer: what the graphics layer fails on past about 50 (docs/GEN4.md 10.5)
+            mt = self.m.materials[me.material] if me.material is not None else None
+            if mt is not None and any((t.flags & 0xF) == 1 for t in mt.textures):
+                self.report['reflect_pieces'] = self.report.get('reflect_pieces', 0) + 1
         for a, b in zip(pobjs, pobjs[1:]):
             a.ptr(4, b)
         return pobjs[0] if pobjs else None

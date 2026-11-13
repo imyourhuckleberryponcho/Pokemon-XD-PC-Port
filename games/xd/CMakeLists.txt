@@ -1,4 +1,3 @@
-﻿# PokÃ©mon XD game code, compiled from the current decomp snapshot.
 
 if (XD_BUILD_GAME)
 file(READ "${XD_SNAPSHOT_DIR}/objects.json" _xd_objects_json)
@@ -309,6 +308,59 @@ foreach (_src ${XD_GAME_SOURCES})
   if (_src MATCHES "/fightSeq/fightSeq\\.cpp$" OR _src MATCHES "/fightSeq/fightSeqBasis\\.cpp$")
     list(APPEND _defs "wazaCheckDarkWaza=PortXD_SplitCheckDarkWaza" "zokuseiBiosGetWazaKind=PortXD_SplitTypeKind")
   endif ()
+  if (_src MATCHES "/fightSeq/fightSeq\\.cpp$")
+    list(APPEND _defs "fightSeqWazaDamageCalc=PortXD_RealDamageCalc" "fightSeqFightOutPokemonTokuseiCheckWazaHit=PortXD_RealTokuseiWazaHit"
+      "fightOutPokemonGetZokuseiDataId=PortXD_Gen4GetType"
+      "pokemon_GetPhyAtk=PortXD_Gen4PhyAtk" "pokemon_GetPhyDef=PortXD_Gen4PhyDef")
+    list(APPEND _defs "fightOutPokemonGetWazaZokuseiDataId=PortXD_Gen4WazaType"
+      "fightSeqFightOutPokemonTokuseiCheckWazaHitAfter=PortXD_RealWazaHitAfter"
+      "fightSeqFightOutPokemonTokuseiCheckWazaHitBefore=PortXD_RealWazaHitBefore"
+      "fightSeqFightOutPokemonTokuseiCheckAppear=PortXD_RealAppear"
+      "fightOutPokemonIsNokoriHpFollowing=PortXD_Gen4NokoriHp"
+      "fightSeqAttackPokemonJoutaiCheck=PortXD_RealAttackJoutaiCheck"
+      "fightOutPokemonGetSoubiItemSoubiDataId=PortXD_Gen4GetSoubi")
+  endif ()
+  if (_src MATCHES "/fightSeq/fightSeqWazaseq\\.cpp$")
+    list(APPEND _defs "fightOutPokemonGetSoubiItemSoubiDataId=PortXD_Gen4GetSoubi" "fightWaza_GetZokusei=PortXD_Gen4WazaZokusei")
+  endif ()
+  if (_src MATCHES "/fightSeq/fightSeqBasis\\.cpp$")
+    list(APPEND _defs "zokuseiGetWazaJoutai=PortXD_Gen4TypeJoutai" "wazaDB_GetAvg=PortXD_Gen4GetAvg"
+      "fightOutPokemonGetZokuseiDataId=PortXD_Gen4GetType" "fightWaza_SetCritical=PortXD_Gen4SetCritical"
+      "fightWaza_GetHitDamage=PortXD_Gen4GetHitDamage" "fightOutPokemonGetSoubiItemSoubiDataId=PortXD_Gen4GetSoubi"
+      "fightSeqSelectDefensePokemonPtr=PortXD_RealSelectDefense" "fightOutPokemonGetWazaZokuseiDataId=PortXD_Gen4WazaType"
+      "fightWaza_GetZokusei=PortXD_Gen4WazaZokusei")
+  endif ()
+  if (_src MATCHES "/app/item/itemBios\\.cpp$")
+    list(APPEND _defs "itemDataBiosGetWazaIDByWazaMachineNo=PortXD_RealMachineWaza")
+  elseif (_src MATCHES "/app/pokemon/pokemonBios\\.cpp$")
+    list(APPEND _defs "pokemonDataBiosGetWazaMcn=PortXD_RealWazaMcn")
+  elseif (_src MATCHES "/game/menuPocket\\.cpp$")
+    list(APPEND _defs "itemDataBiosGetWazaMachineNo=PortXD_PocketMachineNo" "itemDataBiosGetWazaIDByWazaMachineNo=PortXD_PocketMachineWaza")
+  endif ()
+  if (_src MATCHES "/fight/fightFloor\\.cpp$")
+    list(APPEND _defs "fightOutPokemonGetNowNimbleness=PortXD_Gen4NowNimbleness")
+  endif ()
+  if (_src MATCHES "/fightSeq/fightSeqWSWaza\\.cpp$")
+    list(APPEND _defs "fightSeq_CallWazaSeqCustom=PortXD_Gen4CallWazaSeq" "WS_POKE_RESHUFFLE_END=PortXD_Gen4ReshuffleEnd"
+      "WS_RENZOKU=PortXD_Gen4Renzoku" "fightSeqFloorJoutaiCheck=PortXD_Gen4TurnEnd" "WS_KAIFUKU=PortXD_Gen4Kaifuku" "WS_COUNTER=PortXD_Gen4Counter"
+      "fightSeqSideJoutaiCheck=PortXD_Gen4SideCheck" "WS_CRITICAL_CHECK=PortXD_Gen4CriticalCheck"
+      "WS_TSUIKA_INDIRECT_ACT=PortXD_Gen4TsuikaIndirect" "WS_TSUIKA_DIRECT_ACT=PortXD_Gen4TsuikaDirect"
+      "fightOutPokemonGetSoubiItemSoubiDataId=PortXD_Gen4GetSoubi" "fightWaza_GetZokusei=PortXD_Gen4WazaZokusei")
+  endif ()
+  if (_src MATCHES "/fightSeq/fightSeqWSWaza\\.cpp$")
+    list(APPEND _defs "WS_HP_DEC=PortXD_WsHpDec")
+  endif ()
+  if (_src MATCHES "/fight/fightTrainerAiWaza\\.cpp$")
+    list(APPEND _defs "fightTrainerAiWazaDoWazaDamageFunc=PortXD_AiWazaDamageReal")
+  endif ()
+  if (_src MATCHES "/fight/fightActionKindData\\.c$")
+    list(APPEND _defs "fightActionFlowAllFightOutPokemonDoFightAction=PortXD_FlowDoFightAction"
+      "fightActionFlowOneTurnPost=PortXD_FlowOneTurnPost" "fightActionFlowSyuuryou=PortXD_FlowSyuuryou"
+      "fightActionFlowFightOutPokemonOutWaza=PortXD_FlowOutWaza")
+  endif ()
+  if (_src MATCHES "/game/pokecolo\\.cpp$")
+    list(APPEND _defs "GSmsgOpen=PortXD_MsgOpen")
+  endif ()
   if (_src MATCHES "/GSmodel/GSmodel\\.cpp$")
     list(APPEND _defs "GSboundIsInViewFast=PortXD_ModelBoundInView" "modelShadowUpdate=PortXD_ModelShadowUpdate"
       "GSgfxPerfbarCPUEntry=PortXD_ModelPerfEntry")
@@ -321,6 +373,22 @@ foreach (_src ${XD_GAME_SOURCES})
   endif ()
   if (_src MATCHES "/fight/fightMenu\\.cpp$") # the battle command menu opens (an anchor)
     list(APPEND _defs "menuFightOpenTop=PortTick_menuFightOpenTop")
+  endif ()
+  if (_src MATCHES "/pokemon/pokemonEvolution\\.cpp$")
+    list(APPEND _defs "pokemonEvolutionCheck=PortXD_RealEvolutionCheck")
+  endif ()
+  if (_src MATCHES "/game/menuScript\\.cpp$")
+    list(APPEND _defs "menuScriptEevee=PortXD_RealEevee" "menuScriptEeveeHook=PortXD_RealEeveeHook"
+      "pokemonDataBiosGetPtr=PortXD_EeveeDataPtr")
+  endif ()
+  if (_src MATCHES "/game/menuDataBios\\.cpp$")
+    list(APPEND _defs "menuItemBiosGetPtr=PortXD_RealMenuItemPtr")
+  endif ()
+  if (_src MATCHES "/script/objMenu\\.cpp$")
+    list(APPEND _defs "msgctrlSetValue=PortXD_EeveeMsgValue")
+  endif ()
+  if (_src MATCHES "/script/objPeople\\.cpp$")
+    list(APPEND _defs "scriptGetItem=PortXD_EeveeGetItem")
   endif ()
   set_property(SOURCE "${_src}" APPEND PROPERTY COMPILE_DEFINITIONS ${_defs})
 endforeach ()
@@ -419,9 +487,17 @@ target_link_libraries(xd_datamods PUBLIC engine_mods xd_port)
 
 add_executable(xd_data_mods_tool tools/xd_data_mods.cpp)
 set_target_properties(xd_data_mods_tool PROPERTIES OUTPUT_NAME xd_data_mods)
-target_link_libraries(xd_data_mods_tool PRIVATE xd_datamods platform_os)
+target_link_libraries(xd_data_mods_tool PRIVATE xd_datamods platform_os xd_save)
 xd_use_decomp_headers(xd_data_mods_tool)
 aurora_copy_runtime_dlls(xd_data_mods_tool)
+
+if (TARGET pbr_models)
+  add_library(xd_pbr_tables STATIC pbr_pack/xd_pbr_tables.cpp)
+  target_link_libraries(xd_pbr_tables PUBLIC xd_datamods engine_pbr)
+  xd_use_decomp_headers(xd_pbr_tables)
+  target_link_libraries(pbr_models PRIVATE xd_pbr_tables)
+  target_compile_definitions(pbr_models PRIVATE PBR_WITH_XD_TABLES=1)
+endif ()
 
 add_library(xd_randomizer STATIC randomizer/xd_randomizer.cpp)
 target_include_directories(xd_randomizer PUBLIC randomizer)
@@ -580,22 +656,24 @@ target_compile_definitions(xd_rel_link_test PRIVATE XD_RELGLOBAL_IS_U32=0)
 aurora_copy_runtime_dlls(xd_rel_link_test)
 
 if (XD_BUILD_GAME)
-set(XD_PROGRAM_LIBS xd_port engine_gs engine_disc_check engine_settings engine_controls xd_settings_list engine_mods xd_datamods xd_randomizer platform_compat platform_sdk platform_os platform_audio platform_input platform_video
+set(XD_PROGRAM_LIBS xd_port engine_gs engine_disc_check engine_settings engine_controls xd_settings_list engine_mods engine_script xd_datamods xd_randomizer platform_compat platform_sdk platform_os platform_audio platform_input platform_video
   aurora::core aurora::gx aurora::os aurora::pad aurora::vi aurora::mtx aurora::card aurora::dvd aurora::si
   aurora::thp aurora::main)
 
 set(XD_PROGRAM_PORT_SOURCES src/boot.c src/disc_tables.cpp src/disc_verify.c src/disc_choice.cpp src/game_new.cpp src/heap_check.cpp src/heap_model.cpp src/musyx_dsp_program.c
   src/renderdoc_capture.c src/screenshot.cpp src/bug_report.cpp src/settings_boot.cpp src/mods_boot.cpp src/state_dump.cpp src/timing_log.cpp src/cpu_cost_hooks.cpp src/fsys_unpack_cost.cpp src/dvd_open_cost.cpp src/bound_walk_cost.cpp src/perf_marks.cpp src/cpu_counters.cpp src/warp.cpp src/render_icon.cpp src/shader_prep.cpp src/pc_load.cpp src/dsp_coef.cpp
   src/data/rel_link.cpp src/data/main_program_map.cpp src/dev_menu.cpp src/task_stacks.cpp src/input_ticks.cpp
-  src/particle_check.cpp src/settings_menu.cpp src/speedups.cpp src/move_split.cpp src/replay_pacing.cpp src/audio_categories.cpp src/button_icons.cpp src/settings_switches.cpp
-  src/widescreen.cpp src/playthrough.cpp src/challenges.cpp src/level_caps.cpp src/battles_won.cpp src/walk_helper.cpp)
+  src/particle_check.cpp src/settings_menu.cpp src/speedups.cpp src/move_split.cpp src/gen4_moves.cpp src/gen4_abilities.cpp src/gen4_ability_effects.cpp src/script_hooks.cpp src/added_rows.cpp src/gen4_pack.cpp src/gen4_machines.cpp src/replay_pacing.cpp src/audio_categories.cpp src/button_icons.cpp src/settings_switches.cpp
+  src/widescreen.cpp src/playthrough.cpp src/challenges.cpp src/level_caps.cpp src/battles_won.cpp src/walk_helper.cpp src/gen4_evolutions.cpp src/gen4_eevee.cpp)
 if (NOT WIN32)
-  list(REMOVE_ITEM XD_PROGRAM_PORT_SOURCES src/bug_report.cpp src/screenshot.cpp src/state_dump.cpp src/render_icon.cpp)
-  list(APPEND XD_PROGRAM_PORT_SOURCES src/not_on_linux.cpp)
+  list(REMOVE_ITEM XD_PROGRAM_PORT_SOURCES src/bug_report.cpp src/screenshot.cpp src/state_dump.cpp)
+  if (APPLE)
+    list(APPEND XD_PROGRAM_PORT_SOURCES src/not_on_linux.cpp)
+  endif ()
   if (NOT APPLE)
     list(APPEND XD_PROGRAM_PORT_SOURCES src/state_dump_linux.cpp)
-    list(APPEND XD_PROGRAM_PORT_SOURCES src/bug_report_linux.cpp)
   endif ()
+  list(APPEND XD_PROGRAM_PORT_SOURCES src/bug_report_linux.cpp)
 endif ()
 if (APPLE)
   list(APPEND XD_PROGRAM_PORT_SOURCES src/mac_low_reserve.c src/find_variable_mac.cpp)
@@ -623,7 +701,7 @@ set_property(SOURCE src/boot.c APPEND PROPERTY COMPILE_DEFINITIONS "XD_PORT_VERS
 add_executable(xd ${XD_PROGRAM_PORT_SOURCES} $<TARGET_OBJECTS:xd_game> $<TARGET_OBJECTS:xd_musyx>)
 target_compile_definitions(xd PRIVATE XD_RELGLOBAL_IS_U32=${XD_RELGLOBAL_IS_U32})
 set_property(SOURCE src/warp.cpp src/render_icon.cpp src/settings_menu.cpp src/playthrough.cpp src/audio_categories.cpp src/button_icons.cpp src/settings_switches.cpp
-  src/replay_pacing.cpp src/widescreen.cpp src/fsys_unpack_cost.cpp src/challenges.cpp src/walk_helper.cpp APPEND PROPERTY INCLUDE_DIRECTORIES ${PROJECT_SOURCE_DIR}/platform/compat/include
+  src/replay_pacing.cpp src/widescreen.cpp src/fsys_unpack_cost.cpp src/challenges.cpp src/walk_helper.cpp src/gen4_eevee.cpp APPEND PROPERTY INCLUDE_DIRECTORIES ${PROJECT_SOURCE_DIR}/platform/compat/include
   ${PROJECT_SOURCE_DIR}/third_party/aurora/include ${XD_SNAPSHOT_DIR}/include)
 if (MSVC)
   set(XD_PROGRAM_LINK_OPTIONS /BASE:0x40000000 /DYNAMICBASE:NO /INCREMENTAL:NO)
@@ -636,6 +714,9 @@ else () # Linux (docs/LINUX.md, "Low memory"): not position independent, the ima
 endif ()
 target_link_options(xd PRIVATE ${XD_PROGRAM_LINK_OPTIONS})
 target_link_libraries(xd PRIVATE ${XD_PROGRAM_LIBS})
+if (NOT WIN32)
+  target_link_libraries(xd PRIVATE PNG::PNG) # src/render_icon.cpp writes the launcher's pictures as PNG (as platform_video does)
+endif ()
 if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set_target_properties(xd PROPERTIES BUILD_RPATH "\$ORIGIN")
 endif ()
@@ -661,7 +742,9 @@ if (NOT MSVC)
   target_link_options(xd PRIVATE -Wl,--defsym=_ZN5GSvecC1Ev=_ZN5GSvecC2Ev -Wl,--defsym=_ZN5GSmtxC1Ev=_ZN5GSmtxC2Ev
     -Wl,--defsym=_ZN16GSBinWriteStreamD1Ev=_ZN16GSBinWriteStreamD2Ev)
   endif ()
-  target_link_options(xd PRIVATE -Wl,--wrap=aurora_imgui_add_texture)
+  if (NOT APPLE)
+    target_link_options(xd PRIVATE -Wl,--wrap=aurora_imgui_add_texture)
+  endif ()
   endif ()
 endif ()
 xd_link_windows_libs(xd PRIVATE windowscodecs ole32) # F12 screenshots, F10 bug reports (src/screenshot.cpp)
@@ -733,7 +816,7 @@ add_library(xd_playthrough_files STATIC src/xd_playthrough_files.cpp)
 target_include_directories(xd_playthrough_files PUBLIC src)
 target_link_libraries(xd_playthrough_files PUBLIC xd_save engine_memcard engine_playthrough platform_os xd_card_root)
 add_library(xd_save_card STATIC src/save_card_filter.cpp)
-target_link_libraries(xd_save_card PUBLIC xd_save aurora::card)
+target_link_libraries(xd_save_card PUBLIC xd_save xd_port platform_os aurora::card) # (xd_port, platform_os: the load guard's table counts + message)
 
 add_executable(xd_card_filter_test tools/xd_card_filter_test.cpp)
 target_link_libraries(xd_card_filter_test PRIVATE xd_save_card engine_memcard aurora::core aurora::card aurora::os

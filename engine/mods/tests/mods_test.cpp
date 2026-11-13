@@ -692,6 +692,43 @@ int main(int argc, char** argv) {
           "order: other profiles in the file survive");
   }
 
+  {
+    const fs::path sm = root / "scriptmods";
+    write_file(sm / "lua1" / "mod.json", manifest("lua1", "\"scripts\": true, \"applies\": \"any_time\""));
+    write_file(sm / "lua1" / "scripts" / "b.lua", "-- second");
+    write_file(sm / "lua1" / "scripts" / "a.lua", "-- first");
+    write_file(sm / "lua1" / "scripts" / "notes.txt", "not a script");
+    write_file(sm / "quiet" / "mod.json", manifest("quiet"));
+    write_file(sm / "quiet" / "scripts" / "x.lua", "-- not switched on in mod.json");
+    write_file(sm / "future" / "mod.json", manifest("future", "\"scripts\": true, \"script_api\": 99"));
+    write_file(sm / "bad" / "mod.json", manifest("bad", "\"scripts\": \"yes\""));
+    write_file(sm / "empty" / "mod.json", manifest("empty", "\"scripts\": true"));
+    write_file(sm / "list.ini", "[profile default]\nlua1 = on\nquiet = on\nempty = on\n");
+    LoadOptions o4{sm, sm / "list.ini", disc.View()};
+    const LoadResult r = Load(o4);
+    check(r.scripts.size() == 2 && r.scripts[0].name == "scripts/a.lua" && r.scripts[1].name == "scripts/b.lua" &&
+              r.scripts[0].modId == "lua1" && r.scripts[0].text == "-- first",
+          "scripts: scripts/*.lua of a mod with \"scripts\": true, by name, with their text; .txt left out");
+    check(has_message(r, Message::Level::Warning, "only .lua files") && has_message(r, Message::Level::Warning, "does not say \"scripts\": true") &&
+              has_message(r, Message::Level::Warning, "has no scripts/*.lua"),
+          "scripts: a stray file, a scripts folder without the flag and an empty script mod are said");
+    check(has_message(r, Message::Level::Problem, "newer script interface") || has_message(r, Message::Level::Warning, "newer script interface"),
+          "scripts: a newer script_api is refused");
+    Manifest m;
+    std::string error;
+    check(!ParseManifest(manifest("bad", "\"scripts\": \"yes\""), m, error) && error.find("true or false") != std::string::npos,
+          "scripts: \"scripts\" must be true or false");
+    check(ParseManifest(manifest("ok", "\"scripts\": true"), m, error) && m.scripts && m.scriptApi == 1, "scripts: manifest fields");
+    ModFolder folder;
+    folder.manifest = r.active.empty() ? m : r.active[0];
+    folder.manifest.applies = Applies::AnyTime;
+    folder.manifest.scripts = true;
+    folder.folder = sm / "lua1";
+    const AppliesVerdict v = CheckApplies(folder, nullptr);
+    check(v.Downgraded() && v.effective == Applies::NewPlaythrough && v.reason.find("scripts") != std::string::npos,
+          "scripts: a mod that runs scripts is never any_time");
+  }
+
   fs::remove_all(root, ec);
   std::printf(sOk ? "mods_test: all passed\n" : "mods_test: FAILED\n");
   return sOk ? 0 : 1;

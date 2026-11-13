@@ -1,6 +1,7 @@
 #include "xd_battle_models.h"
 #include "xd_playthrough.h"
 #include "xd_challenges.h"
+#include "xd_gen4.h"
 #include "xd_randomizer.h"
 #include "xd_user_folder.h"
 
@@ -1112,6 +1113,7 @@ struct State {
   std::string rCode;
   std::string rMessage;
   std::vector<bool> rules;
+  std::string gen4Why;
 } s;
 
 const char* const kRandomizerStyles[] = {"Off", "Light", "Classic", "Chaos", "Custom"};
@@ -1317,7 +1319,11 @@ std::string RowLabel(const SRow& r) {
   }
   case Kind::RandomizerCode: return "Randomizer code";
   case Kind::RandomizerPaste: return "Use a friend's code";
-  case Kind::Challenges: return xd::challenges::Rules()[r.sw].label;
+  case Kind::Challenges:
+    if (!s.gen4Why.empty() && std::string(xd::challenges::Rules()[r.sw].id).rfind("gen4_", 0) == 0) {
+      return std::string(xd::challenges::Rules()[r.sw].label) + " (not available)";
+    }
+    return xd::challenges::Rules()[r.sw].label;
   default: return "START";
   }
 }
@@ -1356,6 +1362,10 @@ std::string RowInfo(const SRow& r) {
   case Kind::RandomizerPaste:
     return s.rMessage.empty() ? "Copy a code (or a seed number) on the PC, then press A here to use it." : s.rMessage;
   case Kind::Challenges:
+    if (!s.gen4Why.empty() && std::string(xd::challenges::Rules()[r.sw].id).rfind("gen4_", 0) == 0) {
+      return "Not available: " + s.gen4Why + ". The Gen 4 Pokemon, moves, cries and models are made from your own Pokemon Battle "
+             "Revolution disc (launcher, Extra assets page).";
+    }
     return std::string("Challenge rule, for this playthrough from start to end. ") + xd::challenges::Rules()[r.sw].info;
   default:
     return restart ? "Start the new game with this setup. The game starts again with these mods first; then choose NEW "
@@ -1381,6 +1391,10 @@ void Open(void*) {
     s.rStyle = StyleIndexOf(CodeSettings(s.rCode));
   }
   s.rules.assign(xd::challenges::Rules().size(), false);
+  if (!xd::gen4::PackPresent(&s.gen4Why)) {
+  } else {
+    s.gen4Why.clear();
+  }
   for (size_t i = 0; i < s.rules.size(); i++) {
     const std::vector<std::string>& had = s.defaults.challenges;
     s.rules[i] = std::find(had.begin(), had.end(), xd::challenges::Rules()[i].id) != had.end();
@@ -1599,6 +1613,8 @@ bool Frame(void*, const PortMenuInput* in) {
     break;
   case Kind::Challenges:
     if (left || right || a) {
+      const bool blocked = !s.gen4Why.empty() && std::string(xd::challenges::Rules()[r.sw].id).rfind("gen4_", 0) == 0;
+      if (blocked) break;
       s.rules[r.sw] = left ? true : right ? false : !s.rules[r.sw];
       event = kSoundMove;
     }

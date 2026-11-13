@@ -266,12 +266,21 @@ jobs:
       # It must run on the same kind of machine as the build (PyInstaller cannot cross-build): the Intel machine
       # gives an x86_64 program, as xd is. continue-on-error: a failure here must not stop the app and the zip;
       # without the folder package_mac.sh simply leaves the helper out (and says so in its log).
+      # Since 0.4.1 the converter is the C++ program built with the game (build_mac.sh's pbr_models target):
+      # package_mac.sh takes it from the build. This step only freezes the old Python one when the C++ one is
+      # missing (a build of an older branch).
       - name: Battle Revolution models helper (pbr_models), frozen
         if: success() && inputs.stage == 'all'
         continue-on-error: true
         run: |
           set -eu
           set -o pipefail
+          if [ -x "$BIN/pbr_models" ]; then
+            echo "the C++ pbr_models is built: no Python freeze needed" | tee logs/pbr_models_package.log
+            "$BIN/pbr_models" --version 2>&1 | tee -a logs/pbr_models_package.log
+            otool -L "$BIN/pbr_models" 2>&1 | tee -a logs/pbr_models_package.log
+            exit 0
+          fi
           NOD="$(find build/mac/mac-release -name libnod.dylib -not -path "*/dist/*" | head -n 1)"
           echo "nod library: ${NOD:-NOT FOUND}"
           find build/mac/mac-release -iname "*nod*" -not -path "*/CMakeFiles/*" -maxdepth 4 | head -n 20
@@ -378,6 +387,12 @@ jobs:
             echo "exit code $?" >> "$GITHUB_WORKSPACE/logs/launcher_handover.txt" )
           tail -n 12 logs/launcher_handover.txt
           grep -q "mac: low memory self-test: OK" logs/launcher_handover.txt || PROBLEMS="$PROBLEMS handover"
+          # F10 / F12 / crash bundles on the Mac (docs/PARITY.md): the program must hold the real code (the picture
+          # read-back and the bundle writer), not the "not on Linux yet" stand-ins. Needs no disc. A real F10 needs a
+          # disc and a person: the tester presses F10 in the game and sends reports/report_*.
+          { echo "== F10 code in xd:"; nm "$APP/Contents/MacOS/xd" 2>&1 | grep -E "PortShot_LinuxRequest|PortXD_BugReportPoll|PortXD_Screenshot"; } > logs/f10_code.txt 2>&1
+          cat logs/f10_code.txt
+          grep -q "PortShot_LinuxRequest" logs/f10_code.txt || PROBLEMS="$PROBLEMS f10-code"
           # The launcher's own engine test (starts programs, waits, cancels) with its stand-in converter.
           cmake --build build/mac/mac-release --target launcher_extra_test pbr_models_standin > logs/launcher_tests_build.log 2>&1 || PROBLEMS="$PROBLEMS tests-build"
           tail -n 5 logs/launcher_tests_build.log
@@ -390,11 +405,44 @@ jobs:
             PROBLEMS="$PROBLEMS extra-test-missing"
           fi
           if [ -n "$PROBLEMS" ]; then
-            { echo "### The launcher on the Mac: problems"; echo "$PROBLEMS (logs/launcher_run.txt, launcher_handover.txt, launcher_smoke.txt, launcher_shots/)"; } >> "$GITHUB_STEP_SUMMARY"
+            { echo "### The launcher on the Mac: problems"; echo "$PROBLEMS (logs/launcher_run.txt, launcher_handover.txt, launcher_smoke.txt, f10_code.txt, launcher_shots/)"; } >> "$GITHUB_STEP_SUMMARY"
             echo "PROBLEMS with the launcher:$PROBLEMS"
             exit 1
           fi
           echo "### The launcher on the Mac: three pages drawn and photographed, hands over to the game, helper link works, engine test passes (pictures in the logs download: launcher_shots)" >> "$GITHUB_STEP_SUMMARY"
+
+      # The updater on the Mac (docs/UPDATER.md "On each system"): its unit test (signatures, the three-system manifest,
+      # zip with modes and links, the app swap script), then the launcher from the unpacked zip against a LOCAL feed on
+      # this runner (127.0.0.1; nothing goes to the internet): the question, no network before it, Update now (the new app
+      # waits beside the old one), the helper puts it in place after a restart, Go back, tampered files refused.
+      # tools/test_updater_posix.py. continue-on-error: a failure is a finding, it must not lose the zip. UNRUN on a Mac.
+      - name: The updater on the Mac (unit test, launcher with a local feed)
+        if: success() && inputs.stage == 'all'
+        continue-on-error: true
+        run: |
+          set +e
+          PROBLEMS=""
+          cmake --build build/mac/mac-release --target update_test > logs/update_test_build.log 2>&1 || PROBLEMS="$PROBLEMS update-test-build"
+          tail -n 5 logs/update_test_build.log
+          if [ -x "$BIN/update_test" ]; then
+            mkdir -p "$RUNNER_TEMP/update_test_work"
+            perl -e 'alarm 300; exec @ARGV' "$BIN/update_test" "$RUNNER_TEMP/update_test_work" > logs/update_test.log 2>&1 || PROBLEMS="$PROBLEMS update-test"
+            grep -v '^ok' logs/update_test.log | tail -n 20
+          else
+            PROBLEMS="$PROBLEMS update-test-missing"
+          fi
+          APP="$(find "$RUNNER_TEMP/unzipped" -name "Pokemon XD.app" -maxdepth 3 | head -n 1)"
+          mkdir -p logs/updater_shots
+          python3 tools/test_updater_posix.py --system mac --app "$APP" --work "$RUNNER_TEMP/updater_test" > logs/updater_posix_test.log 2>&1 || PROBLEMS="$PROBLEMS updater-launcher"
+          grep -v '^ok' logs/updater_posix_test.log | tail -n 40
+          cp "$RUNNER_TEMP"/updater_test/shots/*.png logs/updater_shots/ 2>/dev/null
+          cp -R "$RUNNER_TEMP"/updater_test/logs logs/updater_launcher_logs 2>/dev/null
+          if [ -n "$PROBLEMS" ]; then
+            { echo "### The updater on the Mac: problems"; echo "$PROBLEMS (logs/update_test.log, updater_posix_test.log, updater_launcher_logs/)"; } >> "$GITHUB_STEP_SUMMARY"
+            echo "PROBLEMS with the updater:$PROBLEMS"
+            exit 1
+          fi
+          echo "### The updater on the Mac: unit test and the launcher with a local feed passed (logs/updater_posix_test.log)" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload the Mac zip
         if: success() && inputs.stage == 'all'
@@ -414,6 +462,8 @@ jobs:
             logs/**/*.log
             logs/*.txt
             logs/launcher_shots/*.png
+            logs/updater_shots/*.png
+            logs/updater_launcher_logs/*.log
             build/mac/mac-release/CMakeFiles/CMakeConfigureLog.yaml
             build/mac/mac-release/disc_tables/*.log
           retention-days: 14

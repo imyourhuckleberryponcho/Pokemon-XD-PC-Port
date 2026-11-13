@@ -37,7 +37,12 @@ struct Manifest {
   int priority = 0;
   Applies applies = Applies::NewPlaythrough;
   bool appliesGiven = false;
+  bool scripts = false;
+  int scriptApi = 1;
 };
+constexpr int kScriptApi = 1;
+constexpr size_t kMaxScriptFileBytes = 256 * 1024;
+constexpr size_t kMaxScriptFiles = 32;
 
 bool ParseManifest(std::string_view json, Manifest& out, std::string& error);
 bool ValidModId(std::string_view id);
@@ -110,6 +115,12 @@ struct LoadOptions {
   std::vector<ExtraLayer> extraLayers;
 };
 
+struct ScriptFile {
+  std::string modId;
+  std::string name;
+  std::string text;
+};
+
 struct LoadResult {
   struct LayerResult {
     std::string id;
@@ -124,8 +135,12 @@ struct LoadResult {
   bool listWritten = false;
   bool listWriteSkipped = false;
   std::vector<DataChange> dataChanges;
+  std::vector<AddedRow> addedRows;
+  std::vector<AddedText> addedTexts;
+  uint32_t addedTextGroup = 0;
   std::shared_ptr<const DataCatalog> catalog;
   std::vector<uint8_t> program;
+  std::vector<ScriptFile> scripts;
 
   bool HasWarnings() const;
   std::string Report() const;

@@ -46,7 +46,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DECOMP_CONFIG = ROOT.parent / "Pokemon-XD-Decomp" / "config" / "GXXE01"  # read only
 ADDR_TSV = ROOT / "games" / "xd" / "src" / "data" / "disc_table_addresses.tsv"
 MANUAL_TSV = ROOT / "games" / "xd" / "src" / "data" / "disc_table_manual.tsv"
-GENERATOR_VERSION = 1
+GENERATOR_VERSION = 2  # 2: the GameCube view of the decomp's PC-only spare rows (pcspare_gc_view.h)
 
 PC_TARGET = "x86_64-pc-windows-msvc"
 # The GameCube layout: the PC's headers only parse for a Windows target, and 32-bit Windows lays out everything this
@@ -142,6 +142,10 @@ def clang_args(flags, lang, target, extra=()):
         args += ["-I", i]
     for f in flags["force_includes"]:
         args += ["-include", f]
+    if target.startswith(("i686", "i386")):
+        # The GameCube layout of tables with PC-only spare rows (the decomp's game/pcspare.h, 2026-11-12): the
+        # original row count, as main.dol has them. After the game's own forced includes (which may pull it in).
+        args += ["-include", str(LINUX_STUBS / "pcspare_gc_view.h")]
     # The PC's C library headers (Visual Studio's). Both targets use them: the decomp's code is compiled against
     # them on PC, and only the layouts of the game's own types matter here.
     for i in flags.get("system_includes") or ([] if ("linux" in target or "apple" in target) else os.environ.get("INCLUDE", "").split(";")):
@@ -356,6 +360,10 @@ def var_layout(pc_var, gc_var):
     pc_t, gc_t = pc_var.type.get_canonical(), gc_var.type.get_canonical()
     if pc_t.kind == ci.TypeKind.CONSTANTARRAY:
         n = pc_t.get_array_size()
+        # (a table with PC-only spare rows: the PC copy is longer than main.dol's; only the GameCube rows are filled,
+        # the spare ones stay zero)
+        if gc_t.kind == ci.TypeKind.CONSTANTARRAY and gc_t.get_array_size() < n:
+            n = gc_t.get_array_size()
         pe, ge = pc_t.get_array_element_type(), gc_t.get_array_element_type()
         leaves = []
         layout(pe, ge, 0, 0, leaves, pc_var.spelling + "[]")

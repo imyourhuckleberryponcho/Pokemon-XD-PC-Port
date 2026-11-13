@@ -97,6 +97,34 @@ Public beta {version}
 Thank you for trying it! This is a beta: expect bugs, and keep a copy of your save.
 Questions, bug reports, other players: https://discord.gg/XVbDVXH4Pn
 
+New in 0.4.1
+------------
+- Gen 4 Pokemon (107 of them, Turtwig to Arceus) for a NEW playthrough: if you own Pokemon Battle
+  Revolution (Wii, USA), the launcher's Extra assets page now makes the Gen 4 pack too ("Make models and
+  Gen 4 pack", about half a minute). Then choose "Gen 4 Pokemon and rules" on the New Game screen. They
+  have their own models, faces, cries, level-up moves and evolutions (Gible -> Gabite -> Garchomp,
+  Piloswine -> Mamoswine...); Magnezone and Probopass evolve by Thunder Stone. Many Gen 4 moves work as in
+  Diamond and Pearl (Close Combat, U-turn, Stealth Rock, Gravity, Healing Wish, Sucker Punch...), and so
+  do their abilities (Solar Power, Dry Skin, Motor Drive, Technician, Mold Breaker, Download...). Your save
+  stays tied to the pack: without it, the game says so and leaves the save alone. Without Gen 4 chosen, the
+  game is exactly as before.
+- In a Gen 4 playthrough: Leafeon (Leaf Stone) and Glaceon (Ice Stone), both offered with the other stones
+  at the start; Weavile, Gliscor and Chansey by levelling up holding Razor Claw, Razor Fang, Oval Stone;
+  Gallade, Froslass, Honchkrow, Mismagius, Togekiss, Roserade by the Dawn, Dusk and Shiny Stones; the
+  Linking Cord does trade evolutions (Electivire, Magmortar, Rhyperior, Porygon-Z, Dusknoir, and XD's own
+  Alakazam, Machamp, Golem, Gengar...). All those items, and TM51 to TM92 from Diamond and Pearl, are
+  prizes at the Poke Coupon exchange. Older Pokemon can learn the TMs they could learn in Diamond and Pearl.
+- Gen 4 Pokemon at the Poke Spots (a New Game choice with Gen 4): each spot keeps its own Pokemon and adds
+  Gen 4 ones that fit it, with a starter as a rare find (Chimchar, Turtwig, Piplup).
+- Randomizer: "Include Gen 4 Pokemon" (needs the Gen 4 pack). Older randomizer codes give the same game
+  as before.
+- The Battle Revolution converter is part of the program now (no Python): the 388 models take seconds.
+- Updates on Linux and the Mac too (the launcher asks first, as on Windows).
+- Linux: the launcher's backgrounds are drawn from your disc.
+- For modders: script mods (Lua) and mods that add new Pokemon, moves and items (docs/MODDING.md).
+- Fixed: a crash during some move animations with frame rate 60 ("draw vertex data overrun"); a rare
+  crash when closing the window on Windows.
+
 New in 0.4.0
 ------------
 - MODS on the title screen: switch mods on or off and set their order inside the game (Apply restarts
@@ -343,11 +371,28 @@ def main():
         shutil.copy2(os.path.join(build, f), game)
     for f in FONTS:
         shutil.copy2(os.path.join(build, 'fonts', f), os.path.join(game, 'fonts'))
-    # The Battle Revolution model converter (tools/pbr_convert/package_pbr_models.py): a program that needs no Python,
-    # game\pbr_models\pbr_models.exe. Only when it has been built; it holds no game data.
-    if os.path.isfile(os.path.join(PBR_MODELS, 'pbr_models.exe')):
-        shutil.copytree(PBR_MODELS, os.path.join(game, 'pbr_models'))
+    # The Battle Revolution model converter, game\pbr_models\pbr_models.exe (the launcher's Extra assets page runs it;
+    # it holds no game data). Since 0.4.1 the C++ program (engine/formats/pbr, byte-identical to the frozen Python
+    # 1.1.0): the build's pbr_models.exe with nod.dll and the C++ runtime beside it (Windows looks for a program's DLLs in
+    # its own folder, not the one above). Else, as in 0.4.0, the frozen Python one when it has been built.
     crt = vc_redist()
+    pbr_dir = os.path.join(game, 'pbr_models')
+    if os.path.isfile(os.path.join(build, 'pbr_models.exe')):
+        os.makedirs(pbr_dir)
+        for f in ('pbr_models.exe', 'nod.dll'):
+            shutil.copy2(os.path.join(build, f), pbr_dir)
+        # (since the Gen 4 pack it links the port's data layer, which brings SDL3, Dawn, libpng and zlib: the launcher
+        # starts it in its own folder, so they must be beside it too, or it can't start: 2026-11-13)
+        for f in ('SDL3.dll', 'webgpu_dawn.dll', 'libpng16.dll', 'zlib1.dll'):
+            if os.path.isfile(os.path.join(build, f)):
+                shutil.copy2(os.path.join(build, f), pbr_dir)
+        for f in RUNTIME if crt else []:
+            if os.path.isfile(os.path.join(crt, f)):
+                shutil.copy2(os.path.join(crt, f), pbr_dir)
+        print('pbr_models: the C++ converter (game/pbr_models)')
+    elif os.path.isfile(os.path.join(PBR_MODELS, 'pbr_models.exe')):
+        shutil.copytree(PBR_MODELS, pbr_dir)
+        print('pbr_models: the frozen Python converter (game/pbr_models)')
     if crt:
         for f in RUNTIME:
             if os.path.isfile(os.path.join(crt, f)):

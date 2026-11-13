@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <wchar.h>
-#if defined(__linux__)
+#if defined(__linux__) || defined(__APPLE__)
 #include <stddef.h>
 #endif
 
@@ -16,7 +16,7 @@ bool PortShot_SavePng(const wchar_t* path, const uint8_t* rgba, uint32_t w, uint
 
 bool PortShot_SaveWindow(const wchar_t* path);
 
-#if defined(__linux__)
+#if defined(__linux__) || defined(__APPLE__)
 typedef void (*PortShotLinuxDone)(void* ctx, const uint8_t* rgba, uint32_t w, uint32_t h, bool overlay);
 void PortShot_LinuxRequest(bool window, PortShotLinuxDone done, void* ctx);
 void PortShot_LinuxFrame(void);

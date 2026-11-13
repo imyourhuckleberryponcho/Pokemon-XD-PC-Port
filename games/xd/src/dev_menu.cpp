@@ -58,6 +58,15 @@ f32 pokemonGetDp(void* pokemon);
 void pokemonSetDp(void* pokemon, f32 value);
 s32 heroItemAddItemDataId(void* hero, u32 itemID, u32 amount, u32 index);
 void pcboxDebugPokemonSetupFull(void);
+void pokemonCreate(void* pokemon, u16 species, u8 level, void* attest);
+uintptr_t savedataGetStatus(u32 save, u32 kind);
+uintptr_t gamedataGetStatus(void* gamedata, u32 kind);
+s32 heroCatchPokemon(void* hero, void* pokemon, u32 arg3, u32 arg4, u8 allowPCBox);
+void memoDataSet(u32 kind, void* pokemon);
+void pokemonBiosSetItemDataId(void* pokemon, u16 item);
+void pokemonBiosSetTokuseiFlag(void* pokemon, bool second);
+void pcboxAddItem(void* pcbox, u16 id, u16 n);
+void pokemonSetOnZukanFlag(void* pokemon, u8 caught);
 
 void* GSgfxLayerFindByID(s32 id);
 s32 GSgfxLayerFindByName_C(const char* name);
@@ -71,6 +80,7 @@ s32 dbgMenuFightStopHostLose(void);
 s32 dbgMenuFightStopTimeOut(void);
 s32 dbgMenuDbgPokemonGet(void);
 s32 dbgMenuFlagCheck(void);
+s32 dbgMenuMenuTestEeveeMenu(void);
 s32 dbgMenuFightEncountSelect(void);
 s32 dbgMenuHeroCreateItem(void);
 s32 dbgMenuHeroIncMoney(void);
@@ -106,6 +116,7 @@ s32 dbgMenuSetHeroStyleNormal(void);
 s32 dbgMenuSetHeroStyleVisor(void);
 s32 dbgMenuSetHeroStyleSnatch(void);
 s32 dbgMenuPTout(void);
+void menuShopOpen(s32 shop);
 
 extern void* floordata;
 extern s32* floordata_number;
@@ -135,6 +146,7 @@ struct Screen {
 };
 const Screen kScreens[] = {
     {"dbgMenuFlagCheck", "Flag: story list (hold R: flag editor)", dbgMenuFlagCheck},
+    {"dbgMenuMenuTestEeveeMenu", "Menu: the Eevee offer (floor 0x97 only)", dbgMenuMenuTestEeveeMenu},
     {"dbgMenuFightEncountSelect", "Fight: choose a battle", dbgMenuFightEncountSelect},
     {"dbgMenuHeroCreateItem", "ItemCreate: item and count", dbgMenuHeroCreateItem},
     {"dbgMenuHeroIncMoney", "Hero: add money", dbgMenuHeroIncMoney},
@@ -271,8 +283,78 @@ void Perform(const std::string& action) {
       return;
     }
     heroItemAddItemDataId(nullptr, id, static_cast<u32>(count), static_cast<u32>(-1));
+  } else if (k == "pcitem") {
+    const u16 id = static_cast<u16>(Num(w, 1));
+    const long count = Num(w, 2, 1);
+    if (!itemDataCheckValid(id) || count < 1 || count > 999) {
+      sStatus = "pcitem: <item number> <count 1..999>";
+      return;
+    }
+    pcboxAddItem(nullptr, id, static_cast<u16>(count));
+    sStatus = "pcitem: " + std::to_string(count) + " x item " + std::to_string(id) + " into the PC item storage";
+  } else if (k == "lead") {
+    const long slot = Num(w, 1, 2);
+    const uintptr_t a = heroGetStatus(nullptr, 3, 0);
+    const uintptr_t b = slot >= 2 && slot <= 6 ? heroGetStatus(nullptr, 3, static_cast<u16>(slot - 1)) : 0;
+    const uintptr_t c = heroGetStatus(nullptr, 3, 1);
+    if (a == 0 || b == 0 || c <= a) {
+      sStatus = "lead: <party slot 2-6>";
+      return;
+    }
+    const size_t stride = c - a;
+    std::vector<uint8_t> tmp(stride);
+    std::memcpy(tmp.data(), reinterpret_cast<void*>(a), stride);
+    std::memcpy(reinterpret_cast<void*>(a), reinterpret_cast<void*>(b), stride);
+    std::memcpy(reinterpret_cast<void*>(b), tmp.data(), stride);
+    sStatus = "lead: party slot " + std::to_string(slot) + " swapped with slot 1";
+  } else if (k == "ability") {
+    const long slot = Num(w, 1, 1);
+    const long which = Num(w, 2, 0);
+    void* p = slot >= 1 && slot <= 6 ? reinterpret_cast<void*>(heroGetStatus(nullptr, 3, static_cast<u16>(slot - 1))) : nullptr;
+    if (p == nullptr || which < 0 || which > 1) {
+      sStatus = "ability: <party slot 1-6> <0|1>";
+      return;
+    }
+    pokemonBiosSetTokuseiFlag(p, which != 0);
+    sStatus = "ability: party slot " + std::to_string(slot) + " ability flag " + std::to_string(which);
   } else if (k == "kit") {
     dbgMenuDbgPokemonGet();
+  } else if (k == "give") {
+    const long species = Num(w, 1, 0);
+    const long level = Num(w, 2, 5);
+    if (species < 1 || species > 0x3FFF || level < 1 || level > 100) {
+      sStatus = "give: <species number 1..16383> [level 1..100]";
+      return;
+    }
+    alignas(16) static uint8_t pokemon[1024];
+    std::memset(pokemon, 0, sizeof pokemon);
+    const uintptr_t hero = savedataGetStatus(0, 2);
+    pokemonCreate(pokemon, static_cast<u16>(species), static_cast<u8>(level), reinterpret_cast<void*>(gamedataGetStatus(nullptr, 1)));
+    heroCatchPokemon(reinterpret_cast<void*>(hero), pokemon, 0, 4, 1);
+    memoDataSet(0, pokemon);
+    sStatus = "give: species " + std::to_string(species) + " level " + std::to_string(level);
+  } else if (k == "hold") {
+    const long slot = Num(w, 1, 1);
+    const long item = Num(w, 2, 0);
+    void* p = slot >= 1 && slot <= 6 ? reinterpret_cast<void*>(heroGetStatus(nullptr, 3, static_cast<u16>(slot - 1))) : nullptr;
+    if (p == nullptr || item < 0 || (item != 0 && !itemDataCheckValid(static_cast<u16>(item)))) {
+      sStatus = "hold: <party slot 1-6> <item number>";
+      return;
+    }
+    pokemonBiosSetItemDataId(p, static_cast<u16>(item));
+    sStatus = "hold: party slot " + std::to_string(slot) + " holds item " + std::to_string(item);
+  } else if (k == "zukan") {
+    const long species = Num(w, 1, 0);
+    const long caught = Num(w, 2, 1);
+    if (species < 1 || species > 0x3FFF) {
+      sStatus = "zukan: <species number> [caught 0/1]";
+      return;
+    }
+    alignas(16) static uint8_t pokemon[1024];
+    std::memset(pokemon, 0, sizeof pokemon);
+    pokemonCreate(pokemon, static_cast<u16>(species), 5, reinterpret_cast<void*>(gamedataGetStatus(nullptr, 1)));
+    pokemonSetOnZukanFlag(pokemon, static_cast<u8>(caught != 0));
+    sStatus = "zukan: species " + std::to_string(species) + (caught != 0 ? " seen + caught" : " seen");
   } else if (k == "pcfill") {
     pcboxDebugPokemonSetupFull();
   } else if (k == "heart") {
@@ -299,6 +381,13 @@ void Perform(const std::string& action) {
     gamedatasaveSetStatus(nullptr, 5, floorGetNextFloorID());
     const s32 r = memcardTaskCall(4, 2, 0);
     sStatus = r == 4 ? "save: saved (memory card result 4)" : "save: FAILED, memory card result " + std::to_string(r);
+  } else if (k == "shop") {
+    const int shop = w.size() > 1 ? std::atoi(w[1].c_str()) : -1;
+    if (shop < 0 || shop > 20) {
+      sStatus = "shop: a number from 0 to 20 is needed";
+      return;
+    }
+    menuShopOpen(shop);
   } else if (k == "screen") {
     const std::string name = w.size() > 1 ? w[1] : "";
     for (const Screen& s : kScreens) {

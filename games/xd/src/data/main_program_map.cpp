@@ -36,6 +36,26 @@ constexpr size_t kMapCount = sizeof(kMap) / sizeof(kMap[0]);
 
 std::vector<const XDMainProgramAddress*> sSorted;
 
+struct ScriptBlock {
+  uint32_t gc;
+  unsigned char* pc;
+  uint32_t size;
+};
+std::vector<ScriptBlock> sScriptBlocks;
+const ScriptBlock* FindScriptBlock(uint32_t gc) {
+  for (const ScriptBlock& b : sScriptBlocks) {
+    if (gc >= b.gc && gc - b.gc < b.size) return &b;
+  }
+  return nullptr;
+}
+const ScriptBlock* FindScriptBlockPc(const void* p) {
+  const auto* c = static_cast<const unsigned char*>(p);
+  for (const ScriptBlock& b : sScriptBlocks) {
+    if (c >= b.pc && c < b.pc + b.size) return &b;
+  }
+  return nullptr;
+}
+
 [[noreturn]] void fatal_address(uint32_t gcAddress, const char* why) {
   std::fprintf(stderr, "[games/xd] Game data used GameCube address %08X: %s. Stopping here.\n", gcAddress, why);
   std::fflush(stderr);
@@ -53,9 +73,18 @@ extern "C" void PortXD_RegisterMainProgramMap(void) {
             [](const XDMainProgramAddress* a, const XDMainProgramAddress* b) { return a->gcAddress < b->gcAddress; });
 }
 
+extern "C" void PortXD_AddScriptBlock(uint32_t gcAddress, void* bytes, uint32_t size) {
+  sScriptBlocks.push_back({gcAddress, static_cast<unsigned char*>(bytes), size});
+}
+
 extern "C" void* PortXD_GameAddress(uint32_t gcAddress) {
   if (gcAddress == 0) {
     return nullptr;
+  }
+  if (!sScriptBlocks.empty()) {
+    if (const ScriptBlock* b = FindScriptBlock(gcAddress)) {
+      return b->pc + (gcAddress - b->gc);
+    }
   }
   auto it = std::upper_bound(sSorted.begin(), sSorted.end(), gcAddress,
                              [](uint32_t a, const XDMainProgramAddress* m) { return a < m->gcAddress; });
@@ -83,6 +112,10 @@ extern "C" void* PortXD_GameAddress(uint32_t gcAddress) {
 extern "C" void* PortXD_GameAddressIfKnown(uint32_t gcAddress, uint32_t* size) {
   *size = 0;
   if (gcAddress == 0) return nullptr;
+  if (const ScriptBlock* b = FindScriptBlock(gcAddress)) {
+    *size = b->size - (gcAddress - b->gc);
+    return b->pc + (gcAddress - b->gc);
+  }
   auto it = std::upper_bound(sSorted.begin(), sSorted.end(), gcAddress,
                              [](uint32_t a, const XDMainProgramAddress* m) { return a < m->gcAddress; });
   if (it != sSorted.begin()) {
@@ -105,6 +138,9 @@ extern "C" void* PortXD_GameAddressIfKnown(uint32_t gcAddress, uint32_t* size) {
 extern "C" uint32_t PortXD_GameAddressOf(const void* p) {
   if (p == nullptr) {
     return 0;
+  }
+  if (const ScriptBlock* sb = FindScriptBlockPc(p)) {
+    return sb->gc + static_cast<uint32_t>(static_cast<const unsigned char*>(p) - sb->pc);
   }
   const auto* b = static_cast<const unsigned char*>(p);
   for (const XDMainProgramAddress* m : sSorted) {

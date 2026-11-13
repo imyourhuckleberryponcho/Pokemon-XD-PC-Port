@@ -491,6 +491,13 @@ const std::vector<Rule>& Rules() {
       {"nuzlocke_one_per_area", "Nuzlocke: one catch per area",
        "In each area you may catch one Pokemon of your choice, snagged or wild. After that, Poke Balls can't be used "
        "in that area's battles."},
+      {"gen4_rules", "Gen 4 Pokemon and rules",
+       "The 107 Diamond/Pearl Pokemon (their models, cries and names) and 113 moves, made from your own Pokemon Battle Revolution "
+       "disc, and the rules they need: abilities (Technician, Adaptability, Iron Fist, Scrappy...) and the new effects of moves "
+       "such as U-turn and Trick Room."},
+      {"gen4_spots", "Gen 4 Pokemon at the Poke Spots",
+       "With the Gen 4 Pokemon: the three Poke Spots (Rock, Oasis, Cave) offer nine of them instead of their usual Pokemon: "
+       "Hippopotas, Skorupi and Gible; Shellos, Cherubi and Buizel; Bronzor, Stunky and Riolu. Levels and chances stay the same."},
       {"level_cap", "Level caps",
        "Your Pokemon can't grow past the level of the next story boss's strongest Pokemon: at the cap they gain no "
        "experience, and Rare Candy has no effect. The cap rises when the boss is beaten."},

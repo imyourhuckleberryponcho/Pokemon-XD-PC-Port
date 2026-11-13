@@ -160,6 +160,8 @@ FILE* sDumpFrames = nullptr;
 uint32_t sDumpLastFrame = ~0u;
 uint32_t sDumpBytes = 0;
 std::atomic<uint32_t> sStarved{0}, sStarvedBytes{0};
+std::atomic<uint32_t> sStarvedFrozenBytes{0};
+std::atomic<bool> sFrozen{false};
 
 void dump_open() {
   static bool tried = false;
@@ -279,6 +281,10 @@ void shape_block() {
 
 void SDLCALL on_device_wants(void*, SDL_AudioStream*, int additional, int) {
   if (additional > 0) {
+    if (sFrozen.load(std::memory_order_relaxed)) {
+      sStarvedFrozenBytes += static_cast<uint32_t>(additional);
+      return;
+    }
     sStarved++;
     sStarvedBytes += static_cast<uint32_t>(additional);
   }
@@ -518,6 +524,8 @@ void PortAudio_SetVolume(float gain) {
   }
 }
 
+void PortAudio_SetFrozen(bool frozen) { sFrozen.store(frozen, std::memory_order_relaxed); }
+
 void PortAudio_SetPaused(bool paused) {
   sPaused = paused;
   sReserve.lastArrivalNs = 0;
@@ -560,6 +568,7 @@ void PortAudio_GetStats(PortAudioStats* out) {
   out->aiUnderruns = sUnderruns;
   out->outShortTimes = sStarved.load();
   out->outShortBytes = sStarvedBytes.load();
+  out->frozenQuietBytes = sStarvedFrozenBytes.load();
   out->aiHandlerNs = sHandlerNs.load();
   out->reserveMs = sReserve.targetNow.load();
   out->reserveGrown = sReserve.grown.load();

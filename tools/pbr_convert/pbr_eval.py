@@ -60,6 +60,9 @@ class Pose:
 
 
 class Eval:
+    comp_t = False   # scale compensation also divides the node's TRANSLATION by the parent's scale (Maya's segment
+                     # scale compensate; gen4.py turns it on for models whose chains of scaled bones blew up without it)
+
     def __init__(self, sdr, compensate='joint8_under_joint'):
         self.sdr = sdr
         nodes = sdr.nodes
@@ -118,8 +121,9 @@ class Eval:
     def frames_of(self, act):
         return max(int(round(self.sdr.actions[act][3] * FPS)), 1)
 
-    def sample(self, act, frames=None):
-        """Pose of action `act` (None = the static values) at frames 0..N."""
+    def sample(self, act, frames=None, tmap=None):
+        """Pose of action `act` (None = the static values) at frames 0..N. tmap: output time (seconds) -> the
+        action's own time, for an action played faster or slower (gen4 retiming)."""
         nodes = self.sdr.nodes
         if act is None:
             nf = 1
@@ -131,7 +135,7 @@ class Eval:
         vis = np.ones((nf, self.n), dtype=bool)
         animated = np.zeros(self.n, dtype=bool)
         if act is not None:
-            times = [f / FPS for f in range(nf)]
+            times = [f / FPS if tmap is None else tmap(f / FPS) for f in range(nf)]
             for i, x in enumerate(nodes):
                 curves = x.anim.get(act)
                 if not curves:
@@ -160,12 +164,16 @@ class Eval:
         t = t + v2[None] + np.einsum('fnij,nj->fni', rm, v1) + np.einsum('fnij,nj->fni', m3, v0)
         # scale compensation (joints): 1 / the parent's own scale in front
         p.compensated = np.zeros(self.n, dtype=bool)
+        p.dcomp = np.ones((nf, self.n, 3))   # the compensating scale in front of the node's own: 1 / the parent's scale
         for i in range(self.n):
             if self.comp[i] and self.parent[i] >= 0:
                 ps = sca[:, self.parent[i], :]
                 if np.any(np.abs(ps - 1.0) > 1e-5):
                     safe = np.where(np.abs(ps) < 1e-8, 1.0, ps)
                     m3[:, i] = m3[:, i] / safe[:, :, None]
+                    p.dcomp[:, i] = 1.0 / safe
+                    if self.comp_t:
+                        t[:, i] = t[:, i] / safe
                     p.compensated[i] = True
         m[..., :3, :3] = m3
         m[..., :3, 3] = t
@@ -235,15 +243,36 @@ def continuous_euler(rm):
     return out
 
 
-def decompose(pose, ev, file_rot=None):
+def shear_error(pose, ev):
+    """Per node: the largest difference between the node's real 3x3 and what a plain T*R*S joint holds
+    (decompose() without pairs), over the frames, as a fraction of the matrix's largest column length."""
+    s, r, t = decompose(pose, ev)
+    rec = rot_matrices(r) * s[..., None, :]
+    err = np.zeros(ev.n)
+    for i in np.nonzero(pose.compensated)[0]:
+        m = pose.local[:, i, :3, :3]
+        nrm = np.linalg.norm(m, axis=1).max(axis=1)
+        err[i] = float((np.abs(m - rec[:, i]).max(axis=(1, 2)) / np.maximum(nrm, 1e-8)).max())
+    return err
+
+
+def decompose(pose, ev, file_rot=None, pairs=()):
     """A sampled pose -> (scale, Euler, translate) [frames, nodes, 3] for HSD joints without scale compensation
     ("classical" joints: the game multiplies T * R * S down the tree).  Where a node has no compensation the
-    scale is the file's own (exact); where it has, the 3x3 is taken apart (a shear is lost)."""
+    scale is the file's own (exact); where it has, the 3x3 is taken apart (a shear is lost).
+
+    pairs: nodes held EXACTLY by two joints (Maya's segment scale compensate: the node's 3x3 is
+    diag(1/parent scale) * R * S, a shear no single T*R*S joint holds). The first joint of the pair
+    carries the translation and the compensating scale, the second (the node's own, which children, meshes
+    and weights stay on) the rotation and the node's own scale. The arrays get one extra entry per pair
+    after the nodes, in sorted(pairs) order: entry n + k is the first joint of the k-th paired node."""
     local = pose.local
     t = local[..., :3, 3].copy()
     r = continuous_euler(pose.rot_only)
     s = pose.scale.copy()
     for i in np.nonzero(pose.compensated)[0]:
+        if int(i) in pairs:
+            continue
         m = local[:, i, :3, :3]
         sc = np.linalg.norm(m, axis=1)
         det = np.linalg.det(m)
@@ -253,4 +282,18 @@ def decompose(pose, ev, file_rot=None):
         rr = m / np.where(sc2 == 0, 1.0, sc2)[:, None, :]
         r[:, i] = np.where(ok[:, None], continuous_euler(rr[:, None])[:, 0], r[:, i])
         s[:, i] = np.where(ok[:, None], sc2, s[:, i])
+    pl = sorted(pairs)
+    if pl:
+        s = np.concatenate([s, pose.dcomp[:, pl]], axis=1)
+        r = np.concatenate([r, np.zeros((r.shape[0], len(pl), 3))], axis=1)
+        t = np.concatenate([t, t[:, pl]], axis=1)
+        t[:, pl] = 0.0
     return s, r, t
+
+
+def compose_local(s, r, t, n, pairs=()):
+    """The local 4x4 matrices [frames, nodes] that decompose()'s arrays (with the same pairs) give."""
+    loc = compose(s[:, :n], r[:, :n], t[:, :n])
+    for k, i in enumerate(sorted(pairs)):
+        loc[:, i] = compose(s[:, n + k], r[:, n + k], t[:, n + k]) @ loc[:, i]
+    return loc

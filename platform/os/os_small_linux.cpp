@@ -3,6 +3,9 @@
 #include "port_window_icon.h"
 #include "port_zip.h"
 
+#include <SDL3/SDL_surface.h>
+#include <SDL3/SDL_video.h>
+
 #include <signal.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -60,7 +63,21 @@ extern "C" bool PortFolderClaim_Take(const char* folder) {
   return false;
 }
 
-extern "C" bool PortWindowIcon_Apply(SDL_Window*, const char*) { return false; }
+extern "C" bool PortWindowIcon_Apply(SDL_Window* window, const char* pathUtf8) {
+  if (window == nullptr) return false;
+  std::error_code ec;
+  std::filesystem::path file;
+  if (pathUtf8 != nullptr && std::filesystem::path(pathUtf8).extension() == ".png") file = pathUtf8;
+  if (file.empty() || !std::filesystem::exists(file, ec)) {
+    file = std::filesystem::read_symlink("/proc/self/exe", ec).parent_path() / "icon.png";
+  }
+  if (ec || !std::filesystem::exists(file, ec)) return false;
+  SDL_Surface* picture = SDL_LoadPNG(file.c_str());
+  if (picture == nullptr) return false;
+  const bool ok = SDL_SetWindowIcon(window, picture);
+  SDL_DestroySurface(picture);
+  return ok;
+}
 extern "C" bool PortWindowIcon_SetAppId(SDL_Window*, const char*) { return false; }
 extern "C" bool PortWindowIcon_OwnRGBA(int, uint8_t*) { return false; }
 extern "C" bool PortWindowIcon_ResourceRGBA(int, int, uint8_t*) { return false; }

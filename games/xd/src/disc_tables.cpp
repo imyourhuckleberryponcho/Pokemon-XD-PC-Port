@@ -334,7 +334,7 @@ extern "C" int PortXD_FillDiscTables(char* error, unsigned errorSize) {
       const XDDiscTableFile* file = kXDDiscTableFiles[f];
       for (uint32_t i = 0; i < file->tableCount; i++) {
         const XDDiscTable* t = &file->tables[i];
-        if (t->gcStride * t->count != t->gcSize || t->pcStride * t->count != t->pcSize || t->gcAddress == 0 ||
+        if (t->gcStride * t->count != t->gcSize || t->pcStride * t->count > t->pcSize || t->gcAddress == 0 ||
             !in_loaded_data(t->gcAddress, t->gcSize)) {
           char buf[256];
           std::snprintf(buf, sizeof buf, "%s (%s): not inside main.dol's loaded data (%08X, 0x%X bytes)", t->name,

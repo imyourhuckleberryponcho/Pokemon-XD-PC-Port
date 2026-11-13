@@ -6,7 +6,11 @@
 #include <mods.h>
 #include <port_disc.h>
 
+#include <algorithm>
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <cstdlib>
 #include <cstring>
 #include <map>
@@ -67,11 +71,35 @@ bool read_disc_entry(const std::string& archive, const std::string& entry, std::
   return ok;
 }
 
+std::filesystem::path sGen4Pack;
+bool sGen4Spots = false;
+
+std::vector<em::DataModFile> gen4_files() {
+  std::vector<em::DataModFile> out;
+  if (sGen4Pack.empty()) return out;
+  std::vector<std::filesystem::path> names;
+  std::error_code ec;
+  for (const auto& e : std::filesystem::directory_iterator(sGen4Pack / "data", ec)) {
+    if (e.path().extension() == ".json") names.push_back(e.path());
+  }
+  std::sort(names.begin(), names.end());
+  if (sGen4Spots) names.push_back(sGen4Pack / "optional" / "spots.json");
+  for (const auto& f : names) {
+    std::ifstream in(f, std::ios::binary);
+    std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    out.push_back({"gen4", "Gen 4 Pokemon and moves", "gen4/" + f.filename().string(), text});
+  }
+  return out;
+}
+
 bool load_back(const em::DataCatalog& cat, const xr::Result& r, size_t& changes, std::string& report) {
   em::DataModFile file{xr::kModId, "Randomizer", "data/randomizer.json", r.mod.ToJson("check")};
   std::vector<em::Message> messages;
-  const em::DataApplyResult applied = em::ApplyDataMods(cat, {file}, read_disc_entry, messages);
-  changes = applied.changes.size();
+  std::vector<em::DataModFile> files = gen4_files();
+  const size_t before = em::ApplyDataMods(cat, files, read_disc_entry, messages).changes.size();
+  files.push_back(file);
+  const em::DataApplyResult applied = em::ApplyDataMods(cat, files, read_disc_entry, messages);
+  changes = applied.changes.size() - before;
   bool clean = true;
   for (const em::Message& m : messages) {
     if (m.level == em::Message::Level::Info) continue;
@@ -783,6 +811,103 @@ int run_selftest(const em::DataCatalog& cat) {
             "a version-3 code is still written as version 3 and read with the new switches off (" + code3 + ")");
     }
   }
+  {
+    check(xr::CodeVersionOf(xr::CodeFor(xr::Style::Classic, 12345)) == 2 && er::EncodeCode(sc, off).rfind("XDR1-", 0) == 0,
+          "the new switch off: codes keep their old versions");
+    if (sGen4Pack.empty()) {
+      std::printf("skip Gen 4 checks (no --gen4 <pack folder>)\n");
+    } else {
+      std::set<uint32_t> packIds, packLegend, withRow;
+      {
+        std::ifstream in(sGen4Pack / "randomizer.txt");
+        std::string line;
+        while (std::getline(in, line)) {
+          unsigned id = 0, dex = 0, leg = 0;
+          if (std::sscanf(line.c_str(), "sp %u %u %u", &id, &dex, &leg) == 3) {
+            packIds.insert(id);
+            if (leg) packLegend.insert(id);
+          }
+        }
+      }
+      {
+        std::ifstream in(sGen4Pack / "tables.txt");
+        std::string line;
+        while (std::getline(in, line)) {
+          unsigned id = 0, dex = 0;
+          char key[64] = {};
+          if (std::sscanf(line.c_str(), "species %u %u %63s", &dex, &id, key) == 3 && packIds.count(id)) withRow.insert(id);
+        }
+      }
+      check(packIds.size() >= 100 && withRow == packIds, "the pack lists " + std::to_string(packIds.size()) + " species, each with its species row");
+      uint32_t discTop = 0;
+      if (const em::DataTable* pt = cat.FindTable("pokemon_data")) discTop = pt->count;
+      size_t good = 0, runs = 0, gen4Seen = 0, legendGen4 = 0, wildGen4 = 0, shadowGen4 = 0, trainerGen4 = 0;
+      std::string bad;
+      for (xr::Style style : {xr::Style::Light, xr::Style::Classic, xr::Style::Chaos}) {
+        for (uint32_t legend = 0; legend < 3; legend++) {
+          for (uint64_t seed = 1; seed <= 3; seed++) {
+            er::Settings s;
+            xr::ApplyStyle(s, style);
+            s.Set(sc, "gen4", 1);
+            s.Set(sc, "legendaries", legend);
+            s.seed = seed * 7919;
+            xr::Result r;
+            runs++;
+            if (!xr::Generate(cat, read_disc_entry, s, r, error)) {
+              if (bad.empty()) bad = error;
+              continue;
+            }
+            size_t changes = 0;
+            std::string report;
+            bool ok = load_back(cat, r, changes, report) && changes == r.mod.Count() && r.code.rfind("XDR5-", 0) == 0;
+            auto look = [&](const char* table, const char* field, size_t& counter) {
+              const auto tt = r.mod.tables.find(table);
+              if (tt == r.mod.tables.end()) return;
+              for (const auto& [entry, fields] : tt->second) {
+                const auto f = fields.find(field);
+                if (f == fields.end()) continue;
+                const uint32_t v = f->second;
+                if (v >= discTop) {
+                  counter++;
+                  gen4Seen++;
+                  if (!packIds.count(v)) ok = false, bad = "species " + std::to_string(v) + " is not a pack species";
+                  if (packLegend.count(v)) {
+                    legendGen4++;
+                    if (legend == 0) ok = false, bad = "a Gen 4 legendary with legendaries \"never\"";
+                  }
+                }
+              }
+            };
+            for (const char* e : {"esabapokemondata_E1", "esabapokemondata_E2", "esabapokemondata_E3"}) look(e, "id", wildGen4);
+            look("story_pokemon", "pokemonID", trainerGen4);
+            look("darkPokemonList", "pokemonID", shadowGen4);
+            if (ok) good++;
+            else if (bad.empty()) bad = report;
+          }
+        }
+      }
+      check(good == runs, "Gen 4 on: " + std::to_string(runs) + " runs, every species from the disc or the pack, the data layer takes all" +
+                              (bad.empty() ? "" : ": " + bad));
+      check(gen4Seen > 0 && wildGen4 > 0 && trainerGen4 > 0 && shadowGen4 > 0,
+            "Gen 4 Pokemon turn up: wild spots " + std::to_string(wildGen4) + ", trainers " + std::to_string(trainerGen4) + ", Shadows " +
+                std::to_string(shadowGen4) + "; Gen 4 legendaries " + std::to_string(legendGen4));
+      er::Settings plain;
+      xr::ApplyStyle(plain, xr::Style::Classic);
+      plain.seed = 7919;
+      xr::Result r0b;
+      const bool none = xr::Generate(cat, read_disc_entry, plain, r0b, error);
+      size_t sink = 0;
+      for (const char* e : {"esabapokemondata_E1", "esabapokemondata_E2", "esabapokemondata_E3"}) {
+        const auto tt = r0b.mod.tables.find(e);
+        if (tt == r0b.mod.tables.end()) continue;
+        for (const auto& [entry, fields] : tt->second) {
+          const auto f = fields.find("id");
+          if (f != fields.end() && f->second >= discTop) sink++;
+        }
+      }
+      check(none && sink == 0 && r0b.code.rfind("XDR5-", 0) != 0, "the switch off: no Gen 4 species, not a version-5 code");
+    }
+  }
   std::printf(sOk ? "ALL OK\n" : "FAILED\n");
   return sOk ? 0 : 1;
 }
@@ -820,6 +945,15 @@ int main(int argc, char** argv) {
     std::fprintf(stderr, "FAILED: %s\n", error.c_str());
     return 1;
   }
+  for (int i = 2; i + 1 < argc; i++) {
+    if (std::strcmp(argv[i], "--gen4") == 0) {
+      sGen4Pack = argv[i + 1];
+      if (!xr::LoadGen4Species(sGen4Pack / "randomizer.txt", error)) {
+        std::fprintf(stderr, "FAILED: %s\n", error.c_str());
+        return 2;
+      }
+    }
+  }
   if (std::strcmp(argv[2], "--selftest") == 0) return run_selftest(cat);
 
   er::Settings s;
@@ -855,6 +989,10 @@ int main(int argc, char** argv) {
       }
       s.Set(sc, kv.substr(0, eq), static_cast<uint32_t>(std::strtoul(kv.c_str() + eq + 1, nullptr, 10)));
       i++;
+    } else if (a == "--gen4" && v) {
+      i++;
+    } else if (a == "--gen4-spots") {
+      sGen4Spots = true;
     } else if (a == "--out" && v) {
       out = v;
       i++;

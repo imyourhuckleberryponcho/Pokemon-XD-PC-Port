@@ -356,4 +356,58 @@ bool ReadSave(const std::vector<uint8_t>& file, Save& out, ReadReport& report, s
   return true;
 }
 
+std::vector<std::string> UnknownIds(const Save& save, const TableCounts& counts) {
+  std::vector<std::string> out;
+  const auto look = [&](const Pokemon& p, const std::string& where) {
+    if (p.species != 0 && p.species >= counts.species) {
+      out.push_back(where + ": species " + std::to_string(p.species) + " (the game has " + std::to_string(counts.species) + ")");
+    }
+    if (p.species == 0) return;
+    if (p.heldItem != 0 && p.heldItem >= counts.items) {
+      out.push_back(where + ": held item " + std::to_string(p.heldItem) + " (the game has " + std::to_string(counts.items) + ")");
+    }
+    for (const Move& m : p.moves) {
+      if (m.id != 0 && m.id >= counts.moves) {
+        out.push_back(where + ": move " + std::to_string(m.id) + " (the game has " + std::to_string(counts.moves) + ")");
+      }
+    }
+  };
+  for (size_t i = 0; i < save.party.size(); i++) look(save.party[i], "party " + std::to_string(i + 1));
+  for (size_t b = 0; b < save.boxes.size(); b++) {
+    for (size_t i = 0; i < save.boxes[b].slots.size(); i++) {
+      look(save.boxes[b].slots[i], "box " + std::to_string(b + 1) + " slot " + std::to_string(i + 1));
+    }
+  }
+  look(save.dayCare, "day care");
+  for (size_t c = 0; c < save.chambers.size(); c++) {
+    for (size_t i = 0; i < save.chambers[c].size(); i++) look(save.chambers[c][i], "purify chamber " + std::to_string(c + 1));
+  }
+  for (size_t i = 0; i < save.shadows.size(); i++) {
+    if (save.shadows[i].species != 0 && save.shadows[i].species >= counts.species) {
+      out.push_back("shadow list " + std::to_string(i) + ": species " + std::to_string(save.shadows[i].species));
+    }
+  }
+  const auto pocket = [&](const std::vector<ItemSlot>& slots, const char* name) {
+    for (const ItemSlot& s : slots) {
+      if (s.item != 0 && s.count != 0 && s.item >= counts.items) {
+        out.push_back(std::string(name) + ": item " + std::to_string(s.item) + " (the game has " + std::to_string(counts.items) + ")");
+      }
+    }
+  };
+  pocket(save.items, "bag items");
+  pocket(save.keyItems, "key items");
+  pocket(save.balls, "balls");
+  pocket(save.tmHm, "TMs");
+  pocket(save.berries, "berries");
+  pocket(save.colognes, "colognes");
+  pocket(save.battleCds, "battle CDs");
+  pocket(save.pcItems, "PC items");
+  if (out.size() > 12) {
+    const size_t more = out.size() - 12;
+    out.resize(12);
+    out.push_back("... and " + std::to_string(more) + " more");
+  }
+  return out;
+}
+
 }

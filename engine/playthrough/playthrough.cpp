@@ -7,6 +7,7 @@
 #include <ctime>
 #include <fstream>
 #include <iterator>
+#include <set>
 #include <system_error>
 
 #ifndef _WIN32
@@ -149,6 +150,15 @@ std::string ToJson(const Setup& s) {
            ", \"version\": " + Quote(m.version) + ", \"applies\": " + Quote(mods::AppliesId(m.applies)) + "}";
   }
   out += s.mods.empty() ? "],\n" : "\n  ],\n";
+  if (!s.addedRows.empty()) {
+    out += "  \"added_rows\": [";
+    for (size_t i = 0; i < s.addedRows.size(); i++) {
+      const AddedRowRef& r = s.addedRows[i];
+      out += std::string(i > 0 ? "," : "") + "\n    {\"mod\": " + Quote(r.mod) + ", \"table\": " + Quote(r.table) + ", \"name\": " +
+             Quote(r.name) + ", \"id\": " + std::to_string(r.id) + "}";
+    }
+    out += "\n  ],\n";
+  }
   if (s.randomizer.empty()) {
     out += "  \"randomizer\": null,\n";
   } else {
@@ -224,6 +234,18 @@ bool FromJson(std::string_view text, Setup& out, std::string& error) {
       m.version = Text(v, "version");
       if (!mods::ParseApplies(Text(v, "applies"), m.applies)) m.applies = mods::Applies::NewPlaythrough;
       if (!m.id.empty()) out.mods.push_back(std::move(m));
+    }
+  }
+  const auto rowsIt = root.fields.find("added_rows");
+  if (rowsIt != root.fields.end() && rowsIt->second.kind == Value::Kind::Array) {
+    for (const Value& v : rowsIt->second.items) {
+      if (v.kind != Value::Kind::Object) continue;
+      AddedRowRef a;
+      a.mod = Text(v, "mod");
+      a.table = Text(v, "table");
+      a.name = Text(v, "name");
+      a.id = Number(v, "id");
+      if (!a.mod.empty() && !a.table.empty()) out.addedRows.push_back(std::move(a));
     }
   }
   const auto r = root.fields.find("randomizer");
@@ -321,6 +343,36 @@ Check Compare(const Setup& setup, const std::vector<mods::ModFolder>& found) {
     }
   }
   return check;
+}
+
+std::vector<std::string> BoundProblems(const Setup& setup, const std::vector<AddedRowRef>& now) {
+  std::vector<std::string> problems;
+  std::set<std::string> said;
+  const auto kind = [](const std::string& table) {
+    return table == "pokemon_data" ? "Pokemon" : table == "waza_data" ? "move" : table == "item_data_prime" ? "item" : "entry";
+  };
+  for (const AddedRowRef& want : setup.addedRows) {
+    if (std::find(now.begin(), now.end(), want) != now.end()) continue;
+    const AddedRowRef* moved = nullptr;
+    bool modThere = false;
+    for (const AddedRowRef& n : now) {
+      if (Lower(n.mod) == Lower(want.mod)) modThere = true;
+      if (Lower(n.mod) == Lower(want.mod) && n.table == want.table && n.name == want.name) moved = &n;
+    }
+    std::string text;
+    if (moved != nullptr) {
+      text = "the mod \"" + want.mod + "\" now gives the " + kind(want.table) + " \"" + want.name + "\" the number " +
+             std::to_string(moved->id) + ", the save has it as " + std::to_string(want.id) +
+             " (another mod before it, or another order of the mods)";
+    } else if (modThere) {
+      text = "the mod \"" + want.mod + "\" no longer adds the " + kind(want.table) + " \"" + want.name + "\" (it was changed)";
+    } else {
+      text = "the mod \"" + want.mod + "\" is not on: this save has its " + kind(want.table) + " \"" + want.name + "\" (number " +
+             std::to_string(want.id) + ")";
+    }
+    if (said.insert(text).second) problems.push_back(text);
+  }
+  return problems;
 }
 
 std::vector<std::string> WorldModIds(const Setup& setup) {

@@ -679,30 +679,30 @@ void scheduled_idle_step(std::unique_lock<SchedMutex>& lock) {
   idle_run(lock);
 }
 
-#ifndef _WIN32
 std::atomic<bool> gTimerQuit{false}, gTimerGone{false};
 void stop_timer_at_exit() {
+  const bool wasRunning = !gTimerGone.load();
   gTimerQuit.store(true);
-  gTimerCv.notify_all();
-  for (int i = 0; i < 300 && !gTimerGone.load(); ++i) {
+  int waited = 0;
+  for (; waited < 300 && !gTimerGone.load(); ++waited) {
+    gTimerCv.notify_all();
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  if (std::getenv("XD_EXIT_LOG") != nullptr) {
+    std::fprintf(stderr, "[exit] timer thread %s after %d ms%s\n", gTimerGone.load() ? "stopped" : "NOT stopped", waited,
+                 wasRunning ? " (it was running: before 2026-11-13 it ran on while the static objects were destroyed)" : "");
   }
 }
 #define TIMER_QUIT() gTimerQuit.load()
-#else
-#define TIMER_QUIT() false
-#endif
 
 void timer_main() {
   init_time();
   std::unique_lock<SchedMutex> lock(gSched);
   for (;;) {
-#ifndef _WIN32
     if (gTimerQuit.load()) {
       gTimerGone.store(true);
       return;
     }
-#endif
     if (gSchedOn) {
       scheduled_idle_step(lock);
       continue;
@@ -747,9 +747,8 @@ void ensure_timer() {
     gTimerStarted = true;
 #ifdef _WIN32
     timeBeginPeriod(1);
-#else
-    std::atexit(stop_timer_at_exit);
 #endif
+    std::atexit(stop_timer_at_exit);
     std::thread(timer_main).detach();
   }
 }

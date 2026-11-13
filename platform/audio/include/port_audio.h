@@ -20,6 +20,8 @@ typedef struct {
   uint32_t aiUnderruns;
   uint32_t outShortTimes;
   uint32_t outShortBytes;
+  uint32_t frozenQuietBytes;
+
   uint64_t aiHandlerNs;
   uint64_t dspNs;
   uint32_t reserveMs;
@@ -34,6 +36,8 @@ void PortAudio_SetFastForward(int factor);
 void PortAudio_SetVolume(float gain);
 
 void PortAudio_SetPaused(bool paused);
+
+void PortAudio_SetFrozen(bool frozen);
 
 int PortDsp_UseCoefDump(const uint8_t* bytes, size_t size);
 

@@ -31,7 +31,7 @@ const Source* FindSource(const std::vector<Source>& sources, std::string_view id
 bool AcceptsGameId(const Source& source, std::string_view gameId);
 std::filesystem::path ConverterPath(const Source& source, const std::filesystem::path& programFolder);
 std::vector<std::string> ConverterArguments(const Source& source, const std::string& disc, const std::string& gameDisc,
-                                            const std::filesystem::path& out);
+                                            const std::filesystem::path& out, const std::filesystem::path& out2 = {});
 
 struct Status {
   enum class Kind { NotSetUp, Ready, OutOfDate, ConverterMissing } kind = Kind::NotSetUp;
@@ -42,6 +42,14 @@ struct Status {
 };
 Status ComputeStatus(const std::filesystem::path& modFolder, const std::string& expectedModId, bool converterFound,
                      const std::string& converterVersion);
+
+struct SecondStatus {
+  enum class Kind { NotMade, Ready, OutOfDate } kind = Kind::NotMade;
+  std::string text, detail;
+  int species = 0;
+};
+SecondStatus ComputeSecondStatus(const std::filesystem::path& folder, const std::string& manifestFile, const std::string& expectedId,
+                                 int wantedVersion, const std::string& provides, bool firstOutOfDate);
 
 std::string QueryVersion(const std::filesystem::path& converter, const std::filesystem::path& logFile, int waitMs);
 
@@ -67,6 +75,7 @@ struct MakeRequest {
   std::filesystem::path converter;
   std::vector<std::string> arguments;
   std::filesystem::path outFolder;
+  std::filesystem::path outFolder2;
   std::filesystem::path logFile;
 };
 

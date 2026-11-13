@@ -28,16 +28,6 @@ bool PortShot_SavePng(const wchar_t* path, const uint8_t* rgba, uint32_t w, uint
 
 }
 
-#if defined(__APPLE__)
-extern "C" bool PortShot_SaveWindow(const wchar_t*) {
-  static bool said = false;
-  if (!said) {
-    said = true;
-    std::fprintf(stderr, "[window shot] a picture of the window as shown: not on macOS yet\n");
-  }
-  return false;
-}
-#else
 #include <port_freeze.h>
 
 #include <aurora/aurora.h>
@@ -485,5 +475,4 @@ bool PortShot_SaveWindow(const wchar_t* path) {
 }
 
 }
-#endif
 #endif
