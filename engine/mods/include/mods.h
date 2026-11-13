@@ -102,9 +102,21 @@ struct LoadOptions {
   std::function<bool(const DataCatalog& catalog, const EntryReader& read, std::vector<DataModFile>& out, std::string& error)>
       generateData;
   bool listReadOnly = false;
+  struct ExtraLayer {
+    std::string id;
+    std::string name;
+    std::filesystem::path folder;
+  };
+  std::vector<ExtraLayer> extraLayers;
 };
 
 struct LoadResult {
+  struct LayerResult {
+    std::string id;
+    size_t files = 0;
+    bool found = false;
+  };
+  std::vector<LayerResult> extraLayers;
   std::vector<Manifest> active;
   std::vector<AppliesVerdict> activeApplies;
   std::vector<Replacement> files;
@@ -129,11 +141,41 @@ struct ModFolder {
 };
 
 std::vector<ModFolder> FindMods(const std::filesystem::path& modsFolder, std::vector<Message>& messages);
+struct BrokenFolder {
+  std::string folderName;
+  std::string reason;
+};
+std::vector<ModFolder> FindMods(const std::filesystem::path& modsFolder, std::vector<Message>& messages,
+                                std::vector<BrokenFolder>& broken);
 bool ReadModListFile(const std::filesystem::path& file, ModList& list, std::vector<std::string>& warnings);
 bool WriteModListFile(const std::filesystem::path& file, const ModList& list);
 std::vector<std::string> AddNewMods(ModList& list, const std::vector<ModFolder>& found);
 
 AppliesVerdict CheckApplies(const ModFolder& mod, const LooksOrSound& looks, const DiscView* disc = nullptr);
+
+struct ModChanges {
+  std::vector<std::string> files;
+  std::vector<std::string> entries;
+  std::vector<std::string> dataFiles;
+  bool Empty() const { return files.empty() && entries.empty() && dataFiles.empty(); }
+};
+ModChanges ChangesOf(const ModFolder& mod);
+std::string DescribeChanges(const ModChanges& changes);
+
+struct ReviewRow {
+  std::string id;
+  bool on = false;
+  const ModFolder* mod = nullptr;
+  std::vector<std::string> problems;
+  std::vector<std::string> warnings;
+  bool Usable() const { return mod != nullptr && problems.empty(); }
+};
+struct Review {
+  std::vector<ReviewRow> rows;
+};
+Review ReviewList(const ModList::Profile& profile, const std::vector<ModFolder>& found, std::string_view gameId);
+
+bool MoveMod(ModList::Profile& profile, size_t index, int dir);
 
 }
 

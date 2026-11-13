@@ -34,7 +34,16 @@ uint32_t sBetweenTotal = 0;
 double sBetweenStart = 0.0;
 constexpr double kSlowMs = 8.0;
 constexpr uint32_t kPausePictures = 150;
+constexpr uint32_t kStrikePictures = 60;
 uint32_t sPause = 0;
+uint32_t sStrikeAge = kStrikePictures;
+
+bool Strike() {
+  const bool again = sStrikeAge < kStrikePictures;
+  sStrikeAge = 0;
+  if (again) sPause = kPausePictures;
+  return again;
+}
 struct Switch {
   uint32_t field;
   bool on;
@@ -52,6 +61,18 @@ struct Counts {
   AuroraInterpInfo last{};
 } sCounts;
 uint32_t sLogField = 0;
+int sLogPictures = 0;
+
+void Why(const char* why, uint32_t field, uint32_t fresh, uint32_t gap, const AuroraInterpInfo& i) {
+  if (sLogPictures == 0) return;
+  std::fprintf(stderr,
+               "[frame rate] picture %u field %u: %s%s%s; new pictures %u, fields since the last %u; %u transform "
+               "sets, %u 3D, %u found, %u moved, %u jumped, %u new, %u unknown; sprites: %u in steady motion, %u moved "
+               "otherwise\n",
+               i.pictures, field, why == nullptr ? "in-between" : "none (", why == nullptr ? "" : why,
+               why == nullptr ? "" : ")", fresh, gap, i.draws, i.perspective, i.matched, i.moved, i.jumped, i.fresh,
+               i.unknown, i.sprites, i.unsteady);
+}
 
 double NowMs() {
   return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count();
@@ -63,11 +84,11 @@ void Log(uint32_t field) {
   std::fprintf(stderr,
                "[frame rate] %u fields: %u game pictures, %u in-between pictures (%.0f%%); none because: rhythm %u, "
                "next picture begun %u, no match %u, fast-forward %u, frozen %u, no room %u, PC too slow %u; per in-between picture %.0f draws "
-               "blended, %.0f as they are, %.2f ms of extra work; fullest frame buffer %.0f%%; last comparison: %u transform sets, %u 3D, %u found, %u moved, %u jumped\n",
+               "blended, %.0f as they are, %.2f ms of extra work; fullest frame buffer %.0f%%; last comparison: %u transform sets, %u 3D, %u found, %u moved, %u jumped, %u new, %u unknown, %u unsteady; slipped %u\n",
                c.fields, c.pictures, c.between, c.pictures ? 100.0 * c.between / c.pictures : 0.0, c.rhythm, c.partial,
                c.unmatched, c.fast, c.busy, c.full, c.slow, c.between ? static_cast<double>(c.blended) / c.between : 0.0,
                c.between ? static_cast<double>(c.plain) / c.between : 0.0, c.between ? c.ms / c.between : 0.0, c.use * 100.0, c.last.draws, c.last.perspective,
-               c.last.matched, c.last.moved, c.last.jumped);
+               c.last.matched, c.last.moved, c.last.jumped, c.last.fresh, c.last.unknown, c.last.unsteady, c.last.slipped);
   std::fflush(stderr);
   sCounts = Counts{};
   sLogField = field;
@@ -90,6 +111,7 @@ static void FollowSetting() {
   sHavePicture = false;
   sLastHadBetween = false;
   sPause = 0;
+  sStrikeAge = kStrikePictures;
   if (sOn) {
     PortFreeze_Capture();
     AuroraInterpSetMode(AURORA_INTERP_RECORD, 1.f);
@@ -115,6 +137,7 @@ bool PortFrameRate_Init(uint32_t (*field)(void)) {
   if (const char* log = std::getenv("XD_FRAME_RATE_LOG"); log != nullptr && std::atof(log) > 0.0) {
     sLogFields = static_cast<uint32_t>(std::atof(log) * 60.0);
   }
+  if (const char* pics = std::getenv("XD_FRAME_RATE_LOG_PICTURES"); pics != nullptr) sLogPictures = std::atoi(pics);
   if (const char* fast = std::getenv("XD_FRAME_RATE_FAST"); fast != nullptr && fast[0] == '1') sFastToo = true;
   if (const char* at = std::getenv("XD_FRAME_RATE_AT"); at != nullptr) {
     for (const char* q = at; *q != '\0' && sSwitchCount < 8;) {
@@ -158,6 +181,7 @@ void PortFrameRate_BeforePresent(void) {
   if (fresh == 0) return;
   sCounts.pictures += fresh;
   const uint32_t gap = field - sPictureField;
+  sStrikeAge = sStrikeAge > kStrikePictures ? sStrikeAge : sStrikeAge + fresh;
   const bool hadPicture = sHavePicture;
   const bool lastHadBetween = sLastHadBetween;
   sLastHadBetween = false;
@@ -166,19 +190,22 @@ void PortFrameRate_BeforePresent(void) {
   if (sPause > 0) {
     sPause = fresh >= sPause ? 0 : sPause - fresh;
     sCounts.slow++;
+    Why("PC too slow: pause", field, fresh, gap, info);
     return;
   }
-  if (lastHadBetween && fresh == 1 && gap == 3) {
-    sPause = kPausePictures;
+  if (lastHadBetween && fresh == 1 && gap == 3 && Strike()) {
     sCounts.slow++;
+    Why("late picture, twice", field, fresh, gap, info);
     return;
   }
   if (!hadPicture || fresh != 1 || gap < 2 || gap > 4) {
     sCounts.rhythm++;
+    Why("rhythm", field, fresh, gap, info);
     return;
   }
   if (info.pending != 0) {
     sCounts.partial++;
+    Why("next picture begun", field, fresh, gap, info);
     return;
   }
   if (aurora::time::scale() > 1.5f && !sFastToo) {
@@ -188,10 +215,13 @@ void PortFrameRate_BeforePresent(void) {
   sCounts.last = info;
   if (!info.usable) {
     sCounts.unmatched++;
+    Why(info.moved == 0 && info.jumped == 0 ? "nothing moved" : info.moved != 0 && info.moved <= info.unsteady ? "only sprites not in steady motion" : "a cut",
+        field, fresh, gap, info);
     return;
   }
   if (use > 0.3f) {
     sCounts.full++;
+    Why("no room", field, fresh, gap, info);
     return;
   }
   const double start = NowMs();
@@ -199,6 +229,7 @@ void PortFrameRate_BeforePresent(void) {
     sCounts.busy++;
     return;
   }
+  if (sLogPictures >= 2) Why(nullptr, field, fresh, gap, info);
   AuroraInterpSetMode(AURORA_INTERP_REPLAY, sBlend);
   PortFreeze_DrawPicture();
   sBetween = true;
@@ -222,7 +253,7 @@ void PortFrameRate_AfterBegin(void) {
   PortFreeze_RedrawEnd();
   const double took = NowMs() - start;
   sCounts.ms += took;
-  if (sBetweenStart + took > kSlowMs && !sFastToo) sPause = kPausePictures;
+  if (sBetweenStart + took > kSlowMs && !sFastToo) Strike();
   sCounts.blended += blended;
   sCounts.plain += plain;
 }

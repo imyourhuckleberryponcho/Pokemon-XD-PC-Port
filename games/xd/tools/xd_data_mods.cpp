@@ -60,7 +60,12 @@ bool read_disc_entry_uncached(const std::string& archive, const std::string& ent
   bool ok = false;
   if (Fsys_Open(file, size, &f)) {
     int index = -1;
-    for (uint32_t i = 0; i < f.count; i++) {
+    const bool byNumber = entry.size() >= 2 && entry[0] == '#';
+    if (byNumber) {
+      const unsigned long n = std::strtoul(entry.c_str() + 1, nullptr, 10);
+      if (n < f.count) index = static_cast<int>(n);
+    }
+    for (uint32_t i = 0; i < f.count && !byNumber; i++) {
       FsysEntry e;
       if (Fsys_Entry(&f, i, &e) && (std::strcmp(e.fullName, entry.c_str()) == 0 || (index < 0 && std::strcmp(e.name, entry.c_str()) == 0))) {
         index = static_cast<int>(i);
@@ -329,6 +334,31 @@ int show_names(const em::DataCatalog& cat, const char* name) {
   return 0;
 }
 
+int show_text(const em::DataCatalog& cat, const char* fromText, const char* toText) {
+  const uint32_t from = static_cast<uint32_t>(std::strtoul(fromText, nullptr, 0));
+  const uint32_t to = toText != nullptr ? static_cast<uint32_t>(std::strtoul(toText, nullptr, 0)) : from;
+  if (cat.text.places.empty() || !cat.text.read) {
+    std::fprintf(stderr, "no message table that data files can change was found on this disc\n");
+    return 1;
+  }
+  for (const em::DataPlace& p : cat.text.places) {
+    std::vector<uint8_t> bytes;
+    if (!read_disc_entry(p.archive, p.entry, bytes) || p.offset >= bytes.size()) continue;
+    for (uint32_t id = from; id <= to && id >= from; id++) {
+      std::string text;
+      if (!cat.text.read(bytes.data() + p.offset, bytes.size() - p.offset, id, text)) continue;
+      std::string shown;
+      for (char c : text) {
+        if (c == '"' || c == '\\') shown.push_back('\\');
+        if (c == '\n') shown += "\\n";
+        else shown.push_back(c);
+      }
+      std::printf("    \"#%u\": \"%s\"\n", id, shown.c_str());
+    }
+  }
+  return 0;
+}
+
 int run_mods(const fs::path& modsFolder, const fs::path& listFile) {
   em::LoadOptions options;
   options.modsFolder = modsFolder;
@@ -531,6 +561,7 @@ int main(int argc, char** argv) {
   if (mode == "--fields" && argc >= 4) return list_fields(*cat, argv[3]);
   if (mode == "--show" && argc >= 5) return show_entry(*cat, argv[3], argv[4]);
   if (mode == "--names" && argc >= 4) return show_names(*cat, argv[3]);
+  if (mode == "--text" && argc >= 4) return show_text(*cat, argv[3], argc >= 5 ? argv[4] : nullptr);
   if (mode == "--selftest") return selftest(*cat);
   std::fprintf(stderr, "unknown or incomplete option %s\n", argv[2]);
   return 2;

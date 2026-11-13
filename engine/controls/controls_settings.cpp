@@ -126,9 +126,10 @@ void RegisterSettings(Registry& registry) {
                      .Preference().Implemented());
     registry.Add(Definition::Enum(Id(kGamepad, port, "layout"), Category::Controls, "Button layout",
                                   "Where the GameCube's A, B, X and Y buttons go on a PC controller by default. "
-                                  "position: by place (A is the bottom button, as on the GameCube); label: by the "
-                                  "letter printed on the button.",
-                                  {{"position", "By position"}, {"label", "By label"}}, "position", "position")
+                                  "auto: by the letter printed on Nintendo controllers (Switch Pro, Joy-Cons), by "
+                                  "place on the others; position: by place (A is the bottom button, as on the "
+                                  "GameCube); label: by the letter printed on the button.",
+                                  {{"auto", "Auto"}, {"position", "By position"}, {"label", "By label"}}, "auto", "auto")
                      .Preference().Implemented());
     for (size_t i = 0; i < kGcInputCount; i++) {
       const GcInput gc = static_cast<GcInput>(i);
@@ -197,8 +198,10 @@ PortMap ReadPort(const Registry& registry, int port) {
     map.keyboard.walkPercent = tilt.Get();
   }
   if (const auto layout = registry.Enum(Id(kGamepad, port, "layout")); layout.Valid()) {
-    map.gamepad.layout =
-        layout.Get() == registry.ChoiceIndex(Id(kGamepad, port, "layout"), "label") ? Layout::Label : Layout::Position;
+    const std::string id = Id(kGamepad, port, "layout");
+    map.gamepad.layout = layout.Get() == registry.ChoiceIndex(id, "label")      ? Layout::Label
+                         : layout.Get() == registry.ChoiceIndex(id, "position") ? Layout::Position
+                                                                                 : Layout::Auto;
   }
   if (ControllerChoice c; ParseChoice(registry.Text(Id(kGamepad, port, "controller")), c)) {
     map.controller = std::move(c);
@@ -258,7 +261,9 @@ bool WritePort(Registry& registry, int port, const PortMap& map) {
   }
   ok &= registry.SetEnum(Id(kGamepad, port, "kind"), kind);
   ok &= registry.SetBool(Id(kGamepad, port, "rumble"), map.gamepad.rumble);
-  ok &= registry.SetEnum(Id(kGamepad, port, "layout"), map.gamepad.layout == Layout::Label ? "label" : "position");
+  ok &= registry.SetEnum(Id(kGamepad, port, "layout"), map.gamepad.layout == Layout::Label      ? "label"
+                                                       : map.gamepad.layout == Layout::Position ? "position"
+                                                                                                : "auto");
   ok &= registry.SetFloat(Id(kGamepad, port, "left_stick_deadzone"), map.gamepad.leftStickDeadzone);
   ok &= registry.SetFloat(Id(kGamepad, port, "right_stick_deadzone"), map.gamepad.rightStickDeadzone);
   ok &= registry.SetFloat(Id(kGamepad, port, "l_click"), map.gamepad.lClickThreshold);

@@ -121,13 +121,14 @@ struct Json {
   int64_t number = 0;
   std::string text;
   std::vector<Json> items;
-  std::vector<std::pair<std::string, Json>> members;
+  std::vector<std::string> memberNames;
+  std::vector<Json> memberValues;
   size_t begin = 0, end = 0;
 
   const Json* Member(std::string_view name) const {
-    for (const auto& [key, value] : members) {
-      if (key == name) {
-        return &value;
+    for (size_t i = 0; i < memberNames.size(); i++) {
+      if (memberNames[i] == name) {
+        return &memberValues[i];
       }
     }
     return nullptr;
@@ -236,7 +237,8 @@ class Reader {
       if (!Value(member, depth + 1)) {
         return false;
       }
-      v.members.emplace_back(std::move(key), std::move(member));
+      v.memberNames.push_back(std::move(key));
+      v.memberValues.push_back(std::move(member));
       Space();
       if (p_ < t_.size() && t_[p_] == ',') {
         p_++;

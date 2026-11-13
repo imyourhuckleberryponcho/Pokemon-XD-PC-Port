@@ -227,6 +227,15 @@ Each is small and could go upstream:
   Also `AuroraGetFrameBufferUse` (how full the frame's fixed-size buffers are: a replay in the same frame needs
   room), and `AuroraRestoreGXState` (patch 0021) now keeps the vertex arrays uploaded in the frame known and
   uploads the restored state's arrays again when next used.
+- `0032-frame-interpolation-steady-pieces.patch` (on top of 0031; docs/FRAME_RATE.md "Tests 2", "2D"): the pairing
+  and the decision "blend or not" are made once, when a picture is whole, per set of transforms with all the draws
+  that used it; a replay only looks the decision up (and blends nothing if the transforms it is about to send are
+  not the recorded ones: `slipped` in `AuroraInterpInfo`). A draw's matrices are compared only in the slots its
+  vertices really use (unused slots made skinned models "jump"); a cut is "more than half of the models found
+  again jumped"; models whose vertex arrays change address every picture are found by their indices; sprites,
+  letters and particles (positions in the command) are told apart by their corners and texture coordinates and
+  blended only in steady motion (or when they hardly moved). New `AuroraInterpInfo` fields: fresh, unknown,
+  unsteady, sprites, slipped.
 
 `patches/aurora-32bit-experiment.patch`: the three small fixes Aurora needed to compile as 32-bit
 (2026-11-04 experiment, ARCHITECTURE.md "hard parts" 2). Not applied (the port is 64-bit).

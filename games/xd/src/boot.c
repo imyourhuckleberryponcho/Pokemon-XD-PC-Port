@@ -93,6 +93,7 @@ void PortXD_PlaythroughBoot(void);
 void PortXD_PlaythroughFrame(void);
 const char* PortXD_PlaythroughHeader(void);
 const char* PortXD_ActiveMods(void);
+const char* PortXD_ExtraAssetsText(void);
 bool PortInput_LoadScript(const char* script);
 void PortInput_ScriptField(uint32_t field);
 void PortVI_SetFieldHook(void (*hook)(uint32_t field));
@@ -329,6 +330,9 @@ static void start_input_recording(const char* discPath) {
   const char* mods = PortXD_ActiveMods();
   if (mods[0] != '\0' && n > 0 && n < (int)sizeof header) {
     n += snprintf(header + n, sizeof header - n, "mods %s\n", mods);
+  }
+  if (PortXD_ExtraAssetsText()[0] != '\0' && n > 0 && n < (int)sizeof header) {
+    n += snprintf(header + n, sizeof header - n, "extra assets %s\n", PortXD_ExtraAssetsText());
   }
   if (n > 0 && n < (int)sizeof header) {
     n += snprintf(header + n, sizeof header - n, "%s\n", PortXD_PlaythroughHeader());

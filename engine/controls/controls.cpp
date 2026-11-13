@@ -456,6 +456,44 @@ int NthOfModel(const std::vector<ConnectedPad>& pads, size_t index) {
   return nth;
 }
 
+bool IsBuiltInPad(const ConnectedPad& pad) {
+  if (pad.vendor == 0x28de && pad.product == 0x1205) {
+    return true;
+  }
+  return pad.name.rfind("Steam Deck", 0) == 0;
+}
+
+bool AutoFollowsPresses(const std::array<ControllerChoice, 4>& choices) {
+  for (size_t port = 1; port < choices.size(); port++) {
+    if (choices[port].mode != ControllerChoice::Mode::None) {
+      return false;
+    }
+  }
+  return true;
+}
+
+int PreferredAutoPad(const std::vector<ConnectedPad>& pads, int lastPressed) {
+  if (pads.size() < 2) {
+    return -1;
+  }
+  if (lastPressed >= 0 && static_cast<size_t>(lastPressed) < pads.size()) {
+    return lastPressed;
+  }
+  bool anyBuiltIn = false;
+  for (const ConnectedPad& pad : pads) {
+    anyBuiltIn = anyBuiltIn || IsBuiltInPad(pad);
+  }
+  if (!anyBuiltIn) {
+    return -1;
+  }
+  for (size_t i = 0; i < pads.size(); i++) {
+    if (!IsBuiltInPad(pads[i])) {
+      return static_cast<int>(i);
+    }
+  }
+  return -1;
+}
+
 std::array<int, 4> AssignControllers(const std::array<ControllerChoice, 4>& choices,
                                      const std::vector<ConnectedPad>& pads) {
   std::array<int, 4> out{-1, -1, -1, -1};
@@ -539,7 +577,7 @@ std::optional<PadPreset> PadPresetOf(const GamepadMap& map) {
 std::vector<Input> DefaultPadInputs(GcInput input, Device device, Layout layout) {
   using B = PadButton;
   const FaceLayout faces = PositionFaces(device);
-  const bool labels = layout == Layout::Label;
+  const bool labels = EffectiveLayout(layout, device) == Layout::Label;
   switch (input) {
   case GcInput::A: return {labels ? Input::Label(FaceLabel::A) : Input::Button(faces.a)};
   case GcInput::B: return {labels ? Input::Label(FaceLabel::B) : Input::Button(faces.b)};
@@ -585,8 +623,8 @@ std::vector<Input> PadInputs(const GamepadMap& map, GcInput input, Device device
   return own ? *own : DefaultPadInputs(input, device, map.layout);
 }
 
-bool UsesDefaultButtons(const GamepadMap& map) {
-  return map.layout == Layout::Position && !map.kind &&
+bool UsesDefaultButtons(const GamepadMap& map, Device device) {
+  return EffectiveLayout(map.layout, device) == Layout::Position && !map.kind &&
          std::all_of(map.buttons.begin(), map.buttons.end(), [](const auto& b) { return !b.has_value(); });
 }
 

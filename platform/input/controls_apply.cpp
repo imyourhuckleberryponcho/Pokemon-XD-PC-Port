@@ -164,13 +164,14 @@ void ApplyController(int port, const ec::GamepadMap& map, aurora::input::SourceI
     std::fprintf(stderr, "[platform/input] controller %d: Aurora refused the deadzone / click settings\n", port + 1);
   }
   const bool emulate = settings.emulateTriggers;
-  if (ec::UsesDefaultButtons(map)) {
+  const ec::Device device = ec::EffectiveDevice(map, Classify(GamepadOf(source)));
+  if (ec::UsesDefaultButtons(map, device)) {
     if (HasOverrides(target)) {
       aurora::pad::reset_to_defaults(target);
     }
     return;
   }
-  SetAll(target, ec::ResolveGamepad(map, ec::EffectiveDevice(map, Classify(GamepadOf(source))), emulate));
+  SetAll(target, ec::ResolveGamepad(map, device, emulate));
 }
 
 struct Pads {
@@ -184,7 +185,7 @@ Pads ConnectedPads() {
       continue;
     }
     if (const auto id = aurora::pad::controller_identity(source.id)) {
-      found.push_back({source.id, {id->guid, id->name}});
+      found.push_back({source.id, {id->guid, id->name, id->vid, id->pid}});
     }
   }
   std::sort(found.begin(), found.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
@@ -199,14 +200,59 @@ Pads ConnectedPads() {
 std::array<ec::ControllerChoice, ec::kPorts> sChoices;
 bool sChoicesApplied = false;
 std::vector<aurora::input::SourceId> sPadSources;
+aurora::input::SourceId sLastPressedPad = aurora::input::kInvalidSourceId;
+aurora::input::SourceId sLastPressedApplied = aurora::input::kInvalidSourceId;
+aurora::input::SourceId sAutoPick = aurora::input::kInvalidSourceId;
+
+aurora::input::SourceId AutoPick(const Pads& pads, bool followPresses) {
+  int last = -1;
+  for (size_t i = 0; i < pads.sources.size(); i++) {
+    if (followPresses && pads.sources[i] == sLastPressedPad) {
+      last = static_cast<int>(i);
+    }
+  }
+  const int pick = ec::PreferredAutoPad(pads.pads, last);
+  return pick >= 0 ? pads.sources[static_cast<size_t>(pick)] : aurora::input::kInvalidSourceId;
+}
 
 void ApplyChoices(const std::array<ec::ControllerChoice, ec::kPorts>& choices, const Pads& pads) {
+  const aurora::input::SourceId autoPick =
+      choices[0].mode == ec::ControllerChoice::Mode::Auto ? AutoPick(pads, ec::AutoFollowsPresses(choices)) : aurora::input::kInvalidSourceId;
+  if (autoPick != sAutoPick && choices[0].mode == ec::ControllerChoice::Mode::Auto) {
+    sAutoPick = autoPick;
+    if (autoPick != aurora::input::kInvalidSourceId) {
+      std::string name;
+      bool builtIn = false;
+      for (size_t i = 0; i < pads.sources.size(); i++) {
+        if (pads.sources[i] == autoPick) {
+          name = pads.pads[i].name;
+          builtIn = ec::IsBuiltInPad(pads.pads[i]);
+        }
+      }
+      std::fprintf(stderr, "[platform/input] controller 1: auto -> %s (%s)\n", name.c_str(),
+                   autoPick == sLastPressedPad && ec::AutoFollowsPresses(choices) ? "pressed most recently"
+                   : builtIn                  ? "built-in"
+                                              : "outside controller preferred over built-in");
+    } else {
+      std::fprintf(stderr, "[platform/input] controller 1: auto -> the first free PC controller\n");
+    }
+  }
+  if (choices[0].mode != ec::ControllerChoice::Mode::Auto) {
+    sAutoPick = aurora::input::kInvalidSourceId;
+  }
   for (int pass = 0; pass < 2; pass++) {
     for (int port = 0; port < ec::kPorts; port++) {
       const ec::ControllerChoice& c = choices[static_cast<size_t>(port)];
       const uint32_t p = static_cast<uint32_t>(port);
-      const bool pinned = c.mode == ec::ControllerChoice::Mode::Pinned;
+      const bool autoPinned = port == 0 && c.mode == ec::ControllerChoice::Mode::Auto && autoPick != aurora::input::kInvalidSourceId;
+      const bool pinned = c.mode == ec::ControllerChoice::Mode::Pinned || autoPinned;
       if ((pass == 0) != pinned) {
+        continue;
+      }
+      if (autoPinned) {
+        if (aurora::pad::port_controller(p) != autoPick) {
+          aurora::pad::set_port_controller(p, autoPick);
+        }
         continue;
       }
       if (c.mode == ec::ControllerChoice::Mode::Auto) {
@@ -248,9 +294,10 @@ void UpdateChoices(const engine::settings::Registry& registry, bool settingsChan
   }
   Pads pads = ConnectedPads();
   const bool newChoices = !sChoicesApplied || choices != sChoices;
-  if (!newChoices && pads.sources == sPadSources) {
+  if (!newChoices && pads.sources == sPadSources && sLastPressedPad == sLastPressedApplied) {
     return;
   }
+  sLastPressedApplied = sLastPressedPad;
   ApplyChoices(choices, pads);
   if (newChoices) {
     for (int port = 0; port < ec::kPorts; port++) {
@@ -314,6 +361,9 @@ extern "C" void PortInput_ControlsHandleEvent(const SDL_Event* event) {
     return;
   }
   bool keyboard;
+  if (event->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) {
+    sLastPressedPad = aurora::input::source_for_gamepad(event->gbutton.which);
+  }
   if (event->type == SDL_EVENT_KEY_DOWN && !event->key.repeat) {
     const ec::PortMap& map = sApplied[0].map;
     bool bound = map.keyboard.walk.kind == ec::Input::Kind::Key && map.keyboard.walk.code == event->key.scancode;
@@ -333,7 +383,12 @@ extern "C" void PortInput_ControlsHandleEvent(const SDL_Event* event) {
     keyboard = true;
   } else if (event->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN ||
              (event->type == SDL_EVENT_GAMEPAD_AXIS_MOTION && (event->gaxis.value > 16000 || event->gaxis.value < -16000))) {
-    const aurora::input::SourceId source = aurora::pad::port_controller(0);
+    aurora::input::SourceId source = aurora::pad::port_controller(0);
+    if (event->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && sChoices[0].mode == ec::ControllerChoice::Mode::Auto && ec::AutoFollowsPresses(sChoices) &&
+        sLastPressedPad != aurora::input::kInvalidSourceId &&
+        std::find(sPadSources.begin(), sPadSources.end(), sLastPressedPad) != sPadSources.end()) {
+      source = sLastPressedPad;
+    }
     if (source == aurora::input::kInvalidSourceId) {
       return;
     }

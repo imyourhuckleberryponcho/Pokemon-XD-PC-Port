@@ -33,7 +33,7 @@ constexpr uint32_t kLevelsByStrength = 5;
 er::Schema MakeSchema() {
   er::Schema s;
   s.prefix = "XDR";
-  s.version = 3;
+  s.version = 4;
   const std::vector<std::string> onOff = {"off", "on"};
   s.switches = {
       {"wild", "Randomize Poke Spot Pokemon", onOff},
@@ -54,6 +54,11 @@ er::Schema MakeSchema() {
       {"trainer_levels", "Trainers' Pokemon: levels", {"kept", "+10%", "+20%", "+30%", "+50%", "matched to the new Pokemon's strength"}, 3},
       {"trainer_items", "Trainers' Pokemon: held items", {"kept", "random", "none"}, 3},
       {"trainer_natures", "Trainers' Pokemon: natures", {"kept", "random"}, 3},
+      {"shops", "Poke Mart stock", {"off", "shuffled", "everyday goods", "anything"}, 4},
+      {"tutor_moves", "Move tutor's moves", {"off", "random", "random, no one-hit-KO moves"}, 4},
+      {"wild.scope", "Poke Spots: scope", {"each spot its own", "same swap everywhere"}, 4},
+      {"wild.types", "Poke Spots: keep the type theme", {"off", "similar types"}, 4},
+      {"wild_levels", "Poke Spot Pokemon: levels", {"kept", "+10%", "+20%", "+30%", "+50%"}, 4},
   };
   return s;
 }
@@ -110,6 +115,21 @@ public:
       }
     }
     return "#" + std::to_string(v);
+  }
+  std::string Text(uint32_t id) const {
+    if (!cat_.text.read) return "";
+    for (const em::DataPlace& p : cat_.text.places) {
+      auto key = std::make_pair(p.archive, p.entry);
+      auto it = cache_.find(key);
+      if (it == cache_.end()) {
+        std::vector<uint8_t> bytes;
+        if (!read_(p.archive, p.entry, bytes)) bytes.clear();
+        it = cache_.emplace(key, std::move(bytes)).first;
+      }
+      std::string out;
+      if (p.offset < it->second.size() && cat_.text.read(it->second.data() + p.offset, it->second.size() - p.offset, id, out)) return out;
+    }
+    return "";
   }
 
 private:
@@ -210,17 +230,43 @@ uint32_t Pick(er::Rng& rng, const std::vector<uint32_t>& pool, const Species& sp
   return from[rng.Below(static_cast<uint32_t>(from.size()))];
 }
 
+constexpr const char* kSpots[] = {"esabapokemondata_E1", "esabapokemondata_E2", "esabapokemondata_E3"};
+
+bool SharesType(const Tables& t, uint32_t a, uint32_t b) {
+  for (uint32_t i = 0; i < 2; i++) {
+    for (uint32_t k = 0; k < 2; k++) {
+      if (t.Get("pokemon_data", a, "zokuseiDataId", i) == t.Get("pokemon_data", b, "zokuseiDataId", k)) return true;
+    }
+  }
+  return false;
+}
+
 void Wild(const Tables& t, const Species& sp, const er::Settings& s, Result& r) {
   const auto& sc = GetSchema();
   er::Rng rng = er::Rng::Stream(s.seed, "wild");
   const auto pool = PoolFor(sp, s.Get(sc, "legendaries") == 2);
-  const bool similar = s.Get(sc, "wild.similar") != 0;
-  for (const char* spot : {"esabapokemondata_E1", "esabapokemondata_E2", "esabapokemondata_E3"}) {
-    std::vector<bool> used(sp.bst.size(), false);
+  const bool similar = s.Get(sc, "wild.similar") != 0, global = s.Get(sc, "wild.scope") != 0, types = s.Get(sc, "wild.types") != 0;
+  std::vector<bool> usedEverywhere(sp.bst.size(), false);
+  std::map<uint32_t, uint32_t> swap;
+  for (const char* spot : kSpots) {
+    std::vector<bool> usedHere(sp.bst.size(), false);
+    std::vector<bool>& used = global ? usedEverywhere : usedHere;
     for (uint32_t i = 0; i < t.Count(spot); i++) {
       const uint32_t old = t.Get(spot, i, "id");
       if (old == 0) continue;
-      const uint32_t now = Pick(rng, pool, sp, old, similar, &used);
+      uint32_t now = 0;
+      if (const auto known = swap.find(old); global && known != swap.end()) {
+        now = known->second;
+      } else if (types) {
+        std::vector<uint32_t> themed;
+        for (uint32_t x : pool) {
+          if (SharesType(t, old, x)) themed.push_back(x);
+        }
+        now = Pick(rng, themed.size() >= 3 ? themed : pool, sp, old, similar, &used);
+      } else {
+        now = Pick(rng, pool, sp, old, similar, &used);
+      }
+      swap[old] = now;
       used[now] = true;
       r.mod.Set(spot, i, "id", now);
       r.mod.spoiler.push_back(std::string("Poke Spot ") + spot + " #" + std::to_string(i) + ": " + t.Name("species", old) +
@@ -596,6 +642,109 @@ std::string TmName(uint32_t machine) {
   return text;
 }
 
+constexpr const char* kLineBreak = "{00}";
+
+std::string FitLines(const std::string& text) {
+  std::vector<std::string> words;
+  std::string flat = text;
+  for (size_t p; (p = flat.find(kLineBreak)) != std::string::npos;) flat.replace(p, 4, " ");
+  if (flat.find('{') != std::string::npos) return "";
+  for (size_t i = 0; i < flat.size();) {
+    const size_t e = flat.find(' ', i);
+    if (e != i) words.push_back(flat.substr(i, e == std::string::npos ? e : e - i));
+    if (e == std::string::npos) break;
+    i = e + 1;
+  }
+  if (words.empty()) return "";
+  const auto length = [](const std::string& w) {
+    size_t n = 0;
+    for (unsigned char c : w) n += (c & 0xC0) != 0x80 ? 1 : 0;
+    return n;
+  };
+  const auto join = [&](size_t from, size_t to) {
+    std::string line;
+    for (size_t i = from; i < to; i++) line += (i != from ? " " : "") + words[i];
+    return line;
+  };
+  for (size_t width : {19u, 20u, 21u}) {
+    std::vector<std::string> lines;
+    std::string cur;
+    for (const std::string& w : words) {
+      if (!cur.empty() && length(cur) + 1 + length(w) > width) {
+        lines.push_back(cur);
+        cur = w;
+      } else {
+        cur += (cur.empty() ? "" : " ") + w;
+      }
+    }
+    lines.push_back(cur);
+    bool fits = lines.size() <= 3;
+    for (const std::string& l : lines) fits = fits && length(l) <= width;
+    if (!fits) continue;
+    std::string out;
+    for (size_t i = 0; i < lines.size(); i++) out += (i != 0 ? kLineBreak : "") + lines[i];
+    return out;
+  }
+  size_t bestA = 1, bestB = 2, best = SIZE_MAX;
+  for (size_t a = 1; a < words.size(); a++) {
+    for (size_t b = a + 1; b < words.size(); b++) {
+      const size_t longest = std::max({length(join(0, a)), length(join(a, b)), length(join(b, words.size()))});
+      if (longest < best) best = longest, bestA = a, bestB = b;
+    }
+  }
+  if (best == SIZE_MAX) return join(0, words.size());
+  return join(0, bestA) + kLineBreak + join(bestA, bestB) + kLineBreak + join(bestB, words.size());
+}
+
+size_t TextBytes(const std::string& text) {
+  size_t n = 2;
+  for (size_t i = 0; i < text.size(); i++) {
+    if (text.compare(i, 4, kLineBreak) == 0) {
+      n += 3;
+      i += 3;
+    } else if ((static_cast<unsigned char>(text[i]) & 0xC0) != 0x80) {
+      n += 2;
+    }
+  }
+  return n;
+}
+
+void TmTexts(const Tables& t, const TmMoves& tm, Result& r) {
+  struct Plan {
+    uint32_t item, own;
+    std::string text;
+    bool fitted;
+  };
+  std::vector<Plan> plans;
+  std::set<uint32_t> owns;
+  size_t room = 0;
+  for (uint32_t machine : tm.machines) {
+    const uint32_t item = tm.itemOf.at(machine), own = t.Get("item_data_prime", item, "doc");
+    const std::string old = t.Text(own);
+    if (own == 0 || old.empty() || !owns.insert(own).second) return;
+    room += TextBytes(old);
+    const uint32_t now = NowValue(t, r, "item_waza_machine_no", machine, "wazaID");
+    const auto disc = tm.docOf.find(now);
+    Plan p{item, own, disc != tm.docOf.end() ? t.Text(disc->second) : FitLines(t.Text(t.Get("waza_data", now, "doc"))), disc == tm.docOf.end()};
+    plans.push_back(p);
+  }
+  for (;;) {
+    size_t need = 0;
+    Plan* longest = nullptr;
+    for (Plan& p : plans) {
+      need += TextBytes(p.text);
+      if (p.fitted && !p.text.empty() && (longest == nullptr || p.text.size() > longest->text.size())) longest = &p;
+    }
+    if (need <= room) break;
+    if (longest == nullptr) return;
+    longest->text.clear();
+  }
+  for (const Plan& p : plans) {
+    r.text.messages[p.own] = p.text;
+    if (!p.text.empty()) r.text.ownDescription.insert(p.item);
+  }
+}
+
 void TmMovesRandom(const Tables& t, const er::Settings& s, Result& r) {
   er::Rng rng = er::Rng::Stream(s.seed, "tm_moves");
   const TmMoves tm = ReadTmMoves(t, s.Get(GetSchema(), "tm_moves") == 2);
@@ -607,6 +756,148 @@ void TmMovesRandom(const Tables& t, const er::Settings& s, Result& r) {
     r.mod.Set("item_waza_machine_no", machine, "wazaID", now);
     r.mod.Set("item_data_prime", tm.itemOf.at(machine), "doc", TmDescription(t, tm, now));
     r.mod.spoiler.push_back(TmName(machine) + ": " + t.Name("move", old) + " -> " + t.Name("move", now));
+  }
+  TmTexts(t, tm, r);
+}
+
+void WildLevels(const Tables& t, const er::Settings& s, Result& r) {
+  const uint32_t mode = s.Get(GetSchema(), "wild_levels");
+  if (mode == 0 || mode >= std::size(kLevelPercents)) return;
+  for (const char* spot : kSpots) {
+    for (uint32_t i = 0; i < t.Count(spot); i++) {
+      if (t.Get(spot, i, "id") == 0) continue;
+      const uint32_t oldMin = t.Get(spot, i, "minLevel"), oldMax = t.Get(spot, i, "maxLevel");
+      const uint32_t nowMin = er::ScaleLevel(oldMin, kLevelPercents[mode], kMaxLevel);
+      const uint32_t nowMax = std::max(nowMin, er::ScaleLevel(oldMax, kLevelPercents[mode], kMaxLevel));
+      r.mod.Set(spot, i, "minLevel", nowMin);
+      r.mod.Set(spot, i, "maxLevel", nowMax);
+      r.mod.spoiler.push_back(std::string("Poke Spot ") + spot + " #" + std::to_string(i) + " (" +
+                              t.Name("species", NowValue(t, r, spot, i, "id")) + "): levels " + std::to_string(oldMin) + "-" +
+                              std::to_string(oldMax) + " -> " + std::to_string(nowMin) + "-" + std::to_string(nowMax));
+    }
+  }
+}
+
+constexpr uint32_t kShopKindMart = 0;
+constexpr uint32_t kItemKindBall = 1, kItemKindMedicine = 2, kItemKindBerry = 3;
+
+struct Shops {
+  std::vector<std::vector<uint32_t>> lists;
+  std::vector<uint32_t> firsts;
+  std::vector<uint32_t> pool;
+};
+
+uint32_t ItemEntry(const Tables& t, uint32_t item) {
+  return item < t.Count("item_data_index") ? t.Get("item_data_index", item, "value") : 0;
+}
+
+bool ShopGoods(const Tables& t, uint32_t item) {
+  const uint32_t e = ItemEntry(t, item);
+  if (item == 0 || e == 0 || e >= t.Count("item_data_prime")) return false;
+  const uint32_t kind = t.Get("item_data_prime", e, "kind");
+  if (kind != kItemKindMedicine && kind != kItemKindBerry && kind != kItemKindTm) return false;
+  if (t.Get("item_data_prime", e, "important") != 0 || t.Get("item_data_prime", e, "price") == 0) return false;
+  if (t.Get("item_data_prime", e, "name") == 0) return false;
+  const std::string name = t.Name("item", item);
+  return !name.empty() && name[0] != '#' && name.find_first_not_of('?') != std::string::npos;
+}
+
+bool Everyday(const Tables& t, uint32_t item) {
+  const uint32_t e = ItemEntry(t, item);
+  const uint32_t kind = t.Get("item_data_prime", e, "kind");
+  if (kind == kItemKindBerry) return true;
+  if (kind != kItemKindMedicine) return false;
+  const uint32_t effect = t.Get("item_data_prime", e, "itemEffectParam");
+  if ((effect >= 1 && effect <= 31) || (effect >= 41 && effect <= 47)) return true;
+  return e == 80 || e == 81 || (e >= 83 && e <= 86);
+}
+
+Shops ReadShops(const Tables& t, uint32_t mode) {
+  Shops sh;
+  const uint32_t goods = t.Count("shopGoods");
+  std::set<uint32_t> starts;
+  for (uint32_t shop = 0; shop < t.Count("shopData"); shop++) {
+    if (t.Get("shopData", shop, "mode") != kShopKindMart) continue;
+    const uint32_t first = t.Get("shopData", shop, "goodsIdx");
+    if (first >= goods || !starts.insert(first).second) continue;
+    std::vector<uint32_t> list;
+    for (uint32_t g = first; g < goods && t.Get("shopGoods", g, "value") != 0; g++) {
+      const uint32_t item = t.Get("shopGoods", g, "value");
+      if (!ShopGoods(t, item)) continue;
+      list.push_back(g);
+    }
+    sh.lists.push_back(list);
+    sh.firsts.push_back(first);
+  }
+  std::set<uint32_t> seen;
+  for (uint32_t item = 1; item < t.Count("item_data_index"); item++) {
+    if (!ShopGoods(t, item) || (mode == 2 && !Everyday(t, item))) continue;
+    if (seen.insert(ItemEntry(t, item)).second) sh.pool.push_back(item);
+  }
+  return sh;
+}
+
+void ShopStock(const Tables& t, const er::Settings& s, Result& r) {
+  const uint32_t mode = s.Get(GetSchema(), "shops");
+  er::Rng rng = er::Rng::Stream(s.seed, "shops");
+  const Shops sh = ReadShops(t, mode);
+  if (sh.pool.empty()) return;
+  std::vector<uint32_t> bag;
+  for (const auto& list : sh.lists) {
+    for (uint32_t g : list) bag.push_back(t.Get("shopGoods", g, "value"));
+  }
+  rng.Shuffle(bag);
+  for (size_t l = 0; l < sh.lists.size(); l++) {
+    std::set<uint32_t> here;
+    for (uint32_t g = sh.firsts[l]; g < t.Count("shopGoods") && t.Get("shopGoods", g, "value") != 0; g++) {
+      if (std::find(sh.lists[l].begin(), sh.lists[l].end(), g) == sh.lists[l].end()) here.insert(t.Get("shopGoods", g, "value"));
+    }
+    for (uint32_t g : sh.lists[l]) {
+      const uint32_t old = t.Get("shopGoods", g, "value");
+      uint32_t now = old;
+      if (mode == 1) {
+        size_t pick = 0;
+        while (pick < bag.size() && here.count(bag[pick]) != 0) pick++;
+        if (pick == bag.size()) pick = 0;
+        now = bag[pick];
+        bag.erase(bag.begin() + static_cast<std::ptrdiff_t>(pick));
+      } else {
+        for (int tries = 0; tries < 50; tries++) {
+          now = sh.pool[rng.Below(static_cast<uint32_t>(sh.pool.size()))];
+          if (here.count(now) == 0) break;
+        }
+      }
+      here.insert(now);
+      r.mod.Set("shopGoods", g, "value", now);
+      r.mod.spoiler.push_back("Shop list " + std::to_string(l + 1) + " #" + std::to_string(g) + ": " + t.Name("item", old) + " -> " +
+                              t.Name("item", now));
+    }
+  }
+}
+
+std::set<uint32_t> MachineMoves(const Tables& t, const Result& r) {
+  std::set<uint32_t> moves;
+  for (uint32_t m = 0; m < t.Count("item_waza_machine_no"); m++) moves.insert(NowValue(t, r, "item_waza_machine_no", m, "wazaID"));
+  return moves;
+}
+
+void TutorMoves(const Tables& t, const er::Settings& s, Result& r) {
+  er::Rng rng = er::Rng::Stream(s.seed, "tutor_moves");
+  const bool fair = s.Get(GetSchema(), "tutor_moves") == 2;
+  const std::set<uint32_t> machines = MachineMoves(t, r);
+  std::vector<uint32_t> pool;
+  for (uint32_t move = 1; move < t.Count("waza_data"); move++) {
+    if (TmMoveUsable(t, move) && machines.count(move) == 0 && !(fair && OneHitKo(t, move))) pool.push_back(move);
+  }
+  if (pool.size() < t.Count("wazaoshie_data")) return;
+  rng.Shuffle(pool);
+  size_t next = 0;
+  for (uint32_t i = 0; i < t.Count("wazaoshie_data"); i++) {
+    const uint32_t old = t.Get("wazaoshie_data", i, "id");
+    if (old == 0) continue;
+    const uint32_t now = pool[next++];
+    r.mod.Set("wazaoshie_data", i, "id", now);
+    r.mod.spoiler.push_back("Move tutor #" + std::to_string(i + 1) + ": " + t.Name("move", old) + " -> " + t.Name("move", now));
   }
 }
 
@@ -690,10 +981,41 @@ bool Verify(const Tables& t, const Species& sp, const StoryTeams& st, const er::
       }
     }
   }
+  if (const auto goods = r.mod.tables.find("shopGoods"); goods != r.mod.tables.end()) {
+    const Shops sh = ReadShops(t, s.Get(sc, "shops"));
+    std::set<uint32_t> may, pool(sh.pool.begin(), sh.pool.end());
+    for (const auto& list : sh.lists) may.insert(list.begin(), list.end());
+    for (const auto& [entry, fields] : goods->second) {
+      for (const auto& [field, v] : fields) {
+        if (may.count(entry) == 0) return fail("shopGoods #" + std::to_string(entry) + " is not a Mart's ordinary item but changed");
+        if (v == 0 || pool.count(v) == 0) return fail("a shop got an item outside the pool");
+      }
+    }
+  }
+  if (r.mod.tables.count("wazaoshie_data") != 0) {
+    const std::set<uint32_t> machines = MachineMoves(t, r);
+    std::set<uint32_t> seen;
+    for (uint32_t i = 0; i < t.Count("wazaoshie_data"); i++) {
+      const uint32_t before = t.Get("wazaoshie_data", i, "id"), now = value("wazaoshie_data", i, "id");
+      if (now != 0 && !seen.insert(now).second) return fail("two tutor entries teach the same move");
+      if (now == before) continue;
+      if (before == 0 || !TmMoveUsable(t, now)) return fail("a tutor entry got a move that can't be used");
+      if (machines.count(now) != 0) return fail("a tutor move that a TM teaches");
+      if (s.Get(sc, "tutor_moves") == 2 && OneHitKo(t, now)) return fail("a one-hit-KO tutor move with those ruled out");
+    }
+  }
+  for (const char* spot : kSpots) {
+    for (uint32_t i = 0; i < t.Count(spot); i++) {
+      const uint32_t lo = value(spot, i, "minLevel"), hi = value(spot, i, "maxLevel");
+      if (r.mod.tables.count(spot) != 0 && t.Get(spot, i, "id") != 0 && (lo < 1 || hi > kMaxLevel || lo > hi)) {
+        return fail("a Poke Spot level outside 1-100");
+      }
+    }
+  }
   for (const auto& [table, entries] : r.mod.tables) {
     for (const auto& [entry, fields] : entries) {
       for (const auto& [field, v] : fields) {
-        const bool species = (table == "story_pokemon" && field == "pokemonID") || field == "id";
+        const bool species = (table == "story_pokemon" && field == "pokemonID") || (field == "id" && table.rfind("esabapokemondata", 0) == 0);
         if (species && pool.count(v) == 0) return fail(table + " #" + std::to_string(entry) + " got a species outside the pool");
         if (species && table != "story_pokemon" && sp.legendary[v] && legend != 2) return fail("a legendary in a Poke Spot");
         if (species && table == "story_pokemon" && st.shadowEntries.count(entry) == 0 && sp.legendary[v] && legend != 2) {
@@ -788,6 +1110,24 @@ bool Generate(const em::DataCatalog& catalog, const em::EntryReader& read, const
     }
     TmMovesRandom(t, s, out);
   }
+  if (s.Get(sc, "wild_levels")) {
+    if (!t.Need("esabapokemondata_E1", {"minLevel", "maxLevel"}, error)) return false;
+    WildLevels(t, s, out);
+  }
+  if (s.Get(sc, "shops")) {
+    if (!t.Need("shopData", {"mode", "goodsIdx"}, error) || !t.Need("shopGoods", {"value"}, error) ||
+        !t.Need("item_data_index", {"value"}, error) || !t.Need("item_data_prime", {"kind", "name"}, error)) {
+      return false;
+    }
+    ShopStock(t, s, out);
+  }
+  if (s.Get(sc, "tutor_moves")) {
+    if (!t.Need("wazaoshie_data", {"id"}, error) || !t.Need("item_waza_machine_no", {"wazaID"}, error) ||
+        !t.Need("waza_data", {"darkWazaKind", "hidenFlag", "pp", "name", "seqId"}, error)) {
+      return false;
+    }
+    TutorMoves(t, s, out);
+  }
   for (auto ti = out.mod.tables.begin(); ti != out.mod.tables.end();) {
     for (auto ei = ti->second.begin(); ei != ti->second.end();) {
       for (auto fi = ei->second.begin(); fi != ei->second.end();) {
@@ -802,6 +1142,36 @@ bool Generate(const em::DataCatalog& catalog, const em::EntryReader& read, const
     ti = ti->second.empty() ? out.mod.tables.erase(ti) : std::next(ti);
   }
   return Verify(t, sp, teams, s, out, error);
+}
+
+std::string Result::GameJson(const std::string& note) const {
+  if (text.Empty()) return mod.ToJson(note);
+  er::ModOutput numbers = mod;
+  if (const auto items = numbers.tables.find("item_data_prime"); items != numbers.tables.end()) {
+    for (uint32_t item : text.ownDescription) {
+      const auto e = items->second.find(item);
+      if (e == items->second.end()) continue;
+      e->second.erase("doc");
+      if (e->second.empty()) items->second.erase(e);
+    }
+    if (items->second.empty()) numbers.tables.erase(items);
+  }
+  std::string out = numbers.ToJson(note);
+  std::string block = ",\n  \"text\": {";
+  bool first = true;
+  for (const auto& [id, words] : text.messages) {
+    block += first ? "\n" : ",\n";
+    first = false;
+    block += "    \"#" + std::to_string(id) + "\": \"";
+    for (char c : words) {
+      if (c == '"' || c == '\\') block += '\\';
+      block += c;
+    }
+    block += "\"";
+  }
+  block += "\n  }";
+  out.insert(out.size() - 3, block);
+  return out;
 }
 
 bool WriteMod(const Result& r, const er::Settings& s, const std::filesystem::path& folder, std::string& error) {
@@ -830,8 +1200,10 @@ bool WriteMod(const Result& r, const er::Settings& s, const std::filesystem::pat
   }
   spoiler += "\n";
   for (const std::string& line : r.mod.spoiler) spoiler += line + "\n";
+  std::error_code gone;
+  std::filesystem::remove(folder / "game.json", gone);
   return write(folder / "mod.json", mod) && write(folder / "data" / "randomizer.json", r.mod.ToJson("randomizer " + r.code)) &&
-         write(folder / "spoiler.txt", spoiler);
+         write(folder / "spoiler.txt", spoiler) && (r.text.Empty() || write(folder / "game.json", r.GameJson("randomizer " + r.code)));
 }
 
 Style StyleOf(const er::Settings& s) {

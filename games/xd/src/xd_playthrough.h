@@ -35,6 +35,11 @@ void RandomizerMade(const std::string& code);
 bool NeedsRestart(const engine::playthrough::Setup& setup);
 void Begin(const engine::playthrough::Setup& setup, const std::string& settingsChanged);
 
+bool WorldModsFixed(std::vector<std::string>& ids);
+std::vector<std::string> LoadedModIds();
+engine::mods::AppliesVerdict ModApplies(const engine::mods::ModFolder& mod);
+void RestartForMods(const std::vector<engine::playthrough::ModUse>& use);
+
 const std::vector<std::string>& ContinueProblems();
 void ContinueAnswer(bool carryOn);
 bool EngineQuestionPossible();

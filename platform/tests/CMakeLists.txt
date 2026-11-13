@@ -41,6 +41,8 @@ add_executable(gx_fifo_test gx_fifo_test.cpp)
 target_link_libraries(gx_fifo_test PRIVATE platform_sdk aurora::core aurora::gx aurora::os aurora::main aurora::vi)
 aurora_copy_runtime_dlls(gx_fifo_test)
 
+add_executable(time_stretch_test time_stretch_test.cpp)
+
 add_executable(dsp_decode_test dsp_decode_test.cpp)
 target_link_libraries(dsp_decode_test PRIVATE platform_dsp)
 

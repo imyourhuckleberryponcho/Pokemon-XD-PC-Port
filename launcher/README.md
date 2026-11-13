@@ -10,6 +10,7 @@ Choose your disc, how you want to play, your controls and mods, then press **Pla
   It is checked the same way the game checks it (right version, complete, unchanged). The first check of a
   new file reads it all (a few seconds, with a progress bar); after that it's remembered. The launcher
   remembers the disc for next time (`system.disc_path` in settings.ini). Below: "Icon and shortcuts".
+- **Extra assets**: discs of OTHER games the port can borrow assets from (below, "Extra assets"). Today one row, Pokemon Battle Revolution (USA): "Battle Revolution battle models".
 - **Preset**: Original (the GameCube game, the default), Enhanced (the recommended improvements) or Custom
   (your own mix). Below it: everything that is different from the GameCube game right now.
 - **Settings**: every setting, in tabs (Video, Audio, Gameplay, System). Each says what it does; a purple
@@ -141,6 +142,67 @@ there is no upload, no email and no network code. To share one, the player expor
   cases, listing, export read back, delete; sessions: matching log/recording/cards/reports, a killed run's
   half-written recording, the short-session rule, the session zip read back and scrubbed; a shortened session zip:
   JPEG screenshots, copies left out, recording rests, put back from shortened.txt).
+
+## Extra assets
+
+A page for the discs of other games (not the game the port plays) whose pictures or models the port can use. The list
+of sources is a small table (`GameInfo::ExtraSource`, XD's rows in `games/xd/launcher/xd_extra_sources.cpp`): id, the
+disc's name, the game IDs it accepts, what it provides, how it is made, the setting that remembers the disc's path, the
+description file's id, and the converter program. One row today; Pokemon Colosseum and others get a row each.
+
+Extra assets are a **built-in feature of the port, not mods** (mods are things other people make and add through the
+Mods page). What is made goes in `<data folder>\extra_assets\<source id>\` (e.g. `extra_assets\pbr`), never in the
+mods folder, and it never appears in the Mods page, in mods.ini, in the bottom bar's MODS line or in a playthrough's
+mod list.
+
+- **Pokemon Battle Revolution (USA, RPBE01)** gives "Battle Revolution battle models": the Pokemon models of that disc
+  (a Wii disc) turned into XD's model format, in `extra_assets\pbr`. XD keeps its own model for any Pokemon the
+  converter couldn't convert.
+- Per source: **Choose disc...** (the Disc page's file picker; .iso .rvz .wbfs .ciso .gcz), a quick check that the file
+  really is that game (its header, through the same disc reader as the Disc page; a wrong game says which game it is
+  and which one is needed), the path remembered in settings.ini as `system.extra_disc.pbr` (hidden from the Settings
+  page), and **Make models**.
+- **Make models** runs the converter program shipped next to the game, `<game folder>\pbr_models\pbr_models.exe`, on a
+  thread (the window never freezes): `pbr_models.exe --pbr-disc <that disc> --xd-disc <your XD disc> --out <data
+  folder>\extra_assets\pbr` (`--out` is just a folder to make). It prints `progress <done> <total> <model name>` lines (the progress bar), then
+  `done <converted> <kept_xd> <total_bytes>` (exit 0) or `error <message>` (exit 1; a wrong disc exits 2). The converter
+  writes `<out>.tmp` and renames it at the end. **Cancel** ends the program and everything it started (a job object on
+  Windows) and removes a leftover `<out>.tmp`: nothing half-made stays. Errors are shown in the converter's own words.
+  The folder holds `files\`/`fsys\` in the layout the game loads, `conversion_log.txt` and `mod.json`, which is only the
+  folder's description file (its version is what the status compares); it stays named `mod.json` because mods code
+  only ever looks inside the mods folder, never in `extra_assets`.
+- **Where the program is, per system** (always `<program folder>/pbr_models/pbr_models[.exe]`, `<program folder>` =
+  the folder of the launcher's own file): Windows `game\pbr_models\pbr_models.exe` (tools/package_release.py); Linux
+  `game/pbr_models/pbr_models` + `libnod.so` (tools/package_linux.py, built in WSL with
+  `python3 tools/pbr_convert/package_pbr_models.py`); Mac: the launcher's folder is `Pokemon XD.app/Contents/MacOS`, where
+  `pbr_models` is a link to `Contents/Resources/pbr_models` (games/xd/mac/package_mac.sh; built by the Mac workflow;
+  the Mac launcher is built and packaged by the workflow since 2026-11-12, docs/MAC.md "Launcher on the Mac"; none of it has run on a Mac). The Linux run of the real program on the real discs
+  (docs/LINUX.md "pbr_models on Linux") also needs the POSIX half of `launcher_sys` for Cancel: the converter leads a
+  process group of its own (`killTree`), so its worker processes end with it.
+- **Status** on the page: "Not set up" / "Ready: N models" / "Out of date: make again" (the description file's version
+  is older than `pbr_models.exe --version`, which prints e.g. `version 1.0.0`; unknown version: never out of date) /
+  "Converter missing" (no pbr_models.exe next to the game; a folder that is already there still counts as Ready).
+  It reads `extra_assets\pbr`.
+- **Using the result**: the setting `video.battle_revolution_models` ("Battle Revolution models", Enhanced, off unless
+  turned on; an improvement, so Original/Faithful holds it off). When it is on and the folder is there, the game puts
+  the folder's files in the disc overlay as a built-in layer: **above the disc, below every real mod** (a mod that
+  replaces the same file wins, quietly), through the same overlay code mods use (`engine::mods::LoadOptions::extraLayers`,
+  set in `games/xd/src/mods_boot.cpp`). Off, or no folder: nothing. The start-up log says
+  `[extra assets] Battle Revolution models: on, 388 files` (or `off`, or why not), and the same sentence is the
+  `extra assets` line of recordings and F10's info.txt; the setting itself is also in their `settings` line like every
+  other change from the GameCube game. The Extra assets page has the tick, the Settings page (Video) the row, and the
+  game's own SETTINGS page shows the row when the folder is there. It is read when the game starts, so it acts from the
+  next start (or soft reset); the row says so. It only changes how the Pokemon look, so it works for every save.
+- **An old test build's mod folder**: `<data folder>\mods\battle-revolution-models` (made when this was a mod) is moved to
+  `extra_assets\pbr` by the launcher when it starts, if `extra_assets\pbr` isn't there yet, and taken out of mods.ini;
+  if both exist the old one is left alone (delete it).
+- Testing: `XD_PBR_MODELS_EXE=<program>` names another converter (it must keep to the command line above);
+  `pbr_models_standin.exe` (launcher/tests/pbr_models_standin.cpp; XD_STANDIN_SOURCE=<work folder with pairs.tsv and
+  out\*.pkx>, XD_STANDIN_COUNT, XD_STANDIN_DELAY_MS, XD_STANDIN_VERSION, XD_STANDIN_FAIL) does. Script steps
+  `page:extra`, `extradisc:pbr=<disc>`, `wait:extradisc`, `extramake`, `extracancel`, `wait:extra`. Unit tests:
+  `launcher_extra_test.exe` (the converter's lines, status words, disc check, the stand-in run for real: done, wrong disc,
+  error, Cancel, leftover .tmp), `xd_extra_sources_test.exe` (the table agrees with the settings list), `mods_test.exe`
+  (the switch in the loader).
 
 ## The playthrough on the Save page
 
@@ -393,7 +455,49 @@ With the Original preset the game runs exactly as on the GameCube, and nothing e
 An in-game settings overlay is planned only for the other presets; it will use
 the same settings code as the launcher (`engine/settings_ui`).
 
+## On Linux
+
+The launcher builds and runs on Linux since 2026-11-11 (`xd_launcher` next to `xd`; docs/LINUX.md "Ninth pass").
+**It has only ever run inside WSL, driven by its test script, and been looked at in the screenshots it takes of
+itself: never on a real Linux desktop, never with a mouse.** The Linux package's start script opens it
+(tools/package_linux.py); with a disc image on the command line, or `XD_NO_LAUNCHER=1`, the game starts
+without it as before.
+
+What is the same as on Windows: the Disc page (file window through SDL: the desktop's file chooser service, else
+zenity), Play (starts `xd` with the disc, waits for it, reads the save again afterwards), Preset, Settings,
+Controls, Mods, Save (several saves, backups, import / export), Reports (list, Export, play sessions, Delete).
+
+What is different, and what the player sees:
+
+| Windows | Linux |
+|---|---|
+| Updates card: check, install, go back | only "Version x.y.z": no updater (no signed Linux update exists; the launcher has no update address there and never goes online) |
+| Icon chooser (program's styles, pictures from the disc) | one line: choosing another icon "isn't there on this system yet"; window and shortcuts show `icon.png` next to the program (the program's own icon) |
+| Backgrounds: from the disc's pictures + drawn by the game | from the disc's pictures only (the game has no hidden render mode on Linux) |
+| Shaders prepared before the first Play | not done (the game compiles them as it meets them, as the Linux game always did); `XD_LAUNCHER_SHADERS=1` tries it, untested |
+| "Open folder" opens Explorer | `xdg-open`; a desktop without it gets a small window with the folder's path and "Copy the path" |
+| Deleted saves go to the recycle bin | to the desktop's trash (freedesktop.org: `~/.local/share/Trash`, with its info file so the file manager can put it back); on another drive than the saves: refused with a message, never deleted |
+| Start menu / desktop shortcut (.lnk) | "applications menu" (`~/.local/share/applications`) / desktop shortcut: a `.desktop` file starting `Pokemon XD.sh`; some desktops ask to "Allow launching" first |
+| "Hide my Windows user name" in exports | "Hide my user name": `$USER` and `$HOME` are taken out the same way |
+| Screenshots in exports as JPEG | kept as PNG (no JPEG writer on Linux yet) |
+
+Scripted runs: `tools/linux/launcher_run.sh <run folder> <script file>` (own HOME, data folder, settings; the game
+started by `play` is muted and off screen).
+
+## On the Mac
+
+Built (x86_64, Rosetta 2) and packaged as the main program of `Pokemon XD.app`, which starts the game
+(`Contents/MacOS/xd`) when Play is pressed; never run on a Mac yet. Differences from Linux: `open` for folders, the
+Finder (osascript, else `~/.Trash`) for deleted saves, Arial as the fall-back font, no shortcut buttons, no updater.
+`XD_NO_LAUNCHER=1` starts the game directly. docs/MAC.md "Launcher on the Mac": what the workflow checks, what is
+untested.
+
 ## How it is built (for developers)
+
+- Everything the launcher asks of the system it runs on is behind `include/launcher_sys.h` (the program's folder,
+  starting a program and waiting for it, opening a folder, Documents / desktop, the recycle bin, shortcuts, .ico
+  reading): `launcher_sys_win.cpp` holds the Win32 calls, `launcher_sys_posix.cpp` the Linux half (plain POSIX
+  where there is a choice: a Mac half can start from it). launcher_app.cpp itself includes no system header.
 
 - `launcher/` is shared by every game (it never names one): the window (SDL3 with SDL's own 2D renderer)
   and the pages (Dear ImGui, the same version Aurora uses). The look (colours, spacing, the header, the page

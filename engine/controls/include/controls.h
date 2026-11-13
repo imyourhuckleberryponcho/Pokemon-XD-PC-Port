@@ -91,10 +91,15 @@ struct KeyboardMap {
 enum class Layout : uint8_t {
   Position,
   Label,
+  Auto,
 };
+inline Layout EffectiveLayout(Layout layout, Device device) {
+  if (layout != Layout::Auto) return layout;
+  return device == Device::Switch ? Layout::Label : Layout::Position;
+}
 
 struct GamepadMap {
-  Layout layout = Layout::Position;
+  Layout layout = Layout::Auto;
   std::optional<Device> kind;
   bool rumble = true;
   std::array<std::optional<std::vector<Input>>, kGcInputCount> buttons;
@@ -123,7 +128,12 @@ bool ParseChoice(std::string_view text, ControllerChoice& out);
 struct ConnectedPad {
   std::string guid;
   std::string name;
+  uint16_t vendor = 0;
+  uint16_t product = 0;
 };
+bool IsBuiltInPad(const ConnectedPad& pad);
+int PreferredAutoPad(const std::vector<ConnectedPad>& pads, int lastPressed);
+bool AutoFollowsPresses(const std::array<ControllerChoice, 4>& choices);
 std::array<int, 4> AssignControllers(const std::array<ControllerChoice, 4>& choices,
                                      const std::vector<ConnectedPad>& pads);
 int NthOfModel(const std::vector<ConnectedPad>& pads, size_t index);
@@ -164,7 +174,7 @@ std::optional<PadPreset> PadPresetOf(const GamepadMap& map);
 std::vector<Input> DefaultPadInputs(GcInput input, Device device, Layout layout);
 std::vector<Input> PadInputs(const GamepadMap& map, GcInput input, Device device);
 
-bool UsesDefaultButtons(const GamepadMap& map);
+bool UsesDefaultButtons(const GamepadMap& map, Device device);
 
 PadButton LabelPosition(FaceLabel label, Device device);
 

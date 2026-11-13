@@ -111,12 +111,29 @@ std::vector<Binding> AuroraDefaults(PadButton a, PadButton b, PadButton x, PadBu
 void test_gamepad_defaults() {
   using P = PadButton;
   const GamepadMap def = DefaultGamepad();
-  check(UsesDefaultButtons(def), "the default controller mapping leaves Aurora's defaults alone");
+  check(UsesDefaultButtons(def, Device::Xbox), "the default controller mapping leaves Aurora's defaults alone");
+  check(def.layout == Layout::Auto, "the default layout is Auto");
+  check(!UsesDefaultButtons(def, Device::Switch), "Auto on a Switch controller is a change (by label)");
+  check(EffectiveLayout(def.layout, Device::Switch) == Layout::Label &&
+            EffectiveLayout(def.layout, Device::Xbox) == Layout::Position &&
+            EffectiveLayout(def.layout, Device::GameCube) == Layout::Position,
+        "Auto: label on Nintendo, position elsewhere");
+  {
+    bool switchA = false, xboxA = false;
+    for (const Binding& b : ResolveGamepad(def, Device::Switch, true))
+      if (b.target == Target::A && b.input == Input::Button(P::East)) switchA = true;
+    for (const Binding& b : ResolveGamepad(def, Device::Xbox, true))
+      if (b.target == Target::A && b.input == Input::Button(P::South)) xboxA = true;
+    check(switchA, "Auto on Switch: GameCube A = the right button (marked A)");
+    check(xboxA, "Auto on Xbox: GameCube A = the bottom button (as before)");
+  }
   check(SameSet(ResolveGamepad(def, Device::Xbox, true),
                 AuroraDefaults(P::South, P::West, P::East, P::North, P::RightShoulder, {}, {}, true)),
         "Xbox: Aurora's Xbox table");
+  GamepadMap defPos = def;
+  defPos.layout = Layout::Position;
   for (Device d : {Device::PlayStation, Device::Switch, Device::Generic}) {
-    check(SameSet(ResolveGamepad(def, d, true),
+    check(SameSet(ResolveGamepad(defPos, d, true),
                   AuroraDefaults(P::South, P::East, P::West, P::North, P::RightShoulder, {}, {}, true)),
           (std::string(DeviceId(d)) + ": Aurora's standard table").c_str());
   }
@@ -132,7 +149,7 @@ void test_gamepad_defaults() {
 void test_position_and_label() {
   GamepadMap label = DefaultGamepad();
   label.layout = Layout::Label;
-  check(!UsesDefaultButtons(label), "label layout is a change");
+  check(!UsesDefaultButtons(label, Device::Xbox), "label layout is a change");
   const auto padFor = [](const GamepadMap& m, Device d, Target t) {
     for (const Binding& b : ResolveGamepad(m, d, true)) {
       if (b.target == t && b.input.kind == Input::Kind::Button) {
@@ -141,7 +158,8 @@ void test_position_and_label() {
     }
     return PadButton::Count;
   };
-  const GamepadMap pos = DefaultGamepad();
+  GamepadMap pos = DefaultGamepad();
+  pos.layout = Layout::Position;
   check(padFor(pos, Device::Switch, Target::A) == PadButton::South, "Switch by position: A is the bottom button");
   check(padFor(label, Device::Switch, Target::A) == PadButton::East, "Switch by label: A is the right button (A)");
   check(padFor(label, Device::Switch, Target::B) == PadButton::South, "Switch by label: B is the bottom button (B)");
@@ -153,6 +171,7 @@ void test_position_and_label() {
   check(padFor(label, Device::GameCube, Target::B) == PadButton::West, "GameCube controller: labels are positions");
 
   GamepadMap own = DefaultGamepad();
+  own.layout = Layout::Position;
   own.buttons[static_cast<size_t>(GcInput::A)] = std::vector<Input>{Input::Label(FaceLabel::A)};
   check(padFor(own, Device::Switch, Target::A) == PadButton::East && padFor(own, Device::Xbox, Target::A) == PadButton::South,
         "\"a\" means the button marked A on each controller");
@@ -210,8 +229,14 @@ void test_names() {
   const PortMap map = DefaultPort(0);
   check(GcInputLabel(map, GcInput::A, Device::Xbox) == ButtonLabel{"A", "xbox_a"}, "A on Xbox: A");
   check(GcInputLabel(map, GcInput::A, Device::PlayStation) == ButtonLabel{"Cross", "ps_cross"}, "A on PlayStation: Cross");
-  check(GcInputLabel(map, GcInput::A, Device::Switch) == ButtonLabel{"B", "switch_b"},
-        "A on Switch (by position): the button marked B");
+  check(GcInputLabel(map, GcInput::A, Device::Switch) == ButtonLabel{"A", "switch_a"},
+        "A on Switch (Auto = by label): the button marked A");
+  {
+    PortMap pos = map;
+    pos.gamepad.layout = Layout::Position;
+    check(GcInputLabel(pos, GcInput::A, Device::Switch) == ButtonLabel{"B", "switch_b"},
+          "A on Switch by position: the button marked B");
+  }
   check(GcInputLabel(map, GcInput::B, Device::Xbox) == ButtonLabel{"X", "xbox_x"}, "B on Xbox: X (GameCube place)");
   check(GcInputLabel(map, GcInput::Start, Device::Keyboard) == ButtonLabel{"Enter", "key_enter"}, "Start on keyboard: Enter");
   check(GcInputLabel(map, GcInput::L, Device::Xbox).text == "LT" && GcInputLabel(map, GcInput::L, Device::PlayStation).text == "L2",
@@ -280,6 +305,30 @@ void test_ports_and_presets() {
   choices[3] = ControllerChoice::Pin(adapter, 5, "");
   check(AssignControllers(choices, pads)[3] == -1, "a pinned controller that isn't plugged in: none");
 
+  const ConnectedPad deck{"030000005e0400008e02000014010000", "Steam Deck", 0x28de, 0x1205};
+  const ConnectedPad outside{xbox, "Xbox"};
+  const ConnectedPad virt{"03000000de2800000112000001000000", "Steam Virtual Gamepad", 0x28de, 0x11ff};
+  check(IsBuiltInPad(deck) && !IsBuiltInPad(outside) && !IsBuiltInPad(virt), "built-in pad: the Deck's own, not others");
+  check(PreferredAutoPad({deck}, -1) == -1 && PreferredAutoPad({outside}, -1) == -1, "one controller: Aurora's default");
+  check(PreferredAutoPad({deck, outside}, -1) == 1 && PreferredAutoPad({outside, deck}, -1) == 0,
+        "built-in + outside: the outside one, whatever the order");
+  check(PreferredAutoPad({deck, outside}, 0) == 0 && PreferredAutoPad({deck, outside}, 1) == 1,
+        "after a press: the pad pressed last");
+  check(PreferredAutoPad({outside, outside}, -1) == -1 && PreferredAutoPad({virt, outside}, -1) == -1,
+        "none built-in: first free as before");
+  check(PreferredAutoPad({virt, outside}, 1) == 1, "Steam's virtual pads: the one pressed last");
+  {
+    std::array<ControllerChoice, 4> c4 = {ControllerChoice::Auto(), ControllerChoice{}, ControllerChoice{},
+                                          ControllerChoice{}};
+    check(AutoFollowsPresses(c4), "ports 2-4 none: port 1's auto follows presses");
+    c4[1] = ControllerChoice::Auto();
+    check(!AutoFollowsPresses(c4), "port 2 auto (VS): no following");
+    c4[1] = ControllerChoice{};
+    c4[3] = ControllerChoice::Pin(xbox, 0, "Xbox");
+    check(!AutoFollowsPresses(c4), "port 4 pinned: no following");
+  }
+  check(PreferredAutoPad({deck, outside}, 7) == 1, "a stale press index is ignored");
+
   GamepadMap m;
   m.buttons[static_cast<size_t>(GcInput::A)] = std::vector<Input>{Input::Button(PadButton::North)};
   m.leftStickDeadzone = 0.3f;
@@ -288,7 +337,7 @@ void test_ports_and_presets() {
   check(gc.kind == Device::GameCube && gc.layout == Layout::Position && !gc.buttons[0] && gc.leftStickDeadzone == 0.3f &&
             !gc.rumble,
         "GameCube adapter preset: kind GameCube, standard buttons, deadzone and rumble kept");
-  check(!UsesDefaultButtons(gc), "a preset's kind is a change (it is put into Aurora)");
+  check(!UsesDefaultButtons(gc, Device::GameCube), "a preset's kind is a change (it is put into Aurora)");
   bool gcB = false, gcL = false;
   for (const Binding& b : ResolveGamepad(gc, EffectiveDevice(gc, Device::Generic), true)) {
     gcB |= b.target == Target::B && b.input == Input::Button(PadButton::West);

@@ -1,5 +1,6 @@
 #include <dolphin/ai.h>
 #include <port_audio.h>
+#include "time_stretch.h"
 
 #include <SDL3/SDL_audio.h>
 #include <SDL3/SDL_init.h>
@@ -398,6 +399,15 @@ void steer_rate(int queuedBytes) {
 }
 
 std::atomic<int> sSpeedFactor{1};
+port_audio::TimeStretch sStretch;
+std::vector<int16_t> sStretched;
+bool fold_wanted() {
+  static const bool fold = [] {
+    const char* e = std::getenv("XD_FAST_SOUND");
+    return e != nullptr && std::strcmp(e, "fold") == 0;
+  }();
+  return fold;
+}
 int sFoldCount = 0;
 int32_t sFold[2] = {0, 0};
 std::vector<int16_t> sFolded;
@@ -433,6 +443,17 @@ void take_block(void*, void*) {
     sNonSilent += sound ? 1 : 0;
     dump_open();
     dump_block(sConvert.data(), length);
+    if (sSpeedFactor.load(std::memory_order_relaxed) <= 1 && sStretch.Active()) {
+      sStretched.clear();
+      sStretch.Flush(sStretched);
+      if (sStream != nullptr && !sStretched.empty()) {
+        put_out(sStretched.data(), static_cast<int>(sStretched.size() * sizeof(int16_t)));
+      }
+      if (sFadeInPos >= sFadeIn) {
+        sFadeIn = port_audio::TimeStretch::kHop;
+        sFadeInPos = 0;
+      }
+    }
     shape_block();
     if (sStream != nullptr) {
       int queued = SDL_GetAudioStreamQueued(sStream);
@@ -446,7 +467,13 @@ void take_block(void*, void*) {
       }
       const int maxQueued = reserve_max_queued_bytes();
       const int factor = sSpeedFactor.load(std::memory_order_relaxed);
-      if (factor > 1) {
+      if (factor > 1 && !fold_wanted()) {
+        sStretched.clear();
+        sStretch.Push(sConvert.data(), sConvert.size() / 2, factor, sStretched);
+        if (!sStretched.empty() && queued < maxQueued) {
+          put_out(sStretched.data(), static_cast<int>(sStretched.size() * sizeof(int16_t)));
+        }
+      } else if (factor > 1) {
         const size_t bytes = fold_block(factor);
         if (bytes > 0 && queued < maxQueued) {
           put_out(sFolded.data(), static_cast<int>(bytes));

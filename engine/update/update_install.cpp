@@ -1,9 +1,11 @@
 #include "update.h"
 
+#if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
 #include <bcrypt.h>
+#endif
 
 #include <zlib.h>
 
@@ -28,7 +30,12 @@ fs::path PathOf(const std::string& utf8) {
 
 struct File {
   std::FILE* f = nullptr;
+#if defined(_WIN32)
   explicit File(const fs::path& path, const wchar_t* mode) : f(_wfopen(path.c_str(), mode)) {}
+#else
+  explicit File(const fs::path& path, const wchar_t* mode)
+      : f(std::fopen(path.c_str(), mode[0] == L'w' ? "wb" : "rb")) {}
+#endif
   ~File() {
     if (f != nullptr) {
       std::fclose(f);
@@ -37,7 +44,11 @@ struct File {
   File(const File&) = delete;
   File& operator=(const File&) = delete;
   bool Read(void* into, size_t size) { return std::fread(into, 1, size, f) == size; }
+#if defined(_WIN32)
   bool Seek(uint64_t offset) { return _fseeki64(f, static_cast<long long>(offset), SEEK_SET) == 0; }
+#else
+  bool Seek(uint64_t offset) { return fseeko(f, static_cast<off_t>(offset), SEEK_SET) == 0; }
+#endif
 };
 
 uint16_t U16(const uint8_t* p) { return static_cast<uint16_t>(p[0] | (p[1] << 8)); }
@@ -97,6 +108,11 @@ bool HoldsPlayerData(const fs::path& folder) {
 }
 
 bool Sha256File(const fs::path& file, std::string& hex, std::string& error) {
+#if !defined(_WIN32)
+  (void)file, (void)hex;
+  error = "checking a download isn't there on this system yet";
+  return false;
+#else
   hex.clear();
   File in(file, L"rb");
   if (in.f == nullptr) {
@@ -125,6 +141,7 @@ bool Sha256File(const fs::path& file, std::string& hex, std::string& error) {
   }
   hex = HexEncode(digest, sizeof digest);
   return true;
+#endif
 }
 
 bool ExtractZip(const fs::path& zip, const fs::path& folder, std::string& error, const std::function<bool()>& stop) {
@@ -353,12 +370,21 @@ bool WritePointer(const fs::path& root, const std::string& current, const std::s
   const fs::path file = root / kPointerFile;
   const fs::path fresh = fs::path(file).concat(L".new");
   bool ok = false;
-  if (std::FILE* f = _wfopen(fresh.c_str(), L"wb")) {
-    ok = std::fwrite(text.data(), 1, text.size(), f) == text.size();
-    ok = std::fflush(f) == 0 && ok;
-    ok = std::fclose(f) == 0 && ok;
+  {
+    File out(fresh, L"wb");
+    if (std::FILE* f = out.f) {
+      ok = std::fwrite(text.data(), 1, text.size(), f) == text.size();
+      ok = std::fflush(f) == 0 && ok;
+      out.f = nullptr;
+      ok = std::fclose(f) == 0 && ok;
+    }
   }
-  if (!ok || !MoveFileExW(fresh.c_str(), file.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+#if defined(_WIN32)
+  const bool moved = ok && MoveFileExW(fresh.c_str(), file.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+#else
+  const bool moved = ok && std::rename(fresh.c_str(), file.c_str()) == 0;
+#endif
+  if (!moved) {
     std::error_code ec;
     fs::remove(fresh, ec);
     error = "the choice of version couldn't be saved in " + Utf8(root);

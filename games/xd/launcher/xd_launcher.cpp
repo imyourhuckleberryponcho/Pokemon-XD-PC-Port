@@ -2,6 +2,7 @@
 
 #include "disc_verify.h"
 #include "dol_tables.h"
+#include "xd_extra_sources.h"
 #include "xd_settings.h"
 #include "xd_user_folder.h"
 #include "xd_playthrough_files.h"
@@ -20,13 +21,22 @@
 #include <SDL3/SDL_filesystem.h>
 #include <SDL3/SDL_main.h>
 
+#include <launcher_sys.h>
+
+#if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
 #include <dxgi.h>
+#endif
+
+#if defined(__APPLE__)
+#include <unistd.h>
+#endif
 
 #include <algorithm>
 #include <cctype>
+#include <cerrno>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -76,6 +86,23 @@ DiscVerdict CheckDisc(const std::string& path, const std::function<bool(uint64_t
   out.gameId = v.gameId;
   out.title = v.title;
   return out;
+}
+
+bool IdentifyDisc(const std::string& path, std::string& gameId, std::string& title, std::string& error) {
+  PortDiscInfo info;
+  char reason[256] = {};
+  const PortDiscKind kind = PortDisc_Probe(path.c_str(), &info, reason, sizeof reason);
+  if (kind == PORT_DISC_UNREADABLE) {
+    error = reason;
+    return false;
+  }
+  if (kind == PORT_DISC_NOT_A_DISC) {
+    error = "it has no GameCube or Wii disc mark";
+    return false;
+  }
+  gameId = info.gameId;
+  title = info.title;
+  return true;
 }
 
 xd::save::GameNames sNames;
@@ -509,11 +536,9 @@ bool ReadDiscPictures(const std::string& discPath, std::vector<launcher::GameInf
   return !pictures.empty();
 }
 
-fs::path ProgramFolder() {
-  wchar_t buf[MAX_PATH * 4];
-  const DWORD n = GetModuleFileNameW(nullptr, buf, static_cast<DWORD>(std::size(buf)));
-  return fs::path(std::wstring(buf, n)).parent_path();
-}
+namespace sys = launcher::sys;
+
+fs::path ProgramFolder() { return sys::ProgramFolder(); }
 
 void SetUpUpdates(launcher::GameInfo::Updates& u, const fs::path& own) {
   u.version = engine::update::FolderVersion(own);
@@ -521,6 +546,11 @@ void SetUpUpdates(launcher::GameInfo::Updates& u, const fs::path& own) {
     u.version = XD_PORT_VERSION;
   }
   u.product = "pokemon-xd-pc";
+#if !defined(_WIN32)
+  u.starterName = "Pokemon XD.sh";
+  u.requiredFiles = {"xd_launcher", "xd"};
+  return;
+#else
   u.feedUrl = XD_UPDATE_FEED_URL;
   u.publicKey = XD_UPDATE_PUBLIC_KEY;
   const char* feed = std::getenv("XD_UPDATE_FEED");
@@ -539,35 +569,27 @@ void SetUpUpdates(launcher::GameInfo::Updates& u, const fs::path& own) {
   u.stagingFolder = xd::UserFolder() / L"updates";
   u.starterName = "Pokemon XD.exe";
   u.requiredFiles = {"xd_launcher.exe", "xd.exe"};
+#endif
 }
 
 fs::path sGameProgram;
 
-bool StartHiddenGame(const std::vector<std::wstring>& extra, const std::string& discPath, DWORD priority,
-                     PROCESS_INFORMATION& pi) {
-  std::wstring env;
-  if (wchar_t* block = GetEnvironmentStringsW()) {
-    for (const wchar_t* p = block; *p != L'\0'; p += wcslen(p) + 1) {
-      if (_wcsnicmp(p, L"XD_RENDER_", 10) != 0 && _wcsnicmp(p, L"XD_INPUT_SCRIPT=", 16) != 0 &&
-          _wcsnicmp(p, L"XD_REPLAY", 9) != 0 && _wcsnicmp(p, L"XD_PREPARE_SHADERS", 18) != 0) {
-        env.append(p).push_back(L'\0');
-      }
-    }
-    FreeEnvironmentStringsW(block);
+sys::Process* StartHiddenGame(const std::vector<std::string>& extra, const std::string& discPath, bool lowPriority) {
+  sys::StartRequest request;
+  request.program = sGameProgram;
+  request.arguments = {discPath};
+  request.folder = sGameProgram.parent_path();
+  request.hidden = true;
+  request.lowPriority = lowPriority;
+  request.ownEnvironment = true;
+  request.environmentWithout = {"XD_RENDER_", "XD_INPUT_SCRIPT=", "XD_REPLAY", "XD_PREPARE_SHADERS"};
+  request.environmentAdd = extra;
+  std::string why;
+  sys::Process* process = sys::StartProgram(request, why);
+  if (process == nullptr) {
+    std::fprintf(stderr, "[launcher] the game program couldn't be started: %s\n", why.c_str());
   }
-  for (const auto& e : extra) {
-    env.append(e).push_back(L'\0');
-  }
-  env.push_back(L'\0');
-  std::wstring disc(discPath.size() + 1, L'\0');
-  disc.resize(std::max(0, MultiByteToWideChar(CP_UTF8, 0, discPath.c_str(), -1, disc.data(), (int)disc.size()) - 1));
-  std::wstring command = L"\"" + sGameProgram.wstring() + L"\" \"" + disc + L"\"";
-  STARTUPINFOW si{};
-  si.cb = sizeof si;
-  pi = {};
-  return CreateProcessW(sGameProgram.c_str(), command.data(), nullptr, nullptr, FALSE,
-                        CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT | priority, env.data(),
-                        sGameProgram.parent_path().c_str(), &si, &pi) != 0;
+  return process;
 }
 
 std::string Fnv64File(const fs::path& file) {
@@ -585,6 +607,9 @@ std::string Fnv64File(const fs::path& file) {
 }
 
 std::string GraphicsAdapters() {
+#if !defined(_WIN32)
+  return "adapters not listed on this system";
+#else
   std::string out;
   IDXGIFactory1* factory = nullptr;
   if (FAILED(CreateDXGIFactory1(__uuidof(IDXGIFactory1), reinterpret_cast<void**>(&factory)))) {
@@ -607,11 +632,12 @@ std::string GraphicsAdapters() {
   }
   factory->Release();
   return out;
+#endif
 }
 
 fs::path ShaderCacheFolder() {
-  if (const wchar_t* dir = _wgetenv(L"XD_CACHE_DIR"); dir != nullptr && dir[0] != L'\0') {
-    return fs::path(dir);
+  if (const fs::path dir = sys::EnvPath("XD_CACHE_DIR"); !dir.empty()) {
+    return dir;
   }
   char* pref = SDL_GetPrefPath(nullptr, "Pokemon XD");
   if (pref == nullptr) {
@@ -653,29 +679,26 @@ bool PrepareShaders(const std::string& discPath, const std::function<void(uint32
   const fs::path progressFile = cache / L"shaders_prepared.txt.progress";
   fs::remove(progressFile, ec);
   progress(0, 0);
-  PROCESS_INFORMATION pi{};
-  if (!StartHiddenGame({L"XD_PREPARE_SHADERS=" + stamp.wstring(), L"XD_PREPARE_SHADERS_KEY=" + std::wstring(key.begin(), key.end())},
-                       discPath, NORMAL_PRIORITY_CLASS, pi)) {
+  sys::Process* game =
+      StartHiddenGame({"XD_PREPARE_SHADERS=" + Utf8(stamp), "XD_PREPARE_SHADERS_KEY=" + key}, discPath, false);
+  if (game == nullptr) {
     error = "could not start the game program";
     return false;
   }
-  CloseHandle(pi.hThread);
-  for (int waited = 0; WaitForSingleObject(pi.hProcess, 100) == WAIT_TIMEOUT; waited += 100) {
+  for (int waited = 0; !sys::Ended(game, 100); waited += 100) {
     if (std::ifstream in(progressFile); in) {
       uint32_t done = 0, total = 0;
       if (in >> done >> total) progress(done, total);
     }
     if (stop() || waited > 20 * 60 * 1000) {
-      TerminateProcess(pi.hProcess, 1);
-      WaitForSingleObject(pi.hProcess, 5000);
-      CloseHandle(pi.hProcess);
+      sys::Stop(game);
+      sys::Close(game);
       error = stop() ? "stopped (the launcher closed)" : "took too long";
       return false;
     }
   }
-  DWORD code = 1;
-  GetExitCodeProcess(pi.hProcess, &code);
-  CloseHandle(pi.hProcess);
+  const int code = sys::ExitCode(game);
+  sys::Close(game);
   if (std::ifstream in(progressFile); in) {
     uint32_t done = 0, total = 0;
     if (in >> done >> total) progress(done, total);
@@ -709,25 +732,22 @@ bool RenderPictures(const std::string& discPath, const std::string& discId, cons
   }
   fs::create_directories(folder, ec);
   starting();
-  PROCESS_INFORMATION pi{};
-  if (!StartHiddenGame({L"XD_RENDER_ICON=all"}, discPath, BELOW_NORMAL_PRIORITY_CLASS, pi)) {
+  sys::Process* game = StartHiddenGame({"XD_RENDER_ICON=all"}, discPath, true);
+  if (game == nullptr) {
     error = "could not start the game program";
     return false;
   }
-  CloseHandle(pi.hThread);
-  DWORD code = STILL_ACTIVE;
-  for (int waited = 0; WaitForSingleObject(pi.hProcess, 250) == WAIT_TIMEOUT; waited += 250) {
+  for (int waited = 0; !sys::Ended(game, 250); waited += 250) {
     if (stop() || waited > 5 * 60 * 1000) {
-      TerminateProcess(pi.hProcess, 1);
-      WaitForSingleObject(pi.hProcess, 5000);
-      CloseHandle(pi.hProcess);
+      sys::Stop(game);
+      sys::Close(game);
       error = stop() ? "stopped (the launcher closed, or Play was pressed)" : "the game took too long";
       return false;
     }
   }
-  GetExitCodeProcess(pi.hProcess, &code);
-  CloseHandle(pi.hProcess);
-  if (FILE* f = _wfopen(done.c_str(), L"w")) {
+  const unsigned long code = static_cast<unsigned long>(static_cast<unsigned int>(sys::ExitCode(game)));
+  sys::Close(game);
+  if (FILE* f = sys::OpenFile(done, "w")) {
     std::fprintf(f, "xd.exe XD_RENDER_ICON=all exit code %lu (0: all made; see render_icon.txt)\n", code);
     std::fclose(f);
   }
@@ -742,8 +762,24 @@ bool RenderPictures(const std::string& discPath, const std::string& discId, cons
 }
 
 int main(int argc, char** argv) {
+#if defined(__APPLE__)
+  if (const char* none = std::getenv("XD_NO_LAUNCHER"); none != nullptr && std::strcmp(none, "1") == 0) {
+    const std::string game = (sys::ProgramFolder() / "xd").string();
+    std::vector<char*> args{const_cast<char*>(game.c_str())};
+    for (int i = 1; i < argc; i++) {
+      if (std::strncmp(argv[i], "-psn_", 5) != 0) {
+        args.push_back(argv[i]);
+      }
+    }
+    args.push_back(nullptr);
+    execv(game.c_str(), args.data());
+    std::fprintf(stderr, "[launcher] XD_NO_LAUNCHER=1 but %s can't be started: %s\n", game.c_str(), std::strerror(errno));
+    return 1;
+  }
+#else
   (void)argc;
   (void)argv;
+#endif
   launcher::GameInfo game;
   game.title = "Pokemon XD";
   game.windowTitle = "Pok\xC3\xA9mon XD";
@@ -760,17 +796,22 @@ int main(int argc, char** argv) {
   game.readOnlyNote = xd::kPlayerFilesReadOnlyNote;
   const fs::path own = ProgramFolder();
   std::error_code ec;
-  game.program = own / L"xd.exe";
-  if (!fs::exists(game.program, ec) && fs::exists(own / L"game" / L"xd.exe", ec)) {
-    game.program = own / L"game" / L"xd.exe";
+  const std::string xdName = sys::ProgramName("xd");
+  game.program = own / xdName;
+  if (!fs::exists(game.program, ec) && fs::exists(own / L"game" / xdName, ec)) {
+    game.program = own / L"game" / xdName;
   }
-  game.shortcutTarget = own / L"Pokemon XD.exe";
-  if (fs::exists(own.parent_path() / L"Pokemon XD.exe", ec) &&
+#if defined(_WIN32)
+  const wchar_t* const kStarter = L"Pokemon XD.exe";
+#else
+  const char* const kStarter = "Pokemon XD.sh";
+#endif
+  game.shortcutTarget = own / kStarter;
+  if (fs::exists(own.parent_path() / kStarter, ec) &&
       engine::update::IsGameFolderName(own.filename().string())) {
-    game.shortcutTarget = own.parent_path() / L"Pokemon XD.exe";
+    game.shortcutTarget = own.parent_path() / kStarter;
   } else if (!fs::exists(game.shortcutTarget, ec)) {
-    wchar_t self[MAX_PATH * 4];
-    game.shortcutTarget = fs::path(std::wstring(self, GetModuleFileNameW(nullptr, self, MAX_PATH * 4)));
+    game.shortcutTarget = sys::ProgramFile();
   }
   game.iconFolder = xd::UserFolder() / L"icons";
   game.backgroundFolder = xd::UserFolder() / L"backgrounds";
@@ -788,28 +829,38 @@ int main(int argc, char** argv) {
     game.saves.saveFile = SaveFileOf;
     game.saves.checkImport = CheckImport;
     game.saves.exportName = "01-GXXE-PokemonXD.gci";
-    if (const wchar_t* bin = _wgetenv(L"XD_SAVE_BIN_DIR"); bin != nullptr && bin[0] != L'\0') {
+    if (const fs::path bin = sys::EnvPath("XD_SAVE_BIN_DIR"); !bin.empty()) {
       game.saves.binFolder = bin;
     }
   }
   game.appId = "PokemonXD.PCPort";
   game.readDiscPictures = ReadDiscPictures;
   sGameProgram = game.program;
+#if defined(_WIN32)
   if (const char* render = std::getenv("XD_LAUNCHER_RENDER"); render == nullptr || std::strcmp(render, "0") != 0) {
     game.renderPictures = RenderPictures;
   }
+#else
+  (void)RenderPictures;
+#endif
   {
     const char* shaders = std::getenv("XD_LAUNCHER_SHADERS");
     const char* render = std::getenv("XD_LAUNCHER_RENDER");
     const bool off = shaders != nullptr ? std::strcmp(shaders, "0") == 0 : (render != nullptr && std::strcmp(render, "0") == 0);
+#if defined(_WIN32)
     if (!off) {
       game.prepareShaders = PrepareShaders;
     }
+#else
+    if (!off && shaders != nullptr && std::strcmp(shaders, "1") == 0) {
+      game.prepareShaders = PrepareShaders;
+    }
+#endif
   }
   game.ownIcons = {{"original", "XD (the program's own)", 1}, {"original_shadow", "XD, shadow aura", 2},
                    {"original_minimal", "XD, minimal", 3}, {"original_swirl", "XD, shadow swirl", 4},
                    {"original_light", "XD, light", 5}};
-  if (const wchar_t* dir = _wgetenv(L"XD_SHORTCUT_DIR")) {
+  if (const fs::path dir = sys::EnvPath("XD_SHORTCUT_DIR"); !dir.empty()) {
     game.shortcutFolder = dir;
   }
   if (const char* script = std::getenv("XD_LAUNCHER_SCRIPT")) {
@@ -821,6 +872,8 @@ int main(int argc, char** argv) {
   game.checkDisc = CheckDisc;
   game.readSave = ReadSave;
   game.modLooks = xd::playthrough::LooksOrSound;
+  game.extra.sources = xd::ExtraSources();
+  game.extra.identifyDisc = IdentifyDisc;
   SetUpUpdates(game.updates, own);
   return launcher::Run(game);
 }

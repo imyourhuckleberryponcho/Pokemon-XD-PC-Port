@@ -29,6 +29,14 @@ std::vector<Definition> StandardSettings() {
               "Keeps textures sharp when seen at an angle (anisotropic filtering).",
               {{"original", "Original"}, {"2x", "2x"}, {"4x", "4x"}, {"8x", "8x"}, {"16x", "16x"}}, "original", "16x")
           .OriginalNote("the filtering the game itself asks for, as on the console."),
+      D::Bool("video.battle_revolution_models", C::Video, "Battle Revolution models",
+              "Shows Pokemon Battle Revolution's models for the Pokemon in battle instead of XD's, where there is one "
+              "(from the models you made on the launcher's Extra assets page, with your own Battle Revolution disc; built in, not a mod). "
+              "Only how they look changes. Takes effect the next time the game starts (also after a soft reset). "
+              "Off: XD's own models.",
+              false, false)
+          .OriginalNote("XD's own models.")
+          .Implemented(),
       D::Bool("video.widescreen", C::Video, "Widescreen",
               "Shows a wider picture (Widescreen shape): 3D scenes show more at the sides, while menus, text and "
               "the on-screen displays keep their shape (menus at the screen's sides move out to the wide edges: "
@@ -161,6 +169,11 @@ std::vector<Definition> StandardSettings() {
               "")
           .Preference()
           .Implemented(),
+      D::Text("system.extra_disc.pbr", C::System, "Pokemon Battle Revolution disc image",
+              "The Pokemon Battle Revolution disc image the launcher's Extra assets page makes the Battle Revolution "
+              "models from (empty: none chosen yet).", "", "")
+          .Preference()
+          .Implemented(),
       D::Bool("system.launcher_stays_open", C::System, "Keep the launcher open",
               "Keeps the launcher's window open while the game runs. Off: it closes when the game starts.", false,
               false)
@@ -215,6 +228,14 @@ std::vector<Definition> StandardSettings() {
               "battle plays out the same.",
               false, false)
           .FormerIds({"gameplay.skip_animations"})
+          .Implemented(),
+      D::Bool("gameplay.physical_special_split", C::Gameplay, "Physical/special split",
+              "Whether a move hits with Attack or Sp. Atk follows the move itself, as from Pokemon Diamond and "
+              "Pearl on, instead of its type: Fire Punch, Crunch and Dragon Claw become physical; Shadow Ball, "
+              "Hyper Beam, Sludge Bomb and Hidden Power special (54 moves change). Shadow moves stay as they are. "
+              "Changes how battles play, so it is off unless you turn it on.",
+              false, false)
+          .OriginalNote("physical or special by the move's type, as in every game before Diamond and Pearl.")
           .Implemented(),
       D::Bool("gameplay.fast_forward", C::Gameplay, "Fast-forward key",
               "While the fast-forward key is held (Tab at first, or the right stick pressed in; Controls page), the "

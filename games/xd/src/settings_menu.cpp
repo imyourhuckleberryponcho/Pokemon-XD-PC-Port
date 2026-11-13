@@ -1,3 +1,4 @@
+#include "xd_battle_models.h"
 #include "xd_playthrough.h"
 #include "xd_challenges.h"
 #include "xd_randomizer.h"
@@ -8,6 +9,7 @@
 
 #include <gx_texture_decode.h>
 #include <port_audio.h>
+#include <port_disc.h>
 #include <port_menu.h>
 #include <port_sfx.h>
 #include <port_video.h>
@@ -95,6 +97,9 @@ constexpr s16 kTitleOptions = 3;
 constexpr u32 kOptionsInfoMsg = 0x42E3;
 constexpr int kTitleDx = -166;
 const char* kTitleInfoText = "Picture, sound and controls (PC version).";
+constexpr int kModsW = 104, kModsGap = 10;
+const char* kModsText = "MODS";
+const char* kModsInfoText = "Switch the installed mods on or off (PC version).";
 constexpr uint16_t kTitleFont = 1;
 
 bool IsTitleMenu(const void* window) {
@@ -104,6 +109,7 @@ bool IsTitleMenu(const void* window) {
 bool sOn = false;
 bool sSelected = false;
 bool sTitleSelected = false;
+bool sTitleMods = false;
 bool sPageFromTitle = false;
 enum MenuSound { kSoundMove = 1, kSoundChoose = 2, kSoundBack = 3 };
 void PlayMenuSound(s32 menuId, int event);
@@ -582,6 +588,34 @@ void DrawTitleEntry(ImDrawList* dl, const TitleCapture& cap, bool selected) {
   }
 }
 
+void DrawTitleModsEntry(ImDrawList* dl, const TitleCapture& cap, bool selected) {
+  if (!cap.any) return;
+  const Screen sc = ScreenNow();
+  const float boxW = static_cast<float>(std::abs(cap.box.sp.w));
+  const float x = static_cast<float>(cap.box.offX + cap.box.sp.x + kTitleDx - kModsGap - kModsW);
+  const float y = static_cast<float>(cap.box.offY + cap.box.sp.y);
+  DrawSliced(dl, sc, cap.box, x, y, static_cast<float>(kModsW), 22.f, 22.f);
+  if (selected && cap.frame.seen) {
+    const float fx = x + static_cast<float>(cap.frame.sp.x - cap.box.sp.x) + static_cast<float>(cap.frame.offX - cap.box.offX);
+    const float fw = static_cast<float>(kModsW) + static_cast<float>(std::abs(cap.frame.sp.w)) - boxW;
+    DrawSliced(dl, sc, cap.frame, fx, static_cast<float>(cap.frame.offY + cap.frame.sp.y), fw, 24.f, 24.f);
+  }
+  if (cap.text.seen) {
+    const UseFont font(kTitleFont);
+    const SpriteWorkLayout& t = cap.text.sp;
+    uint8_t col[4] = {0xF0, 0xF0, 0xF0, 0xFF};
+    col[3] = static_cast<uint8_t>(col[3] * cap.text.winColor[3] / 255);
+    DrawTextCentred(dl, sc, x, static_cast<float>(cap.text.offY + t.y), static_cast<float>(kModsW), static_cast<float>(t.h), kModsText,
+                    col);
+  }
+  if (selected && cap.info.seen) {
+    uint8_t col[4] = {0xFF, 0xFF, 0xFF, 0xFF};
+    col[3] = static_cast<uint8_t>(col[3] * cap.info.winColor[3] / 255);
+    DrawText(dl, sc, static_cast<float>(cap.info.offX + cap.info.sp.x), static_cast<float>(cap.info.offY + cap.info.sp.y - 8),
+             kModsInfoText, col);
+  }
+}
+
 struct Row {
   const char* id;
   const char* label;
@@ -606,6 +640,8 @@ constexpr Row kRows[] = {
     {"gameplay.fast_forward_mode", "Fast-forward key", 0, true, ""},
     {"gameplay.fast_forward_speed", "Fast-forward speed", 1, true, "x"},
     {"gameplay.fast_battle_animations", "Fast animations", 0, true, ""},
+    {"gameplay.physical_special_split", "Physical/special split", 0, true, ""},
+    {"video.battle_revolution_models", "Battle Revolution models", 0, true, ""},
     {"system.pause_on_focus_loss", "Pause in the background", 0, true, ""},
     {nullptr, "Back", 0, false, ""},
 };
@@ -630,6 +666,7 @@ bool RowShown(const Row& r) {
   const es::Registry& reg = es::Global();
   const size_t i = reg.Find(r.id);
   if (i == es::kNoSetting || !reg.Get(i).implemented) return false;
+  if (std::strcmp(r.id, xd::battle_models::kSetting) == 0 && !PortXD_BattleModelsFound()) return false;
   return !r.enhancedOnly || reg.CurrentPreset() != es::Preset::Original;
 }
 
@@ -1112,6 +1149,16 @@ const SwitchText kSwitchTexts[] = {
                                               "trainers' Pokemon hold in the game. None: nothing. Shadow Pokemon keep theirs."},
     {"trainer_natures", "Trainers' natures", "Random: each of the story trainers' Pokemon gets any of the 25 natures. Shadow "
                                              "Pokemon get theirs from the game, as always."},
+    {"shops", "Poke Mart stock", "What the Poke Marts sell. Shuffled: the Marts' own goods in other Marts. Everyday goods: "
+                                 "medicine, status cures, repels, battle items, berries. Anything: also held items, TMs, "
+                                 "vitamins, stones, valuables. Poke Balls and Poke Snacks stay where they are."},
+    {"tutor_moves", "Tutor moves", "The move tutor teaches other moves, all different and none a TM teaches. Each is "
+                                   "learned by the Pokemon that could learn the move it replaces. One-hit-KO moves can be "
+                                   "ruled out."},
+    {"wild.scope", "Scope", "Poke Spots, \"Same swap everywhere\": a Pokemon is replaced by the same new one in every spot, and no "
+                                           "two by the same one."},
+    {"wild.types", "Type theme", "Poke Spots, \"Similar types\": the new Pokemon shares a type with the one it replaces."},
+    {"wild_levels", "Poke Spot levels", "Poke Spot Pokemon are that much higher in level (never above level 100)."},
 };
 const SwitchText* SwitchTextOf(const std::string& id) {
   for (const SwitchText& t : kSwitchTexts) {
@@ -1212,7 +1259,8 @@ void BuildRows() {
   s.rows.push_back({Kind::Original});
   s.rows.push_back({Kind::Engine});
   if (s.engine == engine::playthrough::Engine::Enhanced) {
-    for (const char* id : {"gameplay.text_speed", "gameplay.fast_forward", "gameplay.fast_battle_animations"}) {
+    for (const char* id : {"gameplay.text_speed", "gameplay.fast_forward", "gameplay.fast_battle_animations",
+                            "gameplay.physical_special_split"}) {
       const es::Registry& reg = es::Global();
       const size_t i = reg.Find(id);
       if (i != es::kNoSetting && reg.Get(i).implemented) {
@@ -1871,6 +1919,365 @@ void DrawNote() {
 
 }
 
+namespace mm {
+
+namespace em = engine::mods;
+
+enum class Kind { Mod, Broken, Apply, Exit };
+struct PRow {
+  Kind kind;
+  int index = -1;
+};
+
+struct State {
+  em::ModList list;
+  em::ModList original;
+  std::vector<em::ModFolder> found;
+  std::vector<em::BrokenFolder> broken;
+  em::Review review;
+  std::string gameId;
+  bool worldFixed = false;
+  std::vector<std::string> worldIds;
+  std::vector<std::string> loaded;
+  std::vector<PRow> rows;
+  int cursor = 0, first = 0;
+  std::vector<float> rowAlpha;
+  float titleTimer = 0.f, age = 0.f;
+  std::chrono::steady_clock::time_point last{};
+  std::string notice;
+  std::vector<std::pair<std::string, bool>> hidden;
+} s;
+
+std::filesystem::path ListFile() { return xd::SettingsFolder() / em::kListFile; }
+
+bool Changed() { return em::FormatModList(s.list) != em::FormatModList(s.original); }
+
+std::string LowerOf(std::string t) {
+  for (char& c : t) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  return t;
+}
+bool InIds(const std::vector<std::string>& ids, const std::string& id) {
+  return std::any_of(ids.begin(), ids.end(), [&](const std::string& x) { return LowerOf(x) == LowerOf(id); });
+}
+
+void Rebuild() {
+  s.review = em::ReviewList(s.list.Active(), s.found, s.gameId);
+  s.rows.clear();
+  for (int i = 0; i < static_cast<int>(s.review.rows.size()); i++) s.rows.push_back({Kind::Mod, i});
+  for (int i = 0; i < static_cast<int>(s.broken.size()); i++) s.rows.push_back({Kind::Broken, i});
+  s.rows.push_back({Kind::Apply});
+  s.rows.push_back({Kind::Exit});
+  s.cursor = std::clamp(s.cursor, 0, static_cast<int>(s.rows.size()) - 1);
+}
+
+void Open(void*) {
+  s = State{};
+  const std::filesystem::path modsFolder = xd::SettingsFolder() / L"mods";
+  std::vector<em::Message> messages;
+  s.found = em::FindMods(modsFolder, messages, s.broken);
+  std::vector<std::string> warnings;
+  em::ReadModListFile(ListFile(), s.list, warnings);
+  const auto hiddenId = [](const std::string& id) { return LowerOf(id) == "battle-revolution-models"; };
+  s.found.erase(std::remove_if(s.found.begin(), s.found.end(), [&](const em::ModFolder& f) { return hiddenId(f.manifest.id); }), s.found.end());
+  auto& listed = s.list.Active().mods;
+  for (const auto& e : listed) {
+    if (hiddenId(e.first)) s.hidden.push_back(e);
+  }
+  listed.erase(std::remove_if(listed.begin(), listed.end(), [&](const auto& e) { return hiddenId(e.first); }), listed.end());
+  em::AddNewMods(s.list, s.found);
+  s.original = s.list;
+  const char* id = PortDisc_GameId();
+  s.gameId = id != nullptr ? id : "";
+  s.worldFixed = xd::pt::WorldModsFixed(s.worldIds);
+  s.loaded = xd::pt::LoadedModIds();
+  Rebuild();
+  s.rowAlpha.clear();
+  std::fprintf(stderr, "[mods menu] %zu mod(s) in the list \"%s\", %zu folder(s) that can't be used; %zu in use now\n",
+               s.list.Active().mods.size(), s.list.active.c_str(), s.broken.size(), s.loaded.size());
+}
+
+void Close(void*) {}
+
+void Details(const PRow& r, std::string& summary, std::string& text) {
+  const int mods = static_cast<int>(std::count_if(s.review.rows.begin(), s.review.rows.end(),
+                                                  [](const em::ReviewRow& e) { return e.on && e.Usable(); }));
+  switch (r.kind) {
+  case Kind::Mod: {
+    const em::ReviewRow& row = s.review.rows[r.index];
+    if (row.mod == nullptr) {
+      summary = row.id;
+      text = row.problems.empty() ? std::string() : row.problems.front();
+      return;
+    }
+    const em::Manifest& m = row.mod->manifest;
+    summary = m.name + (m.version.empty() ? "" : "  " + m.version) + (m.author.empty() ? "" : "  by " + m.author);
+    const auto add = [&](const std::string& part) {
+      if (!part.empty()) text += (text.empty() ? "" : " ") + part;
+    };
+    for (const std::string& p : row.problems) add(p);
+    for (const std::string& w : row.warnings) add(w);
+    add(m.description);
+    add("Changes: " + em::DescribeChanges(em::ChangesOf(*row.mod)) + ".");
+    const em::AppliesVerdict v = xd::pt::ModApplies(*row.mod);
+    switch (v.effective) {
+    case em::Applies::AnyTime: add("Looks and sound only."); break;
+    case em::Applies::Restart: add("Read when the game starts."); break;
+    default:
+      if (s.worldFixed && InIds(s.worldIds, row.id)) {
+        add("New playthrough only: your save is set up with it, so it stays on for that save whatever is chosen here.");
+      } else if (s.worldFixed) {
+        add("New playthrough only: it is chosen when you start a new game. Your save keeps the mods it was started with.");
+      } else {
+        add("New playthrough only: it is chosen when you start a new game.");
+      }
+      break;
+    }
+    if (v.Downgraded()) add("(It says " + std::string(em::AppliesName(v.claimed)) + ", but " + v.reason + ".)");
+    if (InIds(s.loaded, row.id)) add("In use now.");
+    return;
+  }
+  case Kind::Broken: {
+    const em::BrokenFolder& b = s.broken[r.index];
+    summary = b.folderName;
+    text = "Can't be used: " + b.reason + ". Fix or remove it in the mods folder, then open this page again.";
+    return;
+  }
+  case Kind::Apply:
+    summary = "List \"" + s.list.active + "\": " + std::to_string(mods) + (mods == 1 ? " mod on" : " mods on");
+    if (!s.notice.empty()) {
+      text = s.notice;
+    } else if (Changed()) {
+      text = "Save this mod list and start the game again with it. Until you do, nothing changes: EXIT or B leaves the list as it was.";
+    } else {
+      text = "Nothing has changed yet. Switch mods on or off above (L / R, or X / Y, move one up or down the order: further down wins "
+             "when two mods change the same file).";
+    }
+    return;
+  default:
+    summary = "List \"" + s.list.active + "\"";
+    text = "Leave without applying: the mod list stays as it was.";
+    return;
+  }
+}
+
+bool Apply() {
+  if (!Changed()) {
+    s.notice = "Nothing has changed, so there is nothing to apply.";
+    return false;
+  }
+  if (xd::PlayerFilesReadOnly()) {
+    s.notice = std::string("This test run can't save the mod list: ") + xd::kPlayerFilesReadOnlyNote;
+    std::fprintf(stderr, "[mods menu] %s (mods.ini)\n", xd::kPlayerFilesReadOnlyNote);
+    return false;
+  }
+  std::error_code ec;
+  std::filesystem::create_directories(ListFile().parent_path(), ec);
+  em::ModList toWrite = s.list;
+  for (const auto& e : s.hidden) toWrite.Active().mods.push_back(e);
+  if (!em::WriteModListFile(ListFile(), toWrite)) {
+    s.notice = "The mod list couldn't be saved to mods.ini, so nothing was changed.";
+    std::fprintf(stderr, "[mods menu] could not write %ls\n", ListFile().wstring().c_str());
+    return false;
+  }
+  std::vector<engine::playthrough::ModUse> use;
+  std::string ids;
+  for (const em::ReviewRow& row : s.review.rows) {
+    if (!row.on || !row.Usable()) continue;
+    use.push_back({row.mod->manifest.id, row.mod->manifest.name, row.mod->manifest.version, xd::pt::ModApplies(*row.mod).effective});
+    ids += (ids.empty() ? "" : ", ") + row.mod->manifest.id;
+  }
+  std::fprintf(stderr, "[mods menu] applied: mods.ini written (%ls); on, in order: %s; starting the game again\n", ListFile().wstring().c_str(),
+               ids.empty() ? "none" : ids.c_str());
+  xd::pt::RestartForMods(use);
+  return true;
+}
+
+void Draw(ImDrawList* dl, float dt) {
+  const Screen sc = ScreenNow();
+  const int n = static_cast<int>(s.rows.size());
+  FillWindow(dl, IM_COL32(0, 0, 0, 255));
+  DrawItemAsIs(dl, sc, kOptBgTop);
+  DrawItemAsIs(dl, sc, kOptBgBottom);
+  DrawItemAsIs(dl, sc, kOptPanel);
+  DrawItemAsIs(dl, sc, kOptHeader);
+  for (int i = kOptDescFirst; i <= kOptDescLast; i++) DrawItemAsIs(dl, sc, i);
+  const uint8_t white[4] = {0xF0, 0xF0, 0xF0, 0xFF}, grey[4] = {0xA0, 0xA0, 0xA0, 0xFF}, amber[4] = {0xFF, 0xD0, 0x60, 0xFF},
+                red[4] = {0xFF, 0x90, 0x90, 0xFF};
+  {
+    const UseFont font(kScrFont);
+    DrawText(dl, sc, 82.f, 38.f + std::floor((22.f - static_cast<float>(sFontW + 1)) / 2.f), kModsText, white);
+    const UseFont small(kScrInfoFont);
+    DrawText(dl, sc, 232.f, 41.f, "L / R: move up / down the order", grey, 0.9f, 0.8f);
+  }
+  const int shown = std::min(n, kScrRows);
+  s.first = std::clamp(s.first, std::max(0, s.cursor - shown + 1), s.cursor);
+  s.first = std::clamp(s.first, 0, n - shown);
+  if (static_cast<int>(s.rowAlpha.size()) != n) s.rowAlpha.assign(n, 0.f);
+  for (int i = 0; i < n; i++) {
+    const float target = i == s.cursor ? 255.f : 0.f, step = 255.f * dt / 0.15f;
+    float& a = s.rowAlpha[i];
+    a = a < target ? std::min(target, a + step) : std::max(target, a - step);
+  }
+  const uint8_t pulse = PulseAlpha(s.titleTimer);
+  for (int i = s.first; i < s.first + shown; i++) {
+    const PRow& r = s.rows[i];
+    const bool sel = i == s.cursor;
+    const float y = kScrRowTop + kScrPitch * static_cast<float>(i - s.first), mid = y + kScrBarH / 2.f;
+    DrawItem(dl, sc, kOptRowBar, 0.f, y, 640.f, kScrBarH, static_cast<uint8_t>(s.rowAlpha[i]));
+    const UseFont font(kScrFont);
+    if (r.kind == Kind::Apply) {
+      const uint8_t a = Changed() ? 255 : 150;
+      DrawItem(dl, sc, kOptExit, 120.f, mid - 16.f, 400.f, -1.f, a, 16.f);
+      if (sel) DrawItem(dl, sc, kOptExitCursor, 117.f, mid - 19.f, 406.f, -1.f, pulse, 16.f);
+      DrawTextCentred(dl, sc, 120.f, mid - 16.f, 400.f, 32.f, "Apply and restart", Changed() ? white : grey);
+      continue;
+    }
+    if (r.kind == Kind::Exit) {
+      DrawItem(dl, sc, kOptExit, 437.f, mid - 16.f);
+      if (sel) DrawItem(dl, sc, kOptExitCursor, 434.f, mid - 19.f, -1.f, -1.f, pulse);
+      DrawTextCentred(dl, sc, 437.f, mid - 16.f, 144.f, 32.f, "EXIT", white);
+      continue;
+    }
+    std::string label, value;
+    const uint8_t* labelColour = white;
+    int set = -1;
+    if (r.kind == Kind::Mod) {
+      const em::ReviewRow& row = s.review.rows[r.index];
+      label = std::to_string(r.index + 1) + ". " + (row.mod != nullptr ? row.mod->manifest.name : row.id);
+      if (row.mod == nullptr) {
+        value = "Missing";
+        labelColour = red;
+      } else {
+        set = row.on ? 0 : 1;
+        if (!row.problems.empty() && row.on) labelColour = red;
+        else if (!row.warnings.empty() && row.on) labelColour = amber;
+      }
+    } else {
+      label = s.broken[r.index].folderName;
+      value = "Can't load";
+      labelColour = red;
+    }
+    const float labelW = static_cast<float>(TextWidth(label.c_str())), room = 321.f - 8.f - 74.f;
+    DrawText(dl, sc, 74.f, std::floor(mid - static_cast<float>(sFontW + 1) / 2.f), label.c_str(), labelColour, labelW > room ? room / labelW : 1.f);
+    const float boxY = mid - 12.f;
+    if (set >= 0) {
+      DrawItem(dl, sc, set == 0 ? kOptChoice : kOptChoice2, set == 0 ? 321.f : 449.f, boxY, -1.f, -1.f, sel ? pulse : 255);
+      DrawTextCentred(dl, sc, 321.f, boxY, 121.f, 24.f, "On", white);
+      DrawTextCentred(dl, sc, 449.f, boxY, 121.f, 24.f, "Off", white);
+    } else {
+      DrawItem(dl, sc, kOptChoice, 321.f, boxY, 249.f, -1.f, 110, 14.f);
+      DrawTextCentred(dl, sc, 321.f, boxY, 249.f, 24.f, value.c_str(), grey);
+    }
+  }
+  if (s.first > 0) DrawTriangle(dl, sc, 320.f, 75.f, 16.f, 0, IM_COL32(0xF0, 0xF0, 0xF0, 0xE0));
+  if (s.first + shown < n) DrawTriangle(dl, sc, 320.f, 328.f, 16.f, 1, IM_COL32(0xF0, 0xF0, 0xF0, 0xE0));
+  {
+    const UseFont font(kScrInfoFont);
+    std::string summary, text;
+    Details(s.rows[s.cursor], summary, text);
+    const float summaryW = std::max(1.f, static_cast<float>(TextWidth(summary.c_str())));
+    DrawText(dl, sc, 90.f, 352.f, summary.c_str(), white, std::min(0.9f, 452.f / summaryW), 0.85f);
+    struct Fit {
+      size_t lines;
+      float pitch, scale;
+    };
+    constexpr Fit kFits[] = {{3, 16.f, 0.75f}, {4, 13.f, 0.65f}, {5, 10.6f, 0.52f}};
+    Fit fit = kFits[0];
+    std::vector<std::string> lines;
+    for (const Fit& f : kFits) {
+      fit = f;
+      lines = Wrap(text, 452.f / (f.scale * 0.9f));
+      if (lines.size() <= f.lines) break;
+    }
+    if (lines.size() > fit.lines) {
+      lines.resize(fit.lines);
+      lines.back() += " ...";
+    }
+    for (size_t k = 0; k < lines.size(); k++) {
+      DrawText(dl, sc, 90.f, 379.f + fit.pitch * static_cast<float>(k), lines[k].c_str(), white, 0.9f, fit.scale);
+    }
+  }
+  if (s.age < 0.25f) FillWindow(dl, IM_COL32(0, 0, 0, std::clamp(static_cast<int>(255.f * (1.f - s.age / 0.25f)), 0, 255)));
+}
+
+bool Frame(void*, const PortMenuInput* in) {
+  const int n = static_cast<int>(s.rows.size());
+  int event = 0;
+  const int before = s.cursor;
+  if (in->repeat & PAD_BUTTON_UP) s.cursor = (s.cursor + n - 1) % n;
+  if (in->repeat & PAD_BUTTON_DOWN) s.cursor = (s.cursor + 1) % n;
+  if (s.cursor != before) {
+    event = kSoundMove;
+    s.notice.clear();
+  }
+  const PRow r = s.rows[s.cursor];
+  const bool left = (in->repeat & PAD_BUTTON_LEFT) != 0, right = (in->repeat & PAD_BUTTON_RIGHT) != 0;
+  const bool a = (in->pressed & PAD_BUTTON_A) != 0;
+  bool close = false;
+  if (r.kind == Kind::Mod) {
+    const em::ReviewRow& row = s.review.rows[r.index];
+    auto& entry = s.list.Active().mods[static_cast<size_t>(r.index)];
+    if (row.mod != nullptr && (left || right || a)) {
+      entry.second = left ? true : right ? false : !entry.second;
+      s.notice.clear();
+      Rebuild();
+      event = kSoundMove;
+    }
+    const int dir = (in->pressed & (PAD_TRIGGER_L | PAD_BUTTON_X)) != 0 ? -1 : (in->pressed & (PAD_TRIGGER_R | PAD_BUTTON_Y)) != 0 ? 1 : 0;
+    if (dir != 0 && em::MoveMod(s.list.Active(), static_cast<size_t>(r.index), dir)) {
+      s.cursor += dir;
+      s.notice.clear();
+      Rebuild();
+      event = kSoundMove;
+    }
+  } else if (r.kind == Kind::Apply && a) {
+    if (Apply()) close = true;
+    else event = kSoundBack;
+  } else if (r.kind == Kind::Exit && a) {
+    close = true;
+  }
+  if (in->pressed & PAD_BUTTON_B) {
+    close = true;
+    event = kSoundBack;
+  } else if (close) {
+    event = kSoundChoose;
+  }
+  if (event != 0) PlayMenuSound(kTitleMenu, event);
+  if (close) return false;
+  const auto now = std::chrono::steady_clock::now();
+  float dt = s.last.time_since_epoch().count() == 0 ? 1.f / 60.f : std::chrono::duration<float>(now - s.last).count();
+  s.last = now;
+  dt = std::clamp(dt, 0.f, 0.1f);
+  s.titleTimer = std::fmod(s.titleTimer + dt, 1.f);
+  s.age += dt;
+  if (!ItemPicture(kOptMenu, kOptPanel).ok) {
+    ImDrawList* dl = ImGui::GetForegroundDrawList();
+    FillWindow(dl, IM_COL32(0, 0, 0, 230));
+    const Screen sc = ScreenNow();
+    const uint8_t white[4] = {0xF0, 0xF0, 0xF0, 0xFF};
+    for (int i = 0; i < n; i++) {
+      std::string label = i == s.cursor ? "> " : "  ";
+      const PRow& row = s.rows[i];
+      if (row.kind == Kind::Mod) {
+        const em::ReviewRow& rr = s.review.rows[row.index];
+        label += (rr.on ? "[on]  " : "[off] ") + (rr.mod != nullptr ? rr.mod->manifest.name : rr.id);
+      } else if (row.kind == Kind::Broken) {
+        label += "(can't load) " + s.broken[row.index].folderName;
+      } else {
+        label += row.kind == Kind::Apply ? "Apply and restart" : "EXIT";
+      }
+      DrawText(dl, sc, 80.f, 60.f + 30.f * i, label.c_str(), white);
+    }
+    return true;
+  }
+  Draw(ImGui::GetForegroundDrawList(), dt);
+  return true;
+}
+
+const PortMenuPage kModsPage{"mods", Open, Frame, Close, nullptr};
+
+}
+
 constexpr u16 kUp = PAD_BUTTON_UP, kDown = PAD_BUTTON_DOWN, kLeft = PAD_BUTTON_LEFT, kRight = PAD_BUTTON_RIGHT;
 u16 sPrevDirs = 0, sPrevButtons = 0;
 
@@ -1899,12 +2306,13 @@ void TitleFilter(PADStatus* status, const WinWorkLayout* w, u16 newDirs, u16 new
   const bool open = w->state == 2 && w->pad_a4 == 0;
   if (!open || w->cursor < 0 || w->cursor >= 5) {
     if (sTitleSelected) std::fprintf(stderr, "[settings menu] the title menu is no longer taking input: entry off\n");
-    sTitleSelected = false;
+    sTitleSelected = sTitleMods = false;
     return;
   }
   if (!sTitleSelected) {
     if (menuTitleGetSelect(w->cursor) == kTitleOptions && (newDirs & kLeft) != 0) {
       sTitleSelected = true;
+      sTitleMods = false;
       PlayMenuSound(w->menuID, kSoundMove);
       PortInput_LatchHeld();
       for (int i = 0; i < PAD_MAX_CONTROLLERS; i++) Neutral(status[i]);
@@ -1912,15 +2320,20 @@ void TitleFilter(PADStatus* status, const WinWorkLayout* w, u16 newDirs, u16 new
     return;
   }
   if (newDirs & kRight) {
-    sTitleSelected = false;
+    if (sTitleMods) sTitleMods = false;
+    else sTitleSelected = false;
+    PlayMenuSound(w->menuID, kSoundMove);
+    PortInput_LatchHeld();
+  } else if ((newDirs & kLeft) != 0 && !sTitleMods) {
+    sTitleMods = true;
     PlayMenuSound(w->menuID, kSoundMove);
     PortInput_LatchHeld();
   } else if ((newDirs & (kLeft | kUp | kDown)) != 0 || (newButtons & PAD_BUTTON_B) != 0) {
-    sTitleSelected = false;
+    sTitleSelected = sTitleMods = false;
     return;
   } else if (newButtons & PAD_BUTTON_A) {
     sPageFromTitle = true;
-    if (PortMenu_Open(&kPage)) PlayMenuSound(w->menuID, kSoundChoose);
+    if (PortMenu_Open(sTitleMods ? &mm::kModsPage : &kPage)) PlayMenuSound(w->menuID, kSoundChoose);
   }
   for (int i = 0; i < PAD_MAX_CONTROLLERS; i++) Neutral(status[i]);
 }
@@ -1975,7 +2388,7 @@ void EntryFilter(PADStatus* status) {
   }
   if (sTitleSelected) {
     std::fprintf(stderr, "[settings menu] the title menu is no longer taking input: entry off\n");
-    sTitleSelected = false;
+    sTitleSelected = sTitleMods = false;
   }
   if (!open) {
     if (sSelected) std::fprintf(stderr, "[settings menu] the field menu is no longer taking input: entry off\n");
@@ -2100,7 +2513,7 @@ void PortXD_SettingsMenuInit(void) {
   }
   if (sOn || xd::pt::ScreenEnabled() || xd::pt::ChallengesPossible() || xd::pt::EngineQuestionPossible()) PortInput_SetPadFilter(Filter);
   if (sOn) {
-    std::fprintf(stderr, "[settings menu] SETTINGS after EXIT in the field menu, left of OPTIONS in the title menu\n");
+    std::fprintf(stderr, "[settings menu] SETTINGS after EXIT in the field menu, left of OPTIONS in the title menu; MODS left of SETTINGS\n");
   } else {
     std::fprintf(stderr, "[settings menu] no SETTINGS entry this run (%s)\n", why);
   }
@@ -2217,8 +2630,11 @@ void PortXD_SettingsMenuOverlay(void) {
   if (!sOn || PortMenu_Active()) return;
   const uint32_t flip = PortVI_GetFlipCount();
   if (sTitleBuilding.any) sTitleShown = sTitleBuilding;
-  if (sTitleShown.any && flip <= sTitleShown.flip + 2) {
-    DrawTitleEntry(ImGui::GetBackgroundDrawList(), sTitleShown, sTitleSelected);
+  const auto* active = static_cast<const WinWorkLayout*>(windowSearchID(windowGetActiveID()));
+  const bool titleInFront = active == nullptr || IsTitleMenu(active);
+  if (sTitleShown.any && flip <= sTitleShown.flip + 2 && titleInFront) {
+    DrawTitleEntry(ImGui::GetBackgroundDrawList(), sTitleShown, sTitleSelected && !sTitleMods);
+    DrawTitleModsEntry(ImGui::GetBackgroundDrawList(), sTitleShown, sTitleSelected && sTitleMods);
   } else {
     sTitleShown.any = false;
   }

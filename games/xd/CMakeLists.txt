@@ -306,6 +306,9 @@ foreach (_src ${XD_GAME_SOURCES})
   if (_src MATCHES "/GSmsg/GSmsg\\.cpp$")
     list(APPEND _defs "spriteSetEnv=PortXD_MsgSpriteSetEnv" "timeGetLastFrameTime=PortXD_MsgFrameTime")
   endif ()
+  if (_src MATCHES "/fightSeq/fightSeq\\.cpp$" OR _src MATCHES "/fightSeq/fightSeqBasis\\.cpp$")
+    list(APPEND _defs "wazaCheckDarkWaza=PortXD_SplitCheckDarkWaza" "zokuseiBiosGetWazaKind=PortXD_SplitTypeKind")
+  endif ()
   if (_src MATCHES "/GSmodel/GSmodel\\.cpp$")
     list(APPEND _defs "GSboundIsInViewFast=PortXD_ModelBoundInView" "modelShadowUpdate=PortXD_ModelShadowUpdate"
       "GSgfxPerfbarCPUEntry=PortXD_ModelPerfEntry")
@@ -469,13 +472,29 @@ target_link_libraries(xd_settings_test PRIVATE xd_settings_list)
 
 add_executable(xd_heap_model_test tools/xd_heap_model_test.cpp src/heap_model.cpp)
 
+add_library(xd_extra_sources STATIC launcher/xd_extra_sources.cpp)
+target_include_directories(xd_extra_sources PUBLIC launcher src ${PROJECT_SOURCE_DIR}/launcher/include)
+target_link_libraries(xd_extra_sources PUBLIC engine_mods engine_settings)
+add_executable(xd_extra_sources_test tools/xd_extra_sources_test.cpp)
+target_link_libraries(xd_extra_sources_test PRIVATE xd_extra_sources xd_settings_list)
+
 add_executable(xd_launcher WIN32 launcher/xd_launcher.cpp src/disc_verify.c)
 target_include_directories(xd_launcher PRIVATE src)
-target_link_libraries(xd_launcher PRIVATE xd_playthrough_files xd_randomizer) # (Save page: the randomizer's style)
+target_link_libraries(xd_launcher PRIVATE xd_playthrough_files xd_randomizer xd_extra_sources) # (Save page: the randomizer's style)
 target_link_libraries(xd_launcher PRIVATE launcher_ui xd_settings_list engine_disc_check platform_os xd_save
   xd_save_names engine_memcard ${AURORA_SDL3_TARGET})
 target_compile_options(xd_launcher PRIVATE ${XD_FLAG_UTF8})
 xd_link_windows_libs(xd_launcher PRIVATE ole32 shell32 uuid dxgi) # shortcuts (IShellLink), known folders; dxgi: graphics driver versions (shaders)
+if (APPLE)
+  set_target_properties(xd_launcher PROPERTIES LINK_OPTIONS "")
+endif ()
+if (NOT WIN32 AND NOT APPLE)
+  set_target_properties(xd_launcher PROPERTIES BUILD_RPATH "\$ORIGIN")
+  add_custom_command(TARGET xd_launcher POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/resources/xd_icon.png"
+      "$<TARGET_FILE_DIR:xd_launcher>/icon.png"
+    VERBATIM)
+endif ()
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/updates.txt)
 file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/updates.txt _xd_update_lines REGEX "^(feed|public_key)=")
 set(_xd_feed "")
@@ -568,7 +587,7 @@ set(XD_PROGRAM_LIBS xd_port engine_gs engine_disc_check engine_settings engine_c
 set(XD_PROGRAM_PORT_SOURCES src/boot.c src/disc_tables.cpp src/disc_verify.c src/disc_choice.cpp src/game_new.cpp src/heap_check.cpp src/heap_model.cpp src/musyx_dsp_program.c
   src/renderdoc_capture.c src/screenshot.cpp src/bug_report.cpp src/settings_boot.cpp src/mods_boot.cpp src/state_dump.cpp src/timing_log.cpp src/cpu_cost_hooks.cpp src/fsys_unpack_cost.cpp src/dvd_open_cost.cpp src/bound_walk_cost.cpp src/perf_marks.cpp src/cpu_counters.cpp src/warp.cpp src/render_icon.cpp src/shader_prep.cpp src/pc_load.cpp src/dsp_coef.cpp
   src/data/rel_link.cpp src/data/main_program_map.cpp src/dev_menu.cpp src/task_stacks.cpp src/input_ticks.cpp
-  src/particle_check.cpp src/settings_menu.cpp src/speedups.cpp src/replay_pacing.cpp src/audio_categories.cpp src/button_icons.cpp src/settings_switches.cpp
+  src/particle_check.cpp src/settings_menu.cpp src/speedups.cpp src/move_split.cpp src/replay_pacing.cpp src/audio_categories.cpp src/button_icons.cpp src/settings_switches.cpp
   src/widescreen.cpp src/playthrough.cpp src/challenges.cpp src/level_caps.cpp src/battles_won.cpp src/walk_helper.cpp)
 if (NOT WIN32)
   list(REMOVE_ITEM XD_PROGRAM_PORT_SOURCES src/bug_report.cpp src/screenshot.cpp src/state_dump.cpp src/render_icon.cpp)
@@ -673,9 +692,20 @@ if (XD_CALL_TRACE)
   target_sources(xd PRIVATE src/call_trace.cpp $<TARGET_OBJECTS:xd_call_trace_asm>)
   target_sources(xd PRIVATE src/func_cost.cpp)
   include(sdk_cost_renames.cmake)
+  set(XD_SDK_COST_RENAMES_LAST
+    C_MTXConcat=PortSdk_PSMTXConcat C_MTXCopy=PortSdk_PSMTXCopy C_MTXIdentity=PortSdk_PSMTXIdentity
+    C_MTXInvXpose=PortSdk_PSMTXInvXpose C_MTXInverse=PortSdk_PSMTXInverse C_MTXMultVec=PortSdk_PSMTXMultVec
+    C_MTXMultVecSR=PortSdk_PSMTXMultVecSR C_MTXQuat=PortSdk_PSMTXQuat C_MTXRotAxisRad=PortSdk_PSMTXRotAxisRad
+    C_MTXRotRad=PortSdk_PSMTXRotRad C_MTXScale=PortSdk_PSMTXScale C_MTXScaleApply=PortSdk_PSMTXScaleApply
+    C_MTXTrans=PortSdk_PSMTXTrans C_MTXTransApply=PortSdk_PSMTXTransApply C_MTXTranspose=PortSdk_PSMTXTranspose
+    C_QUATInverse=PortSdk_PSQUATInverse C_QUATMultiply=PortSdk_PSQUATMultiply C_VECAdd=PortSdk_PSVECAdd
+    C_VECCrossProduct=PortSdk_PSVECCrossProduct C_VECDotProduct=PortSdk_PSVECDotProduct
+    C_VECScale=PortSdk_PSVECScale C_VECSubtract=PortSdk_PSVECSubtract
+    PortGX_CallDisplayList=PortXD_GXCallDisplayList PortGX_SetArrayUnsized=PortSdk_GXSetArrayUnsized)
   foreach (_src ${XD_GAME_SOURCES})
     if (NOT _src MATCHES "/bound\\.cpp$")
-      set_property(SOURCE "${_src}" APPEND PROPERTY COMPILE_DEFINITIONS ${XD_SDK_COST_RENAMES})
+      set_property(SOURCE "${_src}" APPEND PROPERTY COMPILE_DEFINITIONS ${XD_SDK_COST_RENAMES}
+        ${XD_SDK_COST_RENAMES_LAST})
     endif ()
   endforeach ()
   target_sources(xd PRIVATE src/sdk_cost.cpp)

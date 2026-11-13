@@ -7,8 +7,12 @@
 #
 # Result:  <out>/Pokemon XD PC <version> - Mac (test)/Pokemon XD.app + Read me.txt
 #          <out>/Pokemon XD PC <version> - Mac (test).zip
-# The app holds the game program (xd, x86_64: runs through Rosetta 2 on Apple silicon), the libraries it loads
-# and the licences. No game data: the player picks his own disc image at the first start.
+# The app holds the launcher (xd_launcher: the app's main program, what a double-click starts), the game program
+# (xd, started by the launcher; x86_64, both run through Rosetta 2 on Apple silicon), the libraries they load and
+# the licences. No game data: the player picks his own disc image in the launcher.
+# The game stays startable without the launcher (tests, scripts): Contents/MacOS/xd, or the launcher with
+# XD_NO_LAUNCHER=1 (docs/MAC.md, "Launcher on the Mac"). A build without xd_launcher gives the old app, whose main
+# program is xd (the log says so).
 set -eu
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../../.." && pwd)"
@@ -24,7 +28,38 @@ rm -rf "$DEST" "$OUT/$NAME.zip"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/licenses"
 
 cp "$BIN/xd" "$APP/Contents/MacOS/xd"
-sed "s/@VERSION@/$VERSION/g" "$HERE/Info.plist.in" > "$APP/Contents/Info.plist"
+MAIN=xd
+if [ -x "$BIN/xd_launcher" ]; then
+  cp "$BIN/xd_launcher" "$APP/Contents/MacOS/xd_launcher"
+  MAIN=xd_launcher
+  echo "  launcher: included, the app's main program"
+else
+  echo "  launcher: NOT included ($BIN/xd_launcher is missing): the app starts the game directly, as before"
+fi
+sed -e "s/@VERSION@/$VERSION/g" -e "s/@MAIN@/$MAIN/g" "$HERE/Info.plist.in" > "$APP/Contents/Info.plist"
+# The app's picture (original art, games/xd/resources/xd_icon.png): sips and iconutil are Apple's own tools.
+# Best effort: without the picture the app just shows the system's plain icon.
+ICON_PNG="$ROOT/games/xd/resources/xd_icon.png"
+if [ -f "$ICON_PNG" ] && command -v sips >/dev/null 2>&1 && command -v iconutil >/dev/null 2>&1; then
+  ICONSET="$OUT/.AppIcon.iconset"
+  rm -rf "$ICONSET"; mkdir -p "$ICONSET"
+  for sz in 16 32 64 128 256; do
+    sips -z $sz $sz "$ICON_PNG" --out "$ICONSET/icon_${sz}x${sz}.png" >/dev/null 2>&1 || true
+  done
+  # (the 256 picture is the largest we have: it also serves as the 128 @2x and the 16/32 @2x of the smaller ones)
+  cp "$ICONSET/icon_32x32.png" "$ICONSET/icon_16x16@2x.png" 2>/dev/null || true
+  cp "$ICONSET/icon_64x64.png" "$ICONSET/icon_32x32@2x.png" 2>/dev/null || true
+  cp "$ICONSET/icon_256x256.png" "$ICONSET/icon_128x128@2x.png" 2>/dev/null || true
+  rm -f "$ICONSET/icon_64x64.png"
+  if iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns" 2>&1; then
+    echo "  icon: AppIcon.icns made"
+  else
+    echo "  icon: iconutil failed (the app has the plain icon)"
+  fi
+  rm -rf "$ICONSET"
+else
+  echo "  icon: not made (xd_icon.png, sips or iconutil missing)"
+fi
 
 # Where things go inside the app (run 9 on GitHub's Mac, 2026-11-11: signing failed with everything in
 # Contents/MacOS. Apple's rule: that folder holds programs only; anything else there is taken for code that
@@ -70,6 +105,9 @@ bundle_needs() { # <file inside the app> <the prefix its libraries get>
 }
 : > "$TODO"
 bundle_needs "$APP/Contents/MacOS/xd" "@executable_path/../Frameworks"
+if [ -f "$APP/Contents/MacOS/xd_launcher" ]; then
+  bundle_needs "$APP/Contents/MacOS/xd_launcher" "@executable_path/../Frameworks"
+fi
 # (libraries of libraries: the list grows while it is worked through)
 DONE=0
 while [ "$DONE" -lt "$(wc -l < "$TODO" | tr -d ' ')" ]; do
@@ -79,7 +117,7 @@ done
 rm -f "$TODO" "$TODO.needs"
 # Nothing may still point into a package manager's folders (a player's Mac has none).
 LEFT=0
-for f in "$APP/Contents/MacOS/xd" "$FW"/*.dylib; do
+for f in "$APP/Contents/MacOS/xd" "$APP/Contents/MacOS/xd_launcher" "$FW"/*.dylib; do
   [ -f "$f" ] || continue
   echo "  $(basename "$f") asks for:"
   needs_of "$f" | sed 's/^/      /'
@@ -90,7 +128,8 @@ for f in "$APP/Contents/MacOS/xd" "$FW"/*.dylib; do
 done
 [ "$LEFT" = 0 ] || exit 1
 
-# Files the build puts next to the program and the program reads at run time (the shipped shader list, fonts).
+# Files the build puts next to the program and the programs read at run time (the shipped shader list, fonts: the
+# launcher's own Inter font files are in the build's fonts folder too, from the xd_launcher target).
 for f in initial_pipeline_cache.db; do
   if [ -f "$BIN/$f" ]; then
     cp "$BIN/$f" "$APP/Contents/Resources/$f"
@@ -100,6 +139,19 @@ done
 if [ -d "$BIN/fonts" ]; then
   cp -R "$BIN/fonts" "$APP/Contents/Resources/fonts"
   ln -s "../Resources/fonts" "$APP/Contents/MacOS/fonts"
+fi
+# The Battle Revolution models helper (tools/pbr_convert/package_pbr_models.py, built by the workflow's step before
+# this one; PBR_MODELS_DIR names its folder): the launcher's Extra assets page looks for
+# <program folder>/pbr_models/pbr_models, and the program folder is Contents/MacOS. Same rule as the fonts: the files
+# live in Resources, Contents/MacOS gets a link (a real folder there is refused by the signing).
+# UNTESTED on a Mac. It is left out, with a note in the log, when it was not built.
+PBR_MODELS_DIR="${PBR_MODELS_DIR:-$ROOT/build/pbr_models_dist_mac/pbr_models}"
+if [ -x "$PBR_MODELS_DIR/pbr_models" ]; then
+  cp -R "$PBR_MODELS_DIR" "$APP/Contents/Resources/pbr_models"
+  ln -s "../Resources/pbr_models" "$APP/Contents/MacOS/pbr_models"
+  echo "  pbr_models: included (from $PBR_MODELS_DIR)"
+else
+  echo "  pbr_models: NOT included ($PBR_MODELS_DIR/pbr_models is not there)"
 fi
 echo "$VERSION" > "$APP/Contents/Resources/version.txt"
 ln -s "../Resources/version.txt" "$APP/Contents/MacOS/version.txt"
@@ -138,6 +190,18 @@ sign() { # <file or app>: codesign's own words go into the log
 for lib in "$FW"/*.dylib; do
   [ -f "$lib" ] || continue
   sign "$lib"
+done
+# The helper's own programs and libraries (PyInstaller's; they were changed by being copied and its libnod is ours):
+# each one ad hoc, as the libraries above. Their failure does not fail the app's signature.
+if [ -d "$APP/Contents/Resources/pbr_models" ]; then
+  find "$APP/Contents/Resources/pbr_models" -type f | while read -r f; do
+    if file -b "$f" | grep -q "Mach-O"; then codesign --force --sign - "$f" 2>&1 || echo "  (could not sign ${f#"$DEST"/})"; fi
+  done
+fi
+# (the programs in Contents/MacOS: the main one is signed with the app, but the other one is a second program that
+# the app's seal only records as a file: ad hoc signed by itself first, so it carries a signature of its own)
+for prog in xd xd_launcher; do
+  if [ -f "$APP/Contents/MacOS/$prog" ]; then sign "$APP/Contents/MacOS/$prog"; fi
 done
 sign "$APP"
 [ "$SIGNED" = 1 ] || echo "package_mac.sh: ad hoc signing failed (the app is unsigned or half signed)"

@@ -30,6 +30,7 @@ void PortTime_SetSpeed(float speed);
 bool PortCARD_Busy(void);
 void PortInput_EnhancedNote(const char* what);
 uint32_t PortVI_GetFlipCount(void);
+uint32_t VIGetRetraceCount(void);
 bool PortTime_IsDeterministic(void);
 }
 
@@ -74,6 +75,10 @@ bool sRecovering = false;
 uint32_t sStalls = 0;
 bool sGaveUp = false;
 float sSpeedCap = 16.0f;
+std::vector<uint32_t> sGaps;
+uint32_t sGapField = 0;
+std::chrono::steady_clock::time_point sGapWindow = std::chrono::steady_clock::now();
+int sBehindWindows = 0;
 std::mutex sMarksLock;
 std::vector<std::string> sUsed;
 uint32_t sFirstFrame = 0;
@@ -232,7 +237,9 @@ void PortSpeedups_Frame(bool gameWants) {
     if (mayGiveUp && !sGaveUp && (atLowest || sStalls >= 4)) {
       sGaveUp = true;
       Note("fast-forward off until the game is started again: the PC can't keep up with it");
-      PortVideo_Notice("Fast-forward switched itself off: this PC can't keep up with it.", 6.0);
+      PortVideo_Notice(sFastByKey ? "Fast-forward switched itself off: this PC can't keep up with it."
+                                  : "Fast battle animations switched themselves off: this PC can't keep up with them.",
+                       6.0);
     }
     sLastStallFlip = flips;
     sLastStallSpeed = sAppliedSpeed;
@@ -250,6 +257,43 @@ void PortSpeedups_Frame(bool gameWants) {
   }
   if (sSpeedCap < 16.0f && flips - sCapSince > 1800) {
     sSpeedCap = 16.0f;
+  }
+  {
+    static uint32_t lastFlip = 0;
+    static const bool deterministic = PortTime_IsDeterministic();
+    const uint32_t field = VIGetRetraceCount();
+    if (flips != lastFlip) {
+      if (sFast && !deterministic && field > sGapField) sGaps.push_back(field - sGapField);
+      lastFlip = flips;
+      sGapField = field;
+    }
+    const auto now = std::chrono::steady_clock::now();
+    if (!sFast) {
+      sGaps.clear();
+      sBehindWindows = 0;
+      sGapWindow = now;
+    } else if (now - sGapWindow >= std::chrono::milliseconds(500)) {
+      sGapWindow = now;
+      if (sGaps.size() >= 3) {
+        std::nth_element(sGaps.begin(), sGaps.begin() + static_cast<std::ptrdiff_t>(sGaps.size() / 2), sGaps.end());
+        const float median = static_cast<float>(sGaps[sGaps.size() / 2]);
+        sBehindWindows = median >= 3.0f ? sBehindWindows + 1 : 0;
+        if (sBehindWindows >= 2) {
+          const float manages = std::max(2.0f * sBaseNow.load(), std::floor(sAppliedSpeed * 2.0f / median));
+          if (manages < sAppliedSpeed) {
+            sSpeedCap = manages;
+            sCapSince = flips;
+            char line[160];
+            std::snprintf(line, sizeof line, "%s eases off: the PC manages about %gx, not %gx (pictures %g fields apart)",
+                          sFastByKey ? "fast-forward" : "fast battle animations", static_cast<double>(manages),
+                          static_cast<double>(sAppliedSpeed), static_cast<double>(median));
+            Note(line);
+          }
+          sBehindWindows = 0;
+        }
+      }
+      sGaps.clear();
+    }
   }
   want = want && !sRecovering && !sGaveUp;
   const float base = sH.base.Valid() && sH.base.Get() > 1.0f ? sH.base.Get() : 1.0f;
@@ -275,6 +319,7 @@ void PortSpeedups_Frame(bool gameWants) {
   if (target != sAppliedSpeed) {
     PortTime_SetSpeed(target);
     sAppliedSpeed = target;
+    if (sFast) PortAudio_SetFastForward(static_cast<int>(target / base + 0.5f));
   }
 }
 

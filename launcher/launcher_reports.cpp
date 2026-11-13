@@ -2,9 +2,11 @@
 
 #include <port_zip.h>
 
+#if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
+#endif
 
 #include <algorithm>
 #include <chrono>
@@ -27,6 +29,7 @@ std::string Utf8(const fs::path& p) {
   return std::string(reinterpret_cast<const char*>(s.data()), s.size());
 }
 
+#if defined(_WIN32)
 std::string Utf8(const wchar_t* w) {
   if (w == nullptr || w[0] == L'\0') {
     return "";
@@ -38,6 +41,7 @@ std::string Utf8(const wchar_t* w) {
   }
   return out;
 }
+#endif
 
 char LowerAscii(char c) { return c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c; }
 
@@ -284,6 +288,18 @@ std::vector<Report> List(const fs::path& folder) {
 
 Identity CurrentIdentity() {
   Identity who;
+#if !defined(_WIN32)
+  for (const char* name : {"USER", "LOGNAME"}) {
+    const char* value = std::getenv(name);
+    if (who.userName.empty() && value != nullptr) {
+      who.userName = value;
+    }
+  }
+  if (const char* home = std::getenv("HOME"); home != nullptr && home[0] != '\0') {
+    who.profilePaths.push_back(home);
+  }
+  return who;
+#else
   who.userName = Utf8(_wgetenv(L"USERNAME"));
   const std::string homePath = Utf8(_wgetenv(L"HOMEPATH"));
   for (const std::string& p : {Utf8(_wgetenv(L"USERPROFILE")),
@@ -294,6 +310,7 @@ Identity CurrentIdentity() {
     }
   }
   return who;
+#endif
 }
 
 std::string Scrub(const std::string& text, const Identity& who) {

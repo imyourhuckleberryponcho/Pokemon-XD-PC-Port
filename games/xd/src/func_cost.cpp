@@ -64,6 +64,7 @@ constexpr uint32_t JOBJ_CLASSICAL_SCALE = 1u << 3, JOBJ_MTX_DIRTY = 1u << 6, JOB
 
 extern "C" {
 void PortCpuCost_Count(unsigned counter, uint64_t amount);
+void PortCpuCost_Label(const char* label);
 int PortFuncCost_Init(void);
 int PortFuncCost_Resolve(const char* name);
 void PortFuncCost_Call(int entry, const uintptr_t* regs);
@@ -96,8 +97,10 @@ struct Entry {
   uint32_t x = 0;
 };
 std::vector<Entry> sEntries;
+std::vector<std::string> sEntryNames;
 std::unordered_map<std::string, int> sByName;
 bool sLogUnknown = false;
+bool sReady = false;
 HSD_JObj* sWalkRoot = nullptr;
 const uint8_t* sPartFound = nullptr;
 
@@ -1066,6 +1069,7 @@ int PortFuncCost_Init(void) {
     e.x = x;
     sByName[line] = static_cast<int>(sEntries.size());
     sEntries.push_back(e);
+    sEntryNames.emplace_back(line);
   }
   std::fclose(f);
   for (const auto& h : kHandlers) {
@@ -1076,10 +1080,12 @@ int PortFuncCost_Init(void) {
     e.handler = h.handler;
     sByName[h.name] = static_cast<int>(sEntries.size());
     sEntries.push_back(e);
+    sEntryNames.emplace_back(h.name);
   }
   if (const char* e = std::getenv("XD_FUNC_COST_TEV_LOG"); e != nullptr && e[0] != '\0') {
     sTevLog = std::fopen(e, "w");
   }
+  sReady = true;
   std::fprintf(stderr, "[func cost] XD_FUNC_COST: %zu functions with a cost, %zu material configurations (%s)\n",
                sEntries.size(), sTev.size(), path);
   return 1;
@@ -1118,6 +1124,9 @@ int PortFuncCost_Resolve(const char* name) {
 }
 
 int PortFuncCost_Row(const char* name, char* kind, uint32_t* a, uint32_t* b) {
+  if (!sReady) {
+    return -1;
+  }
   auto it = sByName.find(name);
   if (it == sByName.end()) {
     return 0;
@@ -1130,6 +1139,7 @@ int PortFuncCost_Row(const char* name, char* kind, uint32_t* a, uint32_t* b) {
 }
 
 void PortFuncCost_Call(int entry, const uintptr_t* regs) {
+  PortCpuCost_Label(entry >= 0 ? sEntryNames[static_cast<size_t>(entry)].c_str() : entry == -2 ? "(no row)" : "(pc only)");
   if (entry < 0) {
     if (entry == -2) {
       PortCpuCost_Count(kUnknown, 1);
@@ -1155,6 +1165,7 @@ void PortFuncCost_Call(int entry, const uintptr_t* regs) {
   }
   switch (e.kind) {
     case 'E':
+    case 'S':
       PortCpuCost_Count(kExact, e.a);
       break;
     case 'M':

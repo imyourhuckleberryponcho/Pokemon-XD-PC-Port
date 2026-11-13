@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <atomic>
 #include <cstring>
+#include <map>
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -83,6 +84,15 @@ void load_counter_model(const char* path) {
 }
 
 bool sInFrame = false;
+
+FILE* sAttrLog = nullptr;
+uint32_t sAttrFrom = 0, sAttrTo = 0xFFFFFFFFu;
+thread_local const char* tLabel = "(none)";
+struct AttrSum {
+  uint64_t calls = 0, amount = 0;
+};
+std::mutex sAttrLock;
+std::map<std::pair<const char*, unsigned>, AttrSum> sAttr;
 int64_t sFrameStart = 0;
 int64_t sWaitStart = 0;
 int sWaitDepth = 0;
@@ -151,6 +161,14 @@ void init() {
       std::fprintf(stderr, "[cpu cost] XD_CPU_COUNTER_SPEND: the counters' time is spent in place, in pieces of %.0f "
                            "instructions\n", sInPlaceChunk * 8100000.0);
     }
+    if (const char* e = std::getenv("XD_CPU_COST_ATTR"); e != nullptr && e[0] != '\0') {
+      sAttrLog = std::fopen(e, "w");
+      if (const char* r = std::getenv("XD_CPU_COST_ATTR_PASSES"); r != nullptr && r[0] != '\0') {
+        char* end = nullptr;
+        sAttrFrom = static_cast<uint32_t>(std::strtoul(r, &end, 10));
+        sAttrTo = *end == '-' ? static_cast<uint32_t>(std::strtoul(end + 1, nullptr, 10)) : sAttrFrom;
+      }
+    }
     if (const char* e = std::getenv("XD_CPU_COUNTERS_LOG"); e != nullptr && e[0] != '\0') {
       sCountLog = std::fopen(e, "w");
       if (sCountLog != nullptr) {
@@ -191,11 +209,19 @@ void PortCpuCost_Add(double vsyncs) {
 void PortCpuCost_Count(unsigned counter, uint64_t amount) {
   if (counter < kCounters) {
     sCount[counter].fetch_add(amount, std::memory_order_relaxed);
+    if (sAttrLog != nullptr && sInFrame) {
+      std::lock_guard<std::mutex> lock(sAttrLock);
+      AttrSum& a = sAttr[{tLabel, counter}];
+      a.calls++;
+      a.amount += amount;
+    }
     if (sInPlace) {
       tDebt += sCoef[counter] * static_cast<double>(amount);
     }
   }
 }
+
+void PortCpuCost_Label(const char* label) { tLabel = label; }
 
 double PortCpuCost_Debt(void) { return tDebt; }
 
@@ -283,6 +309,17 @@ void PortCpuCost_FrameEnd(uint32_t id) {
     pay(0.0);
   }
   sInFrame = false;
+  if (sAttrLog != nullptr) {
+    std::lock_guard<std::mutex> lock(sAttrLock);
+    if (id >= sAttrFrom && id <= sAttrTo) {
+      for (const auto& [key, a] : sAttr) {
+        std::fprintf(sAttrLog, "attr %u %s %s %llu %llu\n", id, key.first, kCounterNames[key.second],
+                     static_cast<unsigned long long>(a.calls), static_cast<unsigned long long>(a.amount));
+      }
+      std::fflush(sAttrLog);
+    }
+    sAttr.clear();
+  }
   uint64_t counts[kCounters];
   for (unsigned i = 0; i < kCounters; ++i) {
     counts[i] = sCount[i].load(std::memory_order_relaxed) - sCountAtStart[i];

@@ -260,6 +260,28 @@ jobs:
             { echo "### First start: problems listed"; echo '```'; grep "^PROBLEM" logs/first_run_report.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      # The Battle Revolution models helper (the launcher's Extra assets page runs it; tools/pbr_convert/
+      # package_pbr_models.py): pbr_models.py frozen with PyInstaller (a program that needs no Python), with Mac nod
+      # library (libnod.dylib, from the nod package Aurora downloaded for the build) beside it. UNRUN on a Mac.
+      # It must run on the same kind of machine as the build (PyInstaller cannot cross-build): the Intel machine
+      # gives an x86_64 program, as xd is. continue-on-error: a failure here must not stop the app and the zip;
+      # without the folder package_mac.sh simply leaves the helper out (and says so in its log).
+      - name: Battle Revolution models helper (pbr_models), frozen
+        if: success() && inputs.stage == 'all'
+        continue-on-error: true
+        run: |
+          set -eu
+          set -o pipefail
+          NOD="$(find build/mac/mac-release -name libnod.dylib -not -path "*/dist/*" | head -n 1)"
+          echo "nod library: ${NOD:-NOT FOUND}"
+          find build/mac/mac-release -iname "*nod*" -not -path "*/CMakeFiles/*" -maxdepth 4 | head -n 20
+          [ -n "$NOD" ] || { echo "no libnod.dylib in the build (the nod package has only libnod.a?)"; exit 1; }
+          python3 tools/pbr_convert/package_pbr_models.py --nod "$PWD/$NOD" --dist "$PWD/build/pbr_models_dist_mac"             --venv "$RUNNER_TEMP/pbr_models_venv" 2>&1 | tee logs/pbr_models_package.log
+          # a start without discs must print the version (proves the frozen program and its libraries load)
+          build/pbr_models_dist_mac/pbr_models/pbr_models --version 2>&1 | tee -a logs/pbr_models_package.log
+          # and the disc library must load through ctypes (what every real run needs first)
+          NOD_DLL="$PWD/build/pbr_models_dist_mac/pbr_models/libnod.dylib" python3 -c "import ctypes,sys; ctypes.CDLL(sys.argv[1]); print('libnod.dylib loads')" "$PWD/build/pbr_models_dist_mac/pbr_models/libnod.dylib" 2>&1 | tee -a logs/pbr_models_package.log
+
       - name: The app and the zip
         if: success() && inputs.stage == 'all'
         run: |
@@ -280,13 +302,13 @@ jobs:
             echo "app: $APP"
             echo "== codesign --verify (app)"; codesign --verify --strict --verbose=4 "$APP" 2>&1; echo "exit code $?"
             echo "== codesign -dv (app)"; codesign -dv --verbose=4 "$APP" 2>&1
-            for f in "$APP"/Contents/Frameworks/*.dylib "$APP/Contents/MacOS/xd"; do
+            for f in "$APP"/Contents/Frameworks/*.dylib "$APP/Contents/MacOS/xd" "$APP/Contents/MacOS/xd_launcher"; do
               echo "== codesign --verify $(basename "$f")"; codesign --verify --strict --verbose=4 "$f" 2>&1; echo "exit code $?"
               echo "== otool -L $(basename "$f")"; otool -L "$f"
             done
             echo "== files"; ls -laR "$APP"
             echo "== paths outside the app and the system (must be none):"
-            for f in "$APP"/Contents/Frameworks/*.dylib "$APP/Contents/MacOS/xd"; do
+            for f in "$APP"/Contents/Frameworks/*.dylib "$APP/Contents/MacOS/xd" "$APP/Contents/MacOS/xd_launcher"; do
               otool -L "$f" | tail -n +2 | awk '{print $1}' | grep -E "^(/usr/local|/opt/|@rpath)" | sed "s|^|$(basename "$f"): |"
             done
             echo "(end of list)"
@@ -312,6 +334,68 @@ jobs:
             echo "### The packaged app: signature verifies, libraries from inside the app, start OK" >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      # The launcher (the app's main program), run from the unpacked zip as a player's Mac would run it: no disc, a test
+      # script (XD_LAUNCHER_SCRIPT, launcher/README.md) draws three pages, takes a picture of each and quits. SDL's
+      # software renderer (SDL_RENDER_DRIVER=software) so that no graphics card is needed on the machine. The pictures
+      # go into the logs download (logs/launcher_shots). Also: the launcher with XD_NO_LAUNCHER=1 must hand over to the
+      # game (a start with no disc, as in the step before), the pbr_models link must work, and the launcher's Extra assets
+      # engine test (launcher_extra_test: starting programs, waiting, cancelling) is built and run. continue-on-error: a
+      # failure here is a finding, it must not lose the zip. UNRUN on a Mac.
+      - name: The launcher in the packaged app (pages without a disc, hand-over to the game, helper link)
+        if: success() && inputs.stage == 'all'
+        continue-on-error: true
+        run: |
+          set +e
+          mkdir -p logs/launcher_shots
+          APP="$(find "$RUNNER_TEMP/unzipped" -name "Pokemon XD.app" -maxdepth 3 | head -n 1)"
+          L="$APP/Contents/MacOS/xd_launcher"
+          {
+            echo "app: $APP"; file "$L"; otool -L "$L"
+            echo "== main program named in Info.plist:"; /usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$APP/Contents/Info.plist"
+            echo "== helper link:"; ls -laL "$APP/Contents/MacOS/pbr_models" 2>&1 | head -n 12
+            "$APP/Contents/MacOS/pbr_models/pbr_models" --version 2>&1
+            echo "== fonts:"; ls -laL "$APP/Contents/MacOS/fonts" 2>&1 | head
+          } > logs/launcher_smoke.txt 2>&1
+          cat logs/launcher_smoke.txt
+          mkdir -p "$RUNNER_TEMP/lsmoke/settings" "$RUNNER_TEMP/lsmoke/cache" "$RUNNER_TEMP/lsmoke/card"
+          SHOTS="$PWD/logs/launcher_shots"
+          # (the launcher's data folder is SDL's: ~/Library/Application Support/Pokemon XD of this runner, thrown away
+          # with it; settings and caches are the run's own folders)
+          ( cd "$APP/Contents/MacOS" && XD_LAUNCHER_SCRIPT="size:1100x760|page:disc|shot:$SHOTS/01_disc.png|page:settings|shot:$SHOTS/02_settings.png|page:extra|shot:$SHOTS/03_extra.png|quit" \
+              XD_SETTINGS_DIR="$RUNNER_TEMP/lsmoke/settings" XD_CACHE_DIR="$RUNNER_TEMP/lsmoke/cache" XD_NO_MESSAGE_BOXES=1 \
+              SDL_RENDER_DRIVER=software SDL_AUDIODRIVER=dummy \
+              perl -e 'alarm 120; exec @ARGV' ./xd_launcher > "$GITHUB_WORKSPACE/logs/launcher_run.txt" 2>&1
+            echo "exit code $?" >> "$GITHUB_WORKSPACE/logs/launcher_run.txt" )
+          head -n 60 logs/launcher_run.txt
+          ls -la logs/launcher_shots
+          PROBLEMS=""
+          grep -q "^exit code 0$" logs/launcher_run.txt || PROBLEMS="$PROBLEMS launcher-exit"
+          for n in 01_disc 02_settings 03_extra; do [ -s "logs/launcher_shots/$n.png" ] || PROBLEMS="$PROBLEMS shot-$n"; done
+          # The launcher handing over to the game (no disc: the game stops with exit code 1, having placed its memory).
+          ( cd "$APP/Contents/MacOS" && XD_NO_LAUNCHER=1 XD_TEST_RUN=1 XD_NO_MESSAGE_BOXES=1 XD_CRASH_REPORT=0 \
+              XD_SETTINGS_DIR="$RUNNER_TEMP/lsmoke/settings" XD_CARD_DIR="$RUNNER_TEMP/lsmoke/card" XD_CACHE_DIR="$RUNNER_TEMP/lsmoke/cache" \
+              perl -e 'alarm 120; exec @ARGV' ./xd_launcher > "$GITHUB_WORKSPACE/logs/launcher_handover.txt" 2>&1
+            echo "exit code $?" >> "$GITHUB_WORKSPACE/logs/launcher_handover.txt" )
+          tail -n 12 logs/launcher_handover.txt
+          grep -q "mac: low memory self-test: OK" logs/launcher_handover.txt || PROBLEMS="$PROBLEMS handover"
+          # The launcher's own engine test (starts programs, waits, cancels) with its stand-in converter.
+          cmake --build build/mac/mac-release --target launcher_extra_test pbr_models_standin > logs/launcher_tests_build.log 2>&1 || PROBLEMS="$PROBLEMS tests-build"
+          tail -n 5 logs/launcher_tests_build.log
+          if [ -x "$BIN/launcher_extra_test" ]; then
+            mkdir -p "$RUNNER_TEMP/lextra"
+            perl -e 'alarm 300; exec @ARGV' "$BIN/launcher_extra_test" "$RUNNER_TEMP/lextra" > logs/launcher_extra_test.log 2>&1
+            echo "launcher_extra_test exit code $?" | tee -a logs/launcher_extra_test.log
+            grep -q "^launcher_extra_test exit code 0$" logs/launcher_extra_test.log || PROBLEMS="$PROBLEMS extra-test"
+          else
+            PROBLEMS="$PROBLEMS extra-test-missing"
+          fi
+          if [ -n "$PROBLEMS" ]; then
+            { echo "### The launcher on the Mac: problems"; echo "$PROBLEMS (logs/launcher_run.txt, launcher_handover.txt, launcher_smoke.txt, launcher_shots/)"; } >> "$GITHUB_STEP_SUMMARY"
+            echo "PROBLEMS with the launcher:$PROBLEMS"
+            exit 1
+          fi
+          echo "### The launcher on the Mac: three pages drawn and photographed, hands over to the game, helper link works, engine test passes (pictures in the logs download: launcher_shots)" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload the Mac zip
         if: success() && inputs.stage == 'all'
         uses: actions/upload-artifact@v7
@@ -329,6 +413,7 @@ jobs:
           path: |
             logs/**/*.log
             logs/*.txt
+            logs/launcher_shots/*.png
             build/mac/mac-release/CMakeFiles/CMakeConfigureLog.yaml
             build/mac/mac-release/disc_tables/*.log
           retention-days: 14

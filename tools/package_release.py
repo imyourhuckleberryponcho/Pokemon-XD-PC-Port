@@ -26,6 +26,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FOLDER_NAME = 'Pokemon XD PC'
+PBR_MODELS = os.path.join(ROOT, 'build', 'pbr_models_dist', 'pbr_models')   # optional: included when built
 
 # The programs and libraries in game\ (next to each other: xd.exe and xd_launcher.exe load the same ones).
 PROGRAMS = ['xd_launcher.exe', 'xd.exe']
@@ -95,6 +96,26 @@ Public beta {version}
 =====================
 Thank you for trying it! This is a beta: expect bugs, and keep a copy of your save.
 Questions, bug reports, other players: https://discord.gg/XVbDVXH4Pn
+
+New in 0.4.0
+------------
+- MODS on the title screen: switch mods on or off and set their order inside the game (Apply restarts
+  to the title with the new set; your saves keep the mods they were made with).
+- Battle Revolution models (Windows and Linux; Mac new and untested): if you own Pokemon Battle Revolution (Wii, USA), the
+  launcher's new Extra assets page turns your disc's Pokemon into models this game can show (about 3-5
+  minutes, once). Then switch on "Battle Revolution models" in Settings. Built in, not a mod.
+- Randomizer: shops (off, shuffled, everyday goods, anything), random move tutor moves, Poke Spot options,
+  TM descriptions that fit their box.
+- Physical/special split (Settings, off unless you turn it on): Attack or Sp. Atk follows the move, as
+  from Diamond and Pearl on.
+- Fast-forward and fast battle animations: the sound plays faster at its own pitch (no more squeaky
+  sound), and on a PC that can't keep up they slow down to what it manages instead of stuttering.
+- Controllers: Nintendo controllers go by the letters printed on them (A is A); a second controller takes
+  over from a built-in one (Steam Deck); two-player setups stay as they are.
+- Linux launcher (Disc, Extra assets, Settings, Controls, Save, Mods, Reports); on the Mac the app now
+  opens the launcher (new, not yet run on a Mac).
+- Fixed: long streaks across the screen in Extreme Speed, Fly, confusion stars and electric moves;
+  Flamethrower shooting straight up; the move tutor; the SETTINGS button on top of the VS MODE menu.
 
 New in 0.3.6 (fixes after the first days in public)
 ---------------------------------------------------
@@ -322,6 +343,10 @@ def main():
         shutil.copy2(os.path.join(build, f), game)
     for f in FONTS:
         shutil.copy2(os.path.join(build, 'fonts', f), os.path.join(game, 'fonts'))
+    # The Battle Revolution model converter (tools/pbr_convert/package_pbr_models.py): a program that needs no Python,
+    # game\pbr_models\pbr_models.exe. Only when it has been built; it holds no game data.
+    if os.path.isfile(os.path.join(PBR_MODELS, 'pbr_models.exe')):
+        shutil.copytree(PBR_MODELS, os.path.join(game, 'pbr_models'))
     crt = vc_redist()
     if crt:
         for f in RUNTIME:
@@ -358,6 +383,8 @@ def main():
             ext = os.path.splitext(n)[1].lower()
             if n == PIPELINE_LIST and os.path.dirname(p) == game:
                 continue
+            if os.path.relpath(p, game).startswith('pbr_models' + os.sep):
+                continue   # the converter's own folder (a frozen Python program: .pyd, .dll, .zip files)
             if ext not in allowed_ext or (ext == '.exe' and n not in allowed_exe):
                 bad.append(os.path.relpath(p, out))
     if bad:

@@ -17,6 +17,7 @@
 
 extern "C" {
 void PortCpuCost_Count(unsigned counter, uint64_t amount);
+void PortCpuCost_Label(const char* label);
 int PortFuncCost_Row(const char* name, char* kind, uint32_t* a, uint32_t* b);
 void PortSdkCost_SkipConcat(void);
 extern unsigned gPortSdkDirty, gPortSdkVatDirty;
@@ -76,6 +77,11 @@ bool on() {
 }
 
 void resolve(const char* name, Cost& c) {
+  char kind0 = 0;
+  uint32_t a0 = 0, b0 = 0;
+  if (PortFuncCost_Row("", &kind0, &a0, &b0) < 0) {
+    return;
+  }
   c.resolved = true;
   for (const auto& s : kSides) {
     if (std::strcmp(s.name, name) == 0) {
@@ -96,7 +102,7 @@ void resolve(const char* name, Cost& c) {
   char kind = 0;
   uint32_t a = 0, b = 0;
   if (PortFuncCost_Row(name, &kind, &a, &b) != 0) {
-    if (kind == 'E') {
+    if (kind == 'E' || kind == 'S') {
       c.instr += a;
     } else if (kind == 'M') {
       c.instr += a;
@@ -115,6 +121,7 @@ inline void charge(const char* name, Cost& c) {
   if (!c.resolved) {
     resolve(name, c);
   }
+  PortCpuCost_Label(name);
   PortCpuCost_Count(kSdkInstr, c.instr);
   if (c.span != 0) {
     PortCpuCost_Count(kSdkSpan, c.span);
@@ -125,10 +132,11 @@ inline void charge(const char* name, Cost& c) {
   }
 }
 
-inline void fixed(uint64_t instr, Side side, unsigned dirty = 0) {
+inline void fixed_(const char* label, uint64_t instr, Side side, unsigned dirty = 0) {
   if (!on()) {
     return;
   }
+  PortCpuCost_Label(label);
   PortCpuCost_Count(kSdkInstr, instr);
   PortCpuCost_Count(kSdkCalls, 1);
   if (side != kNone) {
@@ -136,6 +144,8 @@ inline void fixed(uint64_t instr, Side side, unsigned dirty = 0) {
   }
   gPortSdkDirty |= dirty;
 }
+
+#define fixed(...) fixed_(__func__, __VA_ARGS__)
 
 unsigned list_len_desc(const GXVtxDescList* l) {
   unsigned n = 0;
@@ -164,6 +174,11 @@ void PortSdkCost_SkipConcat(void) { tSkipConcat++; }
   }
 #include "sdk_cost_wrappers.inc"
 #undef W
+
+void PortSdk_GXSetArrayUnsized(int attr, const void* data, uint8_t stride) {
+  fixed(16, kXf);
+  PortGX_SetArrayUnsized(attr, data, stride);
+}
 
 void PortSdk_PSMTXConcat(const Mtx a, const Mtx b, Mtx ab) {
   if (tSkipConcat != 0) {
@@ -213,6 +228,7 @@ void PortSdk_GXSetVtxDescv(GXVtxDescList* list) {
     if (!c.resolved) {
       resolve("GXSetVtxDescv", c);
     }
+    PortCpuCost_Label(__func__);
     PortCpuCost_Count(kSdkInstr, c.instr + static_cast<uint64_t>(c.span) * list_len_desc(list));
     PortCpuCost_Count(kSdkCalls, 1);
     gPortSdkDirty |= 8u;
@@ -237,6 +253,7 @@ void PortSdk_GXSetVtxAttrFmtv(GXVtxFmt vtxfmt, const GXVtxAttrFmtList* list) {
     if (!c.resolved) {
       resolve("GXSetVtxAttrFmtv", c);
     }
+    PortCpuCost_Label(__func__);
     PortCpuCost_Count(kSdkInstr, c.instr + static_cast<uint64_t>(c.span) * list_len_fmt(list));
     PortCpuCost_Count(kSdkCalls, 1);
     gPortSdkDirty |= 0x10u;
@@ -362,6 +379,7 @@ static void mem_log(int kind, uintptr_t caller, uint64_t bytes, uint64_t instr) 
 
 void* PortSdk_memcpy(void* dst, const void* src, size_t n) {
   if (on()) {
+    PortCpuCost_Label(__func__);
     PortCpuCost_Count(kMemInstr, 9 + 4ull * n);
     PortCpuCost_Count(kSdkCalls, 1);
     mem_log(0, reinterpret_cast<uintptr_t>(_ReturnAddress()), n, 9 + 4ull * n);
@@ -386,6 +404,7 @@ void* PortSdk_memset(void* dst, int value, size_t n) {
       }
     }
     c += 1;
+    PortCpuCost_Label(__func__);
     PortCpuCost_Count(kMemInstr, c);
     PortCpuCost_Count(kSdkCalls, 1);
     mem_log(1, reinterpret_cast<uintptr_t>(_ReturnAddress()), n, c);

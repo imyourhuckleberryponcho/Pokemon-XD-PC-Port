@@ -13,7 +13,7 @@ This repository contains **no game assets, ROMs, ISOs or executables**, and none
 You need your own legally obtained copy of the game (USA, `GXXE01`); the port reads everything from your disc
 image while it runs.
 
-## Status: public beta — version 0.3.6
+## Status: public beta — version 0.4.0
 
 **Playable from New Game into the story, with known bugs.** It is not finished: expect crashes, stalls and
 graphics differences, and keep backups of saves you care about. Downloads are on the [Releases](../../releases)
@@ -23,10 +23,25 @@ page, one per system:
 |---|---|
 | **Windows** 10 / 11 (64-bit) | The main build: what is developed and tested every day. |
 | **Linux** (x86_64) | Test build. Checked against the Windows build in automatic runs (same random numbers, same saves, same sound), but so far only with software graphics: it has **not been played on a real Linux PC or a Steam Deck** yet. |
-| **Mac** | Test build. Two players have run it on Apple M2 Macs (macOS 15 and 27, through Rosetta 2): picture, sound, controllers, settings and saving work. 0.3.5 stopped after a few minutes of play; 0.3.6 has the fix, which has not been played on a Mac yet. It is an Intel (x86_64) program: Apple-silicon Macs run it through Rosetta 2. No launcher yet. More testers wanted. |
+| **Mac** | Test build. Two players have run it on Apple M2 Macs (macOS 15 and 27, through Rosetta 2): picture, sound, controllers, settings and saving work. 0.3.5 stopped after a few minutes of play; 0.3.6 has the fix, which has not been played on a Mac yet. It is an Intel (x86_64) program: Apple-silicon Macs run it through Rosetta 2. New in 0.4.0: the app opens the launcher (with Battle Revolution models); this is the first Mac build with it and it has not been played on a Mac yet. More testers wanted. |
 
 **Found a bug, or want to help test?** Join the [Discord](https://discord.gg/XVbDVXH4Pn) — see
 *Reporting a bug* below.
+
+New in 0.4.0:
+
+- **MODS on the title screen:** switch mods on or off and set their order inside the game.
+- **Battle Revolution models** (Windows and Linux; Mac: new, untested): own Pokémon Battle Revolution (Wii, USA)? The launcher's new
+  **Extra assets** page turns your disc's Pokémon into models this game can show, then a setting switches them on.
+  Built in, made on your PC from your own disc; nothing from either game is included.
+- **Randomizer:** shops, move tutor moves, Poké Spot options, TM descriptions that fit.
+- **Physical/special split** (off unless you turn it on), as from Diamond and Pearl on.
+- **Fast-forward sound at its own pitch**, and fast speeds slow down instead of stuttering on PCs that can't keep up.
+- **Controllers:** Nintendo controllers by their printed letters; a second controller takes over from a built-in
+  one (Steam Deck).
+- **Linux launcher**, and on the Mac the app now opens the launcher (new, untested on a Mac).
+- **Fixed:** streaks across the screen in some move effects, Flamethrower going straight up, the move tutor, the
+  SETTINGS button over the VS MODE menu.
 
 New in 0.3.6 (fixes after the first days in public):
 

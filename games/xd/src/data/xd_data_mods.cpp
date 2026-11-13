@@ -67,6 +67,8 @@ const Values kValues[] = {
     {"*_pokemon", "wazaID", "move"},              {"*_pokemon", "seikakuID", "nature"},
     {"*_shadow", "darkWaza", "move"},             {"*_trainers", "trainerItem", "item"},
     {"darkPokemonList", "pokemonID", "species"},  {"item_waza_machine_no", "wazaID", "move"},
+    {"shopGoods", "value", "item"},               {"wazaoshie_data", "id", "move"},
+    {"floor_tresure_list", "item", "item"},
 };
 bool matches(const char* pattern, const std::string& table) {
   if (pattern[0] != '*') {
@@ -115,7 +117,215 @@ size_t section_offset(const CommonRel& c, uint8_t section) {
   return static_cast<size_t>(c.rel.sections[section].data - c.file.data());
 }
 
-void add_common_rel(CommonRel& c, em::DataCatalog& out, std::vector<Bank>& banks) {
+uint32_t ctrl_arg_bytes(uint8_t ctrl) {
+  switch (ctrl) {
+  case 7: case 9: case 56: case 82: case 83: case 84: case 91: case 92: return 1;
+  case 8: return 4;
+  }
+  return 0;
+}
+bool bank_find(const uint8_t* b, size_t room, uint32_t id, uint32_t& index) {
+  if (room < 0x10 || be16(b) != id >> 20) return false;
+  const uint32_t count = be16(b + 4), sub = id & 0xFFFFF;
+  if (0x10 + static_cast<size_t>(count) * 8 > room) return false;
+  uint32_t lo = 0, hi = count;
+  while (lo < hi) {
+    const uint32_t mid = (lo + hi) >> 1, k = be32(b + 0x10 + mid * 8);
+    if (k == sub) {
+      index = mid;
+      return true;
+    }
+    if (k < sub) lo = mid + 1;
+    else hi = mid;
+  }
+  return false;
+}
+size_t text_end(const uint8_t* b, size_t room, size_t at) {
+  for (size_t p = at; p + 2 <= room;) {
+    const uint16_t ch = be16(b + p);
+    p += 2;
+    if (ch == 0) return p;
+    if (ch == 0xFFFF) {
+      if (p >= room) return 0;
+      p += 1 + ctrl_arg_bytes(b[p]);
+    }
+  }
+  return 0;
+}
+void put_utf8(std::string& out, uint32_t ch) {
+  if (ch < 0x80) {
+    out.push_back(static_cast<char>(ch));
+  } else if (ch < 0x800) {
+    out.push_back(static_cast<char>(0xC0 | ch >> 6));
+    out.push_back(static_cast<char>(0x80 | (ch & 0x3F)));
+  } else {
+    out.push_back(static_cast<char>(0xE0 | ch >> 12));
+    out.push_back(static_cast<char>(0x80 | (ch >> 6 & 0x3F)));
+    out.push_back(static_cast<char>(0x80 | (ch & 0x3F)));
+  }
+}
+bool bank_read(const uint8_t* b, size_t room, uint32_t id, std::string& out) {
+  uint32_t index = 0;
+  if (!bank_find(b, room, id, index)) return false;
+  const size_t at = be32(b + 0x10 + index * 8 + 4), end = text_end(b, room, at);
+  if (end == 0) return false;
+  out.clear();
+  static const char kHex[] = "0123456789ABCDEF";
+  for (size_t p = at; p + 2 < end;) {
+    const uint16_t ch = be16(b + p);
+    p += 2;
+    if (ch == 0xFFFF) {
+      const uint32_t n = 1 + ctrl_arg_bytes(b[p]);
+      out.push_back('{');
+      for (uint32_t k = 0; k < n; k++) {
+        if (k != 0) out.push_back(' ');
+        out.push_back(kHex[b[p + k] >> 4]);
+        out.push_back(kHex[b[p + k] & 15]);
+      }
+      out.push_back('}');
+      p += n;
+    } else if (ch == '{') {
+      out += "{{";
+    } else {
+      put_utf8(out, ch);
+    }
+  }
+  return true;
+}
+bool text_encode(const std::string& text, std::vector<uint8_t>& out) {
+  out.clear();
+  const auto unit = [&](uint32_t ch) {
+    out.push_back(static_cast<uint8_t>(ch >> 8));
+    out.push_back(static_cast<uint8_t>(ch));
+  };
+  for (size_t i = 0; i < text.size();) {
+    const unsigned char c = static_cast<unsigned char>(text[i]);
+    if (c == '{' && i + 1 < text.size() && text[i + 1] == '{') {
+      unit('{');
+      i += 2;
+    } else if (c == '{') {
+      const size_t close = text.find('}', i);
+      if (close == std::string::npos) return false;
+      std::vector<uint8_t> bytes;
+      for (size_t k = i + 1; k < close;) {
+        if (text[k] == ' ') {
+          k++;
+          continue;
+        }
+        if (k + 1 >= close || !std::isxdigit(static_cast<unsigned char>(text[k])) || !std::isxdigit(static_cast<unsigned char>(text[k + 1]))) return false;
+        bytes.push_back(static_cast<uint8_t>(std::stoul(text.substr(k, 2), nullptr, 16)));
+        k += 2;
+      }
+      if (bytes.empty() || bytes.size() != 1 + ctrl_arg_bytes(bytes[0])) return false;
+      unit(0xFFFF);
+      out.insert(out.end(), bytes.begin(), bytes.end());
+      i = close + 1;
+    } else if (c < 0x80) {
+      unit(c);
+      i++;
+    } else if ((c & 0xE0) == 0xC0 && i + 1 < text.size()) {
+      unit((c & 0x1F) << 6 | (text[i + 1] & 0x3F));
+      i += 2;
+    } else if ((c & 0xF0) == 0xE0 && i + 2 < text.size()) {
+      const uint32_t ch = (c & 0x0F) << 12 | (text[i + 1] & 0x3F) << 6 | (text[i + 2] & 0x3F);
+      if (ch == 0xFFFF || ch == 0) return false;
+      unit(ch);
+      i += 3;
+    } else {
+      return false;
+    }
+  }
+  unit(0);
+  return true;
+}
+bool bank_write(uint8_t* b, size_t room, const std::map<uint32_t, std::string>& texts, std::vector<uint32_t>& written,
+                std::string& error) {
+  written.clear();
+  if (room < 0x10) return true;
+  const uint32_t count = be16(b + 4);
+  if (0x10 + static_cast<size_t>(count) * 8 > room) return true;
+  std::map<uint32_t, std::vector<uint8_t>> mine;
+  std::map<uint32_t, uint32_t> idOf;
+  for (const auto& [id, text] : texts) {
+    uint32_t index = 0;
+    if (!bank_find(b, room, id, index)) continue;
+    if (!text_encode(text, mine[index])) {
+      error = "message #" + std::to_string(id) + " has a character or a {control code} the game's text can't hold";
+      return false;
+    }
+    idOf[index] = id;
+  }
+  if (mine.empty()) return true;
+  std::vector<std::pair<size_t, size_t>> freed, kept;
+  for (uint32_t i = 0; i < count; i++) {
+    const size_t at = be32(b + 0x10 + i * 8 + 4), end = text_end(b, room, at);
+    if (end == 0) {
+      if (mine.count(i) != 0) {
+        error = "message #" + std::to_string(idOf[i]) + "'s text on the disc is damaged";
+        return false;
+      }
+      continue;
+    }
+    (mine.count(i) != 0 ? freed : kept).emplace_back(at, end);
+  }
+  std::vector<bool> isFree(room, false);
+  for (const auto& [a, e] : freed) std::fill(isFree.begin() + a, isFree.begin() + e, true);
+  for (const auto& [a, e] : kept) std::fill(isFree.begin() + a, isFree.begin() + e, false);
+  std::vector<std::pair<size_t, size_t>> runs;
+  size_t total = 0;
+  for (size_t p = 0; p < room;) {
+    if (!isFree[p]) {
+      p++;
+      continue;
+    }
+    size_t e = p;
+    while (e < room && isFree[e]) e++;
+    runs.emplace_back(p, e - p);
+    total += e - p;
+    p = e;
+  }
+  std::vector<uint32_t> order;
+  size_t need = 0;
+  for (const auto& [index, bytes] : mine) {
+    order.push_back(index);
+    need += bytes.size();
+  }
+  std::stable_sort(order.begin(), order.end(), [&](uint32_t x, uint32_t y) { return mine[x].size() > mine[y].size(); });
+  std::vector<std::pair<uint32_t, size_t>> placed;
+  for (uint32_t index : order) {
+    const size_t n = mine[index].size();
+    size_t best = runs.size();
+    for (size_t r = 0; r < runs.size(); r++) {
+      if (runs[r].second >= n && (best == runs.size() || runs[r].second < runs[best].second)) best = r;
+    }
+    if (best == runs.size()) {
+      error = "the new texts need " + std::to_string(need) + " bytes, the messages they replace hold " + std::to_string(total) +
+              " (texts can only be as long, together, as the ones they replace)";
+      return false;
+    }
+    placed.emplace_back(index, runs[best].first);
+    runs[best].first += n;
+    runs[best].second -= n;
+  }
+  for (const auto& [a, e] : freed) {
+    for (size_t p = a; p < e; p++) {
+      if (isFree[p]) b[p] = 0;
+    }
+  }
+  for (const auto& [index, at] : placed) {
+    std::copy(mine[index].begin(), mine[index].end(), b + at);
+    uint8_t* o = b + 0x10 + index * 8 + 4;
+    o[0] = static_cast<uint8_t>(at >> 24);
+    o[1] = static_cast<uint8_t>(at >> 16);
+    o[2] = static_cast<uint8_t>(at >> 8);
+    o[3] = static_cast<uint8_t>(at);
+    written.push_back(idOf[index]);
+  }
+  return true;
+}
+
+void add_common_rel(CommonRel& c, em::DataCatalog& out, std::vector<Bank>& banks, const char* archive = "common.fsys",
+                    const char* entry = "common_rel") {
   RelPrologStore all[512];
   const int n = Rel_ReadPrologStores(&c.rel, all, 512);
   if (n < 0) {
@@ -159,7 +369,7 @@ void add_common_rel(CommonRel& c, em::DataCatalog& out, std::vector<Bank>& banks
     if (static_cast<uint64_t>(it->second.offset) + static_cast<uint64_t>(t.count) * t.entrySize > c.rel.sections[it->second.section].size) {
       continue;
     }
-    t.places.push_back({"common.fsys", "common_rel", static_cast<uint32_t>(section_offset(c, it->second.section) + it->second.offset)});
+    t.places.push_back({archive, entry, static_cast<uint32_t>(section_offset(c, it->second.section) + it->second.offset)});
     bool anyEditable = false;
     for (uint32_t i = 0; i < d->numFields; i++) {
       t.fields.push_back(from_desc(d->fields[i]));
@@ -197,6 +407,9 @@ void add_common_rel(CommonRel& c, em::DataCatalog& out, std::vector<Bank>& banks
     if (r != nullptr && r->type == REL_R_ADDR32 && r->module == c.rel.id && r->targetSection < c.rel.numSections &&
         c.rel.sections[r->targetSection].data != nullptr && r->addend + 0x10 <= c.rel.sections[r->targetSection].size) {
       banks.push_back({c.rel.sections[r->targetSection].data + r->addend, c.rel.sections[r->targetSection].size - r->addend});
+      out.text.places.push_back({archive, entry, static_cast<uint32_t>(section_offset(c, r->targetSection) + r->addend)});
+      out.text.read = bank_read;
+      out.text.write = bank_write;
     }
   }
 }
@@ -478,6 +691,70 @@ void add_program_tables(const em::EntryReader& read, em::DataCatalog& out) {
     t.fields = p.fields();
     out.tables.push_back(std::move(t));
   }
+  uint32_t textAt = 0;
+  if (DolAddressToOffset(dol.data(), dol.size(), 0x80377FC0, 0x178BC, textAt)) {
+    out.text.places.push_back({em::kProgramArchive, "main.dol", textAt});
+    out.text.read = bank_read;
+    out.text.write = bank_write;
+  }
+}
+
+bool looks_like_messages(const std::vector<uint8_t>& d) {
+  if (d.size() < 0x20) return false;
+  const uint32_t count = be16(d.data() + 4);
+  if (count < 2 || 0x10 + static_cast<size_t>(count) * 8 > d.size()) return false;
+  for (uint32_t i = 0; i < count; i++) {
+    if (be32(d.data() + 0x10 + i * 8 + 4) >= d.size()) return false;
+    if (i != 0 && be32(d.data() + 0x10 + i * 8) <= be32(d.data() + 0x10 + (i - 1) * 8)) return false;
+  }
+  return true;
+}
+bool find_entry(const em::EntryReader& read, const char* archive, bool module, std::string& name, std::vector<uint8_t>& bytes) {
+  for (int i = 0; i < 4; i++) {
+    name = "#" + std::to_string(i);
+    if (!read(archive, name, bytes)) return false;
+    if (module) {
+      RelModule rel{};
+      if (bytes.size() > 0x40 && be32(bytes.data()) != 0 && be32(bytes.data()) < 0x1000 && Rel_Parse(bytes.data(), bytes.size(), &rel)) {
+        RelPrologStore stores[512];
+        const int n = Rel_ReadPrologStores(&rel, stores, 512);
+        Rel_Free(&rel);
+        if (n > 0) return true;
+      }
+    } else if (looks_like_messages(bytes)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void add_menu_module(const em::EntryReader& read, em::DataCatalog& out) {
+  std::string name, copyName;
+  {
+    CommonRel c;
+    if (find_entry(read, "pocket_menu.fsys", true, name, c.file) && Rel_Parse(c.file.data(), c.file.size(), &c.rel)) {
+      c.ok = true;
+      const size_t first = out.tables.size();
+      std::vector<Bank> none;
+      add_common_rel(c, out, none, "pocket_menu.fsys", name.c_str());
+      std::vector<uint8_t> copy;
+      if (find_entry(read, "colosseumbattle_menu.fsys", true, copyName, copy) && copy == c.file) {
+        for (size_t i = first; i < out.tables.size(); i++) {
+          out.tables[i].places.push_back({"colosseumbattle_menu.fsys", copyName, out.tables[i].places[0].offset});
+        }
+      }
+    }
+  }
+  static const char* const kMenus[] = {"pocket_menu.fsys",       "pcbox_pocket_menu.fsys", "pcbox_menu.fsys",
+                                       "pokemonchange_menu.fsys", "waza_menu.fsys",         "battle_disk.fsys",
+                                       "colosseumbattle_menu.fsys", "orre_menu.fsys"};
+  for (const char* archive : kMenus) {
+    std::vector<uint8_t> bytes;
+    if (!find_entry(read, archive, false, name, bytes)) continue;
+    out.text.places.push_back({archive, name, 0});
+    out.text.read = bank_read;
+    out.text.write = bank_write;
+  }
 }
 
 }
@@ -506,6 +783,7 @@ bool BuildDataCatalog(const em::EntryReader& read, em::DataCatalog& out, std::st
     error = "common_rel's tables weren't found";
     return false;
   }
+  add_menu_module(read, out);
   add_decks(read, out);
   add_program_tables(read, out);
 

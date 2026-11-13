@@ -137,6 +137,7 @@ public:
   void Run() {
     FindMods();
     ModList list = ReadList();
+    CollectExtraLayers();
     std::vector<const FoundMod*> on = ChooseMods(list);
     for (const FoundMod* mod : on) {
       mResult.active.push_back(mod->manifest);
@@ -308,6 +309,25 @@ private:
     return on;
   }
 
+  static constexpr const char* kLayerPrefix = "extra-assets:";
+  static bool IsLayerId(const std::string& id) { return id.rfind(kLayerPrefix, 0) == 0; }
+  void CollectExtraLayers() {
+    for (const LoadOptions::ExtraLayer& layer : mOpt.extraLayers) {
+      LoadResult::LayerResult r;
+      r.id = layer.id;
+      std::error_code ec;
+      r.found = fs::is_directory(layer.folder, ec);
+      if (r.found) {
+        FoundMod mod;
+        mod.folder = layer.folder;
+        mod.manifest.id = kLayerPrefix + layer.id;
+        mod.manifest.name = layer.name;
+        r.files = CollectFiles(mod, true);
+      }
+      mResult.extraLayers.push_back(std::move(r));
+    }
+  }
+
   Layer& LayerFor(const std::string& path, bool& isNew) {
     const std::string key = Lower(path);
     auto it = mLayers.find(key);
@@ -355,12 +375,13 @@ private:
     return std::any_of(std::begin(kNames), std::end(kNames), [&](const char* n) { return lower == n; });
   }
 
-  void CollectFiles(const FoundMod& mod) {
+  size_t CollectFiles(const FoundMod& mod, bool quiet = false) {
+    size_t used = 0;
     const std::string& id = mod.manifest.id;
     const auto whole = FilesIn(mod, mod.folder / "files");
     const auto entries = FilesIn(mod, mod.folder / "fsys");
     std::error_code ec;
-    if (whole.empty() && entries.empty() && !fs::is_directory(mod.folder / "data", ec)) {
+    if (!quiet && whole.empty() && entries.empty() && !fs::is_directory(mod.folder / "data", ec)) {
       Say(Message::Level::Warning, "The mod \"" + mod.manifest.name + "\" is on but has no files in \"files\", \"fsys\" or \"data\".");
     }
     for (const auto& [rel, path] : whole) {
@@ -371,22 +392,24 @@ private:
       }
       bool isNew = false;
       Layer& layer = LayerFor(rel, isNew);
-      if (!layer.wholeFrom.empty()) {
+      if (!layer.wholeFrom.empty() && !IsLayerId(layer.wholeFrom)) {
         Say(Message::Level::Warning, "Conflict: the mods \"" + NameOf(layer.wholeFrom) + "\" and \"" + mod.manifest.name +
                                          "\" both replace " + layer.discPath + ". \"" + mod.manifest.name +
                                          "\" (further down the list) is used.");
       }
-      if (!layer.entries.empty()) {
+      if (std::any_of(layer.entries.begin(), layer.entries.end(),
+                      [](const auto& e) { return !IsLayerId(e.second.from); })) {
         Say(Message::Level::Warning, "Conflict: \"" + mod.manifest.name + "\" replaces all of " + layer.discPath +
                                          ", so the changes inside it from " + EntryMods(layer) + " are not used.");
-        layer.entries.clear();
       }
+      layer.entries.clear();
       if (!layer.onDisc && isNew) {
         Say(Message::Level::Info, "The mod \"" + mod.manifest.name + "\" adds " + rel + ", which the disc doesn't have.");
       }
       layer.whole = path;
       layer.wholeFrom = id;
       mBaseCache.erase(Lower(rel));
+      used++;
     }
     for (const auto& [rel, path] : entries) {
       const size_t slash = rel.rfind('/');
@@ -417,13 +440,15 @@ private:
         continue;
       }
       const auto had = layer.entries.find(index);
-      if (had != layer.entries.end()) {
+      if (had != layer.entries.end() && !IsLayerId(had->second.from)) {
         Say(Message::Level::Warning, "Conflict: the mods \"" + NameOf(had->second.from) + "\" and \"" + mod.manifest.name +
                                          "\" both replace " + entryName + " inside " + layer.discPath + ". \"" +
                                          mod.manifest.name + "\" (further down the list) is used.");
       }
       layer.entries[index] = {path, id, entryName};
+      used++;
     }
+    return used;
   }
 
   bool ReadEntry(const std::string& archive, const std::string& entryName, std::vector<uint8_t>& out) {
@@ -524,6 +549,11 @@ private:
         }
       }
     }
+    for (const TextChange& c : applied.texts) {
+      for (const DataPlace& p : catalog->text.places) {
+        fromMods[{p.archive, p.entry}].insert(c.mod);
+      }
+    }
     size_t archiveEntries = 0;
     for (auto& [place, bytes] : applied.entries) {
       if (place.first == kProgramArchive) {
@@ -559,7 +589,8 @@ private:
                                   (same != 0 ? " (" + std::to_string(same) + " of them to the value the disc has)" : std::string()) +
                                   ", " + std::to_string(archiveEntries) + " archive entr" +
                                   (archiveEntries == 1 ? "y" : "ies") + " changed" +
-                                  (mResult.program.empty() ? std::string() : std::string(", tables in the program changed")));
+                                  (mResult.program.empty() ? std::string() : std::string(", tables in the program changed")) +
+                                  (applied.texts.empty() ? std::string() : ", " + std::to_string(applied.texts.size()) + " message text(s) rewritten"));
     mResult.dataChanges = std::move(applied.changes);
   }
 
@@ -685,9 +716,13 @@ private:
 
 }
 
-std::vector<ModFolder> FindMods(const fs::path& modsFolder, std::vector<Message>& messages) {
+namespace {
+std::vector<ModFolder> FindModsImpl(const fs::path& modsFolder, std::vector<Message>& messages, std::vector<BrokenFolder>* broken) {
   std::vector<ModFolder> found;
   const auto say = [&](Message::Level level, std::string text) { messages.push_back({level, std::move(text)}); };
+  const auto broke = [&](const std::string& folder, std::string reason) {
+    if (broken != nullptr) broken->push_back({folder, std::move(reason)});
+  };
   std::error_code ec;
   if (!fs::is_directory(modsFolder, ec)) {
     return found;
@@ -704,6 +739,7 @@ std::vector<ModFolder> FindMods(const fs::path& modsFolder, std::vector<Message>
       if (ext == ".zip" || ext == ".7z" || ext == ".rar") {
         say(Message::Level::Warning, "\"" + name + "\" in the mods folder is a packed file: unpack it into its own "
                                      "folder there (the folder with mod.json in it).");
+        broke(name, "a packed file: unpack it into its own folder in the mods folder");
       }
       continue;
     }
@@ -719,6 +755,7 @@ std::vector<ModFolder> FindMods(const fs::path& modsFolder, std::vector<Message>
     if (!ReadAll(manifestPath, text) || !ParseManifest(text, mod.manifest, error)) {
       say(Message::Level::Problem, "The mod in \"" + name + "\" can't be used: its " + kManifestFile + " " +
                                        (error.empty() ? std::string("can't be read") : error) + ".");
+      broke(name, std::string(kManifestFile) + " " + (error.empty() ? std::string("can't be read") : error));
       continue;
     }
     bool duplicate = false;
@@ -727,6 +764,7 @@ std::vector<ModFolder> FindMods(const fs::path& modsFolder, std::vector<Message>
         say(Message::Level::Problem, "The folders \"" + other.folderName + "\" and \"" + name +
                                          "\" both hold a mod with the id \"" + mod.manifest.id + "\"; only \"" +
                                          other.folderName + "\" is used. Remove one of them.");
+        broke(name, "the same id \"" + mod.manifest.id + "\" as the mod in \"" + other.folderName + "\", which is used instead");
         duplicate = true;
       }
     }
@@ -737,6 +775,14 @@ std::vector<ModFolder> FindMods(const fs::path& modsFolder, std::vector<Message>
     }
   }
   return found;
+}
+}
+
+std::vector<ModFolder> FindMods(const fs::path& modsFolder, std::vector<Message>& messages) {
+  return FindModsImpl(modsFolder, messages, nullptr);
+}
+std::vector<ModFolder> FindMods(const fs::path& modsFolder, std::vector<Message>& messages, std::vector<BrokenFolder>& broken) {
+  return FindModsImpl(modsFolder, messages, &broken);
 }
 
 bool ReadModListFile(const fs::path& file, ModList& list, std::vector<std::string>& warnings) {

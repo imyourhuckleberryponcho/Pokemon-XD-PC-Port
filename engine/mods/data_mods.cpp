@@ -69,6 +69,10 @@ public:
         continue;
       }
       const DataTable* table = mCatalog.FindTable(key);
+      if (table == nullptr && key == "text") {
+        Texts(file, v);
+        continue;
+      }
       if (table == nullptr) {
         Problem(file, v.line, "names the table " + Quote(key) + ", which the game doesn't have" + Hint());
         continue;
@@ -104,8 +108,79 @@ public:
     }
   }
 
+  void Texts(const DataModFile& file, const Value& v) {
+    if (mCatalog.text.places.empty() || !mCatalog.text.write) {
+      Problem(file, v.line, "changes message text, which can't be changed on this disc");
+      return;
+    }
+    if (v.kind != Value::Kind::Object) {
+      Problem(file, v.line, "\"text\" must be a { ... } block of messages, like { \"#1234\": \"new words\" }");
+      return;
+    }
+    for (const std::string& key : v.order) {
+      if (key.empty() || key[0] == '_') {
+        continue;
+      }
+      const Value& tv = v.fields.at(key);
+      uint32_t id = 0;
+      if (!ParseNumberText(key, id)) {
+        Problem(file, tv.line, "messages are named by number, like \"#1234\" (not " + Quote(key) + ")");
+        continue;
+      }
+      if (tv.kind != Value::Kind::String) {
+        Problem(file, tv.line, "message #" + std::to_string(id) + " needs its new text in quotes");
+        continue;
+      }
+      const auto it = mTexts.find(id);
+      if (it != mTexts.end() && it->second.mod != file.mod) {
+        Say(Message::Level::Warning, "Conflict: the mods " + Quote(ModName(it->second.mod)) + " and " + Quote(file.modName) +
+                                         " both change message #" + std::to_string(id) + ". " + Quote(file.modName) +
+                                         " (further down the list) is used.");
+      }
+      mModNames[file.mod] = file.modName;
+      mTexts[id] = {id, tv.text, file.mod, Where(file, tv.line)};
+      mTextFiles[id] = file.modName;
+    }
+  }
+
+  void FinishTexts(DataApplyResult& out) {
+    if (mTexts.empty()) {
+      return;
+    }
+    std::map<uint32_t, std::string> texts;
+    for (const auto& [id, t] : mTexts) {
+      texts.emplace(id, t.text);
+    }
+    std::set<uint32_t> taken;
+    for (const DataPlace& p : mCatalog.text.places) {
+      Work& w = WorkFor(p);
+      if (!w.ok || p.offset >= w.now.size()) {
+        continue;
+      }
+      std::vector<uint32_t> written;
+      std::string error;
+      std::vector<uint8_t> copy = w.now;
+      if (!mCatalog.text.write(copy.data() + p.offset, copy.size() - p.offset, texts, written, error)) {
+        Say(Message::Level::Problem, "The mod " + Quote(mTextFiles.begin()->second) + ": its message texts can't be used (" +
+                                         error + ").");
+        continue;
+      }
+      w.now = std::move(copy);
+      taken.insert(written.begin(), written.end());
+    }
+    for (const auto& [id, t] : mTexts) {
+      if (taken.count(id) != 0) {
+        out.texts.push_back(t);
+      } else {
+        Say(Message::Level::Problem, "The mod " + Quote(mTextFiles.at(id)) + ", " + t.where + ": the game has no message #" +
+                                         std::to_string(id) + " that can be changed.");
+      }
+    }
+  }
+
   DataApplyResult Finish() {
     DataApplyResult out;
+    FinishTexts(out);
     for (auto& [key, w] : mWork) {
       if (w.now != w.before) {
         out.entries.emplace(key, std::move(w.now));
@@ -135,6 +210,8 @@ private:
   std::map<std::tuple<std::string, uint32_t, uint32_t>, std::vector<Owner>> mOwners;
   std::map<std::tuple<std::string, uint32_t, uint32_t, uint8_t>, DataChange> mChanges;
   std::set<std::string> mSaid;
+  std::map<uint32_t, TextChange> mTexts;
+  std::map<uint32_t, std::string> mTextFiles;
   std::map<std::string, std::map<uint32_t, std::string>> mReverse;
 
   std::string Hint() const { return mCatalog.toolHint.empty() ? "" : " (" + mCatalog.toolHint + ")"; }

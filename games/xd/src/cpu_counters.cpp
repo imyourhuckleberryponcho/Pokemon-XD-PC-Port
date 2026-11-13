@@ -5,6 +5,7 @@
 
 extern "C" {
 void PortCpuCost_Count(unsigned counter, uint64_t amount);
+void PortCpuCost_Label(const char* label);
 
 enum : unsigned {
   kVertices = 0, kDlBytes = 1, kTexLoads = 2, kCacheBytes = 4, kBegins = 7,
@@ -63,6 +64,7 @@ static void sdk_cache(uintptr_t addr, uint32_t n, unsigned own = 9) {
 }
 
 void PortXD_GXBegin(GXPrimitive type, GXVtxFmt vtxfmt, u16 nverts) {
+  PortCpuCost_Label(__func__);
   PortCpuCost_Count(kBegins, 1);
   PortCpuCost_Count(kVertices, nverts == 0xFFFF ? 0 : nverts);
   sdk_draw(30);
@@ -70,12 +72,14 @@ void PortXD_GXBegin(GXPrimitive type, GXVtxFmt vtxfmt, u16 nverts) {
 }
 
 void PortXD_GXCallDisplayList(const void* list, u32 nbytes) {
+  PortCpuCost_Label(__func__);
   PortCpuCost_Count(kDlBytes, nbytes);
   sdk_draw(26);
   GXCallDisplayList(list, nbytes);
 }
 
 void PortXD_GXLoadTexObj(GXTexObj* obj, GXTexMapID id) {
+  PortCpuCost_Label(__func__);
   PortCpuCost_Count(kTexLoads, 1);
   const u32 fmt = static_cast<u32>(GXGetTexObjFmt(obj));
   PortCpuCost_Count(kSdkInstr, fmt >= 8 && fmt <= 10 ? 167 : 148);
@@ -86,26 +90,31 @@ void PortXD_GXLoadTexObj(GXTexObj* obj, GXTexMapID id) {
 }
 
 void PortXD_DCFlushRange(void* addr, u32 n) {
+  PortCpuCost_Label(__func__);
   PortCpuCost_Count(kCacheBytes, n);
   sdk_cache(reinterpret_cast<uintptr_t>(addr), n, 11);
   DCFlushRange(addr, n);
 }
 void PortXD_DCStoreRange(void* addr, u32 n) {
+  PortCpuCost_Label(__func__);
   PortCpuCost_Count(kCacheBytes, n);
   sdk_cache(reinterpret_cast<uintptr_t>(addr), n, 11);
   DCStoreRange(addr, n);
 }
 void PortXD_DCFlushRangeNoSync(void* addr, u32 n) {
+  PortCpuCost_Label(__func__);
   PortCpuCost_Count(kCacheBytes, n);
   sdk_cache(reinterpret_cast<uintptr_t>(addr), n);
   DCFlushRangeNoSync(addr, n);
 }
 void PortXD_DCStoreRangeNoSync(void* addr, u32 n) {
+  PortCpuCost_Label(__func__);
   PortCpuCost_Count(kCacheBytes, n);
   sdk_cache(reinterpret_cast<uintptr_t>(addr), n);
   DCStoreRangeNoSync(addr, n);
 }
 void PortXD_DCInvalidateRange(void* addr, u32 n) {
+  PortCpuCost_Label(__func__);
   PortCpuCost_Count(kCacheBytes, n);
   sdk_cache(reinterpret_cast<uintptr_t>(addr), n);
   DCInvalidateRange(addr, n);

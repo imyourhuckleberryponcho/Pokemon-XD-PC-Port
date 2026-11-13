@@ -1,4 +1,5 @@
 #include "data/xd_data_mods.h"
+#include "xd_battle_models.h"
 #include "xd_user_folder.h"
 #include "xd_playthrough_files.h"
 #include "xd_randomizer.h"
@@ -8,6 +9,7 @@
 #include <port_disc.h>
 #include <port_message.h>
 #include <sdk_port.h>
+#include <settings.h>
 
 #include <cstdio>
 #include <cstdlib>
@@ -26,6 +28,7 @@ void AfterModsLoaded(const engine::mods::LoadResult& result, const std::filesyst
 
 namespace {
 std::string sActive;
+std::string sExtraText;
 
 bool ApplyProgramChanges(const std::vector<uint8_t>& program) {
   size_t size = 0;
@@ -62,6 +65,15 @@ extern "C" bool PortXD_LoadMods(void) {
   const bool playerFilesReadOnly = xd::PlayerFilesReadOnly();
   options.listReadOnly = playerFilesReadOnly;
   options.disc = em::OpenDiscView();
+  const std::filesystem::path modelsFolder = user / L"extra_assets" / xd::battle_models::kLayerId;
+  bool modelsOn = false;
+  {
+    const engine::settings::BoolSetting models = engine::settings::Global().Bool(xd::battle_models::kSetting);
+    modelsOn = models.Valid() && models.Get();
+    if (modelsOn) {
+      options.extraLayers.push_back({xd::battle_models::kLayerId, "Battle Revolution models", modelsFolder});
+    }
+  }
   options.dataCatalog = xd::data::BuildDataCatalog;
   options.looksOrSound = xd::playthrough::LooksOrSound;
   options.usePlaythroughMods = xd::pt::BootWorldMods(options.playthroughMods);
@@ -76,7 +88,7 @@ extern "C" bool PortXD_LoadMods(void) {
       if (!engine::randomizer::DecodeCode(xr::GetSchema(), randomizerCode, s, seedOnly, error)) return false;
       xr::Result r;
       if (!xr::Generate(catalog, read, s, r, error)) return false;
-      out.push_back({xr::kModId, "Randomizer", "data/randomizer.json", r.mod.ToJson("randomizer " + r.code)});
+      out.push_back({xr::kModId, "Randomizer", "data/randomizer.json", r.GameJson("randomizer " + r.code)});
       const std::filesystem::path folder = xd::CardRoot() / L"playthroughs" / L"randomizer" / r.code;
       std::string writeError;
       std::error_code ec;
@@ -134,7 +146,29 @@ extern "C" bool PortXD_LoadMods(void) {
     return false;
   }
   sActive = result.ActiveText();
+  std::fprintf(stderr, "[mods] in use: %s\n", sActive.empty() ? "none" : sActive.c_str());
+  if (!modelsOn) {
+    sExtraText = "Battle Revolution models: off";
+  } else if (result.extraLayers.empty() || !result.extraLayers.front().found) {
+    sExtraText = "Battle Revolution models: on, but not made yet (no folder " + modelsFolder.string() + ")";
+  } else if (result.extraLayers.front().files == 0) {
+    sExtraText = "Battle Revolution models: on, but its folder has no files";
+  } else {
+    sExtraText = "Battle Revolution models: on, " + std::to_string(result.extraLayers.front().files) + " files";
+  }
+  std::fprintf(stderr, "[extra assets] %s\n", sExtraText.c_str());
   return true;
 }
+
+extern "C" bool PortXD_BattleModelsFound(void) {
+  static int found = -1;
+  if (found < 0) {
+    std::error_code ec;
+    found = std::filesystem::is_directory(xd::SettingsFolder() / L"extra_assets" / xd::battle_models::kLayerId, ec) ? 1 : 0;
+  }
+  return found == 1;
+}
+
+extern "C" const char* PortXD_ExtraAssetsText(void) { return sExtraText.c_str(); }
 
 extern "C" const char* PortXD_ActiveMods(void) { return sActive.c_str(); }

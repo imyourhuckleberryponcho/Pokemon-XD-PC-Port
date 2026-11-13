@@ -5,6 +5,8 @@
 #include <randomizer.h>
 
 #include <filesystem>
+#include <map>
+#include <set>
 #include <string>
 
 namespace xd::randomizer {
@@ -17,9 +19,17 @@ bool StyleFromName(const std::string& name, Style& out);
 const engine::randomizer::Schema& GetSchema();
 void ApplyStyle(engine::randomizer::Settings& s, Style style);
 
+struct TextFix {
+  std::map<uint32_t, std::string> messages;
+  std::set<uint32_t> ownDescription;
+  bool Empty() const { return messages.empty(); }
+};
+
 struct Result {
   engine::randomizer::ModOutput mod;
+  TextFix text;
   std::string code;
+  std::string GameJson(const std::string& note) const;
 };
 
 bool Generate(const engine::mods::DataCatalog& catalog, const engine::mods::EntryReader& read,

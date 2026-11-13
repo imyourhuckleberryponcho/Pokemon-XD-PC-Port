@@ -52,7 +52,7 @@ target_link_libraries(disc_check_test PRIVATE engine_disc_check)
 target_compile_options(disc_check_test PRIVATE ${XD_FLAG_UTF8}) # (a test path with a non-English letter)
 aurora_copy_runtime_dlls(disc_check_test)
 
-add_library(engine_mods STATIC mods/mod_manifest.cpp mods/mod_list.cpp mods/mod_load.cpp mods/mods_disc.cpp
+add_library(engine_mods STATIC mods/mod_manifest.cpp mods/mod_list.cpp mods/mod_load.cpp mods/mod_review.cpp mods/mods_disc.cpp
   mods/data_mods.cpp)
 target_include_directories(engine_mods PUBLIC mods/include)
 target_link_libraries(engine_mods PUBLIC engine_formats platform_disc)
@@ -89,7 +89,11 @@ target_link_libraries(engine_settings_ui PUBLIC engine_settings engine_controls 
 add_library(monocypher STATIC ${PROJECT_SOURCE_DIR}/third_party/monocypher/monocypher.c
   ${PROJECT_SOURCE_DIR}/third_party/monocypher/optional/monocypher-ed25519.c)
 target_include_directories(monocypher PUBLIC ${PROJECT_SOURCE_DIR}/third_party/monocypher)
-add_library(engine_update STATIC update/update_manifest.cpp update/update_fetch.cpp update/update_install.cpp)
+if (WIN32)
+  add_library(engine_update STATIC update/update_manifest.cpp update/update_fetch.cpp update/update_install.cpp)
+else () # Linux / Mac: no downloads yet (update/update_fetch_none.cpp answers "couldn't"); the launcher shows no updater
+  add_library(engine_update STATIC update/update_manifest.cpp update/update_fetch_none.cpp update/update_install.cpp)
+endif ()
 target_include_directories(engine_update PUBLIC update/include)
 target_link_libraries(engine_update PRIVATE monocypher ZLIB::ZLIB)
 xd_link_windows_libs(engine_update PRIVATE winhttp bcrypt)

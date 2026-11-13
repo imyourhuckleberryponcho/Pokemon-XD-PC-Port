@@ -16,7 +16,8 @@
 set -u
 cd "$(dirname "$0")" || exit 1
 PRESET=mac-release
-# The Linux list (build.sh) plus the game. Not yet on the Mac: launcher, updater (as on Linux).
+# The Linux list (build.sh) plus the game and the launcher (xd_launcher: the app's main program, docs/MAC.md
+# "Launcher on the Mac"). Not on the Mac: the updater (as on Linux).
 MAC_TARGETS="settings_test controls_test memcard_test save_backups_test gen3_save_test randomizer_test
   gsthread_test xd_save_test xd_save_convert_test xd_gba_test xd_settings_test
   dsp_decode_test dsp_core_test
@@ -27,7 +28,7 @@ MAC_TARGETS="settings_test controls_test memcard_test save_backups_test gen3_sav
   xd_settings xd_data_mods xd_save_convert xd_mods_check
   os_threads_test gc_memory_test gx_fifo_test card_timing_test input_record_test game_clock_test
   keyboard_defaults_test controls_apply_test button_art_test low_arena_test dsp_equiv_test
-  xd"
+  xd_launcher xd"
 EXTRA_ARGS=""
 [ -n "${XD_SNAPSHOT_OVERRIDE:-}" ] && EXTRA_ARGS="$EXTRA_ARGS -DXD_SNAPSHOT_OVERRIDE=$XD_SNAPSHOT_OVERRIDE"
 [ "${XD_BUILD_GAME:-1}" = 0 ] && EXTRA_ARGS="$EXTRA_ARGS -DXD_BUILD_GAME=OFF"

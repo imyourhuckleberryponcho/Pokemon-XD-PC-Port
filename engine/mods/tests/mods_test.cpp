@@ -1,6 +1,7 @@
 #include <gs_formats.h>
 #include <mods.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -545,6 +546,150 @@ int main(int argc, char** argv) {
     o3.playthroughMods = {"gone"};
     r = Load(o3);
     check(has_message(r, Message::Level::Info, "\"gone\""), "load: a playthrough's mod that is gone is said (info)");
+
+    {
+      const fs::path layerDir = root / "extra_assets" / "pbr";
+      write_file(layerDir / "mod.json", manifest("battle-revolution-models"));
+      write_file(layerDir / "files" / "sound" / "se.samp", "layer sound");
+      write_file(layerDir / "files" / "Title.thp", "layer movie");
+      write_file(layerDir / "fsys" / "common.fsys" / "raw_entry", "layer raw");
+      write_file(layerDir / "fsys" / "common.fsys" / "menu.msg", "layer menu");
+      write_file(mods3 / "ent" / "mod.json", manifest("ent", "\"applies\": \"any_time\""));
+      write_file(mods3 / "ent" / "fsys" / "common.fsys" / "menu.msg", "mod menu");
+      write_file(list3, "[profile default]\nmusic = on\nent = on\n");
+      LoadOptions lo{mods3, list3, disc.View()};
+      lo.looksOrSound = looks;
+      lo.extraLayers = {{"pbr", "Battle Revolution models", layerDir}};
+      LoadResult r = Load(lo);
+      const Replacement* common = find(r, "common.fsys");
+      check(r.extraLayers.size() == 1 && r.extraLayers[0].found && r.extraLayers[0].files == 4,
+            "extra layer: found, its 4 files counted");
+      check(contents(find(r, "sound/se.samp")) == "music", "extra layer: a mod replacing the same file wins");
+      check(contents(find(r, "Title.thp")) == "layer movie", "extra layer: above the disc (a file no mod touches)");
+      check(common != nullptr && common->rebuilt && extract(common->data, "menu.msg") == "mod menu" &&
+                extract(common->data, "raw_entry") == "layer raw" && extract(common->data, "menu.dat") == "model data",
+            "extra layer: archive entries: mod over layer over disc");
+      check(!r.HasWarnings() && !has_message(r, Message::Level::Warning, "Conflict"),
+            "extra layer: a mod over a layer file is no conflict");
+      check(r.active.size() == 2 && r.active[0].id == "music" && r.active[1].id == "ent" &&
+                r.ActiveText().find("pbr") == std::string::npos && r.ActiveText().find("battle") == std::string::npos,
+            "extra layer: never among the mods in use");
+      check(read_file(list3).find("pbr") == std::string::npos && read_file(list3).find("battle") == std::string::npos,
+            "extra layer: never in the mod list");
+      lo.extraLayers.clear();
+      r = Load(lo);
+      check(r.extraLayers.empty() && find(r, "Title.thp") == nullptr,
+            "extra layer: not passed: nothing of it");
+      lo.extraLayers = {{"pbr", "Battle Revolution models", root / "extra_assets" / "nothing"}};
+      r = Load(lo);
+      check(r.extraLayers.size() == 1 && !r.extraLayers[0].found && r.extraLayers[0].files == 0 && !r.HasWarnings() &&
+                find(r, "Title.thp") == nullptr,
+            "extra layer: folder missing: nothing, no warning");
+      write_file(mods3 / "world2" / "files" / "common.fsys", "world2");
+      write_file(list3, "[profile default]\nworld2 = on\n");
+      lo.extraLayers = {{"pbr", "Battle Revolution models", layerDir}};
+      lo.usePlaythroughMods = false;
+      r = Load(lo);
+      check(contents(find(r, "common.fsys")) == "world2" && !has_message(r, Message::Level::Warning, "replaces all of"),
+            "extra layer: a mod's whole archive replaces the layer's entries without a warning");
+    }
+  }
+
+  {
+    const fs::path modsR = root / "mods_review", listR = root / "user_review" / "mods.ini";
+    write_file(modsR / "a" / "mod.json", manifest("a"));
+    write_file(modsR / "a" / "files" / "Title.thp", "a");
+    write_file(modsR / "a" / "fsys" / "common.fsys" / "menu.msg", "a");
+    write_file(modsR / "b" / "mod.json", manifest("b", "\"after\": [\"c\"]"));
+    write_file(modsR / "b" / "files" / "title.THP", "b");
+    write_file(modsR / "c" / "mod.json", manifest("c"));
+    write_file(modsR / "c" / "data" / "prices.json", "{}");
+    write_file(modsR / "needs" / "mod.json", manifest("needs", "\"requires\": [\"missing-one\"]"));
+    write_file(modsR / "other" / "mod.json", manifest("other", "", "\"GXXP01\""));
+    write_file(modsR / "arch" / "mod.json", manifest("arch"));
+    write_file(modsR / "arch" / "files" / "common.fsys", "all of it");
+    write_file(modsR / "foe" / "mod.json", manifest("foe", "\"conflicts\": [\"c\"]"));
+    write_file(modsR / "dup1" / "mod.json", manifest("same"));
+    write_file(modsR / "dup2" / "mod.json", manifest("same"));
+    write_file(modsR / "broken" / "mod.json", "{ not json");
+    write_file(modsR / "nomanifest" / "readme.txt", "no mod.json: not a mod, not a row");
+    write_file(modsR / "packed.zip", "zip");
+    std::vector<Message> msgs;
+    std::vector<BrokenFolder> broken;
+    const std::vector<ModFolder> found = FindMods(modsR, msgs, broken);
+    check(found.size() == 8, "review: the usable mods are found (8 of the folders)");
+    bool brokenOk = broken.size() == 3;
+    for (const BrokenFolder& b : broken) brokenOk &= !b.reason.empty();
+    bool hasDup = false, hasBroken = false, hasZip = false;
+    for (const BrokenFolder& b : broken) {
+      hasDup |= b.folderName == "dup2" && b.reason.find("same id") != std::string::npos;
+      hasBroken |= b.folderName == "broken";
+      hasZip |= b.folderName == "packed.zip";
+    }
+    check(brokenOk && hasDup && hasBroken && hasZip, "review: unusable folders come back with a reason (broken mod.json, packed file, id twice), a folder without mod.json doesn't");
+    check(FindMods(modsR, msgs).size() == found.size(), "review: the plain FindMods finds the same mods");
+
+    const ModChanges changes = ChangesOf(*std::find_if(found.begin(), found.end(), [](const ModFolder& f) { return f.manifest.id == "a"; }));
+    check(changes.files == std::vector<std::string>{"Title.thp"} && changes.entries == std::vector<std::string>{"common.fsys/menu.msg"} &&
+              changes.dataFiles.empty() && DescribeChanges(changes) == "1 game file, 1 archive entry",
+          "review: what a mod changes, by name");
+    check(DescribeChanges(ModChanges{}) == "nothing", "review: a mod that changes nothing says so");
+
+    ModList::Profile p;
+    p.name = "default";
+    p.mods = {{"a", true}, {"b", true}, {"c", true}, {"gone", true}, {"other", true}, {"needs", true}, {"c2", false}};
+    const Review r = ReviewList(p, found, "TEST01");
+    const auto row = [&](const char* id) -> const ReviewRow& {
+      for (const ReviewRow& x : r.rows)
+        if (x.id == id) return x;
+      static ReviewRow none;
+      return none;
+    };
+    const auto mentions = [](const std::vector<std::string>& v, const std::string& part) {
+      return std::any_of(v.begin(), v.end(), [&](const std::string& s) { return s.find(part) != std::string::npos; });
+    };
+    check(r.rows.size() == p.mods.size() && r.rows[0].id == "a" && r.rows[6].id == "c2", "review: one row per listed mod, in list order");
+    check(row("a").Usable() && row("b").Usable() && row("c").Usable(), "review: a plain mod that is on is usable");
+    check(mentions(row("a").warnings, "Clashes with \"Mod b\"") && mentions(row("b").warnings, "this one, further down the list, wins") &&
+              mentions(row("b").warnings, "title.thp"),
+          "review: two mods that replace the same file (other spelling too) warn each other, the later one wins");
+    check(mentions(row("b").warnings, "after \"Mod c\""), "review: a mod that wants to come after another further down says so");
+    check(!row("gone").Usable() && row("gone").mod == nullptr && mentions(row("gone").problems, "Not in the mods folder"),
+          "review: a listed mod that isn't there is a row with the reason");
+    check(!row("other").Usable() && mentions(row("other").problems, "GXXP01"), "review: a mod for another game version is not usable, with the reason");
+    check(!row("needs").Usable() && mentions(row("needs").problems, "missing-one"), "review: a missing requirement is a reason");
+    check(row("c2").mod == nullptr && !row("c2").on, "review: a listed mod that is off stays a row (off)");
+    check(mentions(ReviewList(p, found, "").rows[4].problems, "GXXP01") == false, "review: no game ID given: the game isn't checked");
+
+    ModList::Profile q;
+    q.mods = {{"c", true}, {"foe", true}};
+    const Review rq = ReviewList(q, found, "TEST01");
+    check(rq.rows[0].Usable() && !rq.rows[1].Usable() && mentions(rq.rows[1].problems, "Can't be used together"),
+          "review: mods that conflict: the one further down isn't used, and says why");
+    q.mods = {{"a", true}, {"arch", true}};
+    const Review rw = ReviewList(q, found, "TEST01");
+    check(mentions(rw.rows[0].warnings, "common.fsys") && mentions(rw.rows[1].warnings, "common.fsys"),
+          "review: a whole archive and one of its entries replaced by two mods clash");
+    q.mods = {{"a", true}, {"arch", false}};
+    check(ReviewList(q, found, "TEST01").rows[0].warnings.empty(), "review: a clash only counts while both are on");
+
+    ModList list;
+    list.active = "default";
+    list.Active().mods = {{"a", true}, {"b", false}, {"c", true}};
+    check(!MoveMod(list.Active(), 0, -1) && !MoveMod(list.Active(), 2, 1) && !MoveMod(list.Active(), 3, -1) && !MoveMod(list.Active(), 1, 2),
+          "order: nothing moves past the ends or by more than one");
+    check(MoveMod(list.Active(), 2, -1) && list.Active().mods[1].first == "c" && list.Active().mods[2].first == "b" && !list.Active().mods[2].second,
+          "order: a mod moves up one place with its on/off");
+    list.Active().mods[0].second = false;
+    check(WriteModListFile(listR, list), "order: the list is written");
+    ModList back;
+    std::vector<std::string> warn;
+    check(ReadModListFile(listR, back, warn) && back.Active().mods.size() == 3 && back.Active().mods[0] == std::make_pair(std::string("a"), false) &&
+              back.Active().mods[1] == std::make_pair(std::string("c"), true) && back.Active().mods[2] == std::make_pair(std::string("b"), false),
+          "order: mods.ini holds the new order and the on/off, read back");
+    list.profiles.push_back({"second", {{"b", true}}});
+    check(WriteModListFile(listR, list) && ReadModListFile(listR, back, warn) && back.profiles.size() == 2 && back.profiles[1].mods.size() == 1,
+          "order: other profiles in the file survive");
   }
 
   fs::remove_all(root, ec);

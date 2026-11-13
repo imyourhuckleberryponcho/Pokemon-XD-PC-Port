@@ -112,6 +112,26 @@ struct GameInfo {
     std::string exportName = "save.gci";
     std::filesystem::path binFolder;
   } saves;
+  struct ExtraSource {
+    std::string id;
+    std::string name;
+    std::vector<std::string> gameIds;
+    std::string provides;
+    std::string makeLabel = "Make";
+    std::string how;
+    std::string discSetting;
+    std::string manifestId;
+    std::string switchSetting;
+    std::string converterStem;
+    std::string converterFolder;
+    std::string converterOverrideEnv;
+    std::vector<std::string> converterArguments;
+  };
+  struct ExtraAssets {
+    std::vector<ExtraSource> sources;
+    std::function<bool(const std::string& path, std::string& gameId, std::string& title, std::string& error)>
+        identifyDisc;
+  } extra;
   struct Updates {
     std::string version;
     std::string feedUrl;

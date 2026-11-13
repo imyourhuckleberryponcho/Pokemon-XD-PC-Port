@@ -312,6 +312,33 @@ void AfterModsLoaded(const em::LoadResult& result, const fs::path& modsFolder, c
   }
 }
 
+bool WorldModsFixed(std::vector<std::string>& ids) { return BootWorldMods(ids); }
+
+std::vector<std::string> LoadedModIds() {
+  std::vector<std::string> ids;
+  for (const ep::ModUse& m : sLoaded) ids.push_back(m.id);
+  return ids;
+}
+
+em::AppliesVerdict ModApplies(const em::ModFolder& mod) {
+  if (const em::AppliesVerdict* v = VerdictOf(mod.manifest.id)) return *v;
+  return em::CheckApplies(mod, xp::LooksOrSound, nullptr);
+}
+
+void RestartForMods(const std::vector<ep::ModUse>& use) {
+  if (sRestarted) {
+    sRestartSetup.mods = use;
+    if (!ep::WriteFile(sRestartFile, sRestartSetup)) {
+      std::fprintf(stderr, "[playthrough] could not write %ls: the restart keeps the New Game setup's old mods\n",
+                   sRestartFile.wstring().c_str());
+    }
+  }
+  Note("mods changed on the MODS page: starting again");
+  std::fprintf(stderr, "[playthrough] starting the game again with the mod list the MODS page wrote\n");
+  std::fflush(stderr);
+  sRestartNow = true;
+}
+
 Defaults NewGameDefaults() {
   Defaults d;
   d.restarted = sRestarted;

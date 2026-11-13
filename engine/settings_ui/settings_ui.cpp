@@ -573,13 +573,14 @@ bool ControlsPanel::DrawController(es::Registry& registry, const Options& option
   ImGui::AlignTextToFramePadding();
   ImGui::TextUnformatted("Controller preset");
   const std::optional<ec::PadPreset> preset = ec::PadPresetOf(map.gamepad);
-  const bool autoKind = !map.gamepad.kind && map.gamepad.layout == ec::Layout::Position &&
-                        ec::UsesDefaultButtons(map.gamepad);
+  const bool autoKind = !map.gamepad.kind && map.gamepad.layout == ec::Layout::Auto &&
+                        std::all_of(map.gamepad.buttons.begin(), map.gamepad.buttons.end(),
+                                    [](const auto& b) { return !b.has_value(); });
   ImGui::SameLine();
   if (ChoiceButton("Auto", autoKind, options)) {
     ec::GamepadMap g = map.gamepad;
     g.kind.reset();
-    g.layout = ec::Layout::Position;
+    g.layout = ec::Layout::Auto;
     for (auto& b : g.buttons) {
       b.reset();
     }

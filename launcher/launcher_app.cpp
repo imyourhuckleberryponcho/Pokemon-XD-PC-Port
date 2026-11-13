@@ -1,5 +1,7 @@
 #include "launcher.h"
+#include "launcher_extra.h"
 #include "launcher_reports.h"
+#include "launcher_sys.h"
 
 #include <mods.h>
 #include <save_backups.h>
@@ -14,14 +16,6 @@
 #include <imgui.h>
 #include <misc/cpp/imgui_stdlib.h>
 
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <windows.h>
-#include <knownfolders.h>
-#include <shellapi.h>
-#include <shlobj.h>
-#include <shobjidl.h>
-
 #include <algorithm>
 #include <atomic>
 #include <cfloat>
@@ -29,6 +23,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cwctype>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -81,8 +76,6 @@ const ImVec4 kDim = Hex(0xACA4C4), kFaint = Hex(0x7B7296);
 const ImVec4 kText = Hex(0xEFEAFA);
 const ImVec4 kAccent = Hex(0x9B6BFF), kAccentHover = Hex(0xB089FF), kAccentActive = Hex(0x8452F0);
 const ImVec4 kGround = Hex(0x110B1C), kPanel = Hex(0x1A1329), kPanelHigh = Hex(0x231A37), kLine = Hex(0x302549);
-
-std::wstring Wide(const std::string& utf8);
 
 ImU32 U32(const ImVec4& c, float alpha = 1.0f) { return ImGui::GetColorU32(ImVec4(c.x, c.y, c.z, c.w * alpha)); }
 
@@ -169,18 +162,15 @@ struct Fonts {
 Fonts LoadFonts(float scale) {
   ImGuiIO& io = ImGui::GetIO();
   Fonts f;
-  wchar_t self[MAX_PATH * 4];
-  const fs::path own = fs::path(std::wstring(self, GetModuleFileNameW(nullptr, self, MAX_PATH * 4))).parent_path();
-  const wchar_t* windir = _wgetenv(L"WINDIR");
-  const fs::path windows = fs::path(windir != nullptr ? windir : L"C:\\Windows") / L"Fonts";
+  const fs::path own = sys::ProgramFolder();
   struct Choice {
     fs::path regular, strong, display;
   };
-  const Choice choices[] = {
-      {own / L"fonts" / L"Inter-Regular.ttf", own / L"fonts" / L"Inter-SemiBold.ttf",
-       own / L"fonts" / L"InterDisplay-Bold.ttf"},
-      {windows / L"segoeui.ttf", windows / L"seguisb.ttf", windows / L"segoeuib.ttf"},
-  };
+  std::vector<Choice> choices = {{own / L"fonts" / L"Inter-Regular.ttf", own / L"fonts" / L"Inter-SemiBold.ttf",
+                                  own / L"fonts" / L"InterDisplay-Bold.ttf"}};
+  for (const sys::FontSet& set : sys::SystemFonts()) {
+    choices.push_back({set.regular, set.strong, set.display});
+  }
   static const ImWchar kRanges[] = {0x0020, 0x00FF, 0x2010, 0x2027, 0x2190, 0x2193, 0};
   ImFontConfig config;
   config.OversampleH = 2;
@@ -279,6 +269,13 @@ void DrawGlyph(ImDrawList* dl, int page, ImVec2 p, float s, ImU32 col) {
     }
     break;
   }
+  case 7: {
+    dl->AddCircle(ImVec2(p.x + s * 0.34f, p.y + s * 0.34f), s * 0.30f, col, 24, t);
+    dl->AddCircle(ImVec2(p.x + s * 0.34f, p.y + s * 0.34f), s * 0.08f, col, 12, t);
+    dl->AddRect(ImVec2(p.x + s * 0.52f, p.y + s * 0.56f), ImVec2(p.x + s * 0.98f, p.y + s * 0.98f), col, s * 0.08f, 0, t);
+    dl->AddLine(ImVec2(p.x + s * 0.58f, p.y + s * 0.77f), ImVec2(p.x + s * 0.92f, p.y + s * 0.77f), col, t);
+    break;
+  }
   default: break;
   }
 }
@@ -341,7 +338,7 @@ icon::Image LoadPng(const fs::path& file) {
 
 std::vector<std::pair<std::string, std::string>> ReadList(const fs::path& file) {
   std::vector<std::pair<std::string, std::string>> out;
-  if (std::FILE* f = _wfopen(file.c_str(), L"rb")) {
+  if (std::FILE* f = sys::OpenFile(file, "rb")) {
     char line[512];
     while (std::fgets(line, sizeof line, f) != nullptr) {
       std::string text(line);
@@ -359,7 +356,7 @@ std::vector<std::pair<std::string, std::string>> ReadList(const fs::path& file) 
 }
 
 bool WriteText(const fs::path& file, const std::string& text) {
-  std::FILE* f = _wfopen(file.c_str(), L"wb");
+  std::FILE* f = sys::OpenFile(file, "wb");
   if (f == nullptr) {
     return false;
   }
@@ -367,91 +364,7 @@ bool WriteText(const fs::path& file, const std::string& text) {
   return std::fclose(f) == 0 && ok;
 }
 
-icon::Image ReadIcoSize(const fs::path& file, int size) {
-  icon::Image img;
-  HICON h = static_cast<HICON>(LoadImageW(nullptr, file.c_str(), IMAGE_ICON, size, size, LR_LOADFROMFILE));
-  if (h == nullptr) {
-    return img;
-  }
-  ICONINFO info{};
-  if (GetIconInfo(h, &info) && info.hbmColor != nullptr) {
-    BITMAPINFO bmi{};
-    bmi.bmiHeader.biSize = sizeof(bmi.bmiHeader);
-    bmi.bmiHeader.biWidth = size;
-    bmi.bmiHeader.biHeight = -size;
-    bmi.bmiHeader.biPlanes = 1;
-    bmi.bmiHeader.biBitCount = 32;
-    bmi.bmiHeader.biCompression = BI_RGB;
-    std::vector<uint8_t> bgra(static_cast<size_t>(size) * size * 4);
-    HDC dc = GetDC(nullptr);
-    if (GetDIBits(dc, info.hbmColor, 0, size, bgra.data(), &bmi, DIB_RGB_COLORS) == size) {
-      img.width = img.height = size;
-      img.rgba.resize(bgra.size());
-      for (size_t i = 0; i < bgra.size(); i += 4) {
-        img.rgba[i] = bgra[i + 2];
-        img.rgba[i + 1] = bgra[i + 1];
-        img.rgba[i + 2] = bgra[i];
-        img.rgba[i + 3] = bgra[i + 3];
-      }
-    }
-    ReleaseDC(nullptr, dc);
-  }
-  if (info.hbmColor != nullptr) {
-    DeleteObject(info.hbmColor);
-  }
-  if (info.hbmMask != nullptr) {
-    DeleteObject(info.hbmMask);
-  }
-  DestroyIcon(h);
-  return img;
-}
-
-bool MakeShortcut(const fs::path& folder, const std::string& name, const std::string& description,
-                  const fs::path& target, const fs::path& iconFile, std::string& message) {
-  std::error_code ec;
-  fs::create_directories(folder, ec);
-  const fs::path link = folder / (PathOf(name).wstring() + L".lnk");
-  IShellLinkW* shell = nullptr;
-  HRESULT hr = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&shell));
-  if (SUCCEEDED(hr)) {
-    shell->SetPath(target.c_str());
-    shell->SetWorkingDirectory(target.parent_path().c_str());
-    shell->SetDescription(Wide(description).c_str());
-    if (!iconFile.empty() && fs::exists(iconFile, ec)) {
-      shell->SetIconLocation(iconFile.c_str(), 0);
-    } else {
-      shell->SetIconLocation(target.c_str(), 0);
-    }
-    IPersistFile* file = nullptr;
-    hr = shell->QueryInterface(IID_PPV_ARGS(&file));
-    if (SUCCEEDED(hr)) {
-      hr = file->Save(link.c_str(), TRUE);
-      file->Release();
-    }
-    shell->Release();
-  }
-  if (FAILED(hr)) {
-    char code[16];
-    std::snprintf(code, sizeof code, "0x%08lX", static_cast<unsigned long>(hr));
-    message = "Windows didn't let the launcher put a shortcut in " + Utf8(folder) + " (error " + code +
-              "). If that folder is kept in OneDrive or protected by Windows Security, make the shortcut by hand: "
-              "right-click " + Utf8(target.filename()) + ", \"Show more options\", \"Create shortcut\".";
-    return false;
-  }
-  SHChangeNotify(SHCNE_CREATE, SHCNF_PATHW | SHCNF_FLUSHNOWAIT, link.c_str(), nullptr);
-  message = "Shortcut made: " + Utf8(link);
-  return true;
-}
-
-std::wstring Wide(const std::string& utf8) {
-  if (utf8.empty()) {
-    return {};
-  }
-  const int n = MultiByteToWideChar(CP_UTF8, 0, utf8.data(), static_cast<int>(utf8.size()), nullptr, 0);
-  std::wstring out(n, L'\0');
-  MultiByteToWideChar(CP_UTF8, 0, utf8.data(), static_cast<int>(utf8.size()), out.data(), n);
-  return out;
-}
+using sys::ReadIcoSize;
 
 engine::controls::Device DeviceOf(SDL_Gamepad* pad) {
   using D = engine::controls::Device;
@@ -494,9 +407,10 @@ std::vector<std::string> Split(const std::string& text, char sep) {
   return out;
 }
 
-enum class Page { Disc, Preset, Settings, Controls, Mods, Save, Reports, Count };
-const char* const kPageNames[] = {"Disc", "Preset", "Settings", "Controls", "Mods", "Save", "Reports"};
-const char* const kPageIds[] = {"disc", "preset", "settings", "controls", "mods", "save", "reports"};
+enum class Page { Disc, Extra, Preset, Settings, Controls, Mods, Save, Reports, Count };
+const char* const kPageNames[] = {"Disc", "Extra assets", "Preset", "Settings", "Controls", "Mods", "Save", "Reports"};
+const char* const kPageIds[] = {"disc", "extra", "preset", "settings", "controls", "mods", "save", "reports"};
+int GlyphOf(int page) { return page == static_cast<int>(Page::Extra) ? 7 : page > static_cast<int>(Page::Extra) ? page - 1 : page; }
 
 struct Background {
   std::mutex mutex;
@@ -555,6 +469,7 @@ class App {
     StopWorker();
     StopUpdate();
     StopOpenRead();
+    ExtraStop();
   }
   int Run();
 
@@ -586,7 +501,7 @@ class App {
   std::string modError_;
   std::string newProfile_;
 
-  HANDLE gameProcess_ = nullptr;
+  sys::Process* gameProcess_ = nullptr;
   bool gameRunning_ = false;
   std::string playError_;
   bool askStartAnyway_ = false;
@@ -671,6 +586,36 @@ class App {
   bool openUpdates_ = false, openGoBack_ = false, closeWindows_ = false;
   std::string versionNote_;
 
+  struct ExtraState {
+    extra::DiscCheck check;
+    extra::MakeJob job;
+    std::mutex mutex;
+    extra::Status status;
+    bool converterFound = false;
+    bool looked = false;
+    std::thread looker;
+    std::atomic<bool> looking{false};
+    bool lookAgain = false;
+    bool wasRunning = false;
+    bool finishedShown = false;
+    extra::MakeJob::Snapshot last;
+    std::string note;
+  };
+  std::vector<std::unique_ptr<ExtraState>> extras_;
+  std::string extraPicked_;
+  int extraPickedFor_ = -1;
+  bool extraPickedReady_ = false;
+  void ExtraStart();
+  void ExtraStop();
+  void ExtraLook(int index);
+  void ExtraSelectDisc(int index, const std::string& path);
+  void ExtraMake(int index);
+  void ExtraCancel(int index);
+  void ExtraPoll();
+  bool ExtraBusy() const;
+  void DrawExtraPage();
+  fs::path ExtraFolder(const GameInfo::ExtraSource& s) const { return game_.settingsFolder / "extra_assets" / PathOf(s.id); }
+
   void LoadSettings();
   void SaveSettingsIfChanged();
   std::string DiscPath() const { return registry_.Text(kDiscSetting); }
@@ -708,6 +653,9 @@ class App {
   void RestartLauncher();
   void DrawUpdateCard();
   void DrawUpdateWindows();
+  void OpenInSystem(const fs::path& what);
+  void DrawNotOpenedWindow();
+  std::string notOpened_;
 
   void RunScript();
   bool DoStep(const std::string& step);
@@ -1271,19 +1219,15 @@ void App::ApplyIconChoice() {
 void App::Shortcut(bool desktop) {
   fs::path folder = game_.shortcutFolder;
   if (folder.empty()) {
-    PWSTR known = nullptr;
-    if (SUCCEEDED(SHGetKnownFolderPath(desktop ? FOLDERID_Desktop : FOLDERID_Programs, KF_FLAG_CREATE, nullptr,
-                                       &known))) {
-      folder = known;
-    }
-    CoTaskMemFree(known);
+    folder = sys::KnownFolder(desktop ? sys::Folder::Desktop : sys::Folder::Programs, true);
   }
   if (folder.empty()) {
     shortcutOk_ = false;
-    shortcutMessage_ = std::string("Windows didn't say where your ") + (desktop ? "desktop" : "Start menu") + " is.";
+    shortcutMessage_ = std::string("The system didn't say where your ") +
+                       (desktop ? "desktop" : sys::ProgramsFolderName()) + " is.";
     return;
   }
-  shortcutOk_ = MakeShortcut(folder, game_.title, game_.title + " " + game_.subtitle, game_.shortcutTarget,
+  shortcutOk_ = sys::MakeShortcut(folder, game_.title, game_.title + " " + game_.subtitle, game_.shortcutTarget,
                              chosenIcon_, shortcutMessage_);
   Log(shortcutMessage_);
 }
@@ -1338,33 +1282,19 @@ void App::SaveMods() {
 }
 
 bool App::StartGame(std::string& error) {
-  const std::wstring program = game_.program.wstring();
-  std::wstring command = L"\"" + program + L"\" \"" + Wide(DiscPath()) + L"\"";
-  STARTUPINFOW si{};
-  si.cb = sizeof(si);
-  HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE), err = GetStdHandle(STD_ERROR_HANDLE);
-  const bool redirect = out != nullptr && out != INVALID_HANDLE_VALUE && err != nullptr && err != INVALID_HANDLE_VALUE &&
-                        GetFileType(err) != FILE_TYPE_UNKNOWN;
-  if (redirect) {
-    SetHandleInformation(out, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
-    SetHandleInformation(err, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
-    si.dwFlags = STARTF_USESTDHANDLES;
-    si.hStdOutput = out;
-    si.hStdError = err;
-    si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
-  }
-  PROCESS_INFORMATION pi{};
-  const std::wstring folder = game_.program.parent_path().wstring();
-  if (!CreateProcessW(program.c_str(), command.data(), nullptr, nullptr, redirect ? TRUE : FALSE, 0, nullptr,
-                      folder.c_str(), &si, &pi)) {
-    error = "The game couldn't be started (" + Utf8(game_.program) + ", Windows error " +
-            std::to_string(GetLastError()) + "). Is it next to the launcher?";
+  sys::StartRequest request;
+  request.program = game_.program;
+  request.arguments = {DiscPath()};
+  request.folder = game_.program.parent_path();
+  request.shareOutput = true;
+  std::string why;
+  gameProcess_ = sys::StartProgram(request, why);
+  if (gameProcess_ == nullptr) {
+    error = "The game couldn't be started (" + Utf8(game_.program) + ", " + why + "). Is it next to the launcher?";
     return false;
   }
-  CloseHandle(pi.hThread);
-  gameProcess_ = pi.hProcess;
   gameRunning_ = true;
-  Log("started " + Utf8(game_.program) + " (process " + std::to_string(pi.dwProcessId) + ")");
+  Log("started " + Utf8(game_.program) + " (process " + std::to_string(sys::IdOf(gameProcess_)) + ")");
   return true;
 }
 
@@ -1401,12 +1331,11 @@ void App::Play(bool confirmed) {
 }
 
 void App::PollGame() {
-  if (!gameRunning_ || WaitForSingleObject(gameProcess_, 0) != WAIT_OBJECT_0) {
+  if (!gameRunning_ || !sys::Ended(gameProcess_, 0)) {
     return;
   }
-  DWORD code = 0;
-  GetExitCodeProcess(gameProcess_, &code);
-  CloseHandle(gameProcess_);
+  const int code = sys::ExitCode(gameProcess_);
+  sys::Close(gameProcess_);
   gameProcess_ = nullptr;
   gameRunning_ = false;
   Log("the game ended (exit code " + std::to_string(code) + ")");
@@ -1417,10 +1346,7 @@ void App::PollGame() {
 
 namespace eu = engine::update;
 
-fs::path OwnProgramFolder() {
-  wchar_t self[MAX_PATH * 4];
-  return fs::path(std::wstring(self, GetModuleFileNameW(nullptr, self, MAX_PATH * 4))).parent_path();
-}
+fs::path OwnProgramFolder() { return sys::ProgramFolder(); }
 
 bool PrimaryButton(const char* label) {
   ImGui::PushStyleColor(ImGuiCol_Button, kAccent);
@@ -1440,7 +1366,7 @@ std::string MegaBytes(uint64_t bytes) {
 void App::LoadUpdaterState() {
   updatesAsked_ = false;
   skipVersion_.clear();
-  if (std::FILE* f = _wfopen((game_.updates.stagingFolder / L"updater.ini").c_str(), L"rb")) {
+  if (std::FILE* f = sys::OpenFile(game_.updates.stagingFolder / L"updater.ini", "rb")) {
     char line[256];
     while (std::fgets(line, sizeof line, f) != nullptr) {
       std::string text(line);
@@ -1664,20 +1590,18 @@ void App::RestartLauncher() {
     return;
   }
   const fs::path starter = layout_.root / PathOf(game_.updates.starterName);
-  std::wstring command = L"\"" + starter.wstring() + L"\"";
-  STARTUPINFOW si{};
-  si.cb = sizeof(si);
-  PROCESS_INFORMATION pi{};
-  if (CreateProcessW(starter.c_str(), command.data(), nullptr, nullptr, FALSE, 0, nullptr,
-                     layout_.root.wstring().c_str(), &si, &pi)) {
-    AllowSetForegroundWindow(pi.dwProcessId);
-    CloseHandle(pi.hThread);
-    CloseHandle(pi.hProcess);
+  sys::StartRequest request;
+  request.program = starter;
+  request.folder = layout_.root;
+  request.toFront = true;
+  std::string why;
+  if (sys::Process* started = sys::StartProgram(request, why)) {
+    sys::Close(started);
     Log("updates: restarted through " + Utf8(starter));
     quit_ = true;
   } else {
-    versionNote_ = "Please close this window and open " + game_.title + " again (the restart didn't work: Windows "
-                   "error " + std::to_string(GetLastError()) + ").";
+    versionNote_ = "Please close this window and open " + game_.title + " again (the restart didn't work: " + why +
+                   ").";
   }
 }
 
@@ -1963,6 +1887,34 @@ bool App::DoStep(const std::string& step) {
     }
     Log("no such page: " + arg);
     return false;
+  } else if (verb == "extradisc" || verb == "extramake" || verb == "extracancel") {
+    page_ = Page::Extra;
+    int index = 0;
+    std::string rest = arg;
+    const size_t eq = arg.find('=');
+    const std::string name = verb == "extradisc" ? (eq == std::string::npos ? std::string() : arg.substr(0, eq)) : arg;
+    if (!name.empty()) {
+      const auto* found = extra::FindSource(game_.extra.sources, name);
+      if (found != nullptr) {
+        index = static_cast<int>(found - game_.extra.sources.data());
+        if (verb == "extradisc") rest = arg.substr(eq + 1);
+      } else if (verb != "extradisc") {
+        Log("no such extra source: " + name);
+        return false;
+      }
+    }
+    if (extras_.empty()) {
+      Log("no extra assets in this launcher");
+      return false;
+    }
+    if (verb == "extradisc") {
+      ExtraSelectDisc(index, rest);
+    } else if (verb == "extramake") {
+      ExtraMake(index);
+      return extras_[index]->note.empty();
+    } else {
+      ExtraCancel(index);
+    }
   } else if (verb == "tab") {
     page_ = Page::Settings;
     wantTab_ = Lower(arg);
@@ -2185,6 +2137,13 @@ bool App::DoStep(const std::string& step) {
     } else {
       askSpoilers_ = true;
     }
+  } else if (verb == "openfolder") {
+    const std::string which = Lower(arg);
+    if (which == "close") {
+      closeWindows_ = true;
+    } else {
+      OpenInSystem(which == "mods" ? game_.modsFolder : which == "reports" ? game_.reportsFolder : BackupsFolder());
+    }
   } else if (verb == "restorebackup") {
     page_ = Page::Save;
     RestoreBackup();
@@ -2256,6 +2215,13 @@ void App::RunScript() {
       return;
     }
     if (waitFor_ == "shaders" && (bg_.busy || bg_.preparing)) {
+      return;
+    }
+    if (waitFor_ == "extra" && ExtraBusy()) {
+      return;
+    }
+    if (waitFor_ == "extradisc" &&
+        std::any_of(extras_.begin(), extras_.end(), [](const auto& e) { return e->check.state() == extra::DiscCheck::State::Checking; })) {
       return;
     }
     if (waitFor_ == "game" && (gameRunning_ || playWhenDrawn_)) {
@@ -2342,6 +2308,9 @@ void App::DrawNav(float height) {
     if (static_cast<Page>(p) == Page::Reports && game_.reportsFolder.empty()) {
       continue;
     }
+    if (static_cast<Page>(p) == Page::Extra && game_.extra.sources.empty()) {
+      continue;
+    }
     ImGui::PushID(p);
     const ImVec2 pos = ImGui::GetCursorScreenPos();
     const float w = ImGui::GetContentRegionAvail().x;
@@ -2361,7 +2330,7 @@ void App::DrawNav(float height) {
     }
     const ImU32 ink = U32(selected ? kText : hovered ? Hex(0xD9D2EC) : kDim);
     const ImU32 glyphInk = U32(selected ? kAccentHover : hovered ? Hex(0xC5B5EC) : kFaint);
-    DrawGlyph(dl, p, ImVec2(pos.x + 14 * scale_, pos.y + (rowH - glyph) * 0.5f), glyph, glyphInk);
+    DrawGlyph(dl, GlyphOf(p), ImVec2(pos.x + 14 * scale_, pos.y + (rowH - glyph) * 0.5f), glyph, glyphInk);
     dl->AddText(fonts_.nav, fonts_.nav->FontSize,
                 ImVec2(pos.x + 14 * scale_ + glyph + 13 * scale_, pos.y + (rowH - fonts_.nav->FontSize) * 0.5f), ink,
                 kPageNames[p]);
@@ -2370,6 +2339,304 @@ void App::DrawNav(float height) {
   }
   ImGui::EndChild();
   ImGui::PopStyleVar();
+}
+
+namespace {
+std::string HumanBytes(uint64_t bytes) {
+  char text[48];
+  if (bytes >= (1ull << 30)) {
+    std::snprintf(text, sizeof text, "%.1f GB", static_cast<double>(bytes) / static_cast<double>(1ull << 30));
+  } else if (bytes >= (1ull << 20)) {
+    std::snprintf(text, sizeof text, "%.1f MB", static_cast<double>(bytes) / static_cast<double>(1ull << 20));
+  } else {
+    std::snprintf(text, sizeof text, "%llu KB", static_cast<unsigned long long>((bytes + 1023) / 1024));
+  }
+  return text;
+}
+}
+
+void App::ExtraStart() {
+  const auto& sources = game_.extra.sources;
+  for (int i = 0; i < static_cast<int>(sources.size()); i++) {
+    extras_.push_back(std::make_unique<ExtraState>());
+    {
+      const fs::path oldMod = game_.modsFolder / PathOf(sources[i].manifestId);
+      std::error_code ec;
+      if (!game_.playerFilesReadOnly && !sources[i].manifestId.empty() && fs::is_regular_file(oldMod / "mod.json", ec) &&
+          !fs::exists(ExtraFolder(sources[i]), ec)) {
+        fs::create_directories(game_.settingsFolder / "extra_assets", ec);
+        fs::rename(oldMod, ExtraFolder(sources[i]), ec);
+        Log("extra: " + sources[i].id + ": moved the old mod folder " + Utf8(oldMod) + " to " + Utf8(ExtraFolder(sources[i])) +
+            (ec ? " (failed: " + ec.message() + ")" : ""));
+        if (!ec) {
+          for (em::ModList::Profile& profile : mods_.profiles) {
+            auto& list = profile.mods;
+            list.erase(std::remove_if(list.begin(), list.end(),
+                                      [&](const auto& m) { return Lower(m.first) == Lower(sources[i].manifestId); }),
+                       list.end());
+          }
+          SaveMods();
+        }
+        ReloadMods();
+      }
+    }
+    const std::string disc = registry_.Text(sources[i].discSetting);
+    if (!disc.empty() && game_.extra.identifyDisc) {
+      extras_[i]->check.Start(sources[i], disc, game_.extra);
+    }
+    ExtraLook(i);
+  }
+}
+
+void App::ExtraStop() {
+  for (auto& st : extras_) {
+    st->job.Cancel();
+    if (st->looker.joinable()) st->looker.join();
+  }
+  extras_.clear();
+}
+
+void App::ExtraLook(int index) {
+  ExtraState& st = *extras_[index];
+  if (st.looking) {
+    st.lookAgain = true;
+    return;
+  }
+  if (st.looker.joinable()) st.looker.join();
+  st.looking = true;
+  st.lookAgain = false;
+  st.looker = std::thread([this, index] {
+    ExtraState& state = *extras_[index];
+    const GameInfo::ExtraSource& src = game_.extra.sources[index];
+    const fs::path converter = extra::ConverterPath(src, game_.program.parent_path());
+    std::error_code ec;
+    const bool found = fs::is_regular_file(converter, ec);
+    const std::string version =
+        found ? extra::QueryVersion(converter, game_.settingsFolder / "extra_assets" / PathOf(src.id + "_version.txt"), 5000)
+              : std::string();
+    const extra::Status status = extra::ComputeStatus(ExtraFolder(src), src.manifestId, found, version);
+    {
+      std::lock_guard<std::mutex> lock(state.mutex);
+      state.status = status;
+      state.converterFound = found;
+      state.looked = true;
+    }
+    Log("extra: " + src.id + ": " + status.text + (found ? "" : " (no converter at " + Utf8(converter) + ")") +
+        (version.empty() ? std::string() : " (converter " + version + ")"));
+    state.looking = false;
+  });
+}
+
+void App::ExtraSelectDisc(int index, const std::string& path) {
+  if (index < 0 || index >= static_cast<int>(extras_.size())) return;
+  const GameInfo::ExtraSource& src = game_.extra.sources[index];
+  Log("extra disc (" + src.id + "): " + path);
+  if (!registry_.SetText(src.discSetting, path)) {
+    playError_ = "This file name can't be used: " + path;
+    return;
+  }
+  SaveSettingsIfChanged();
+  extras_[index]->note.clear();
+  extras_[index]->check.Start(src, path, game_.extra);
+}
+
+void App::ExtraMake(int index) {
+  if (index < 0 || index >= static_cast<int>(extras_.size())) return;
+  ExtraState& st = *extras_[index];
+  const GameInfo::ExtraSource& src = game_.extra.sources[index];
+  if (st.job.Running()) return;
+  const std::string gameDisc = DiscPath(), disc = registry_.Text(src.discSetting);
+  std::string why;
+  fs::path converter;
+  {
+    std::lock_guard<std::mutex> lock(st.mutex);
+    if (!st.looked) why = "still looking at what is installed";
+    else if (!st.converterFound) why = "the converter isn't next to the game";
+    converter = extra::ConverterPath(src, game_.program.parent_path());
+  }
+  if (why.empty() && gameDisc.empty()) why = "choose your own game disc on the Disc page first";
+  if (why.empty() && disc.empty()) why = "choose the " + src.name + " disc first";
+  if (why.empty() && st.check.state() != extra::DiscCheck::State::Good) why = "that disc isn't the right game (or is still being looked at)";
+  if (why.empty() && game_.playerFilesReadOnly) why = "this is a test run on the player's own files, which it never changes";
+  if (!why.empty()) {
+    st.note = "Can't start: " + why + ".";
+    Log("extra: " + st.note);
+    return;
+  }
+  extra::MakeRequest request;
+  request.converter = converter;
+  request.outFolder = ExtraFolder(src);
+  request.logFile = game_.settingsFolder / "extra_assets" / PathOf(src.id + ".log");
+  request.arguments = extra::ConverterArguments(src, disc, gameDisc, request.outFolder);
+  std::string error;
+  st.note.clear();
+  if (!st.job.Start(request, error)) {
+    st.note = error;
+    Log("extra: " + error);
+    return;
+  }
+  st.wasRunning = true;
+  st.finishedShown = false;
+  Log("extra: " + src.id + ": started " + Utf8(converter));
+}
+
+void App::ExtraCancel(int index) {
+  if (index < 0 || index >= static_cast<int>(extras_.size())) return;
+  if (extras_[index]->job.Running()) {
+    Log("extra: " + game_.extra.sources[index].id + ": cancel");
+    extras_[index]->job.Cancel();
+  }
+}
+
+void App::ExtraPoll() {
+  for (int i = 0; i < static_cast<int>(extras_.size()); i++) {
+    ExtraState& st = *extras_[i];
+    if (st.wasRunning && !st.job.Running()) {
+      st.wasRunning = false;
+      st.last = st.job.Get();
+      st.finishedShown = true;
+      static const char* const kPhase[] = {"idle", "running", "done", "failed", "wrong disc", "cancelled"};
+      Log(std::string("extra: ") + game_.extra.sources[i].id + ": " + kPhase[static_cast<int>(st.last.phase)] +
+          (st.last.message.empty() ? std::string() : " (" + st.last.message + ")") +
+          (st.last.phase == extra::MakeJob::Phase::Done
+               ? " (" + std::to_string(st.last.converted) + " made, " + std::to_string(st.last.keptOriginal) +
+                     " kept, " + std::to_string(st.last.totalBytes) + " bytes)"
+               : std::string()));
+      ExtraLook(i);
+    }
+    if (st.lookAgain && !st.looking) ExtraLook(i);
+  }
+}
+
+bool App::ExtraBusy() const {
+  for (const auto& st : extras_) {
+    if (st->job.Running() || st->wasRunning || st->looking || st->lookAgain) return true;
+  }
+  return false;
+}
+
+void App::DrawExtraPage() {
+  PageTitle("Extra assets",
+            "Discs of other games that this port can borrow assets from. Your discs are only read; what is made from "
+            "them is made on this PC, kept in your own data folder (extra_assets) and never sent anywhere.");
+  const auto& sources = game_.extra.sources;
+  for (int i = 0; i < static_cast<int>(sources.size()) && i < static_cast<int>(extras_.size()); i++) {
+    ExtraState& st = *extras_[i];
+    const GameInfo::ExtraSource& src = sources[i];
+    ImGui::PushID(i);
+    BeginCard("##extra");
+    extra::Status status;
+    bool looked, converterFound;
+    {
+      std::lock_guard<std::mutex> lock(st.mutex);
+      status = st.status;
+      looked = st.looked;
+      converterFound = st.converterFound;
+    }
+    Heading(src.provides.c_str());
+    if (!looked) {
+      ImGui::TextColored(kBusy, "Looking...");
+    } else {
+      const ImVec4 colour = status.kind == extra::Status::Kind::Ready       ? kGood
+                            : status.kind == extra::Status::Kind::OutOfDate ? kWarn
+                            : status.kind == extra::Status::Kind::ConverterMissing ? kBad
+                                                                                   : kDim;
+      ImGui::TextColored(colour, "%s", status.text.c_str());
+      if (!status.detail.empty()) Dim(status.detail);
+    }
+    Dim("From a " + src.name + " disc. " + src.how);
+    ImGui::Dummy(ImVec2(0, 4 * scale_));
+
+    std::string disc = registry_.Text(src.discSetting);
+    ImGui::TextColored(kDim, "%s disc image", src.name.c_str());
+    ImGui::SetNextItemWidth(-250 * scale_);
+    ImGui::InputText("##disc", &disc, ImGuiInputTextFlags_ReadOnly);
+    ImGui::SameLine();
+    if (ImGui::Button("Choose disc...")) {
+      static const SDL_DialogFileFilter kFilters[] = {
+          {"Disc images (ISO, RVZ, WBFS, CISO, GCZ...)", "iso;gcm;rvz;wia;gcz;ciso;wbfs"},
+          {"All files", "*"},
+      };
+      const std::string start = disc.empty() ? std::string() : Utf8(PathOf(disc).parent_path());
+      extraPickedFor_ = i;
+      SDL_ShowOpenFileDialog(
+          [](void* user, const char* const* files, int) {
+            App* app = static_cast<App*>(user);
+            if (files != nullptr && files[0] != nullptr) {
+              std::lock_guard<std::mutex> lock(app->pickMutex_);
+              app->extraPicked_ = files[0];
+              app->extraPickedReady_ = true;
+            }
+          },
+          this, window_, kFilters, 2, start.empty() ? nullptr : start.c_str(), false);
+    }
+    switch (st.check.state()) {
+    case extra::DiscCheck::State::Checking: ImGui::TextColored(kBusy, "Looking at the disc image..."); break;
+    case extra::DiscCheck::State::Good:
+    case extra::DiscCheck::State::WrongGame:
+    case extra::DiscCheck::State::Unreadable:
+      ImGui::PushStyleColor(ImGuiCol_Text, st.check.state() == extra::DiscCheck::State::Good ? kGood : kBad);
+      ImGui::TextWrapped("%s", st.check.message().c_str());
+      ImGui::PopStyleColor();
+      break;
+    case extra::DiscCheck::State::None:
+      if (disc.empty()) Dim("No disc chosen yet.");
+      break;
+    }
+    ImGui::Dummy(ImVec2(0, 4 * scale_));
+
+    const bool running = st.job.Running();
+    if (!running) {
+      if (ImGui::Button(src.makeLabel.c_str())) ExtraMake(i);
+      if (ImGui::IsItemHovered()) ImGui::SetTooltip("Needs your own game disc (Disc page) and this disc.");
+    } else {
+      if (ImGui::Button("Cancel")) ExtraCancel(i);
+    }
+    if (running) {
+      const extra::MakeJob::Snapshot snap = st.job.Get();
+      const float fraction = snap.total > 0 ? static_cast<float>(static_cast<double>(snap.done) / static_cast<double>(snap.total)) : 0.0f;
+      char label[160];
+      std::snprintf(label, sizeof label, snap.total > 0 ? "%llu / %llu  %s" : "starting...",
+                    static_cast<unsigned long long>(snap.done), static_cast<unsigned long long>(snap.total),
+                    snap.current.c_str());
+      ImGui::ProgressBar(fraction, ImVec2(-1, 0), label);
+      Dim("This can take a while. The window stays usable; Cancel stops it and leaves nothing half-made.");
+    } else if (st.finishedShown) {
+      const extra::MakeJob::Snapshot& r = st.last;
+      if (r.phase == extra::MakeJob::Phase::Done) {
+        ImGui::TextColored(kGood, "Done: %llu made, %llu kept as the game's own (%s). Turn it on with the setting below.",
+                           static_cast<unsigned long long>(r.converted), static_cast<unsigned long long>(r.keptOriginal),
+                           HumanBytes(r.totalBytes).c_str());
+      } else if (r.phase == extra::MakeJob::Phase::Cancelled) {
+        ImGui::TextColored(kWarn, "%s", r.message.c_str());
+      } else {
+        ImGui::TextColored(kBad, "%s", r.message.c_str());
+      }
+    }
+    if (!st.note.empty()) ImGui::TextColored(kWarn, "%s", st.note.c_str());
+
+    if (looked && !src.switchSetting.empty() && registry_.Find(src.switchSetting) != es::kNoSetting &&
+        (status.kind == extra::Status::Kind::Ready || status.kind == extra::Status::Kind::OutOfDate)) {
+      ImGui::Dummy(ImVec2(0, 4 * scale_));
+      bool on = registry_.Bool(src.switchSetting).Get();
+      const es::Definition& def = registry_.Get(registry_.Find(src.switchSetting));
+      if (ImGui::Checkbox(("Use them in the game (setting: " + def.name + ")").c_str(), &on)) {
+        registry_.SetBool(src.switchSetting, on);
+        SaveSettingsIfChanged();
+      }
+      Dim("The same switch is in Settings and in the game's SETTINGS page. It is an improvement, so it is not part of "
+          "Original: turning it on here makes the preset Custom. The game reads it when it starts.");
+    }
+    if (ImGui::SmallButton("Look again")) {
+      ExtraLook(i);
+      if (!disc.empty()) st.check.Start(src, disc, game_.extra);
+    }
+    (void)converterFound;
+    EndCard();
+    ImGui::PopID();
+    ImGui::Spacing();
+  }
+  Dim("More discs (for example Pokemon Colosseum) can be added to this page later.");
 }
 
 void App::DrawDiscPage() {
@@ -2483,7 +2750,13 @@ void App::DrawIconSection() {
   }
   const std::string selected = ResolvedIconId();
   std::string chosenName = "the program's own icon";
-  ImGui::TextUnformatted("Icon of the windows, the taskbar and the shortcuts:");
+  const bool icons = sys::HasIcons();
+  if (icons) {
+    ImGui::TextUnformatted("Icon of the windows, the taskbar and the shortcuts:");
+  } else {
+    Dim("Choosing another icon for the windows and shortcuts isn't there on this system yet: they show the "
+        "program's own.");
+  }
   const float side = 56 * scale_, gap = 10 * scale_;
   int index = 0;
   const auto Tile = [&](SDL_Texture* tex, const std::string& id, const std::string& name) {
@@ -2518,14 +2791,16 @@ void App::DrawIconSection() {
     }
     ImGui::PopID();
   };
-  for (size_t i = 0; i < game_.ownIcons.size(); i++) {
+  for (size_t i = 0; icons && i < game_.ownIcons.size(); i++) {
     Tile(i < ownIcons_.size() ? ownIcons_[i] : nullptr, game_.ownIcons[i].id, game_.ownIcons[i].name);
   }
-  for (size_t i = 0; i < choices.size(); i++) {
+  for (size_t i = 0; icons && i < choices.size(); i++) {
     Tile(i < choiceIcons_.size() ? choiceIcons_[i] : nullptr, choices[i].first, choices[i].second);
   }
-  ImGui::Dummy(ImVec2(0, 2 * scale_));
-  ImGui::Text("In use: %s", chosenName.c_str());
+  if (icons) {
+    ImGui::Dummy(ImVec2(0, 2 * scale_));
+    ImGui::Text("In use: %s", chosenName.c_str());
+  }
   if (!grounds_.empty()) {
     ImGui::Dummy(ImVec2(0, 6 * scale_));
     ImGui::TextUnformatted("Launcher background:");
@@ -2564,11 +2839,16 @@ void App::DrawIconSection() {
       ImGui::PopID();
     }
   }
-  Dim(have && !note.empty() ? note
-                            : "Once your disc has been checked, more icons are made from its pictures (only on this "
-                              "PC, in your data folder).");
+  if (icons) {
+    Dim(have && !note.empty() ? note
+                              : "Once your disc has been checked, more icons are made from its pictures (only on this "
+                                "PC, in your data folder).");
+  } else if (grounds_.empty()) {
+    Dim("Once your disc has been checked, launcher backgrounds are made from its pictures (only on this PC, in "
+        "your data folder).");
+  }
   ImGui::Dummy(ImVec2(0, 4 * scale_));
-  if (ImGui::Button("Create Start menu shortcut")) {
+  if (ImGui::Button((std::string("Create ") + sys::ProgramsFolderName() + " shortcut").c_str())) {
     Shortcut(false);
   }
   ImGui::SameLine();
@@ -2581,6 +2861,38 @@ void App::DrawIconSection() {
     ImGui::PopStyleColor();
   }
   EndCard();
+}
+
+void App::OpenInSystem(const fs::path& what) {
+  if (!sys::OpenInSystem(what)) {
+    notOpened_ = Utf8(what);
+    Log("couldn't be opened by the system: " + notOpened_);
+  }
+}
+
+void App::DrawNotOpenedWindow() {
+  if (notOpened_.empty()) {
+    return;
+  }
+  if (!ImGui::IsPopupOpen("Couldn't open it")) {
+    ImGui::OpenPopup("Couldn't open it");
+  }
+  ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+  if (ImGui::BeginPopupModal("Couldn't open it", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    ImGui::TextUnformatted("Your system didn't open this by itself. It is here:");
+    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 560 * scale_);
+    ImGui::TextColored(kText, "%s", notOpened_.c_str());
+    ImGui::PopTextWrapPos();
+    if (ImGui::Button("Copy the path")) {
+      SDL_SetClipboardText(notOpened_.c_str());
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("OK") || closeWindows_) {
+      notOpened_.clear();
+      ImGui::CloseCurrentPopup();
+    }
+    ImGui::EndPopup();
+  }
 }
 
 void App::DrawPresetPage() {
@@ -2744,7 +3056,7 @@ void App::DrawModsPage() {
   if (ImGui::Button("Open the mods folder")) {
     std::error_code ec;
     fs::create_directories(game_.modsFolder, ec);
-    ShellExecuteW(nullptr, L"open", game_.modsFolder.wstring().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+    OpenInSystem(game_.modsFolder);
   }
   ImGui::SameLine();
   if (ImGui::Button("Look again")) {
@@ -2874,8 +3186,7 @@ void App::DrawModsPage() {
     }
     ImGui::EndTable();
     if (moveFrom >= 0) {
-      std::swap(list[moveFrom], list[moveTo]);
-      SaveMods();
+      if (em::MoveMod(mods_.Active(), static_cast<size_t>(moveFrom), moveTo - moveFrom)) SaveMods();
     }
   }
   if (!modError_.empty()) {
@@ -2996,7 +3307,7 @@ void App::DrawBackups(bool inBox) {
   if (ImGui::Button("Open folder")) {
     std::error_code ec;
     fs::create_directories(BackupsFolder(), ec);
-    ShellExecuteW(nullptr, L"open", BackupsFolder().wstring().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+    OpenInSystem(BackupsFolder());
   }
   if (!inBox) {
     ImGui::SameLine();
@@ -3353,20 +3664,10 @@ bool App::BinFolder(const fs::path& folder, std::string& error) {
     Log("saves: moved " + Utf8(folder) + " to " + Utf8(target));
     return true;
   }
-  std::wstring from = folder.wstring();
-  from.push_back(L'\0');
-  from.push_back(L'\0');
-  SHFILEOPSTRUCTW op{};
-  op.hwnd = nullptr;
-  op.wFunc = FO_DELETE;
-  op.pFrom = from.c_str();
-  op.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI | FOF_WANTNUKEWARNING;
-  const int result = SHFileOperationW(&op);
-  if (result != 0 || op.fAnyOperationsAborted || fs::exists(folder, ec)) {
-    error = "Windows couldn't move it to the recycle bin (" + std::to_string(result) + "): " + Utf8(folder);
+  if (!sys::ToRecycleBin(folder, error)) {
     return false;
   }
-  Log("saves: to the recycle bin: " + Utf8(folder));
+  Log(std::string("saves: to ") + sys::RecycleBinName() + ": " + Utf8(folder));
   return true;
 }
 
@@ -3401,7 +3702,7 @@ bool App::DeleteSlot() {
   if (!ok) {
     return SlotDone(false, error);
   }
-  const std::string where = game_.saves.binFolder.empty() ? "the recycle bin" : Utf8(game_.saves.binFolder);
+  const std::string where = game_.saves.binFolder.empty() ? sys::RecycleBinName() : Utf8(game_.saves.binFolder);
   return SlotDone(true, first ? "\"" + gone.name + "\" is empty now: its save, setup and backups went to " + where + "."
                               : "Deleted \"" + gone.name + "\" (it is in " + where + "). \"" + slots_.Active().name +
                                     "\" is the save the game loads" + (chosen ? " now." : ", as before."));
@@ -3633,7 +3934,7 @@ void App::DrawSlots() {
       ImGui::CloseCurrentPopup();
     } else {
       ImGui::Text("Delete \"%s\"?", open->name.c_str());
-      Dim("Its save, its playthrough setup and its backups go to the recycle bin (you can take them back out of it).");
+      Dim("Its save, its playthrough setup and its backups go to " + std::string(sys::RecycleBinName()) + " (you can take them back out of it).");
       if (open->id == sl::kMainId) {
         Dim("This is the first save: its place in the list stays, empty.");
       }
@@ -3703,12 +4004,7 @@ void App::DrawSlotBox(const sl::Slot& slot, bool locked, bool& duplicate) {
     ImGui::SameLine();
     if (ImGui::Button("Export...")) {
       static const SDL_DialogFileFilter kGci[] = {{"GameCube save files", "gci"}};
-      PWSTR known = nullptr;
-      fs::path start;
-      if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, 0, nullptr, &known))) {
-        start = known;
-      }
-      CoTaskMemFree(known);
+      const fs::path start = sys::KnownFolder(sys::Folder::Documents, false);
       const std::string where = Utf8(start / PathOf(game_.saves.exportName));
       slotMessage_.clear();
       SDL_ShowSaveFileDialog(
@@ -3843,7 +4139,7 @@ void App::DrawSetup(const SaveSummary& save) {
     if (ImGui::Button("Show them")) {
       ImGui::CloseCurrentPopup();
       Log("spoilers: " + Utf8(save.spoilerFile));
-      ShellExecuteW(nullptr, L"open", save.spoilerFile.wstring().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+      OpenInSystem(save.spoilerFile);
     }
     ImGui::SameLine();
     if (ImGui::Button("Cancel") || closeSpoilers_) {
@@ -4025,9 +4321,10 @@ void App::DrawSessionWindow() {
       sessionBundleFor_ = key;
     }
     ImGui::Spacing();
-    ImGui::Checkbox("Hide my Windows user name", &exportOptions_.hideUserName);
-    Dim("Your Windows user name appears in folder names in the log, the recording and the settings "
-        "(C:\\Users\\<you>\\...). With this on, the saved copy says %USERNAME% instead.");
+    ImGui::Checkbox((std::string("Hide my ") + sys::UserNameWords()).c_str(), &exportOptions_.hideUserName);
+    Dim(std::string("Your ") + sys::UserNameWords() +
+        " appears in folder names in the log, the recording and the settings (" + sys::HomeFolderExample() +
+        "). With this on, the saved copy says %USERNAME% instead.");
     if (!sessionBundle_.choice.empty()) {
       ImGui::PushStyleColor(ImGuiCol_Text, kWarn);
       ImGui::TextWrapped("%s", sessionBundle_.choice.c_str());
@@ -4039,12 +4336,7 @@ void App::DrawSessionWindow() {
     }
     if (ImGui::Button("Save...")) {
       static const SDL_DialogFileFilter kZip[] = {{"Zip files", "zip"}};
-      PWSTR known = nullptr;
-      fs::path start;
-      if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, 0, nullptr, &known))) {
-        start = known;
-      }
-      CoTaskMemFree(known);
+      const fs::path start = sys::KnownFolder(sys::Folder::Documents, false);
       const std::string where = Utf8(start / PathOf(reports::SessionExportName(s)));
       sessionMessage_.clear();
       SDL_ShowSaveFileDialog(
@@ -4109,7 +4401,7 @@ void App::DrawReportsPage() {
   if (ImGui::Button("Open folder")) {
     std::error_code ec;
     fs::create_directories(game_.reportsFolder, ec);
-    ShellExecuteW(nullptr, L"open", game_.reportsFolder.wstring().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+    OpenInSystem(game_.reportsFolder);
   }
   ImGui::SameLine();
   if (ImGui::Button("Look again")) {
@@ -4216,9 +4508,10 @@ void App::DrawReportsPage() {
   BeginCard("##export");
   Dim("Makes one .zip file of this report, with a name and in a place you choose, to send to a developer "
       "yourself. The report here stays as it is.");
-  ImGui::Checkbox("Hide my Windows user name", &exportOptions_.hideUserName);
-  Dim("Your Windows user name appears in folder names in the log, the settings and the report's info "
-      "(C:\\Users\\<you>\\...). With this on, the exported copy says %USERNAME% instead.");
+  ImGui::Checkbox((std::string("Hide my ") + sys::UserNameWords()).c_str(), &exportOptions_.hideUserName);
+  Dim(std::string("Your ") + sys::UserNameWords() +
+      " appears in folder names in the log, the settings and the report's info (" + sys::HomeFolderExample() +
+      "). With this on, the exported copy says %USERNAME% instead.");
   if (!hasDump) {
     ImGui::BeginDisabled();
   }
@@ -4238,12 +4531,7 @@ void App::DrawReportsPage() {
   ImGui::Spacing();
   if (ImGui::Button("Export...")) {
     static const SDL_DialogFileFilter kZip[] = {{"Zip files", "zip"}};
-    PWSTR known = nullptr;
-    fs::path start;
-    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, 0, nullptr, &known))) {
-      start = known;
-    }
-    CoTaskMemFree(known);
+    const fs::path start = sys::KnownFolder(sys::Folder::Documents, false);
     const std::string where = Utf8(start / PathOf(reports::ExportName(*r)));
     reportMessage_.clear();
     SDL_ShowSaveFileDialog(
@@ -4494,6 +4782,7 @@ void App::Frame() {
   ImGui::PopStyleVar();
   switch (page_) {
   case Page::Disc: DrawDiscPage(); break;
+  case Page::Extra: DrawExtraPage(); break;
   case Page::Preset: DrawPresetPage(); break;
   case Page::Settings: DrawSettingsPage(); break;
   case Page::Controls: DrawControlsPage(); break;
@@ -4505,6 +4794,7 @@ void App::Frame() {
   ImGui::EndChild();
   ImGui::Dummy(ImVec2(0, 4 * scale_));
   DrawBottomBar();
+  DrawNotOpenedWindow();
   DrawUpdateWindows();
   ImGui::End();
   if (ground) {
@@ -4517,8 +4807,10 @@ int App::Run() {
   LoadSettings();
   options_.gameId = game_.gameId;
   options_.hidden = {kDiscSetting, kStaySetting, kIconSetting, kGroundSetting, kUpdateSetting};
+  options_.hiddenPrefixes.push_back("system.extra_disc.");
   script_ = Split(game_.script, '|');
   ReloadMods();
+  ExtraStart();
   LookAtSlots(true);
   if (SlotsOn()) {
     Log("save: \"" + slots_.Active().name + "\" of " + std::to_string(slots_.slots.size()) + " (" +
@@ -4564,7 +4856,18 @@ int App::Run() {
                                                                                        : nullptr);
     }
   }
-  const HRESULT com = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+  if (!sys::HasIcons()) {
+    const icon::Image own = LoadPng(sys::ProgramFolder() / L"icon.png");
+    if (!own.Empty()) {
+      ownIcon_ = MakeTexture(renderer_, own);
+      if (SDL_Surface* surface = SDL_CreateSurfaceFrom(own.width, own.height, SDL_PIXELFORMAT_RGBA32,
+                                                       const_cast<uint8_t*>(own.rgba.data()), own.width * 4)) {
+        SDL_SetWindowIcon(window_, surface);
+        SDL_DestroySurface(surface);
+      }
+    }
+  }
+  sys::Start();
   if (game_.offscreen) {
     SDL_SetWindowPosition(window_, -20000, -20000);
   } else {
@@ -4665,11 +4968,16 @@ int App::Run() {
         }
       } while (SDL_PollEvent(&e));
     }
+    ExtraPoll();
     {
       std::lock_guard<std::mutex> lock(pickMutex_);
       if (pickedReady_) {
         pickedReady_ = false;
         SelectDisc(picked_);
+      }
+      if (extraPickedReady_) {
+        extraPickedReady_ = false;
+        ExtraSelectDisc(extraPickedFor_, extraPicked_);
       }
       if (exportPickedReady_) {
         exportPickedReady_ = false;
@@ -4726,7 +5034,7 @@ int App::Run() {
   StopWorker();
   StopUpdate();
   if (gameProcess_ != nullptr) {
-    CloseHandle(gameProcess_);
+    sys::Close(gameProcess_);
   }
   choiceIcons_.push_back(ownIcon_);
   choiceIcons_.push_back(reportShot_);
@@ -4737,9 +5045,7 @@ int App::Run() {
       SDL_DestroyTexture(tex);
     }
   }
-  if (SUCCEEDED(com)) {
-    CoUninitialize();
-  }
+  sys::End();
   ImGui_ImplSDLRenderer3_Shutdown();
   ImGui_ImplSDL3_Shutdown();
   ImGui::DestroyContext();

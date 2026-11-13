@@ -40,7 +40,10 @@ How to open it (the app is not signed by a registered developer, so macOS blocks
 4. From now on it opens with a double-click.
    (If you know Terminal, this does the same in one step:
       xattr -dr com.apple.quarantine "/path/to/Pokemon XD.app" )
-5. At the first start the program asks for your disc image in a file window. It remembers it afterwards.
+5. The launcher opens first (a small window, as on Windows): on its Disc page choose your disc image, then press
+   Play. It remembers the disc afterwards. Preset, Settings, Controls, Mods, Save and Reports are its other pages.
+   (The "Extra assets" page can make models from a Pokemon Battle Revolution disc; this is new on the Mac, please
+   try it and tell us what happened.)
 
 Where your files are
   Your home folder > Library > Application Support > Pokemon XD
@@ -57,13 +60,16 @@ Before anything else, if you are one of the first testers: the report
   ~/Library/Application Support/Pokemon XD/start_failure.txt
 
 If it does not work
-- Open Terminal and start it from there, so its messages can be read:
+- Open Terminal and start the game itself (without the launcher) from there, so its messages can be read:
       "/path/to/Pokemon XD.app/Contents/MacOS/xd"
+  (add the disc image's path after it to skip the file window; the launcher's own messages:
+      "/path/to/Pokemon XD.app/Contents/MacOS/xd_launcher" )
   Copy everything it prints and send it to us, together with the newest file in
   ~/Library/Application Support/Pokemon XD/logs  (if that folder exists).
 - Tell us your Mac model and macOS version (Apple menu > About This Mac).
 - Nothing is ever sent by the program itself.
 
-Not in this build yet (they exist on Windows): the launcher (settings before starting, mods, save manager,
-updates), screenshots and bug-report bundles from inside the game (F10/F12), the window icon made from your disc.
+Not in this build yet (they exist on Windows): updates (download a new version yourself), the launcher's icon
+chooser and shortcut buttons, screenshots and bug-report bundles from inside the game (F10/F12), the window icon made
+from your disc.
 Settings can be changed in the game's own SETTINGS page, or in settings.ini in the folder above.

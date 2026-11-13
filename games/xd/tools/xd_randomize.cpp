@@ -45,9 +45,12 @@ bool read_disc_entry(const std::string& archive, const std::string& entry, std::
   } else if (uint8_t* file = PortDisc_ReadOriginalFile(archive.c_str(), &size)) {
     FsysArchive f{};
     if (Fsys_Open(file, size, &f)) {
+      const bool byNumber = entry.size() >= 2 && entry[0] == '#';
+      const unsigned long number = byNumber ? std::strtoul(entry.c_str() + 1, nullptr, 10) : 0;
       for (uint32_t i = 0; i < f.count && !ok; i++) {
         FsysEntry e;
-        if (Fsys_Entry(&f, i, &e) && (std::strcmp(e.fullName, entry.c_str()) == 0 || std::strcmp(e.name, entry.c_str()) == 0)) {
+        if (byNumber ? i == number
+                     : Fsys_Entry(&f, i, &e) && (std::strcmp(e.fullName, entry.c_str()) == 0 || std::strcmp(e.name, entry.c_str()) == 0)) {
           uint32_t n = 0;
           if (uint8_t* p = Fsys_Extract(&f, i, &n)) {
             bytes.assign(p, p + n);
@@ -515,6 +518,271 @@ int run_selftest(const em::DataCatalog& cat) {
             "and written back the same; the style + seed still gives this code");
     }
   }
+  {
+    auto val = [&](const char* table, uint32_t entry, const char* name, uint32_t element = 0) {
+      const em::DataTable* t = cat.FindTable(table);
+      if (t == nullptr || entry >= t->count) return 0u;
+      static std::map<std::string, std::vector<uint8_t>> files;
+      const std::string key = t->places[0].archive + "/" + t->places[0].entry;
+      if (files.count(key) == 0) read_disc_entry(t->places[0].archive, t->places[0].entry, files[key]);
+      for (const auto& f : t->fields) {
+        if (f.name == name) return em::ReadDataField(files[key].data() + t->places[0].offset + entry * t->entrySize, f, element);
+      }
+      return 0u;
+    };
+    auto with = [&](er::Settings s, uint64_t seed, std::initializer_list<std::pair<const char*, uint32_t>> sets) {
+      s.seed = seed;
+      for (const auto& [id, v] : sets) s.Set(sc, id, v);
+      xr::Result r;
+      if (!xr::Generate(cat, read_disc_entry, s, r, error)) std::printf("FAIL generate: %s\n", error.c_str());
+      return r;
+    };
+    auto now = [&](const xr::Result& r, const char* table, uint32_t entry, const char* field) {
+      const auto t = r.mod.tables.find(table);
+      if (t != r.mod.tables.end()) {
+        const auto e = t->second.find(entry);
+        if (e != t->second.end() && e->second.count(field)) return e->second.at(field);
+      }
+      return val(table, entry, field);
+    };
+    auto game = [&](const xr::Result& r, size_t& texts, std::string& report) {
+      em::DataModFile file{xr::kModId, "Randomizer", "data/randomizer.json", r.GameJson("check")};
+      std::vector<em::Message> messages;
+      const em::DataApplyResult applied = em::ApplyDataMods(cat, {file}, read_disc_entry, messages);
+      texts = applied.texts.size();
+      bool clean = true;
+      for (const em::Message& m : messages) {
+        if (m.level == em::Message::Level::Info) continue;
+        report += m.text + "\n";
+        clean = false;
+      }
+      return clean;
+    };
+    er::Settings classic;
+    xr::ApplyStyle(classic, xr::Style::Classic);
+    const uint32_t goodsCount = cat.FindTable("shopGoods") != nullptr ? cat.FindTable("shopGoods")->count : 0;
+    check(goodsCount > 100 && cat.FindTable("shopData") != nullptr && cat.FindTable("shopGoods")->places.size() == 2,
+          "the shops' tables are found, in both copies of the menu module (" + std::to_string(goodsCount) + " goods entries)");
+
+    for (uint32_t mode : {1u, 2u, 3u}) {
+      const std::string label = mode == 1 ? "shops shuffled" : mode == 2 ? "shops everyday goods" : "shops anything";
+      const xr::Result a = with(off, 2024, {{"shops", mode}}), b = with(off, 2024, {{"shops", mode}}), c = with(off, 2025, {{"shops", mode}});
+      check(a.code.rfind("XDR4-", 0) == 0 && xr::CodeVersionOf(a.code) == 4, label + ": a version-4 code (" + a.code + ")");
+      const bool onlyGoods = a.mod.tables.size() == 1 && a.mod.tables.count("shopGoods") == 1;
+      check(onlyGoods && a.mod.Count() > 40, label + ": only shop goods change (" + std::to_string(a.mod.Count()) + ")");
+      check(a.mod.ToJson("x") == b.mod.ToJson("x") && a.mod.spoiler == b.mod.spoiler && a.mod.ToJson("x") != c.mod.ToJson("x"),
+            label + ": same code = same stock, another seed = another");
+      bool ends = true, kept = true;
+      std::multiset<uint32_t> before, after;
+      size_t balls = 0;
+      for (uint32_t g = 0; g < goodsCount; g++) {
+        const uint32_t was = val("shopGoods", g, "value"), is = now(a, "shopGoods", g, "value");
+        ends &= (was == 0) == (is == 0);
+        before.insert(was);
+        after.insert(is);
+        if (was == 0) continue;
+        const uint32_t kind = val("item_data_prime", val("item_data_index", was, "value"), "kind");
+        if (kind != 2 && kind != 3 && kind != 4) {
+          balls += kind == 1 ? 1 : 0;
+          kept &= was == is;
+        }
+      }
+      check(ends, label + ": every list keeps its length (no end mark moved)");
+      check(kept && balls >= 10, label + ": Poke Balls (" + std::to_string(balls) + " entries), Poke Snacks and all other special goods stay");
+      if (mode == 1) check(before == after, "shops shuffled: the same items as on the disc, in other places");
+      if (mode == 2) {
+        bool everyday = true;
+        std::string bad;
+        for (const auto& [g, fields] : a.mod.tables.at("shopGoods")) {
+          const uint32_t e = val("item_data_index", fields.at("value"), "value");
+          const uint32_t kind = val("item_data_prime", e, "kind"), eff = val("item_data_prime", e, "itemEffectParam");
+          const bool ok = kind == 3 || (kind == 2 && ((eff >= 1 && eff <= 31) || (eff >= 41 && eff <= 47) || e == 80 || e == 81 || (e >= 83 && e <= 86)));
+          if (!ok && bad.empty()) bad = " (item entry " + std::to_string(e) + ")";
+          everyday &= ok;
+        }
+        check(everyday, "shops everyday goods: only medicine, cures, repels, battle items and berries are sold" + bad);
+      }
+      if (mode == 3) {
+        bool tm = false;
+        for (uint64_t seed = 1; seed <= 10 && !tm; seed++) {
+          const xr::Result any = with(off, seed, {{"shops", 3}});
+          for (const auto& [g, fields] : any.mod.tables.at("shopGoods")) tm |=val("item_data_prime", val("item_data_index", fields.at("value"), "value"), "kind") == 4;
+        }
+        check(tm, "shops anything: TMs can turn up too (10 seeds)");
+      }
+      size_t changes = 0;
+      std::string report;
+      const bool loaded = load_back(cat, a, changes, report);
+      check(loaded && changes == a.mod.Count(), label + ": taken by the data-mod layer (the menu module's tables)" + (report.empty() ? "" : ": " + report));
+      const xr::Result plus = with(classic, 2024, {{"shops", mode}}), plain = with(classic, 2024, {});
+      xr::Result rest = plus;
+      rest.mod.tables.erase("shopGoods");
+      check(plus.mod.tables.count("shopGoods") && plus.mod.tables.at("shopGoods") == a.mod.tables.at("shopGoods") &&
+                rest.mod.ToJson("x") == plain.mod.ToJson("x"),
+            label + ": on top of Classic the same stock, and Classic's own numbers untouched (own stream)");
+    }
+    {
+      size_t changes = 0;
+      std::string report;
+      check(sc.Find("tutor_compat") < 0, "\"who can learn tutor moves\" is not offered (left out on purpose, 2026-11-12)");
+      const uint32_t rows = cat.FindTable("wazaoshie_data") != nullptr ? cat.FindTable("wazaoshie_data")->count : 0;
+      bool onlyIds = true, different = true, noTm = true, noOhko = true;
+      for (uint64_t seed = 1; seed <= 20; seed++) {
+        const xr::Result m = with(off, seed, {{"tutor_moves", seed % 2 ? 1u : 2u}, {"tm_moves", seed % 3 == 0 ? 1u : 0u}});
+        onlyIds &= (seed % 3 == 0 || m.mod.tables.size() == 1) && m.mod.tables.count("wazaoshie_data") == 1;
+        std::set<uint32_t> seen, tms;
+        for (uint32_t k = 0; k < (cat.FindTable("item_waza_machine_no") ? cat.FindTable("item_waza_machine_no")->count : 0); k++) {
+          tms.insert(now(m, "item_waza_machine_no", k, "wazaID"));
+        }
+        for (uint32_t i = 0; i < rows; i++) {
+          const uint32_t mv = now(m, "wazaoshie_data", i, "id");
+          different &= seen.insert(mv).second;
+          noTm &= tms.count(mv) == 0;
+          if (seed % 2 == 0) noOhko &= val("waza_data", mv, "seqId") != val("waza_data", 12, "seqId");
+        }
+        if (seed == 1) {
+          for (const auto& [e, fields] : m.mod.tables.at("wazaoshie_data")) {
+            for (const auto& [f, v] : fields) onlyIds &= f == "id";
+          }
+        }
+      }
+      const xr::Result t1 = with(off, 77, {{"tutor_moves", 1}}), t2 = with(off, 77, {{"tutor_moves", 1}});
+      check(rows == 12 && onlyIds && t1.mod.ToJson("x") == t2.mod.ToJson("x") && load_back(cat, t1, changes, report),
+            "tutor moves: only the 12 rows' move ids change, same code = same, taken by the layer" + report);
+      check(different && noTm && noOhko, "tutor moves, 20 seeds: all different, none a TM teaches (also with random TMs), no one-hit-KO when ruled out");
+    }
+    {
+      const char* spots[] = {"esabapokemondata_E1", "esabapokemondata_E2", "esabapokemondata_E3"};
+      er::Settings wild = off;
+      wild.Set(sc, "wild", 1);
+      wild.Set(sc, "wild.similar", 1);
+      bool oneToOne = true, themed = true, levelsOk = true, levelsOnly = true;
+      size_t spotsChanged = 0;
+      for (uint64_t seed = 1; seed <= 30; seed++) {
+        const xr::Result g = with(wild, seed, {{"wild.scope", 1}}), ty = with(wild, seed, {{"wild.types", 1}});
+        std::map<uint32_t, uint32_t> swap;
+        std::set<uint32_t> news;
+        for (const char* spot : spots) {
+          for (uint32_t i = 0; i < cat.FindTable(spot)->count; i++) {
+            const uint32_t was = val(spot, i, "id"), is = now(g, spot, i, "id");
+            if (was == 0) continue;
+            if (swap.count(was)) oneToOne &= swap[was] == is;
+            else oneToOne &= news.insert(is).second;
+            swap[was] = is;
+            const uint32_t t2 = now(ty, spot, i, "id");
+            bool shares = false;
+            for (uint32_t x = 0; x < 2; x++) {
+              for (uint32_t y = 0; y < 2; y++) shares |= val("pokemon_data", was, "zokuseiDataId", x) == val("pokemon_data", t2, "zokuseiDataId", y);
+            }
+            themed &= shares;
+            spotsChanged += t2 != was ? 1 : 0;
+          }
+        }
+      }
+      check(oneToOne, "Poke Spots \"same swap everywhere\", 30 seeds: a species becomes the same new one in every spot, no two the same");
+      check(themed && spotsChanged > 200, "Poke Spots \"similar types\", 30 seeds: every new Pokemon shares a type with the one it replaces");
+      const xr::Result base = with(wild, 5, {});
+      const xr::Result lv = with(off, 5, {{"wild_levels", 2}}), both = with(wild, 5, {{"wild_levels", 4}});
+      for (const auto& [table, entries] : lv.mod.tables) {
+        levelsOnly &= table.rfind("esabapokemondata_E", 0) == 0 && table != "esabapokemondata_EX";
+        for (const auto& [e, fields] : entries) {
+          for (const auto& [f, v] : fields) levelsOnly &= f == "minLevel" || f == "maxLevel";
+        }
+      }
+      for (const char* spot : spots) {
+        for (uint32_t i = 0; i < cat.FindTable(spot)->count; i++) {
+          if (val(spot, i, "id") == 0) continue;
+          const uint32_t lo = val(spot, i, "minLevel");
+          levelsOk &= now(lv, spot, i, "minLevel") == er::ScaleLevel(lo, 20, 100) && now(lv, spot, i, "maxLevel") >= now(lv, spot, i, "minLevel") &&
+                      now(lv, spot, i, "maxLevel") <= 100 && now(lv, spot, i, "minLevel") > lo;
+          levelsOk &= now(both, spot, i, "id") == now(base, spot, i, "id") && now(both, spot, i, "minLevel") == er::ScaleLevel(lo, 50, 100);
+        }
+      }
+      size_t changes = 0;
+      std::string report;
+      check(levelsOnly && levelsOk && lv.mod.Count() >= 9 && load_back(cat, both, changes, report),
+            "Poke Spot levels: only the three spots' level numbers, each the disc's +N%; with random species the species are the same" + report);
+      check(base.code.rfind("XDR1-", 0) == 0 && base.mod.ToJson("x") == with(wild, 5, {{"wild.scope", 0}, {"wild.types", 0}}).mod.ToJson("x"),
+            "Poke Spots with the new options off: still a version-1 code and the same picks");
+    }
+    {
+      size_t fitted = 0, givenUp = 0, longest = 0, lines = 0, textsTaken = 0;
+      bool clean = true, sameNumbers = true;
+      std::string firstReport;
+      for (uint64_t seed = 1; seed <= 25; seed++) {
+        const xr::Result r = with(off, seed, {{"tm_moves", seed % 2 ? 1u : 2u}});
+        for (const auto& [id, words] : r.text.messages) {
+          if (words.empty()) {
+            givenUp++;
+            continue;
+          }
+          fitted++;
+          size_t line = 0, count = 1;
+          for (size_t i = 0; i < words.size(); i++) {
+            if (words.compare(i, 4, "{00}") == 0) {
+              longest = std::max(longest, line);
+              line = 0;
+              count++;
+              i += 3;
+            } else if ((static_cast<unsigned char>(words[i]) & 0xC0) != 0x80) {
+              line++;
+            }
+          }
+          longest = std::max(longest, line);
+          lines = std::max(lines, count);
+        }
+        size_t texts = 0;
+        std::string report;
+        const bool ok = game(r, texts, report);
+        clean &= ok && texts == r.text.messages.size();
+        textsTaken += texts;
+        if (!ok && firstReport.empty()) firstReport = report;
+        sameNumbers &= r.mod.tables.count("item_data_prime") == 1;
+      }
+      check(fitted > 1000 && lines <= 3, "TM descriptions, 25 seeds: " + std::to_string(fitted) + " TM texts rewritten for their new moves, none longer than 3 lines (longest line " +
+                                             std::to_string(longest) + " characters; the disc's longest item line has 21); " + std::to_string(givenUp) +
+                                             " left to the move's own text for lack of room");
+      check(clean && sameNumbers && textsTaken > 1000, "and the data-mod layer puts every one of them into all the menus' message tables without a complaint" +
+                                                         (firstReport.empty() ? "" : ": " + firstReport));
+      const xr::Result plain = with(off, 3, {{"shops", 1}});
+      check(plain.text.Empty() && plain.GameJson("x") == plain.mod.ToJson("x"), "without random TM moves: no text is touched (the game's data file is the numbers alone)");
+    }
+    {
+      int good = 0, runs = 0;
+      std::string firstError;
+      for (xr::Style style : {xr::Style::Light, xr::Style::Classic, xr::Style::Chaos}) {
+        for (uint32_t k = 0; k < 12; k++) {
+          er::Settings s;
+          xr::ApplyStyle(s, style);
+          s.seed = 4000 + k * 13;
+          s.Set(sc, "shops", k % 4);
+          s.Set(sc, "tutor_moves", k % 3);
+          s.Set(sc, "wild.scope", (k / 2) % 2);
+          s.Set(sc, "wild.types", (k / 4) % 2);
+          s.Set(sc, "wild_levels", k % 5);
+          xr::Result r;
+          runs++;
+          size_t texts = 0;
+          std::string report;
+          if (xr::Generate(cat, read_disc_entry, s, r, error) && game(r, texts, report)) good++;
+          else if (firstError.empty()) firstError = error + report;
+        }
+      }
+      check(good == runs, "generator's own checks and the data-mod layer pass with the new switches on " + std::to_string(runs) + " runs" +
+                              (firstError.empty() ? "" : ": " + firstError));
+    }
+    {
+      er::Settings s3 = classic;
+      s3.seed = 4242;
+      s3.Set(sc, "trainer_levels", 2);
+      const std::string code3 = er::EncodeCode(sc, s3);
+      er::Settings back;
+      bool seedOnly = true;
+      check(code3.rfind("XDR3-", 0) == 0 && er::DecodeCode(sc, code3, back, seedOnly, error) && back.Get(sc, "shops") == 0 &&
+                back.Get(sc, "tutor_moves") == 0 && back.Get(sc, "wild_levels") == 0 && er::EncodeCode(sc, back) == code3,
+            "a version-3 code is still written as version 3 and read with the new switches off (" + code3 + ")");
+    }
+  }
   std::printf(sOk ? "ALL OK\n" : "FAILED\n");
   return sOk ? 0 : 1;
 }
@@ -607,6 +875,7 @@ int main(int argc, char** argv) {
   size_t changes = 0;
   std::string report;
   const bool ok = load_back(cat, r, changes, report) && changes == r.mod.Count();
+  if (!r.text.Empty()) std::printf("%zu TM description(s) rewritten for the bag's box (game.json: what the game applies)\n", r.text.messages.size());
   std::printf("code: %s\n%zu numbers changed, written to %s (data/randomizer.json, spoiler.txt)\n", r.code.c_str(), r.mod.Count(), out.c_str());
   std::printf("%s the data-mod layer took %zu of them%s%s\n", ok ? "ok  " : "FAIL", changes, report.empty() ? "" : ":\n", report.c_str());
   return ok ? 0 : 1;

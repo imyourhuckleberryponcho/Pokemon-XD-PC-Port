@@ -59,8 +59,8 @@ void test_presets() {
   const IntSetting music = r.Int("audio.music_volume");
 
   check(sWarnings.empty(), "standard settings register without warnings");
-  if (r.Count() != 43) std::printf("     (%zu registered)\n", r.Count());
-  check(r.Count() == 43, "41 standard settings + 2 test ones registered");
+  if (r.Count() != 46) std::printf("     (%zu registered)\n", r.Count());
+  check(r.Count() == 46, "44 standard settings + 2 test ones registered");
   check(widescreen.Valid() && aa.Valid() && music.Valid(), "handles found");
   check(!r.Bool("video.anti_aliasing").Valid() && !r.Bool("no.such").Valid(), "wrong type / unknown id: no handle");
   check(!r.Bool("no.such").Get(), "an invalid handle reads as off");

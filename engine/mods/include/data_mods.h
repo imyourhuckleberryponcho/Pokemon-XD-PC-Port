@@ -50,9 +50,18 @@ struct NameList {
   std::vector<std::pair<std::string, uint32_t>> names;
 };
 
+struct TextStore {
+  std::vector<DataPlace> places;
+  std::function<bool(const uint8_t* table, size_t room, uint32_t id, std::string& out)> read;
+  std::function<bool(uint8_t* table, size_t room, const std::map<uint32_t, std::string>& texts, std::vector<uint32_t>& written,
+                     std::string& error)>
+      write;
+};
+
 struct DataCatalog {
   std::vector<DataTable> tables;
   std::vector<NameList> lists;
+  TextStore text;
   std::string toolHint;
 
   const DataTable* FindTable(std::string_view name) const;
@@ -80,9 +89,16 @@ struct DataModFile {
   std::string text;
 };
 
+struct TextChange {
+  uint32_t id = 0;
+  std::string text;
+  std::string mod, where;
+};
+
 struct DataApplyResult {
   std::map<std::pair<std::string, std::string>, std::vector<uint8_t>> entries;
   std::vector<DataChange> changes;
+  std::vector<TextChange> texts;
 };
 
 DataApplyResult ApplyDataMods(const DataCatalog& catalog, const std::vector<DataModFile>& files, const EntryReader& read,

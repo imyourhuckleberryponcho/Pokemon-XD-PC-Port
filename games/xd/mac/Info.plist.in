@@ -9,7 +9,11 @@
   <key>CFBundleIdentifier</key>
   <string>port.pokemonxd.pc</string>
   <key>CFBundleExecutable</key>
-  <string>xd</string>
+  <string>@MAIN@</string>
+  <key>CFBundleIconFile</key>
+  <string>AppIcon</string>
+  <key>NSAppleEventsUsageDescription</key>
+  <string>Pokemon XD asks the Finder to move a save you delete into the Trash, so you can put it back.</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleInfoDictionaryVersion</key>
