@@ -17,6 +17,9 @@
 #include <fstream>
 #include <sstream>
 #include <system_error>
+#if defined(__APPLE__)
+#include <sys/stat.h>
+#endif
 
 namespace launcher::reports {
 
@@ -476,6 +479,13 @@ int64_t StampTime(const std::string& s) {
 }
 
 int64_t WriteTime(const fs::path& file) {
+#if defined(__APPLE__)
+  struct stat st {};
+  if (::stat(file.c_str(), &st) != 0) {
+    return -1;
+  }
+  return static_cast<int64_t>(st.st_mtime);
+#else
   std::error_code ec;
   const auto t = fs::last_write_time(file, ec);
   if (ec) {
@@ -484,6 +494,7 @@ int64_t WriteTime(const fs::path& file) {
   return std::chrono::duration_cast<std::chrono::seconds>(
              std::chrono::clock_cast<std::chrono::system_clock>(t).time_since_epoch())
       .count();
+#endif
 }
 
 std::string ReadPart(const fs::path& file, uint64_t from, size_t count) {
