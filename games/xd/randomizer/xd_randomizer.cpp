@@ -5,6 +5,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <cstdio>
+#include <cstring>
 #include <fstream>
 #include <map>
 #include <numeric>
@@ -717,24 +718,43 @@ std::string FitLines(const std::string& text) {
     for (size_t i = from; i < to; i++) line += (i != from ? " " : "") + words[i];
     return line;
   };
-  for (size_t width : {19u, 20u, 21u}) {
-    std::vector<std::string> lines;
-    std::string cur;
-    for (const std::string& w : words) {
-      if (!cur.empty() && length(cur) + 1 + length(w) > width) {
-        lines.push_back(cur);
-        cur = w;
-      } else {
-        cur += (cur.empty() ? "" : " ") + w;
+  const auto tryWidths = [&](const std::vector<std::string>& ws) -> std::string {
+    for (size_t width : {19u, 20u, 21u}) {
+      std::vector<std::string> lines;
+      std::string cur;
+      for (const std::string& w : ws) {
+        if (!cur.empty() && length(cur) + 1 + length(w) > width) {
+          lines.push_back(cur);
+          cur = w;
+        } else {
+          cur += (cur.empty() ? "" : " ") + w;
+        }
       }
+      lines.push_back(cur);
+      bool fits = lines.size() <= 3;
+      for (const std::string& l : lines) fits = fits && length(l) <= width;
+      if (!fits) continue;
+      std::string out;
+      for (size_t i = 0; i < lines.size(); i++) out += (i != 0 ? kLineBreak : "") + lines[i];
+      return out;
     }
-    lines.push_back(cur);
-    bool fits = lines.size() <= 3;
-    for (const std::string& l : lines) fits = fits && length(l) <= width;
-    if (!fits) continue;
-    std::string out;
-    for (size_t i = 0; i < lines.size(); i++) out += (i != 0 ? kLineBreak : "") + lines[i];
-    return out;
+    return "";
+  };
+  if (const std::string fitted = tryWidths(words); !fitted.empty()) return fitted;
+  static const std::pair<const char*, const char*> kShorter[] = {
+      {"rainbow-colored", "rainbow"}, {"electrical", "electric"}, {"resistance", "resist"}, {"ATTACK", "ATK"}, {"DEFENSE", "DEF"}};
+  std::vector<std::string> shorter = words;
+  for (const auto& [from, to] : kShorter) {
+    bool changed = false;
+    for (std::string& w : shorter) {
+      const size_t at = w.find(from);
+      if (at == std::string::npos || w.size() - at - std::strlen(from) > 1) continue;
+      w.replace(at, std::strlen(from), to);
+      changed = true;
+    }
+    if (changed) {
+      if (const std::string fitted = tryWidths(shorter); !fitted.empty()) return fitted;
+    }
   }
   size_t bestA = 1, bestB = 2, best = SIZE_MAX;
   for (size_t a = 1; a < words.size(); a++) {

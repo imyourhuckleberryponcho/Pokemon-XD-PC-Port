@@ -579,6 +579,10 @@ class App {
   bool closeSpoilers_ = false;
   UpdateWork up_;
   engine::update::Layout layout_;
+  bool settingsFileFound_ = false;
+  bool presetAsked_ = false;
+  bool presetPending_ = false;
+  bool askPreset_ = false;
   bool askUpdates_ = false;
   bool updatesAsked_ = false;
   std::string skipVersion_;
@@ -657,6 +661,10 @@ class App {
   void RestartLauncher();
   void DrawUpdateCard();
   void DrawUpdateWindows();
+  void DrawWelcomeWindow();
+  void LoadLauncherState();
+  void SaveLauncherState();
+  void ChoosePreset(es::Preset preset);
   void OpenInSystem(const fs::path& what);
   void DrawNotOpenedWindow();
   std::string notOpened_;
@@ -804,7 +812,8 @@ void App::LoadSettings() {
     Log("settings: " + w);
   });
   game_.registerSettings(registry_);
-  if (registry_.Load(game_.settingsFolder)) {
+  settingsFileFound_ = registry_.Load(game_.settingsFolder);
+  if (settingsFileFound_) {
     Log("read " + Utf8(game_.settingsFolder / es::Registry::kFileName));
     for (const std::string& id : registry_.LastLoad().unknownIds) {
       settingsNotes_.push_back("settings.ini has \"" + id + "\", which this version doesn't know (kept as it is)");
@@ -1730,13 +1739,141 @@ void App::DrawUpdateCard() {
   EndCard();
 }
 
+void App::LoadLauncherState() {
+  presetAsked_ = false;
+  presetPending_ = false;
+  if (std::FILE* f = sys::OpenFile(game_.settingsFolder / L"launcher.ini", "rb")) {
+    char line[256];
+    while (std::fgets(line, sizeof line, f) != nullptr) {
+      std::string text(line);
+      while (!text.empty() && (text.back() == '\n' || text.back() == '\r' || text.back() == ' ')) {
+        text.pop_back();
+      }
+      presetAsked_ = presetAsked_ || text == "preset_asked=yes";
+      presetPending_ = presetPending_ || text == "preset_pending=yes";
+    }
+    std::fclose(f);
+  }
+}
+
+void App::SaveLauncherState() {
+  if (game_.playerFilesReadOnly) {
+    return;
+  }
+  std::error_code ec;
+  fs::create_directories(game_.settingsFolder, ec);
+  const std::string text = std::string("# The launcher's own memory. Delete this file to be asked \"How do you want to play?\" again.\r\n") +
+                           (presetAsked_ ? "preset_asked=yes\r\n" : presetPending_ ? "preset_pending=yes\r\n" : "");
+  if (!WriteText(game_.settingsFolder / L"launcher.ini", text)) {
+    Log("launcher.ini couldn't be saved in " + Utf8(game_.settingsFolder));
+  }
+}
+
+void App::ChoosePreset(es::Preset preset) {
+  registry_.ApplyPreset(preset);
+  SaveSettingsIfChanged();
+  if (!settingsFileFound_ && !game_.playerFilesReadOnly) {
+    if (registry_.Save(game_.settingsFolder)) {
+      settingsFileFound_ = true;
+    }
+  }
+  presetAsked_ = true;
+  presetPending_ = false;
+  SaveLauncherState();
+  Log(std::string("preset chosen in the first window: ") + ui::PresetName(preset));
+}
+
+void App::DrawWelcomeWindow() {
+  if (askPreset_) {
+    ImGui::OpenPopup("welcome##preset");
+    askPreset_ = false;
+  }
+  const ImGuiViewport* vp = ImGui::GetMainViewport();
+  const float width = std::min(960 * scale_, vp->WorkSize.x - 40 * scale_);
+  const float height = std::min(620 * scale_, vp->WorkSize.y - 30 * scale_);
+  ImGui::SetNextWindowPos(vp->GetCenter(), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+  ImGui::SetNextWindowSize(ImVec2(width, height), ImGuiCond_Always);
+  bool open = true;
+  if (!ImGui::BeginPopupModal("welcome##preset", &open, ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoTitleBar)) {
+    return;
+  }
+  if (closeWindows_) {
+    ImGui::CloseCurrentPopup();
+  }
+  const auto bullets = [&](std::initializer_list<const char*> lines) {
+    for (const char* line : lines) {
+      ImGui::Bullet();
+      ImGui::TextWrapped("%s", line);
+    }
+  };
+  Heading("How do you want to play?");
+  if (ImGui::BeginTable("##presets", 2, ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_BordersInnerV |
+                                            ImGuiTableFlags_PadOuterX)) {
+    ImGui::TableNextRow();
+    ImGui::TableNextColumn();
+    Heading("Original");
+    ImGui::TextWrapped("Exactly the GameCube game: same speed, same rules, same random numbers.");
+    ImGui::Spacing();
+    ImGui::TextColored(kWarn, "Not available in Original:");
+    bullets({"The New Game setup screen",
+             "Randomizer",
+             "Challenge runs: Nuzlocke, level caps, no items in battle",
+             "Gen 4 Pokemon and rules (with the Battle Revolution assets)",
+             "Speed-ups: fast-forward, faster text, faster loading and saving",
+             "Widescreen, a sharper picture, photo mode"});
+    ImGui::Spacing();
+    Dim("Allowed in Original too: button remapping, volumes and full screen.");
+    ImGui::TableNextColumn();
+    Heading("Enhanced (recommended for most players)");
+    ImGui::TextWrapped("The GameCube game plus the PC port's improvements:");
+    ImGui::Spacing();
+    bullets({"A sharper picture that fills your window, widescreen, even frame pacing",
+             "Shorter waits: faster text, loading and saving, and a fast-forward key",
+             "Your controller's own button pictures, photo mode, a pause when the window is in the background"});
+    ImGui::Spacing();
+    ImGui::TextWrapped("The New Game setup lets you choose randomizer, challenge runs, Gen 4 Pokemon and rules and more for "
+                       "each new save.");
+    ImGui::Spacing();
+    Dim("The game's own rules stay as they were until you choose otherwise.");
+    ImGui::EndTable();
+  }
+  ImGui::Spacing();
+  ImGui::PushTextWrapPos(0);
+  Dim("You can change this any time on the Preset page. Each save remembers how it was started: when it differs from your "
+      "choice, the game asks at Continue whether to keep it or switch. If you close this window without choosing, "
+      "Enhanced is used and you are asked again next time.");
+  ImGui::PopTextWrapPos();
+  ImGui::Spacing();
+  const float gap = ImGui::GetStyle().ItemSpacing.x;
+  const ImVec2 big((ImGui::GetContentRegionAvail().x - gap) * 0.5f, 52 * scale_);
+  if (ImGui::Button("Play Original", big)) {
+    ChoosePreset(es::Preset::Original);
+    ImGui::CloseCurrentPopup();
+  }
+  ImGui::SameLine();
+  ImGui::PushStyleColor(ImGuiCol_Button, kAccent);
+  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, kAccentHover);
+  ImGui::PushStyleColor(ImGuiCol_ButtonActive, kAccentActive);
+  const bool enhanced = ImGui::Button("Play Enhanced", big);
+  ImGui::PopStyleColor(3);
+  ImGui::SetItemDefaultFocus();
+  if (enhanced) {
+    ChoosePreset(es::Preset::Enhanced);
+    ImGui::CloseCurrentPopup();
+  }
+  if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+    ImGui::CloseCurrentPopup();
+  }
+  ImGui::EndPopup();
+}
+
 void App::DrawUpdateWindows() {
   const GameInfo::Updates& u = game_.updates;
   if (!u.Active()) {
     return;
   }
   const float wrap = 560 * scale_;
-  if (askUpdates_) {
+  if (askUpdates_ && !askPreset_ && !ImGui::IsPopupOpen("welcome##preset")) {
     ImGui::OpenPopup("Updates##ask");
     askUpdates_ = false;
   }
@@ -1948,6 +2085,19 @@ bool App::DoStep(const std::string& step) {
   } else if (verb == "tab") {
     page_ = Page::Settings;
     wantTab_ = Lower(arg);
+  } else if (verb == "welcome") {
+    const std::string what = Lower(arg);
+    if (what.empty()) {
+      askPreset_ = true;
+    } else if (what == "close") {
+      closeWindows_ = true;
+    } else if (what == "original" || what == "enhanced") {
+      ChoosePreset(what == "original" ? es::Preset::Original : es::Preset::Enhanced);
+      closeWindows_ = true;
+    } else {
+      Log("expected welcome|welcome:original|enhanced|close");
+      return false;
+    }
   } else if (verb == "preset") {
     es::Preset preset;
     if (!es::ParsePreset(arg, preset)) {
@@ -2949,6 +3099,10 @@ void App::DrawNotOpenedWindow() {
 
 void App::DrawPresetPage() {
   PageTitle("How do you want to play?", "Pick a preset. You can change single settings later on the Settings page.");
+  if (ImGui::Button("What's the difference?")) {
+    askPreset_ = true;
+  }
+  ImGui::Spacing();
   ui::DrawPresetChooser(registry_, options_);
 }
 
@@ -4847,6 +5001,7 @@ void App::Frame() {
   ImGui::Dummy(ImVec2(0, 4 * scale_));
   DrawBottomBar();
   DrawNotOpenedWindow();
+  DrawWelcomeWindow();
   DrawUpdateWindows();
   ImGui::End();
   if (ground) {
@@ -4956,6 +5111,21 @@ int App::Run() {
   Log("version " + (game_.updates.version.empty() ? std::string("?") : game_.updates.version) + " (" +
       (layout_.valid ? "player's folder, " + layout_.running : std::string("not in a player's folder")) + "); updates " +
       (game_.updates.Active() ? "available" : "not set up in this build"));
+  LoadLauncherState();
+  {
+    const char* ask = std::getenv("XD_LAUNCHER_ASK_PRESET");
+    const bool allowed = ask != nullptr ? std::string(ask) == "1" : script_.empty();
+    if (!presetAsked_ && (!settingsFileFound_ || presetPending_) && allowed) {
+      if (!settingsFileFound_) {
+        registry_.ApplyPreset(es::Preset::Enhanced);
+        Log("first start: a new install, Enhanced is in use until a choice is made");
+      }
+      presetPending_ = true;
+      SaveLauncherState();
+      askPreset_ = true;
+      Log("first start: asking which preset");
+    }
+  }
   if (game_.updates.Active()) {
     LoadUpdaterState();
     if (!updatesAsked_) {

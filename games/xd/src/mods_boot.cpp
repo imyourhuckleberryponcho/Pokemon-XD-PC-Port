@@ -85,6 +85,14 @@ extern "C" bool PortXD_LoadMods(void) {
   const std::string randomizerCode = xd::pt::BootRandomizer();
   std::vector<em::DataModFile> gen4Files;
   xd::gen4::Prepare(xd::pt::BootGen4(), xd::pt::BootGen4Spots(), options, gen4Files);
+  {
+    std::string layers = "base disc";
+    if (xd::gen4::Loaded()) layers += " > Gen 4 pack";
+    if (xd::gen4::SpotsLoaded()) layers += " > Gen 4 Poke Spots";
+    if (!randomizerCode.empty()) layers += " > Randomizer " + randomizerCode;
+    std::fprintf(stderr, "[mods] built-in layers: %s (user mods are applied before them; conflicts are reported only for user mods)\n",
+                 layers.c_str());
+  }
   if (!randomizerCode.empty() || !gen4Files.empty()) {
     options.generateData = [randomizerCode, gen4Files](const em::DataCatalog& catalog, const em::EntryReader& read,
                                                        std::vector<em::DataModFile>& out, std::string& error) {
@@ -105,7 +113,7 @@ extern "C" bool PortXD_LoadMods(void) {
       }
       xr::Result r;
       if (!xr::Generate(catalog, read, s, r, error)) return false;
-      out.push_back({xr::kModId, "Randomizer", "data/randomizer.json", r.GameJson("randomizer " + r.code)});
+      out.push_back({xr::kModId, "Randomizer", "data/randomizer.json", r.GameJson("randomizer " + r.code), true});
       const std::filesystem::path folder = xd::CardRoot() / L"playthroughs" / L"randomizer" / r.code;
       std::string writeError;
       std::error_code ec;

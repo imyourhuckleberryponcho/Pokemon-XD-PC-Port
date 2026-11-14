@@ -1,6 +1,8 @@
 #ifndef XD_PLAYTHROUGH_H
 #define XD_PLAYTHROUGH_H
 
+#include "xd_save_picker.h"
+
 #include <mods.h>
 #include <playthrough.h>
 
@@ -39,6 +41,9 @@ bool WorldModsFixed(std::vector<std::string>& ids);
 std::vector<std::string> LoadedModIds();
 engine::mods::AppliesVerdict ModApplies(const engine::mods::ModFolder& mod);
 void RestartForMods(const std::vector<engine::playthrough::ModUse>& use);
+void RestartToTitle();
+bool PickerPossible();
+void PickerAnswer(const xd::picker::Row* row);
 
 const std::vector<std::string>& ContinueProblems();
 void ContinueAnswer(bool carryOn);
@@ -56,6 +61,7 @@ void RuleNote(const std::string& what);
 }
 
 bool PortXD_OpenNewGameSetup();
+bool PortXD_OpenSavePicker();
 bool PortXD_OpenContinueQuestion();
 bool PortXD_OpenEngineQuestion();
 bool PortXD_ShowRuleMessage(const std::string& text);

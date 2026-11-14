@@ -48,6 +48,38 @@ bool PortShot_SavePng(const wchar_t* path, const uint8_t* rgba, uint32_t w, uint
   return ok;
 }
 
+void PortShot_GamePicture(PortShotRgbaDone done, void* ctx) {
+  HWND hwnd = static_cast<HWND>(SDL_GetPointerProperty(SDL_GetWindowProperties(aurora_get_window()),
+                                                        SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr));
+  RECT rect;
+  if (hwnd == nullptr || !GetClientRect(hwnd, &rect) || rect.right <= 0 || rect.bottom <= 0) return done(ctx, nullptr, 0, 0);
+  const int w = rect.right, h = rect.bottom;
+  HDC windowDc = GetDC(hwnd);
+  HDC memDc = CreateCompatibleDC(windowDc);
+  HBITMAP bitmap = CreateCompatibleBitmap(windowDc, w, h);
+  HGDIOBJ old = SelectObject(memDc, bitmap);
+  const bool printed = PrintWindow(hwnd, memDc, PW_CLIENTONLY | PW_RENDERFULLCONTENT) != FALSE;
+  SelectObject(memDc, old);
+  BITMAPINFO bi{};
+  bi.bmiHeader.biSize = sizeof bi.bmiHeader;
+  bi.bmiHeader.biWidth = w;
+  bi.bmiHeader.biHeight = -h;
+  bi.bmiHeader.biPlanes = 1;
+  bi.bmiHeader.biBitCount = 32;
+  bi.bmiHeader.biCompression = BI_RGB;
+  std::vector<uint8_t> bgra(static_cast<size_t>(w) * h * 4);
+  const bool read = printed && GetDIBits(memDc, bitmap, 0, h, bgra.data(), &bi, DIB_RGB_COLORS) == h;
+  DeleteObject(bitmap);
+  DeleteDC(memDc);
+  ReleaseDC(hwnd, windowDc);
+  if (!read) return done(ctx, nullptr, 0, 0);
+  for (size_t i = 0; i < bgra.size(); i += 4) {
+    std::swap(bgra[i], bgra[i + 2]);
+    bgra[i + 3] = 255;
+  }
+  done(ctx, bgra.data(), static_cast<uint32_t>(w), static_cast<uint32_t>(h));
+}
+
 bool PortShot_SaveWindow(const wchar_t* path) {
   HWND hwnd = static_cast<HWND>(SDL_GetPointerProperty(SDL_GetWindowProperties(aurora_get_window()),
                                                         SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr));

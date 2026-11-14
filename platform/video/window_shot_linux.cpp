@@ -30,6 +30,22 @@ bool PortShot_SavePng(const wchar_t* path, const uint8_t* rgba, uint32_t w, uint
 
 #include <port_freeze.h>
 
+namespace {
+struct RgbaAsk {
+  PortShotRgbaDone done;
+  void* ctx;
+};
+void RgbaArrived(void* ctx, const uint8_t* rgba, uint32_t w, uint32_t h, bool) {
+  const RgbaAsk ask = *static_cast<RgbaAsk*>(ctx);
+  delete static_cast<RgbaAsk*>(ctx);
+  ask.done(ask.ctx, rgba, w, h);
+}
+}
+
+extern "C" void PortShot_GamePicture(PortShotRgbaDone done, void* ctx) {
+  PortShot_LinuxRequest(false, RgbaArrived, new RgbaAsk{done, ctx});
+}
+
 #include <aurora/aurora.h>
 #include <dolphin/gx.h>
 #include <dolphin/gx/GXAurora.h>

@@ -45,6 +45,8 @@ public:
   Applier(const DataCatalog& catalog, const EntryReader& read, std::vector<Message>& messages)
       : mCatalog(catalog), mRead(read), mMessages(messages) {}
 
+  void MarkBuiltIn(const std::string& id) { mBuiltIn.insert(id); }
+
   void File(const DataModFile& file) {
     Value root;
     json::Reader reader(file.text);
@@ -136,7 +138,7 @@ public:
         continue;
       }
       const auto it = mTexts.find(id);
-      if (it != mTexts.end() && it->second.mod != file.mod) {
+      if (it != mTexts.end() && it->second.mod != file.mod && !BothBuiltIn(it->second.mod, file)) {
         Say(Message::Level::Warning, "Conflict: the mods " + Quote(ModName(it->second.mod)) + " and " + Quote(file.modName) +
                                          " both change message #" + std::to_string(id) + ". " + Quote(file.modName) +
                                          " (further down the list) is used.");
@@ -772,7 +774,8 @@ private:
           ++it;
           continue;
         }
-        if (it->mod != file.mod) {
+        if (BothBuiltIn(it->mod, file)) {
+        } else if (it->mod != file.mod) {
           Say(Message::Level::Warning, "Conflict: the mods " + Quote(ModName(it->mod)) + " and " + Quote(file.modName) +
                                            " both change " + label + " of " + EntryText(t, entry) + ". " +
                                            Quote(file.modName) + " (further down the list) is used.");
@@ -839,6 +842,10 @@ private:
     c.where = where;
   }
 
+  std::set<std::string> mBuiltIn;
+  bool BothBuiltIn(const std::string& earlierMod, const DataModFile& file) const {
+    return file.builtIn && mBuiltIn.count(earlierMod) != 0;
+  }
   std::map<std::string, std::string> mModNames;
   std::string ModName(const std::string& id) const {
     const auto it = mModNames.find(id);
@@ -906,6 +913,9 @@ const NameList* DataCatalog::FindList(std::string_view name) const {
 DataApplyResult ApplyDataMods(const DataCatalog& catalog, const std::vector<DataModFile>& files, const EntryReader& read,
                               std::vector<Message>& messages) {
   Applier a(catalog, read, messages);
+  for (const DataModFile& f : files) {
+    if (f.builtIn) a.MarkBuiltIn(f.mod);
+  }
   for (const DataModFile& f : files) {
     a.Declare(f);
   }

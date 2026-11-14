@@ -13,7 +13,7 @@ This repository contains **no game assets, ROMs, ISOs or executables**, and none
 You need your own legally obtained copy of the game (USA, `GXXE01`); the port reads everything from your disc
 image while it runs.
 
-## Status: public beta — version 0.4.1
+## Status: public beta — version 0.4.2
 
 **Playable from New Game into the story, with known bugs.** It is not finished: expect crashes, stalls and
 graphics differences, and keep backups of saves you care about. Downloads are on the [Releases](../../releases)
@@ -27,6 +27,20 @@ page, one per system:
 
 **Found a bug, or want to help test?** Join the [Discord](https://discord.gg/XVbDVXH4Pn) — see
 *Reporting a bug* below.
+
+New in 0.4.2 (bug fixes):
+
+- **Pick your save at Continue:** with more than one save, Continue on the title screen lists them all with a picture
+  of where you saved, the trainer, the play time and the rules of that save. With one save, nothing changes.
+- **Shadow Pokémon's moves** were blank in the move menu: fixed.
+- **Randomizer with Gen 4:** no more "mod conflict" window for the game's own parts (your own mods are still checked).
+- **Ditto and Dialga** from Battle Revolution come with their full detail and shine. Press **make again** on the
+  launcher's Extra assets page to update models you made before.
+- **Randomizer:** TM descriptions fit their box.
+- After choosing randomizer, Gen 4 or mods on the New Game screen, the game restarts straight into New Game (no logos or
+  title menu in between).
+- The launcher asks once how you want to play (Original or Enhanced); Enhanced is the default of a new install.
+  Players who already have settings keep them.
 
 New in 0.4.1:
 

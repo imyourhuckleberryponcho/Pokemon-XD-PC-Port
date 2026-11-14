@@ -6,6 +6,7 @@
 
 #include "xd_playthrough_files.h"
 #include "xd_randomizer.h"
+#include "xd_save_picker.h"
 #include "xd_user_folder.h"
 
 #include <mods.h>
@@ -211,6 +212,7 @@ extern "C" void PortXD_PlaythroughBoot(void) {
   } else {
     xd::battles::Set({}, false, "start-up: a save without a setup file");
   }
+  xd::picker::ReadIntent();
   if (const wchar_t* next = _wgetenv(L"XD_NEWGAME_SETUP"); next != nullptr && next[0] != L'\0') {
     std::string error;
     if (ep::ReadFile(next, sRestartSetup, error)) {
@@ -221,6 +223,7 @@ extern "C" void PortXD_PlaythroughBoot(void) {
       std::fprintf(stderr, "[playthrough] XD_NEWGAME_SETUP: %ls %s; ignored\n", next, error.c_str());
     }
   }
+  xd::picker::DecideStartUp();
   es::Registry& reg = es::Global();
   sPlayersEngine = ep::DefaultEngine(reg);
   std::string changed;
@@ -343,6 +346,39 @@ void RestartForMods(const std::vector<ep::ModUse>& use) {
   }
   Note("mods changed on the MODS page: starting again");
   std::fprintf(stderr, "[playthrough] starting the game again with the mod list the MODS page wrote\n");
+  std::fflush(stderr);
+  sRestartNow = true;
+  xd::picker::SetForRestart(xd::picker::Intent::Title);
+}
+
+void RestartToTitle() {
+  Note("starting again (back to the title menu)");
+  std::fflush(stderr);
+  sRestartNow = true;
+  xd::picker::SetForRestart(xd::picker::Intent::Title);
+}
+
+bool PickerPossible() { return xd::picker::Possible(); }
+
+void PickerAnswer(const xd::picker::Row* row) {
+  if (row == nullptr) {
+    Note("save picker: back");
+    return;
+  }
+  xd::picker::SetAnswered(true);
+  if (row->active) {
+    Note("save picker: " + row->name + " (" + row->trainer + "), already loaded");
+    sInjectA = 4;
+    sInjectFrom = PortVI_GetFlipCount();
+    return;
+  }
+  if (!xd::picker::SwitchTo(*row)) {
+    PortXD_ShowNote("That save could not be made the active one.", 5.f);
+    return;
+  }
+  Note("save picker: " + row->name + " (" + row->trainer + "): starting again to load it");
+  SetEnvironmentVariableW(L"XD_NEWGAME_SETUP", nullptr);
+  xd::picker::SetForRestart(xd::picker::Intent::Continue);
   std::fflush(stderr);
   sRestartNow = true;
 }
@@ -482,6 +518,7 @@ void Begin(const ep::Setup& setup, const std::string& settingsChanged) {
       std::fprintf(stderr, "[playthrough] starting the game again with the mods of this setup: %s\n", ep::Label(setup).c_str());
       std::fflush(stderr);
       sRestartNow = true;
+      xd::picker::SetForRestart(xd::picker::Intent::NewGame);
       return;
     }
     std::fprintf(stderr, "[playthrough] could not write %ls: the new game keeps the mods loaded now\n", file.wstring().c_str());
@@ -591,6 +628,26 @@ bool TitleInput(PADStatus* status, int select, u16 newButtons) {
 
 bool TitleInputImpl(PADStatus* status, int select, u16 newButtons) {
   if ((newButtons & PAD_BUTTON_A) == 0) return false;
+  if (select == 1 && xd::picker::Possible() && !xd::picker::AnsweredThisRun() && xd::picker::Current() != xd::picker::Intent::Continue) {
+    for (int i = 0; i < PAD_MAX_CONTROLLERS; i++) {
+      if (status[i].err == PAD_ERR_NONE) status[i].button &= static_cast<u16>(~PAD_BUTTON_A);
+    }
+    PortInput_LatchHeld();
+    if (!PortXD_OpenSavePicker()) {
+      xd::picker::SetAnswered(true);
+      sInjectA = 4;
+      sInjectFrom = PortVI_GetFlipCount();
+    }
+    return true;
+  }
+  if (select == 0 && sScreen && xd::picker::WantsNewGameNow() && sRestarted) {
+    sNewGameTaken = true;
+    sContinueAccepted = false;
+    ep::Setup s = sRestartSetup;
+    s.mods = sLoaded;
+    Begin(s, "");
+    return false;
+  }
   if (!sScreen) {
     if (select == 1 && sAsk && !sEngineAnswered) {
       for (int i = 0; i < PAD_MAX_CONTROLLERS; i++) {
@@ -779,9 +836,11 @@ void PortXD_PlaythroughSaveWritten(const uint8_t* file, size_t size) {
     std::fprintf(stderr, "[playthrough] battles won kept with the save: %zu\n", sCardSetup.battlesWon.size());
   }
   sCardId = id;
+  xd::picker::ThumbnailAfterSave(xp::SetupFolder() / (id.key + ".png"));
 }
 
 void PortXD_PlaythroughFrame(void) {
+  xd::picker::ThumbnailFrame();
   xd::battles::Frame();
   xd::challenges::Frame();
   if (sRestartNow) {

@@ -118,6 +118,7 @@ uint32_t sStepFrame = 0;
 uint32_t sFrame = 0;
 bool sDrawnThisFrame = false;
 int sScreenPhase = 0;
+int sModelPhase = 0;
 
 struct View {
   Vec target, dir;
@@ -491,13 +492,22 @@ void OnRender(GSgfxLayer* layer, int pass) {
   const bool own = job.kind == Kind::Pokemon || job.kind == Kind::Trainer;
   GSmodelSetRenderCamera(job.model, sCamera);
   if (own) UseOwnLights(true);
+  const bool black = sModelPhase == 0;
   DrawModel(layer, job.model, GXColor{0, 0, 0, 0}, 0);
-  DrawModel(layer, job.model, GXColor{0, 0, 0, 0}, 0);
-  DrawModel(layer, job.model, GXColor{255, 255, 255, 255}, 1);
+  DrawModel(layer, job.model, black ? GXColor{0, 0, 0, 0} : GXColor{255, 255, 255, 255}, black ? 0 : 1);
   if (own) UseOwnLights(false);
   GSmodelSetRenderCamera(job.model, nullptr);
   GScameraLoadActiveCameraMatrix((int)layer->id);
   sDrawnThisFrame = true;
+  if (std::getenv("XD_RENDER_ICON_LOG") != nullptr) {
+    const auto& pass = layer->passes[kPassXlu];
+    std::fprintf(stderr, "[render icon] layer fifo (xlu pass): %u of %u bytes used so far, highest %u\n", pass.unkB4, pass.size, pass.unkB8);
+  }
+  if (black) {
+    sModelPhase = 1;
+    return;
+  }
+  sModelPhase = 0;
   sStep = Step::Drawn;
   sStepFrame = sFrame;
 }

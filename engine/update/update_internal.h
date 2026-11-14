@@ -11,6 +11,7 @@ std::filesystem::path PathOf(const std::string& utf8);
 bool SafeName(std::string name, std::string& out);
 bool RemoveFolder(const std::filesystem::path& folder);
 bool HoldsPlayerData(const std::filesystem::path& folder);
+bool UseInnerFolder(const std::filesystem::path& folder, const std::vector<std::string>& requiredFiles, std::string& error);
 
 constexpr bool IsLinkMode(uint32_t unixMode) { return (unixMode & 0170000u) == 0120000u; }
 bool FinishUnpackedFile(const std::filesystem::path& file, uint32_t unixMode);

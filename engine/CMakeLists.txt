@@ -45,6 +45,12 @@ add_executable(save_slots_test memcard/tests/save_slots_test.cpp)
 target_link_libraries(save_slots_test PRIVATE engine_save_slots)
 target_compile_options(save_slots_test PRIVATE ${XD_FLAG_UTF8})
 
+add_library(engine_save_thumbnail STATIC memcard/save_thumbnail.cpp)
+target_include_directories(engine_save_thumbnail PUBLIC memcard/include)
+target_link_libraries(engine_save_thumbnail PUBLIC ZLIB::ZLIB)
+add_executable(save_thumbnail_test memcard/tests/save_thumbnail_test.cpp)
+target_link_libraries(save_thumbnail_test PRIVATE engine_save_thumbnail)
+
 add_library(engine_disc_check STATIC disc_check/disc_check.cpp disc_check/disc_check_cache.cpp)
 target_include_directories(engine_disc_check PUBLIC disc_check/include)
 target_link_libraries(engine_disc_check PUBLIC platform_disc)

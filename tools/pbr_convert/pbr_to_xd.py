@@ -42,8 +42,8 @@ Frozen pass (2026-11-12, docs/PBR_CONVERTER_FROZEN.md):
   near-degenerate-scale ambiguity), children / meshes / skin weights / inverse bind stay on the second joint. The
   game numbers joints depth first, so the pair's first joint sits just before its second: joint numbers = jn[node]
   (a table, no longer node + 2). Models within the tolerance are not touched (byte-identical to before).
-- more than MAX_REFLECT_PIECES drawing pieces with a reflection layer = coarser skin weights (the graphics layer never
-  gives such a picture back; Ditto and Dialga).
+- (1.2.0) no limit on drawing pieces with a reflection layer any more: the "fault" of Ditto and Dialga was the game's own per-layer
+  command buffer overflowing in the icon renderer's three draws in one frame, not the graphics layer (docs/SHINE_FAULT.md).
 """
 import math
 import os
@@ -1266,8 +1266,6 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
 MAX_SIDE = 256          # XD's own battle models: no picture side above 256 (Battle Revolution has 512)
 FILE_CAP = 600 * 1024   # XD's largest own battle model is 542 KB; two to four share the battle heap
 MAX_POBJ = 80           # drawing pieces (HSD polygon objects) a model may have; see convert_file
-MAX_REFLECT_PIECES = 54  # ... of which this many drawn with a reflection layer: Ditto drew at 48, Kusaihana (Bellossom) at 54,
-                         # Ditto at 57 / 59 / 66 never came back from the graphics layer (docs/GEN4.md 10.5, shine_fault.md)
 
 
 def _po2(n):
@@ -1548,7 +1546,7 @@ def graft_xd_pieces(m, xd, regions, idle_slot, alpha, log, step):
         len(mine), sum(len(xd.meshes[k].verts) for k in picked)))
 
 
-NO_REFLECTION = {}      # (Ditto and Dialga were in here until the piece budget MAX_REFLECT_PIECES was found)
+NO_REFLECTION = {}      # (Ditto and Dialga were in here until the piece budget was found; the budget is gone too, 1.2.0)
 
 KEEP_XD = {
 }
@@ -1607,7 +1605,7 @@ def convert_file(sdr_path, xd_path, out, log=print, step=0.1, compensate='joint8
             model, pkx = convert(sdr, xd_pkx, xd_model, st, (lambda s: None) if quiet else log, compensate, tol_scale, xd_full,
                                  gen4=gen4)
             archive, report = hsd_write.write_archive(model)
-            if (report.get('pobj', 0) <= MAX_POBJ and report.get('reflect_pieces', 0) <= MAX_REFLECT_PIECES) or st >= 0.34:
+            if report.get('pobj', 0) <= MAX_POBJ or st >= 0.34:
                 break
             log('INFO: %d drawing pieces (%d with a reflection layer): skin weights redone in steps of %g' % (
                 report['pobj'], report.get('reflect_pieces', 0), round(st + 0.05, 2)))

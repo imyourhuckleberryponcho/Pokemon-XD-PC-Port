@@ -96,6 +96,7 @@ struct DataModFile {
   std::string mod, modName;
   std::string label;
   std::string text;
+  bool builtIn = false;
 };
 
 struct TextChange {

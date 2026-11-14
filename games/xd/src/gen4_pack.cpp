@@ -286,6 +286,7 @@ void Prepare(bool wanted, bool spots, engine::mods::LoadOptions& options, std::v
   for (const auto& f : files) {
     engine::mods::DataModFile d;
     d.mod = "gen4";
+    d.builtIn = true;
     d.modName = "Gen 4 Pokemon and moves";
     d.label = "gen4/" + f.filename().string();
     if (!ReadText(f, d.text)) {
@@ -297,6 +298,7 @@ void Prepare(bool wanted, bool spots, engine::mods::LoadOptions& options, std::v
   if (spots) {
     engine::mods::DataModFile d;
     d.mod = "gen4";
+    d.builtIn = true;
     d.modName = "Gen 4 Pokemon and moves";
     d.label = "gen4/optional/spots.json";
     std::string spotText;

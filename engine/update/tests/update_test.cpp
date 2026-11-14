@@ -429,6 +429,60 @@ int main(int argc, char** argv) {
   }
 
   {
+    const fs::path root = work / L"Player folder whole";
+    const std::vector<std::string> required = {"launcher.exe", "game.exe"};
+    write_file(root / L"Starter.exe", "starter");
+    write_file(root / L"game" / L"launcher.exe", "launcher 0.1.0");
+    write_file(root / L"game" / L"game.exe", "game 0.1.0");
+    write_file(root / L"game" / L"version.txt", "0.1.0\r\n");
+    const Layout l = FindLayout(root / L"game", "Starter.exe");
+    const auto whole = [&](const std::string& top) {
+      const fs::path zip = work / L"staging" / fs::path("whole-" + top + (PackageIsTarGz() ? ".tar.gz" : ".zip"));
+      if (PackageIsTarGz()) {
+        write_file(zip, make_tar_gz({{top + "/", "", '5', 0755}, {top + "/Starter.sh", "start", '0', 0755}, {top + "/Read me", "read", '0', 0644},
+                                     {top + "/game/", "", '5', 0755}, {top + "/game/launcher.exe", "launcher 0.2.0", '0', 0755},
+                                     {top + "/game/game.exe", "game 0.2.0", '0', 0755}, {top + "/game/version.txt", "0.2.0\r\n"},
+                                     {top + "/game/fonts/", "", '5', 0755}, {top + "/game/fonts/a.ttf", "font"}}));
+      } else {
+        write_file(zip, make_zip({{top + "/Starter.exe", "starter", true}, {top + "/Read me.txt", "read", true},
+                                  {top + "/game/launcher.exe", "launcher 0.2.0", true}, {top + "/game/game.exe", "game 0.2.0", true},
+                                  {top + "/game/version.txt", "0.2.0\r\n", false}, {top + "/game/fonts/a.ttf", "font", true}}));
+      }
+      return zip;
+    };
+    InstallRequest r;
+    r.layout = l;
+    r.requiredFiles = required;
+    r.package = whole("Pokemon XD PC 0.2.0");
+    r.manifest.version = "0.2.0";
+    r.manifest.size = fs::file_size(r.package);
+    r.manifest.sha256 = std::string(64, '0');
+    std::string installed;
+    check(!Install(r, installed, error) && error.find("SHA-256") != std::string::npos && !fs::exists(root / L"game-0.2.0"),
+          "whole folder: a wrong hash is refused as before");
+    r.manifest.sha256 = sha_of(r.package);
+    check(Install(r, installed, error) && installed == "game-0.2.0", "whole folder: install 0.2.0: " + error);
+    check(read_file(root / L"game-0.2.0" / L"launcher.exe") == "launcher 0.2.0" &&
+              read_file(root / L"game-0.2.0" / L"fonts" / L"a.ttf") == "font" && FolderVersion(root / L"game-0.2.0") == "0.2.0" &&
+              !fs::exists(root / L"game-0.2.0" / L"Starter.exe") && !fs::exists(root / L"game-0.2.0.partial") &&
+              !fs::exists(root / L"game-0.2.0.partial.inner"),
+          "whole folder: game-0.2.0 holds what was inside game\\, nothing else");
+#if !defined(_WIN32)
+    check((fs::status(root / L"game-0.2.0" / L"game.exe").permissions() & fs::perms::owner_exec) != fs::perms::none,
+          "whole folder: the executable bits survive");
+#endif
+    const fs::path bad = work / L"staging" / (PackageIsTarGz() ? L"whole-bad.tar.gz" : L"whole-bad.zip");
+    if (PackageIsTarGz()) write_file(bad, make_tar_gz({{"Top/", "", '5', 0755}, {"Top/Read me", "read", '0', 0644}}));
+    else write_file(bad, make_zip({{"Top/Read me.txt", "read", true}}));
+    r.package = bad;
+    r.manifest.version = "0.2.1";
+    r.manifest.size = fs::file_size(bad);
+    r.manifest.sha256 = sha_of(bad);
+    check(!Install(r, installed, error) && !fs::exists(root / L"game-0.2.1") && !fs::exists(root / L"game-0.2.1.partial"),
+          "whole folder: a folder without the launcher and the game is refused, nothing left: " + error);
+  }
+
+  {
     const fs::path root = work / L"Player folder";
     const std::vector<std::string> required = {"launcher.exe", "game.exe"};
     write_file(root / L"Starter.exe", "starter");
@@ -638,6 +692,22 @@ int main(int argc, char** argv) {
       check(!fs::exists(root / L".Pokemon XD updates" / L"pending.partial"), "Mac: no half-unpacked folder");
       check(GoBack(l, required, error) && !fs::exists(root / L".Pokemon XD updates" / L"pending"), "Mac: 'go back' drops the waiting app");
       check(Install(r, installed, error), "Mac: installed again");
+      {
+        const fs::path zip = work / L"staging" / L"mac-whole-0.2.0.zip";
+        const std::string a = "Pokemon XD PC 0.2.0 - Mac (test)/Pokemon XD.app/Contents/";
+        write_file(zip, make_zip({{"Pokemon XD PC 0.2.0 - Mac (test)/Read me (Mac).txt", "read", true},
+                                  {a + "MacOS/xd_launcher", "launcher 0.2.0", true, 0, 0100755},
+                                  {a + "MacOS/xd", "game 0.2.0", true, 0, 0100755},
+                                  {a + "Resources/version.txt", "0.2.0\n", false},
+                                  {a + "MacOS/version.txt", "0.2.0\n", false}}));
+        InstallRequest w = r;
+        w.package = zip;
+        w.manifest.size = fs::file_size(zip);
+        w.manifest.sha256 = sha_of(zip);
+        check(Install(w, installed, error) && installed == "pending", "Mac: a whole download as the update file installs: " + error);
+        check(FolderVersion(root / L".Pokemon XD updates" / L"pending" / L"Pokemon XD.app" / L"Contents" / L"MacOS") == "0.2.0",
+              "Mac: the app inside the whole download is the one waiting");
+      }
 #if !defined(_WIN32)
       const fs::path state = root / L".Pokemon XD updates";
       const fs::path script = state / L"swap.sh";

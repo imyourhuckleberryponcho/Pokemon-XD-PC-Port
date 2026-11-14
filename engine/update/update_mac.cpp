@@ -141,13 +141,32 @@ bool InstallMacApp(const InstallRequest& r, std::string& installed, std::string&
   if (!ExtractZip(r.package, partial, why, stop)) {
     return fail(why);
   }
+  fs::path base = partial;
+  bool wholeDownload = false;
+  {
+    int topApps = 0;
+    fs::path onlyDir;
+    int dirs = 0;
+    for (const auto& e : fs::directory_iterator(partial, ec)) {
+      if (e.is_directory(ec) && e.path().extension() == ".app") {
+        topApps++;
+      } else if (e.is_directory(ec) && !e.is_symlink(ec)) {
+        onlyDir = e.path();
+        dirs++;
+      }
+    }
+    if (topApps == 0 && dirs == 1) {
+      base = onlyDir;
+      wholeDownload = true;
+    }
+  }
   fs::path found;
   int apps = 0;
-  for (const auto& e : fs::directory_iterator(partial, ec)) {
+  for (const auto& e : fs::directory_iterator(base, ec)) {
     if (e.is_directory(ec) && e.path().extension() == ".app") {
       found = e.path();
       apps++;
-    } else {
+    } else if (!wholeDownload) {
       return fail("the package holds something besides the app: " + Utf8(e.path().filename()));
     }
   }

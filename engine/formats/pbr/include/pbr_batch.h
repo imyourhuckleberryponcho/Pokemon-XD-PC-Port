@@ -11,7 +11,7 @@
 
 namespace pbr {
 
-constexpr const char* CONVERTER_VERSION = "1.1.0";
+constexpr const char* CONVERTER_VERSION = "1.2.0";
 constexpr const char* MOD_ID = "battle-revolution-models";
 constexpr const char* PBR_ID = "RPBE01";
 constexpr const char* XD_ID = "GXXE01";

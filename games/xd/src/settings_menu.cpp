@@ -2294,6 +2294,8 @@ const PortMenuPage kModsPage{"mods", Open, Frame, Close, nullptr};
 
 }
 
+#include "save_picker_page.inc"
+
 constexpr u16 kUp = PAD_BUTTON_UP, kDown = PAD_BUTTON_DOWN, kLeft = PAD_BUTTON_LEFT, kRight = PAD_BUTTON_RIGHT;
 u16 sPrevDirs = 0, sPrevButtons = 0;
 
@@ -2360,6 +2362,10 @@ u16 sPtPrevButtons = 0;
 void Filter(PADStatus* status) {
   xd::pt::PadPoll(status);
   const auto* w = static_cast<const WinWorkLayout*>(windowSearchID(windowGetActiveID()));
+  if (xd::picker::Current() != xd::picker::Intent::None) {
+    const bool open = IsTitleMenu(w) && w->state == 2 && w->pad_a4 == 0 && w->cursor >= 0 && w->cursor < 5;
+    xd::picker::Drive(status, w != nullptr ? w->menuID : 0, open, open ? menuTitleGetSelect(w->cursor) : -1);
+  }
   u16 buttons = 0;
   for (int i = 0; i < PAD_MAX_CONTROLLERS; i++) {
     if (status[i].err == PAD_ERR_NONE) buttons |= status[i].button;
@@ -2375,7 +2381,7 @@ void Filter(PADStatus* status) {
     PortXD_ShowRuleMessage(message);
     return;
   }
-  if (xd::pt::ScreenEnabled() || xd::pt::EngineQuestionPossible()) {
+  if (xd::pt::ScreenEnabled() || xd::pt::EngineQuestionPossible() || xd::pt::PickerPossible()) {
     if (IsTitleMenu(w) && w->state == 2 && w->pad_a4 == 0 && w->cursor >= 0 && w->cursor < 5 && !sTitleSelected &&
         xd::pt::TitleInput(status, menuTitleGetSelect(w->cursor), newButtons)) {
       return;
@@ -2527,7 +2533,10 @@ void PortXD_SettingsMenuInit(void) {
   } else {
     sOn = true;
   }
-  if (sOn || xd::pt::ScreenEnabled() || xd::pt::ChallengesPossible() || xd::pt::EngineQuestionPossible()) PortInput_SetPadFilter(Filter);
+  if (sOn || xd::pt::ScreenEnabled() || xd::pt::ChallengesPossible() || xd::pt::EngineQuestionPossible() || xd::pt::PickerPossible() ||
+      xd::picker::Current() != xd::picker::Intent::None) {
+    PortInput_SetPadFilter(Filter);
+  }
   if (sOn) {
     std::fprintf(stderr, "[settings menu] SETTINGS after EXIT in the field menu, left of OPTIONS in the title menu; MODS left of SETTINGS\n");
   } else {
@@ -2665,6 +2674,14 @@ void PortXD_SettingsMenuOverlay(void) {
 }
 
 bool PortXD_OpenNewGameSetup() { return PortMenu_Open(&ng::kSetupPage); }
+bool PortXD_OpenSavePicker() { return sp::Open() && PortMenu_Open(&sp::kPage); }
+
+extern "C" int PortXD_ActiveWindowState(int* id) {
+  const auto* w = static_cast<const WinWorkLayout*>(windowSearchID(windowGetActiveID()));
+  if (w == nullptr) return -1;
+  *id = w->menuID;
+  return static_cast<int>(w->state) + 256 * static_cast<int>(w->pad_a4);
+}
 bool PortXD_OpenContinueQuestion() { return PortMenu_Open(&ng::kQuestionPage); }
 bool PortXD_OpenEngineQuestion() { return PortMenu_Open(&ng::kEnginePage); }
 bool PortXD_ShowRuleMessage(const std::string& text) {

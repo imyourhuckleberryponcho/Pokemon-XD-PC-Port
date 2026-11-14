@@ -13,6 +13,14 @@ Choose your disc, how you want to play, your controls and mods, then press **Pla
 - **Extra assets**: discs of OTHER games the port can borrow assets from (below, "Extra assets"). Today one row, Pokemon Battle Revolution (USA): "Battle Revolution battle models".
 - **Preset**: Original (the GameCube game, the default), Enhanced (the recommended improvements) or Custom
   (your own mix). Below it: everything that is different from the GameCube game right now.
+  - *First start* (0.4.2): a new install (no settings.ini yet) is asked once, in a window over the launcher, "How do you want
+    to play?": **Original** (exactly the GameCube game; a list "Not available in Original") and **Enhanced** (recommended).
+    "Play Enhanced" is focused. Enhanced is the default of a new install: it is applied at once, so closing the window
+    (Escape or the cross) without choosing leaves Enhanced, and the question comes again at the next start
+    (`preset_pending=yes` in launcher.ini in the settings folder; a choice writes `preset_asked=yes` and settings.ini).
+    A player who already has a settings.ini is never asked. The Preset page's "What's the difference?" opens it any time.
+    It comes before the updates question. Scripted runs are not asked unless `XD_LAUNCHER_ASK_PRESET=1`; script steps
+    `welcome`, `welcome:original|enhanced|close`. Test: `python tools/test_launcher_welcome.py --build <bin>`.
 - **Settings**: every setting, in tabs (Video, Audio, Gameplay, System). Each says what it does; a purple
   "Changed" line means it's not as on the GameCube. Greyed-out settings don't do anything yet. "Back to
   Original on this page" undoes the page.
@@ -254,6 +262,11 @@ and choose which one the game loads; the game is not changed.
     "Save backups"). An empty save's box says "No save yet: the game offers New Game" and its folder.
     Not shown: the place in the game where the save is (the save reader only gives the map's number, not its
     name).
+  - **In the game** (0.5.0): with two or more saves that hold a game, CONTINUE on the title menu shows the saves to
+    choose from (a picture of the screen at the last save, trainer, play time, and the save's rules under the list);
+    choosing another one than the circle's makes it the save the game loads and starts the game again straight into it.
+    The pictures are made on this PC each time the game saves (`playthroughs\Card A\<key>.png` in the save's folder);
+    docs/PLAY_SETUP.md "Choosing a save at CONTINUE". The launcher's rows do not show them yet.
   - **Above the list**: **New...**: a new, empty save (asks for a name; "Save 2" is offered). It is chosen and
     opened, and the game offers New Game. **Import...**: a `.gci` file (from Dolphin's "GCI folder", a GameCube
     memory-card tool, or another PC). Only a file the game's own save reader accepts (a USA Pokemon XD save). It

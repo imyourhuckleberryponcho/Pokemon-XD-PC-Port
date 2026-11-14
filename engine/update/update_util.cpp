@@ -63,6 +63,52 @@ bool RemoveFolder(const fs::path& folder) {
   return !fs::exists(folder, ec) && !fs::is_symlink(folder, ec);
 }
 
+bool UseInnerFolder(const fs::path& folder, const std::vector<std::string>& requiredFiles, std::string& error) {
+  std::error_code ec;
+  if (FolderUsable(folder, requiredFiles)) {
+    return true;
+  }
+  fs::path only;
+  int dirs = 0;
+  for (const auto& e : fs::directory_iterator(folder, ec)) {
+    if (e.is_directory(ec) && !e.is_symlink(ec)) {
+      only = e.path();
+      dirs++;
+    }
+  }
+  if (dirs != 1) {
+    return true;
+  }
+  fs::path inner;
+  if (FolderUsable(only, requiredFiles)) {
+    inner = only;
+  } else if (FolderUsable(only / "game", requiredFiles)) {
+    inner = only / "game";
+  } else {
+    return true;
+  }
+  fs::path moved = folder;
+  moved += ".inner";
+  RemoveFolder(moved);
+  fs::rename(inner, moved, ec);
+  if (ec) {
+    error = "the package's inner folder couldn't be taken out: " + ec.message();
+    return false;
+  }
+  if (!RemoveFolder(folder)) {
+    RemoveFolder(moved);
+    error = "the unpacked package couldn't be tidied up";
+    return false;
+  }
+  fs::rename(moved, folder, ec);
+  if (ec) {
+    RemoveFolder(moved);
+    error = "the package's inner folder couldn't be put in place: " + ec.message();
+    return false;
+  }
+  return true;
+}
+
 bool HoldsPlayerData(const fs::path& folder) {
   std::error_code ec;
   return fs::exists(folder / "data_location.json", ec) || fs::exists(folder / "portable", ec);

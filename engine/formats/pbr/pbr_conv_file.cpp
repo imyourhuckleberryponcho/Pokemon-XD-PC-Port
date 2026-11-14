@@ -428,7 +428,7 @@ ConvertFileResult convert_file(const std::vector<uint8_t>& sdr_bytes, const std:
     while (true) {
       co = convert(sdr, xd.pkx, xd.model, st, lg, compensate, tol_scale, xd_full ? &*xd_full : nullptr, graft, gen4, std::nullopt, nullptr);
       hsd_write_archive(co->m, &rep);
-      if ((rep.pobj <= MAX_POBJ && rep.reflect_pieces <= MAX_REFLECT_PIECES) || st >= 0.34) break;
+      if (rep.pobj <= MAX_POBJ || st >= 0.34) break;
       log(sf("INFO: %d drawing pieces (%d with a reflection layer): skin weights redone in steps of %g", (int)rep.pobj,
              (int)rep.reflect_pieces, py_round(st + 0.05, 2)));
       st = py_round(st + 0.05, 2);

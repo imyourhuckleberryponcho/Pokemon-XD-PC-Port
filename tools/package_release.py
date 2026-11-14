@@ -97,6 +97,21 @@ Public beta {version}
 Thank you for trying it! This is a beta: expect bugs, and keep a copy of your save.
 Questions, bug reports, other players: https://discord.gg/XVbDVXH4Pn
 
+New in 0.4.2 (bug fixes)
+------------------------
+- Pick any of your saves right at Continue: with more than one save, CONTINUE on the title screen shows
+  all of them with a picture of where you saved, the trainer, play time and the rules of that save. One
+  save: Continue works as before.
+- Shadow Pokemon's moves showed as blank rows in the move menu: fixed (they show their Shadow moves again).
+- Randomizer together with Gen 4: no more "mod conflict" window for the game's own parts.
+- Ditto and Dialga from Battle Revolution now come with their full detail and shine ("make again" in the
+  launcher's Extra assets page to update models made before).
+- Randomizer: TM descriptions fit their box.
+- After choosing randomizer / Gen 4 / mods on the New Game screen the game restarts straight into New Game,
+  without the logos and title menu.
+- First start of the launcher: it asks how you want to play (Original or Enhanced). Enhanced is the
+  default of a new install; players who already have settings keep them.
+
 New in 0.4.1
 ------------
 - Gen 4 Pokemon (107 of them, Turtwig to Arceus) for a NEW playthrough: if you own Pokemon Battle

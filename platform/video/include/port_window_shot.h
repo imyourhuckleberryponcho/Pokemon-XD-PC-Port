@@ -14,6 +14,9 @@ extern "C" {
 
 bool PortShot_SavePng(const wchar_t* path, const uint8_t* rgba, uint32_t w, uint32_t h);
 
+typedef void (*PortShotRgbaDone)(void* ctx, const uint8_t* rgba, uint32_t w, uint32_t h);
+void PortShot_GamePicture(PortShotRgbaDone done, void* ctx);
+
 bool PortShot_SaveWindow(const wchar_t* path);
 
 #if defined(__linux__) || defined(__APPLE__)

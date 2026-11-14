@@ -425,6 +425,62 @@ def main():
             time.sleep(1)
         check(inst2.current_version() == '0.0.2', '"Restart now": the helper puts the new app in place')
 
+    # 2b. One file per system: the update file is the WHOLE player download (Linux: "Pokemon XD PC 0.0.2 - Linux (test)/Pokemon XD.sh,
+    # game/..." as tools/package_linux.py makes it; Mac: the folder holding Pokemon XD.app and its Read me), signed as it is with
+    # sign_update.py pack --player-downloads. The launcher takes what is inside. (Section 2 above is today's layout, the one
+    # every older launcher needs.)
+    feed2_dir = os.path.join(a.work, 'feed_whole')
+    os.makedirs(feed2_dir)
+    feed2 = tu.Feed(feed2_dir)
+    win_dir = stand_in_windows(a.work, '0.0.2')
+    win_zip = os.path.join(feed2_dir, 'Pokemon XD PC 0.0.2 - Windows.zip')
+    with zipfile.ZipFile(win_zip, 'w', zipfile.ZIP_DEFLATED) as z:
+        for dp, _, fs_ in os.walk(win_dir):
+            for n_ in fs_:
+                full = os.path.join(dp, n_)
+                z.write(full, 'Pokemon XD PC 0.0.2/' + os.path.relpath(full, win_dir).replace(os.sep, '/'))
+    if SYS == 'linux':
+        whole = os.path.join(feed2_dir, 'Pokemon XD PC 0.0.2 - Linux (test).tar.gz')
+        shutil.copyfile(linux_pkg, whole)
+        pack_args = ['--windows', win_zip, '--linux', whole]
+        wholefile = os.path.basename(whole)
+    else:
+        whole = os.path.join(feed2_dir, 'Pokemon XD PC 0.0.2 - Mac (test).zip')
+        top = 'Pokemon XD PC 0.0.2 - Mac (test)/'
+        with zipfile.ZipFile(mac_pkg) as zin, zipfile.ZipFile(whole, 'w', zipfile.ZIP_DEFLATED) as zout:
+            for info in zin.infolist():
+                info.filename = top + info.filename
+                zout.writestr(info, zin.read(info.filename[len(top):]) if not info.is_dir() else b'')
+            zout.writestr(top + 'Read me (Mac).txt', 'test\n')
+        pack_args = ['--windows', win_zip, '--mac', whole]
+        wholefile = os.path.basename(whole)
+    r = subprocess.run([sys.executable, os.path.join(ROOT, 'tools', 'publish', 'sign_update.py'), 'pack', '--player-downloads'] +
+                       pack_args + ['--url-base', feed2.url('v{version}/'), '--notes', 'Test notes (one file).',
+                                    '--out', feed2_dir, '--key', keyfile, '--public', pub], capture_output=True, text=True)
+    if r.returncode:
+        sys.exit(r.stdout + r.stderr)
+    check(os.path.isfile(os.path.join(feed2_dir, wholefile)), 'pack --player-downloads: the download itself is the update file')
+    os.makedirs(os.path.join(feed2_dir, 'v0.0.2'))
+    shutil.move(os.path.join(feed2_dir, wholefile), os.path.join(feed2_dir, 'v0.0.2', wholefile))
+    run = Run(a, 'whole', feed2, pub, shots)
+    run.forget_state()
+    inst = Install(a, 'whole', '0.0.1').make()
+    code, log, reqs = run.launcher(inst.exe, 'update:yes|wait:update|update:now|wait:update|quit', '2b_whole_update_now')
+    import urllib.parse
+    check(reqs == ['/update.json', '/v0.0.2/' + urllib.parse.quote(wholefile)], 'one file: the manifest, then the whole download: ' + str(reqs))
+    if SYS == 'linux':
+        check('Version 0.0.2 is installed' in log, 'one file: installed: ' + ' '.join(l for l in log.splitlines() if 'updates:' in l)[-300:])
+        new = os.path.join(inst.root, 'game-0.0.2')
+        check(open(os.path.join(new, 'version.txt')).read().strip() == '0.0.2' and os.path.isfile(os.path.join(new, 'xd')) and
+              not os.path.exists(os.path.join(new, 'Pokemon XD.sh')), 'one file: game-0.0.2 holds what was inside game/')
+        check(os.access(os.path.join(new, 'xd_launcher'), os.X_OK) and os.access(os.path.join(new, 'xd'), os.X_OK),
+              'one file: the executable bits survived')
+        check(tu.read_pointer(inst.root) == {'current': 'game-0.0.2', 'previous': 'game'}, 'one file: the start script will open game-0.0.2')
+    else:
+        check('Version 0.0.2 is ready' in log, 'one file: update ready')
+        pend = os.path.join(inst.root, '.Pokemon XD updates', 'pending', APP)
+        check(os.path.isfile(os.path.join(pend, 'Contents', 'MacOS', 'xd_launcher')), 'one file: the new app waits')
+
     # 3. Tampered feeds and packages: refused, nothing installed, nothing left.
     for mode, expect in (('badsig', 'signature is wrong'), ('wrongkey', 'signature is wrong'),
                          ('badhash', 'SHA-256 differs'), ('toobig', 'larger than expected')):

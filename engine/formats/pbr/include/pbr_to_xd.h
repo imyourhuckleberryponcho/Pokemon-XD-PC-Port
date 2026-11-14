@@ -23,7 +23,6 @@ constexpr double SHEAR_TOL = 0.003;
 constexpr int MAX_SIDE = 256;
 constexpr long long FILE_CAP = 600 * 1024;
 constexpr int MAX_POBJ = 80;
-constexpr int MAX_REFLECT_PIECES = 54;
 
 class KeepXD : public std::runtime_error {
  public:

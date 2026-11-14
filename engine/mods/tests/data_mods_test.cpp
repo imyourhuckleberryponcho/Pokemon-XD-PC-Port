@@ -260,6 +260,20 @@ int main(int argc, char** argv) {
   }
   {
     std::vector<Message> m;
+    DataModFile g{"gen4", "Gen 4", "gen4/a.json", "{ \"things\": { \"#1\": { \"level\": 20 } } }"};
+    DataModFile rz{"randomizer", "Randomizer", "data/randomizer.json", "{ \"things\": { \"#1\": { \"level\": 30 } } }"};
+    g.builtIn = rz.builtIn = true;
+    const DataApplyResult r = ApplyDataMods(catalog, {g, rz}, read, m);
+    const auto it = r.entries.find({"data.fsys", "table.bin"});
+    check(it != r.entries.end() && it->second[kHeader + kEntry + 2] == 30, "built-in layers: the later one wins");
+    check(m.empty(), "built-in layers: no conflict message among them");
+    std::vector<Message> m2;
+    ApplyDataMods(catalog, {{"u", "User mod", "data/u.json", "{ \"things\": { \"#1\": { \"level\": 5 } } }"}, g, rz}, read, m2);
+    check(has_message(m2, Message::Level::Warning, "Conflict: the mods \"User mod\" and \"Gen 4\" both change level of things #1"),
+          "a user mod against a built-in layer is still reported");
+  }
+  {
+    std::vector<Message> m;
     const DataApplyResult r = ApplyDataMods(
         catalog,
         {{"x", "X", "data/x.json",

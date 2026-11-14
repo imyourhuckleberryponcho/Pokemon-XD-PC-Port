@@ -451,6 +451,9 @@ bool Install(const InstallRequest& r, std::string& installed, std::string& error
   }
   std::vector<std::string> required = r.requiredFiles;
   required.push_back(kVersionFile);
+  if (!detail::UseInnerFolder(partial, required, why)) {
+    return fail(why);
+  }
   if (!FolderUsable(partial, required)) {
     return fail("the package is incomplete (it should hold the launcher, the game and " + std::string(kVersionFile) + ")");
   }
