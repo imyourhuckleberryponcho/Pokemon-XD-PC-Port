@@ -97,6 +97,13 @@ Public beta {version}
 Thank you for trying it! This is a beta: expect bugs, and keep a copy of your save.
 Questions, bug reports, other players: https://discord.gg/XVbDVXH4Pn
 
+New in 0.5.2
+------------
+- Online battles: making a room with the Gen 4 rules now offers "Restart into the room" (0.5.1 said a
+  restart could not fix it and only offered Back).
+- Linux: fixes "Could not place the game's memory at its GameCube addresses", which stopped about every
+  second start on newer Linux versions (2024 and later, e.g. Arch).
+
 New in 0.5.1
 ------------
 - Fixes the quick black flashes some players saw every second or two while playing 0.5.0 (caused by the
@@ -473,13 +480,16 @@ def main():
     # (an update is a new game-<version> folder beside this one: docs/UPDATER.md).
     with open(os.path.join(game, 'version.txt'), 'w', encoding='ascii', newline='\r\n') as f:
         f.write(version + '\n')
+    # RecompLauncher (recomplauncher.com) reads this first, next to the launcher in the download: a change to it
+    # reaches its players with our next release, nothing for them to refresh (their note, 2026-11-14).
+    shutil.copy2(os.path.join(ROOT, 'recomplauncher.json'), out)
     with open(os.path.join(out, 'Read me.txt'), 'w', encoding='utf-8', newline='\r\n') as f:
         f.write(READ_ME)
         if a.tester:
             f.write(TESTER_NOTES.format(version=version))
 
     # Nothing else may be in it: no debug files, test tools, data folder files, disc pictures or game data.
-    allowed_top = {'Pokemon XD Launcher.exe', 'Read me.txt', 'game'}
+    allowed_top = {'Pokemon XD Launcher.exe', 'Read me.txt', 'recomplauncher.json', 'game'}
     allowed_ext = {'.exe', '.dll', '.ttf', '.txt'}
     allowed_exe = {'Pokemon XD Launcher.exe', 'xd.exe', 'xd_launcher.exe'}
     bad = [n for n in os.listdir(out) if n not in allowed_top]
@@ -489,6 +499,8 @@ def main():
             p = os.path.join(dirpath, n)
             total += os.path.getsize(p)
             ext = os.path.splitext(n)[1].lower()
+            if n == 'recomplauncher.json' and os.path.dirname(p) == out:
+                continue
             if n == PIPELINE_LIST and os.path.dirname(p) == game:
                 continue
             if os.path.relpath(p, game).startswith('xd_languages' + os.sep) and n in ('xd_languages.exe', 'nod.dll') + tuple(RUNTIME):

@@ -198,6 +198,10 @@ sed "s/@VERSION@/$VERSION/g" "$HERE/Read me (Mac).txt" > "$DEST/Read me.txt"
 # only in that shape (an app and nothing beside it). So the Read me also lives inside the app (Show Package Contents >
 # Contents > Resources); the copy beside the app stays in the folder for CI and for people who build it themselves.
 cp "$DEST/Read me.txt" "$APP/Contents/Resources/Read me.txt"
+# RecompLauncher (recomplauncher.com) reads this first from the download; the zip holds only the app (above), so it
+# goes inside the app (their note, 2026-11-14: "inside the app/AppImage"), with a copy beside it in the folder.
+cp "$ROOT/recomplauncher.json" "$APP/Contents/Resources/recomplauncher.json"
+cp "$ROOT/recomplauncher.json" "$DEST/recomplauncher.json"
 
 # No game data may be inside (the same rule as every package of the port).
 if find "$DEST" \( -iname "*.iso" -o -iname "*.gcm" -o -iname "*.rvz" -o -iname "*.dol" -o -iname "*.gci" -o -iname "*.fsys" \) | grep -q .; then

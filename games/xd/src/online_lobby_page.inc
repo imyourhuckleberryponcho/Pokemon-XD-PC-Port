@@ -287,6 +287,7 @@ bool StepSettings(ImDrawList* dl, const Screen& sc, const PortMenuInput* in) {
       L.message = own.refuse.front();
     } else if (own.NeedsRestart()) {
       L.verdict = own;
+      L.host = true;
       L.step = Step::Restart;
     } else {
       StartHosting();

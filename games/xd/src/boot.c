@@ -38,6 +38,10 @@
 #include <malloc.h>
 #include <sys/mman.h>
 #include <ucontext.h>
+#ifdef __linux__
+#include <sys/personality.h>
+#include <unistd.h>
+#endif
 #define _InterlockedExchange(target, value) __atomic_exchange_n((target), (value), __ATOMIC_SEQ_CST)
 #endif
 #ifdef _WIN32
@@ -406,7 +410,31 @@ static int sLowArgc, sLowResult;
 static char** sLowArgv;
 static void low_stack_entry(void) { sLowResult = xd_main(sLowArgc, sLowArgv); }
 
+#ifdef __linux__
+static void linux_heap_low_enough(char** argv) {
+  extern char end;
+  const uintptr_t start = (uintptr_t)sbrk(0);
+  if (start <= (uintptr_t)&end + (64u << 20)) return;
+  const int persona = personality(0xffffffff);
+  if (persona == -1 || (persona & ADDR_NO_RANDOMIZE) != 0) {
+    fprintf(stderr, "[games/xd] linux: the growing memory area starts at %p, far past the program (%p), and "
+            "randomising is already off: carrying on\n", (void*)start, (void*)&end);
+    return;
+  }
+  fprintf(stderr, "[games/xd] linux: the system put the growing memory area at %p, too close to the GameCube "
+          "memory's addresses: starting again without address randomising\n", (void*)start);
+  fflush(stderr);
+  if (personality((unsigned long)persona | ADDR_NO_RANDOMIZE) != -1) {
+    execv("/proc/self/exe", argv);
+  }
+  fprintf(stderr, "[games/xd] linux: could not start again without address randomising: carrying on\n");
+}
+#endif
+
 int aurora_main(int argc, char** argv) {
+#ifdef __linux__
+  linux_heap_low_enough(argv);
+#endif
 #ifdef __APPLE__
   const size_t size = 8u << 20, guard = 0x4000;
 #else
