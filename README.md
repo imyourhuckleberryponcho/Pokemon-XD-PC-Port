@@ -1,7 +1,5 @@
 # Pokémon XD: Gale of Darkness — PC Port
 
-<a href="https://recomplauncher.com/game/pokemon-xd-pc-port"><picture><source media="(prefers-color-scheme: dark)" srcset="https://recomplauncher.com/assets/press/launcher/badge-light.svg"><img alt="Get it on RecompLauncher" src="https://recomplauncher.com/assets/press/launcher/badge-dark.svg" height="48"></picture></a>
-
 [![Discord: join](https://img.shields.io/badge/Discord-Join%20the%20server-5865F2?logo=discord&logoColor=white)](https://discord.gg/XVbDVXH4Pn)
 
 A native PC port of **Pokémon XD: Gale of Darkness** (GameCube, USA, `GXXE01`), built from the
@@ -325,6 +323,10 @@ can be changed inside the game: SETTINGS below EXIT in the field menu, or left o
 - **encounter** for [Aurora](https://github.com/encounter/aurora), [Borealis](https://github.com/encounter/borealis)
   and [nod](https://github.com/encounter/nod) (reading GameCube disc images, including compressed ones).
 - The [Dolphin](https://dolphin-emu.org) emulator, which this port is compared against to stay faithful.
+
+## Other ways to install
+
+The game is also listed on [RecompLauncher](https://recomplauncher.com/game/pokemon-xd-pc-port), which can install and update it from these releases. It opens this project's own launcher, as the downloads above do.
 
 ## About the original game
 

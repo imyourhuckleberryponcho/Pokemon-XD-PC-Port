@@ -14,21 +14,15 @@
     },
     "start": {
         "program": [
-            "game/xd.exe"
+            "Pokemon XD Launcher.exe",
+            "Pokemon XD Launcher.sh",
+            "Pokemon XD.app/Contents/MacOS/xd_launcher"
         ],
         "args": [
             "{game}"
         ]
     },
-    "saves": [
-        "{config}/Pokemon XD/USA/Card A"
-    ],
     "folders": {
-        "saves": [
-            {
-                "path": "{config}/Pokemon XD/USA/Card A"
-            }
-        ],
         "logs": [
             {
                 "path": "{config}/Pokemon XD/logs"
@@ -47,12 +41,6 @@
     },
     "actions": [
         {
-            "id": "saves",
-            "label": "Saves",
-            "help": "Your memory card saves, one .gci file per save.",
-            "open": "saves"
-        },
-        {
             "id": "reports",
             "label": "Bug reports",
             "help": "Reports the game saved when you pressed F10 or it crashed.",
@@ -61,7 +49,7 @@
         {
             "id": "mods",
             "label": "Mods",
-            "help": "Where the game looks for mods.",
+            "help": "Where the game looks for mods. The game's own launcher (opened by Play) manages them.",
             "open": "mods"
         }
     ]
