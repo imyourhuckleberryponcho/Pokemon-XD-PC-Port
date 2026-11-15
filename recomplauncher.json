@@ -1,0 +1,68 @@
+{
+    "$schema": "https://recomplauncher.com/schema/recomplauncher.json",
+    "format": 1,
+    "repo": "imyourhuckleberryponcho/Pokemon-XD-PC-Port",
+    "name": "Pokémon XD PC",
+    "game": {
+        "kind": "iso",
+        "label": "Your disc image of Pokémon XD: Gale of Darkness, USA release (GXXE01): .iso, .gcm, .rvz, .wia, .gcz or .ciso.",
+        "check": {
+            "ids": [
+                "GXXE01"
+            ]
+        }
+    },
+    "start": {
+        "program": [
+            "game/xd.exe"
+        ],
+        "args": [
+            "{game}"
+        ]
+    },
+    "saves": [
+        "{config}/Pokemon XD/USA/Card A"
+    ],
+    "folders": {
+        "saves": [
+            {
+                "path": "{config}/Pokemon XD/USA/Card A"
+            }
+        ],
+        "logs": [
+            {
+                "path": "{config}/Pokemon XD/logs"
+            }
+        ],
+        "reports": [
+            {
+                "path": "{config}/Pokemon XD/reports"
+            }
+        ],
+        "mods": [
+            {
+                "path": "{config}/Pokemon XD/mods"
+            }
+        ]
+    },
+    "actions": [
+        {
+            "id": "saves",
+            "label": "Saves",
+            "help": "Your memory card saves, one .gci file per save.",
+            "open": "saves"
+        },
+        {
+            "id": "reports",
+            "label": "Bug reports",
+            "help": "Reports the game saved when you pressed F10 or it crashed.",
+            "open": "reports"
+        },
+        {
+            "id": "mods",
+            "label": "Mods",
+            "help": "Where the game looks for mods.",
+            "open": "mods"
+        }
+    ]
+}

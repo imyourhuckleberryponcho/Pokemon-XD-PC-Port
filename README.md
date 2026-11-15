@@ -1,5 +1,7 @@
 # Pokémon XD: Gale of Darkness — PC Port
 
+<a href="https://recomplauncher.com/game/pokemon-xd-pc-port"><picture><source media="(prefers-color-scheme: dark)" srcset="https://recomplauncher.com/assets/press/launcher/badge-light.svg"><img alt="Get it on RecompLauncher" src="https://recomplauncher.com/assets/press/launcher/badge-dark.svg" height="48"></picture></a>
+
 [![Discord: join](https://img.shields.io/badge/Discord-Join%20the%20server-5865F2?logo=discord&logoColor=white)](https://discord.gg/XVbDVXH4Pn)
 
 A native PC port of **Pokémon XD: Gale of Darkness** (GameCube, USA, `GXXE01`), built from the
