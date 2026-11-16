@@ -862,6 +862,8 @@ std::string Folder(const char* env, const char* fallback) {
 
 }
 
+extern "C" void PortXD_BackgroundGuardStart(void);
+
 extern "C" bool PortXD_RenderIconPrepare(void) {
   const char* spec = std::getenv("XD_RENDER_ICON");
   if (spec == nullptr || spec[0] == '\0') return false;
@@ -875,12 +877,14 @@ extern "C" bool PortXD_RenderIconPrepare(void) {
   };
   setDefault("XD_NO_MESSAGE_BOXES", "1");
   setDefault("XD_WINDOW_OFFSCREEN", "1");
+  setDefault("XD_WINDOW_HIDDEN", "1");
   setDefault("SDL_WINDOW_ACTIVATE_WHEN_SHOWN", "0");
   setDefault("XD_RECORD", "0");
   setDefault("XD_DISC_TIMING", "fast");
   setDefault("XD_TURBO", "4");
   setDefault("SDL_AUDIO_DRIVER", "dummy");
   setDefault("XD_RUN_LABEL", "render icon");
+  PortXD_BackgroundGuardStart();
   return true;
 }
 

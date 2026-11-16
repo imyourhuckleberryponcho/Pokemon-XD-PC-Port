@@ -292,6 +292,15 @@ int main(int argc, char** argv) {
             m.date == "2026-11-08" && m.notes == "Line one\nLine two \xC3\xA9 \xF0\x9F\x98\x80",
         "manifest fields (escapes, UTF-8)");
   {
+    Manifest h;
+    h.notes = "c-notes";
+    h.history = "##VERSION 0.5.2\nc-notes\n##VERSION 0.5.0\nb1\nb2\n##VERSION 0.4.0\na-notes";
+    check(NotesSince(h, "0.4.0") == "Version 0.5.2\nc-notes\n\nVersion 0.5.0\nb1\nb2", "NotesSince: all newer versions, newest first");
+    check(NotesSince(h, "0.5.2") == "c-notes", "NotesSince: nothing newer in the history falls back to the notes");
+    h.history.clear();
+    check(NotesSince(h, "0.1.0") == "c-notes", "NotesSince: no history = the notes");
+  }
+  {
     std::string changed = good;
     changed.replace(changed.find("0.2.0"), 5, "9.2.0");
     check(!ParseW(changed, pubHex, "test-product", m, error) && error.find("signature") != std::string::npos,
@@ -558,6 +567,37 @@ int main(int argc, char** argv) {
     check(!fs::exists(root / L"game-0.2.0") && fs::exists(root / L"game-0.3.0") && fs::exists(root / L"game") &&
               fs::exists(root / L"game-0.1.5" / L"portable" / L"save.txt"),
           "older update folders go; game\\, the previous one and folders with player data stay");
+
+    {
+      const fs::path flat = work / L"flat" / L"Pokemon-XD-PC-0.4.0";
+      write_file(flat / L"launcher.exe", "old launcher");
+      Layout fl = FindLayout(flat, "Starter.exe");
+      check(!fl.valid && !fl.suggestedRoot.empty() && fl.suggestedRoot.parent_path() == flat.parent_path(), "flat folder: invalid, a new folder is proposed beside it");
+      const fs::path whole = work / L"staging" / L"whole.zip";
+      const std::string v = "0.9.0";
+      if (PackageIsTarGz()) {
+        write_file(whole, make_tar_gz({{"Starter.exe", "starter", '0', 0755}, {"game/", "", '5', 0755}, {"game/launcher.exe", "l", '0', 0755},
+                                       {"game/game.exe", "g", '0', 0755}, {"game/version.txt", v + "\r\n"}}));
+      } else {
+        write_file(whole, make_zip({{"Starter.exe", "starter", true}, {"game/launcher.exe", "l", true}, {"game/game.exe", "g", true},
+                                    {"game/version.txt", v + "\r\n", false}}));
+      }
+      InstallRequest fr;
+      fr.layout = fl;
+      fr.requiredFiles = required;
+      fr.package = whole;
+      fr.manifest.version = v;
+      fr.manifest.size = fs::file_size(whole);
+      fr.manifest.sha256 = sha_of(whole);
+      check(!Install(fr, installed, error), "an in-place install in a flat folder is refused");
+      check(SetUpPlayerFolder(fr, flat, fl.suggestedRoot, error), "set up a new player folder: " + error);
+      check(read_file(fl.suggestedRoot / L"Starter.exe") == "starter" && FolderVersion(fl.suggestedRoot / L"game") == v &&
+                read_file(flat / L"launcher.exe") == "old launcher" && !fs::exists(fs::path(fl.suggestedRoot).concat(L".partial")),
+            "the new folder is complete, the old one untouched");
+      check(FindLayout(fl.suggestedRoot / L"game", "Starter.exe").valid, "the new folder is a player's folder");
+      check(!SetUpPlayerFolder(fr, flat, fl.suggestedRoot, error), "an existing non-empty folder is refused");
+      check(SyncedFolderName(L"C:/Users/x/OneDrive/Desktop/p") == "OneDrive" && SyncedFolderName(L"C:/Games/p").empty(), "synced folder names");
+    }
 
     l = FindLayout(root / L"game-0.4.0", "Starter.exe");
     check(GoBack(l, required, error) && ReadPointer(root, cur, prev) && cur == "game-0.3.0" && prev == "game-0.4.0",

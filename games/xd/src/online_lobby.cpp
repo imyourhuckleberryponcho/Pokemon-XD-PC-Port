@@ -242,9 +242,9 @@ bool Apply(Peer& p, const std::string& line) {
   if (verb == "ACCEPT") p.accepted = true, p.declined = false;
   else if (verb == "DECLINE") p.declined = true, p.accepted = false;
   else if (verb == "TEAM") p.teamCount = std::atoi(arg.c_str());
-  else if (verb == "READY") p.ready = true;
+  else if (verb == "READY") p.ready = true, p.nonce = static_cast<uint32_t>(std::strtoul(arg.c_str(), nullptr, 16));
   else if (verb == "UNREADY") p.ready = false;
-  else if (verb == "REMATCH") p.rematch = true;
+  else if (verb == "REMATCH") p.rematch = true, p.nonce = static_cast<uint32_t>(std::strtoul(arg.c_str(), nullptr, 16));
   else if (verb == "LEAVE") p.left = true;
   return true;
 }

@@ -28,6 +28,7 @@ struct State {
   bool judged = false;
   Peer peer;
   bool iAccepted = false, iReady = false;
+  uint32_t myNonce = 0;
   std::string message;
   std::unique_ptr<xd::legality::DiscRules> rulesData;
   std::vector<Slot> slots;
@@ -512,7 +513,8 @@ bool StepJoinView(ImDrawList* dl, const Screen& sc, const PortMenuInput* in) {
 
 bool RestartCures() {
   xd::online::Capabilities after = L.mine;
-  after.ruleSet = "gen4";
+  after.ruleSet = L.rules.ruleSet != "classic" ? "gen4" : "classic";
+  after.randomizer.clear();
   const xd::online::Capabilities& room = L.host ? after : L.theirs;
   const xd::online::Verdict v = xd::online::Judge(room, L.rules, after, true);
   return v.Ok() && !v.NeedsRestart();
@@ -527,7 +529,7 @@ bool StepRestart(ImDrawList* dl, const Screen& sc, const PortMenuInput* in) {
     if (cures && L.cursor == 0) {
       std::string resume;
       if (L.host) {
-        L.code = L.code.empty() ? xdnet::newRoomCode() : L.code;
+        L.code = L.code.empty() ? (std::getenv("XD_ONLINE_CODE") ? xdnet::normalizeRoomCode(std::getenv("XD_ONLINE_CODE")) : xdnet::newRoomCode()) : L.code;
         resume = "host|" + L.code + "|" + xd::online::RulesToText(L.rules);
       } else {
         resume = "join|" + L.code;
@@ -558,7 +560,7 @@ bool StepRestart(ImDrawList* dl, const Screen& sc, const PortMenuInput* in) {
     y += 21.f * static_cast<float>(kit::Para(dl, sc, 66.f, y, 508.f, TrVerdictLine(r), kit::kGold, 0.8f, 21.f, 3)) + 6.f;
   }
   kit::Para(dl, sc, 66.f, y + 8.f, 508.f, cures ? Tr("The game starts again with the room's data and comes back to this room by itself (you wait through the opening again). Your saves stay as they are.")
-                                                : Tr("A restart alone can't fix this: use the MODS page (EXTRAS) to switch the mods as the room needs, or play a game without the randomizer, then come back."),
+                                                : Tr("A restart alone can't fix this: use the MODS page (EXTRAS) to switch the mods as the room needs, then come back."),
             cures ? kit::kText : kit::kBad, 0.72f, 18.f, 4);
   const char* items[2] = {"Restart into the room", "Back"};
   std::vector<std::string> labels;
@@ -842,6 +844,7 @@ void Go() {
     xd::online::draft::ParseSettings(L.rules.team == "offer" ? "offer" : "snake", L.rules.draft, ds, nullptr);
     h.mineCount = h.friendCount = ds.teamSize;
   }
+  xd::online::SetVsNonce(L.host ? L.myNonce : L.peer.nonce);
   Note("both ready: the battle starts (" + xd::online::RulesText(h.rules) + ")");
   xd::online::SetLobbyRoom(h);
   L.started = true;
@@ -864,7 +867,8 @@ bool StepReady(ImDrawList* dl, const Screen& sc, const PortMenuInput* in) {
       return true;
     }
     L.iReady = true;
-    Send(xd::online::Msg("READY"));
+    if (L.host) L.myNonce = xd::online::NewNonce();
+    { char nb[16]; std::snprintf(nb, sizeof nb, "%x", static_cast<unsigned>(L.host ? L.myNonce : 0u)); Send(xd::online::Msg("READY", L.host ? std::string(nb) : std::string())); }
   }
   if (L.iReady && L.peer.ready) {
     if (!L.cardSent) { L.cardSent = true; Send(xd::card::Encode(xd::card::MyCard())); }
@@ -941,6 +945,8 @@ const PortMenuPage kPage{"online battle", Open, Frame, Close, nullptr};
 struct ResultState {
   int cursor = 0;
   bool iRematch = false;
+  bool host = false;
+  uint32_t myNonce = 0;
   Peer peer;
   std::string outcome, rules;
   std::string ended;
@@ -952,6 +958,7 @@ void OpenResult(void*) {
   R = ResultState();
   const xd::online::BattleSummary b = xd::online::LobbySummary();
   const xd::online::Outcome oc = xd::online::OutcomeOf(b.result, b.host, b.desync);
+  R.host = b.host;
   R.outcome = TrOutcomeText(oc);
   R.rules = b.rulesText;
   Note("result screen: " + xd::online::OutcomeText(oc));
@@ -987,11 +994,15 @@ bool ResultFrame(void*, const PortMenuInput* in) {
     if (leave) { xd::online::LobbyLeave(); return false; }
     if (!R.iRematch) {
       R.iRematch = true;
-      const std::string m = xd::online::Msg("REMATCH");
+      if (R.host) R.myNonce = xd::online::NewNonce();
+      char nb[16];
+      std::snprintf(nb, sizeof nb, "%x", static_cast<unsigned>(R.host ? R.myNonce : 0u));
+      const std::string m = xd::online::Msg("REMATCH", R.host ? std::string(nb) : std::string());
       link->Send(reinterpret_cast<const uint8_t*>(m.data()), m.size());
     }
   }
   if (canRematch && R.iRematch && R.peer.rematch) {
+    xd::online::SetVsNonce(R.host ? R.myNonce : R.peer.nonce);
     xd::online::LobbyRematchReset();
     StartDrive(true);
     return false;
@@ -1034,6 +1045,13 @@ void StartDrive(bool rematch) {
   D.rematch = rematch;
   D.stage = rematch ? 10 : 0;
   Note(rematch ? "driver: back into a battle for the rematch" : "driver: into VS MODE");
+  static RoomRules sRules;
+  if (!rematch) sRules = L.rules;
+  std::vector<std::string> chips;
+  chips.push_back(sRules.ruleSet == "gen4" ? Tr("Gen 4 rules") : sRules.ruleSet == "gen4mt" ? Tr("Gen 4 with modern types") : Tr("Classic XD"));
+  chips.push_back(sRules.style == "double" ? Tr("Double battle") : Tr("Single battle"));
+  if (sRules.split) chips.push_back(Tr("Split on"));
+  ls::CoverBattle(chips, rematch);
 }
 
 bool DriveDirect(PADStatus* status, const WinWorkLayout* w) {
@@ -1088,6 +1106,7 @@ bool DriveTimed(PADStatus* status, const WinWorkLayout* w) {
     }
   } else if (D.stage == 1) {
     static const struct { long at; uint16_t b; } kSched[] = {{60, PAD_BUTTON_RIGHT}, {80, PAD_BUTTON_RIGHT}, {110, PAD_BUTTON_A}};
+    xd::online::LobbyApplyVsStyle();
     const long t = D.polls - D.stageStart;
     if (D.scheduleIdx < 3 && t >= kSched[D.scheduleIdx].at) { push(kSched[D.scheduleIdx].b, 6); D.scheduleIdx++; }
     else if (D.scheduleIdx >= 3 && t >= 230 + 120 * static_cast<long>(D.scheduleIdx - 3) && D.polls >= D.holdUntil) { push(PAD_BUTTON_A, 6); D.scheduleIdx++; }

@@ -493,7 +493,7 @@ bool ParseSignedManifest(std::string_view fileText, std::string_view publicKeyHe
   }
   Manifest m;
   if (!text(manifest, "product", m.product, true) || !text(manifest, "version", m.version, true) ||
-      !text(manifest, "date", m.date, false) || !text(manifest, "notes", m.notes, false)) {
+      !text(manifest, "date", m.date, false) || !text(manifest, "notes", m.notes, false) || !text(manifest, "history", m.history, false)) {
     error = Tr("the update information is missing something (product, version)");
     return false;
   }
@@ -560,4 +560,38 @@ std::string_view CurrentSystem() {
 #endif
 }
 
+}
+
+namespace engine::update {
+std::string NotesSince(const Manifest& m, std::string_view installed) {
+  if (m.history.empty()) return m.notes;
+  std::string out;
+  std::string version, body;
+  bool have = false;
+  const auto flush = [&]() {
+    while (!body.empty() && (body.back() == '\n' || body.back() == '\r')) body.pop_back();
+    if (have && !body.empty() && IsNewer(version, installed)) {
+      if (!out.empty()) out += "\n\n";
+      out += "Version " + version + "\n" + body;
+    }
+    body.clear();
+  };
+  size_t pos = 0;
+  while (pos <= m.history.size()) {
+    size_t end = m.history.find('\n', pos);
+    if (end == std::string::npos) end = m.history.size();
+    std::string line = m.history.substr(pos, end - pos);
+    if (!line.empty() && line.back() == '\r') line.pop_back();
+    if (line.compare(0, 10, "##VERSION ") == 0) {
+      flush();
+      version = line.substr(10);
+      have = true;
+    } else {
+      body += line + "\n";
+    }
+    pos = end + 1;
+  }
+  flush();
+  return out.empty() ? m.notes : out;
+}
 }

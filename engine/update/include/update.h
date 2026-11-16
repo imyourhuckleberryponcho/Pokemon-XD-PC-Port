@@ -25,11 +25,14 @@ struct Manifest {
   std::string version;
   std::string date;
   std::string notes;
+  std::string history;
   std::string url;
   uint64_t size = 0;
   std::string sha256;
   bool hasPackage = true;
 };
+
+std::string NotesSince(const Manifest& m, std::string_view installed);
 
 bool ParseSignedManifest(std::string_view fileText, std::string_view publicKeyHex, std::string_view product,
                          Manifest& out, std::string& error, std::string_view system = CurrentSystem());
@@ -75,6 +78,7 @@ struct Layout {
   std::string previous;
   std::string starter;
   std::vector<std::string> starterNames;
+  std::filesystem::path suggestedRoot;
 };
 Layout FindLayout(const std::filesystem::path& programFolder, const std::string& starterName);
 std::filesystem::path GameFolderPath(const Layout& layout, const std::string& name);
@@ -97,6 +101,10 @@ struct InstallRequest {
 bool PackageIsTarGz();
 bool Install(const InstallRequest& request, std::string& installed, std::string& error,
              const std::function<bool()>& stop = {});
+bool SetUpPlayerFolder(const InstallRequest& request, const std::filesystem::path& runningFolder, const std::filesystem::path& newRoot,
+                       std::string& error, const std::function<bool()>& stop = {});
+std::filesystem::path SuggestPlayerFolder(const std::filesystem::path& programFolder);
+std::string SyncedFolderName(const std::filesystem::path& path);
 bool GoBack(const Layout& layout, const std::vector<std::string>& requiredFiles, std::string& error);
 
 }

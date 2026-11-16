@@ -104,6 +104,27 @@ int main() {
   v = Judge(back.caps, back.rules, c, true);
   CHECK(v.Ok() && v.NeedsRestart() && Has(v.restart, "randomizer"));
 
+  {
+
+    Capabilities rg = host.caps;
+    rg.ruleSet = "gen4";
+    rg.randomizer = "classic:5";
+    RoomRules classic;
+    classic.ruleSet = "classic";
+    Capabilities room = host.caps;
+    room.ruleSet = "classic";
+    room.gen4Pack = "";
+    Verdict before = Judge(room, classic, rg, true);
+    CHECK(before.Ok() && before.NeedsRestart() && Has(before.restart, "randomizer"));
+    Capabilities after = rg;
+    after.ruleSet = classic.ruleSet != "classic" ? "gen4" : "classic";
+    after.randomizer.clear();
+    Verdict cured = Judge(room, classic, after, true);
+    CHECK(cured.Ok() && !cured.NeedsRestart());
+
+    after.mods = room.mods + ",zzz";
+    CHECK(Judge(room, classic, after, true).NeedsRestart());
+  }
 
   RoomRules withSplit = back.rules;
   withSplit.split = true;

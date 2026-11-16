@@ -1386,6 +1386,8 @@ const PortMenuPage kPage{"settings", PageOpen, PageFrame, PageClose, nullptr};
 namespace ls {
 void CoverNewGame(const std::string& label, const char* why);
 void CoverContinue(const char* why);
+void CoverBattle(const std::vector<std::string>& chips, bool rematch);
+void CoverRoomResume();
 }
 
 namespace ng {
@@ -3206,6 +3208,7 @@ void PortXD_SettingsMenuInit(void) {
   PortVideo_SetNoticeDrawer(&kit::Notice);
   if (xd::picker::Current() == xd::picker::Intent::NewGame) ls::CoverStart(ls::Cover::NewGame, xd::pt::RestartLabel(), "started again for the New Game");
   if (xd::picker::Current() == xd::picker::Intent::Continue) ls::CoverStart(ls::Cover::Continue, "", "started again for the chosen save");
+  if (const char* r = std::getenv("XD_ONLINE_ROOM_RESUME"); r != nullptr && r[0] != '\0') ls::CoverRoomResume();
   if (const char* v = std::getenv("XD_MENU_SPRITE_LOG")) sLogMenu = static_cast<int>(std::strtol(v, nullptr, 0));
   if (const char* v = std::getenv("XD_MENU_TEX_PROBE")) sProbeMenu = static_cast<int>(std::strtol(v, nullptr, 0));
   sLookScreen = EnvIs("XD_SETTINGS_LOOK", "screen");

@@ -42,6 +42,7 @@ std::string Msg(const std::string& verb, const std::string& arg = "");
 struct Peer {
   bool accepted = false, declined = false, ready = false, rematch = false, left = false;
   int teamCount = -1;
+  uint32_t nonce = 0;
 };
 bool Apply(Peer& peer, const std::string& line);
 

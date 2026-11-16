@@ -42,6 +42,7 @@ int sWaitHooks = 0;
 
 struct Session {
   uint32_t frame;
+  std::string page;
   std::vector<std::string> steps;
 };
 std::vector<Session> sScript;
@@ -71,6 +72,8 @@ void LoadScript(const char* text) {
     if (colon != std::string::npos) {
       Session s;
       s.frame = static_cast<uint32_t>(std::strtoul(part.c_str(), nullptr, 10));
+      const size_t at = part.find('@');
+      if (at != std::string::npos && at < colon) s.page = part.substr(at + 1, colon - at - 1);
       size_t a = colon + 1;
       while (a <= part.size()) {
         size_t b = part.find(';', a);
@@ -259,7 +262,9 @@ void PortMenu_Init(const char* appFolder, uint32_t (*progress)(void)) {
   sShotDir = dir != nullptr && dir[0] != '\0' ? fs::u8path(dir) : PortUser_Folder(appFolder) / "menu_shots";
   const char* hold = std::getenv("XD_MENU_HOLD");
   sHoldAtLeast = hold != nullptr ? std::atoi(hold) : 0;
-  LoadScript(std::getenv("XD_MENU_SCRIPT"));
+  const char* resumeRoom = std::getenv("XD_ONLINE_ROOM_RESUME");
+  const char* afterRestart = std::getenv("XD_MENU_SCRIPT_AFTER_RESTART");
+  LoadScript(resumeRoom != nullptr && resumeRoom[0] != 0 && afterRestart != nullptr ? afterRestart : std::getenv("XD_MENU_SCRIPT"));
   PortFreeze_Capture();
 }
 
@@ -267,7 +272,8 @@ bool PortMenu_Open(const PortMenuPage* page) {
   if (page == nullptr || page->frame == nullptr || sActive || sPending) return false;
   sRequested = *page;
   sPending = true;
-  if (sRunning == nullptr && sNextSession < sScript.size() && sScript[sNextSession].frame == 0) {
+  if (sRunning == nullptr && sNextSession < sScript.size() && sScript[sNextSession].frame == 0 &&
+      (sScript[sNextSession].page.empty() || sScript[sNextSession].page == page->name)) {
     sRunning = &sScript[sNextSession++];
     sStep = 0;
     sWait = 0;

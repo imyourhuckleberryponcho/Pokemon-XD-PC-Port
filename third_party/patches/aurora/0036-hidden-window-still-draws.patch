@@ -1,0 +1,15 @@
+diff --git a/lib/window.cpp b/lib/window.cpp
+index 236e466..69b284f 100644
+--- a/lib/window.cpp
++++ b/lib/window.cpp
+@@ -663,6 +663,10 @@ bool is_paused() noexcept {
+   }
+   const auto flags = SDL_GetWindowFlags(g_window);
+   if ((flags & SDL_WINDOW_HIDDEN) != 0u) {
++    // XD_WINDOW_HIDDEN=1: hidden on purpose (see show_window); it still draws
++    if (const char* hidden = std::getenv("XD_WINDOW_HIDDEN"); hidden != nullptr && hidden[0] == '1') {
++      return false;
++    }
+     return true;
+   }
+   // Wait until the window has received focus before respecting pauseOnFocusLost

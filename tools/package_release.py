@@ -97,6 +97,23 @@ Public beta {version}
 Thank you for trying it! This is a beta: expect bugs, and keep a copy of your save.
 Questions, bug reports, other players: https://discord.gg/XVbDVXH4Pn
 
+New in 0.5.3
+------------
+- Online battles: fixes the two PCs showing different stages and then drifting apart after the first turn
+  (a "desync"). Both now agree on the arena and the random numbers before the battle starts, and the
+  Pokemon are checked to be the same on both sides.
+- Online battles: rooms with one Pokemon per side (singles) now really fight singles.
+- Online battles: the friend who joins no longer sees the battle menus piled up in the middle of the screen
+  with the widescreen edge menus on.
+- Online battles: a save made with the randomizer or the Gen 4 rules can now host a room.
+- Online battles: a loading screen (with the music) now covers the short time while the lobby's menus
+  are pressed for you, so button mashing can no longer disturb it. It gives up and lets go after 90 seconds.
+- Preparing the game for your PC (shaders and pictures) now runs hidden in the background, says so in
+  plain words in the launcher, and is safe to interrupt: closing the launcher stops it, and the next
+  start picks up cleanly. You can press Play while it is still working.
+- Updater: a copy in a flat folder (as the old 0.4.0 download unpacked) is now offered a proper player
+  folder beside it, and a game kept inside OneDrive or another synced folder gets a hint to move it.
+
 New in 0.5.2
 ------------
 - Online battles: making a room with the Gen 4 rules now offers "Restart into the room" (0.5.1 said a

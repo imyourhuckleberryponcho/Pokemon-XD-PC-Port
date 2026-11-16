@@ -112,8 +112,8 @@ target_link_libraries(button_art_test PRIVATE platform_video)
 aurora_copy_runtime_dlls(button_art_test)
 
 add_executable(dawn_bind_group_race_test dawn_bind_group_race_test.cpp
-  ${PROJECT_SOURCE_DIR}/third_party/aurora/lib/webgpu/sampler_keeper.cpp)
-target_include_directories(dawn_bind_group_race_test PRIVATE ${PROJECT_SOURCE_DIR}/third_party/aurora/lib)
+  ${XD_AURORA_DIR}/lib/webgpu/sampler_keeper.cpp)
+target_include_directories(dawn_bind_group_race_test PRIVATE ${XD_AURORA_DIR}/lib)
 target_link_libraries(dawn_bind_group_race_test PRIVATE dawn::webgpu_dawn)
 aurora_copy_runtime_dlls(dawn_bind_group_race_test)
 

@@ -536,13 +536,14 @@ extern "C" void PortXD_WideMenuSprite(const void* window, const void* sprite) {
   sWindow = nullptr;
   sShift = 0;
   sMirDx = sMirDy = 0;
-  if (window != nullptr) OnlineMirror_WindowShift(window, sprite, &sMirDx, &sMirDy);
+  const bool mirrored = window != nullptr && OnlineMirror_WindowShift(window, sprite, &sMirDx, &sMirDy) != 0;
   if (!edge_menus_on()) return;
   sWindow = plan_of(window);
   if (sWindow == nullptr) return;
   bool cursor = true;
   for_each_sprite(sWindow->w->itemSprites, [&](const SpriteWorkLayout* sp) { cursor = cursor && sp != sprite; });
   sShift = sprite_shift(*sWindow, static_cast<const SpriteWorkLayout*>(sprite), cursor);
+  if (mirrored) sShift = -sShift;
 }
 
 extern "C" int PortXD_WideMenuShiftNow(void) { return sShift; }

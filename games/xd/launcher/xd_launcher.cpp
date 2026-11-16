@@ -699,6 +699,12 @@ sys::Process* StartHiddenGame(const std::vector<std::string>& extra, const std::
   request.ownEnvironment = true;
   request.environmentWithout = {"XD_RENDER_", "XD_INPUT_SCRIPT=", "XD_REPLAY", "XD_PREPARE_SHADERS"};
   request.environmentAdd = extra;
+  request.killTree = true;
+#if defined(_WIN32)
+  request.environmentAdd.push_back("XD_PARENT_PID=" + std::to_string(static_cast<unsigned long>(GetCurrentProcessId())));
+#else
+  request.environmentAdd.push_back("XD_PARENT_PID=" + std::to_string(static_cast<long>(getpid())));
+#endif
   std::string why;
   sys::Process* process = sys::StartProgram(request, why);
   if (process == nullptr) {
@@ -854,6 +860,10 @@ bool RenderTrainerPortraits(const std::string& discPath, const std::string& id, 
     sys::Close(game);
     if (code > worst) worst = code;
   }
+  if (worst != 0 && worst != 2 && worst != 3) {
+    error = Tr("the trainer pictures were interrupted");
+    return false;
+  }
   if (FILE* f = sys::OpenFile(done, "w")) {
     std::fprintf(f, "trainer portraits: worst exit code %lu\n", worst);
     std::fclose(f);
@@ -953,6 +963,20 @@ bool RenderPictures(const std::string& discPath, const std::string& discId, cons
   }
   const unsigned long code = static_cast<unsigned long>(static_cast<unsigned int>(sys::ExitCode(game)));
   sys::Close(game);
+  const fs::path tries = folder / (L"render_" + fs::path(id).wstring() + L".tries");
+  if (code != 0 && code != 2 && code != 3) {
+    int count = 0;
+    if (std::ifstream in(tries); in) in >> count;
+    if (count < 1) {
+      if (FILE* f = sys::OpenFile(tries, "w")) {
+        std::fprintf(f, "%d\n", count + 1);
+        std::fclose(f);
+      }
+      error = Fmt(Tr("the game's render mode ended with code %lu (render_icon.txt in %s)"), code, folder.string().c_str());
+      return false;
+    }
+  }
+  fs::remove(tries, ec);
   if (FILE* f = sys::OpenFile(done, "w")) {
     std::fprintf(f, "xd.exe XD_RENDER_ICON=all exit code %lu (0: all made; see render_icon.txt)\n", code);
     std::fclose(f);

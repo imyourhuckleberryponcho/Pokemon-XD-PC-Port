@@ -27,6 +27,7 @@ inline constexpr TestRunSwitch kTestRunSwitches[] = {
     {"XD_PREPARE_SHADERS", false},
     {"XD_NO_MESSAGE_BOXES", true},
     {"XD_WINDOW_OFFSCREEN", true},
+    {"XD_WINDOW_HIDDEN", true},
     {"XD_REQUIRE_ORIGINAL", true},
 };
 

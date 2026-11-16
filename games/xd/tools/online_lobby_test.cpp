@@ -81,6 +81,7 @@ int main() {
   CHECK(Apply(p, Msg("TEAM", "3")) && p.teamCount == 3);
   CHECK(Apply(p, Msg("READY")) && p.ready);
   CHECK(Apply(p, Msg("UNREADY")) && !p.ready);
+  CHECK(Apply(p, Msg("READY", "1a2b3c4d")) && p.ready && p.nonce == 0x1a2b3c4du);
   CHECK(!Apply(p, "T 1 abcd") && !Apply(p, "Z 123"));
   CHECK(Apply(p, Msg("LEAVE")) && p.left);
 

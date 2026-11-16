@@ -12,6 +12,7 @@
 #include "xd_gen4.h"
 #include "xd_playthrough.h"
 
+#include <random>
 #include <gc_memcard.h>
 #include <port_disc.h>
 #include <net_connection.h>
@@ -113,6 +114,7 @@ uint16_t pokemonGetTokuseiDataId(void* poke);
 uint16_t pokemonGetSoubiItemDataId(void* poke);
 void fightFloorSetTuusinErrorFightResult(void* floor);
 void PortVideo_Notice(const char* text, double seconds);
+uint16_t fightGetFightEncountDataId(void);
 uint16_t fightFloor_GetFightType(void* floor);
 uint16_t fightFloor_GetTurnCount(void* floor);
 uint8_t fightTargetIsHostSide(void* trainer, uint16_t type);
@@ -839,6 +841,29 @@ bool ExchangeTeams() {
     if (!xd::card::Decode(cardLine, theirs, &cardWhy)) { Log("the friend's card is damaged (%s): the default card is used", cardWhy.c_str()); theirs = xd::card::Card(); }
     xd::card::SetRoom(S.host, mine, theirs);
   }
+  {
+    const std::vector<xd::save::Pokemon>& ht = S.host ? S.teamMine : S.teamFriend;
+    const std::vector<xd::save::Pokemon>& gt = S.host ? S.teamFriend : S.teamMine;
+    uint64_t d = 1469598103934665603ull;
+    auto eat = [&](const std::vector<xd::save::Pokemon>& t) {
+      d = Mix(d, static_cast<uint32_t>(t.size()));
+      for (const xd::save::Pokemon& m : t) for (uint8_t b : m.raw) d = Mix(d, b);
+    };
+    eat(ht);
+    eat(gt);
+    char buf[48];
+    std::snprintf(buf, sizeof buf, "Y %016llx", static_cast<unsigned long long>(d));
+    Send(buf);
+    std::string yline;
+    if (!Pump("Y", yline, true)) { EndWithError(); return false; }
+    unsigned long long theirs = std::strtoull(yline.c_str() + 2, nullptr, 16);
+    if (theirs != d) {
+      Log("the two sides' battle records differ before turn 1: mine %016llx, the friend's %016llx", static_cast<unsigned long long>(d), theirs);
+      EndEarly(Tr("The two games do not hold the same Pokemon for this battle (a team was changed on the way). The battle was not started."));
+      return false;
+    }
+    Log("both sides hold the same records for the battle (digest %016llx; fight type 0x%x, encounter %u)", static_cast<unsigned long long>(d), static_cast<unsigned>(fightFloor_GetFightType(nullptr)), static_cast<unsigned>(fightGetFightEncountDataId()));
+  }
   S.created[0] = S.created[1] = 0;
   sBagDone[0] = sBagDone[1] = false;
   Log("teams exchanged and checked: mine %zu Pokemon, the friend's %zu", S.teamMine.size(), S.teamFriend.size());
@@ -981,7 +1006,21 @@ struct SeedKeep {
 
 }
 
+namespace {
+uint32_t sVsNonce = 0;
+uint32_t sVsCalls = 0;
+}
 namespace xd::online {
+uint32_t NewNonce() {
+  static std::random_device rd;
+  uint32_t n = rd();
+  return n == 0 ? 1u : n;
+}
+void SetVsNonce(uint32_t nonce) {
+  sVsNonce = nonce;
+  sVsCalls = 0;
+  Log("the host's number for this battle's VS menu choices (stage, music): %08x", static_cast<unsigned>(nonce));
+}
 bool Active() {
   EnsureInit();
   if (sLobbyPending) {
@@ -1077,6 +1116,33 @@ uint8_t fightTypeDataBiosGetFightoutPokemonNum(void* data);
 alignas(16) uint8_t sHero[2][0x1000];
 }
 
+extern "C" {
+void* fightEncountDataBiosGetPtr(uint16_t id);
+}
+static void SetQuickBattleStyle(bool single) {
+  static uint8_t saved[64][3];
+  static bool have = false, applied = false;
+  const uint8_t* e5 = static_cast<const uint8_t*>(fightEncountDataBiosGetPtr(5));
+  if (!e5) return;
+  if (!have) {
+    for (uint16_t id = 7; id <= 54; id++) { const uint8_t* e = static_cast<const uint8_t*>(fightEncountDataBiosGetPtr(id)); if (e) std::memcpy(saved[id], e + 1, 3); }
+    have = true;
+  }
+  if (single == applied) return;
+  for (uint16_t id = 7; id <= 54; id++) {
+    if (id > 7 && id < 15) continue;
+    uint8_t* e = static_cast<uint8_t*>(fightEncountDataBiosGetPtr(id));
+    if (e) std::memcpy(e + 1, single ? e5 + 1 : saved[id], 3);
+  }
+  applied = single;
+  Log("VS menu: Quick Battle's encounters now make a %s battle (%s)", single ? "single" : "double", single ? "from the room" : "as the game has it");
+}
+void LobbyApplyVsStyle() {
+  if (!S.lobby || !S.active) return;
+  SetQuickBattleStyle(S.rules.style != "double");
+}
+void LobbyRestoreVsStyle() { SetQuickBattleStyle(false); }
+
 int LobbyStartBattle() {
   if (!S.lobby || !S.active) return -1;
   const int want = S.rules.style == "double" ? 2 : 1;
@@ -1093,6 +1159,16 @@ int LobbyStartBattle() {
   if (!xd::online::MakePlaceholderHero(sHero[0], S.host ? S.lobbyMine : S.lobbyFriend) || !xd::online::MakePlaceholderHero(sHero[1], S.host ? S.lobbyFriend : S.lobbyMine)) {
     Log("the heroes for the battle could not be made");
     return -1;
+  }
+  if (S.link && __hsd_rand_seed_hold) {
+    if (S.host) {
+      Send("Z " + std::to_string(*__hsd_rand_seed_hold));
+    } else {
+      std::string line;
+      if (!Pump("Z", line, true)) { Log("the host's battle seed did not arrive: not started"); return -1; }
+      *__hsd_rand_seed_hold = static_cast<uint32_t>(std::strtoull(line.c_str() + 2, nullptr, 10));
+    }
+    Log("battle seed before the battle is built: %08x (%s)", static_cast<unsigned>(*__hsd_rand_seed_hold), S.host ? "mine, sent" : "the host's");
   }
   PortXD_VsSetup v;
   std::memset(&v, 0, sizeof v);
@@ -1130,6 +1206,7 @@ bool LobbyStartBattleThread() {
 }
 
 void LobbyLeave() {
+  LobbyRestoreVsStyle();
   if (S.link) {
     std::string bye = "L1 LEAVE";
     S.link->Send(reinterpret_cast<const uint8_t*>(bye.data()), bye.size());
@@ -1560,6 +1637,12 @@ uint32_t sCosSeed = 0x2545F491u;
 inline void CosNext() { sCosSeed = sCosSeed * 214013u + 2531011u; }
 }
 extern "C" {
+int32_t PortXD_VsRand(void) {
+  if (!xd::online::Active() || sVsNonce == 0) return static_cast<int32_t>(HSD_Rand());
+  uint32_t h = sVsNonce ^ (0x9E3779B9u * (++sVsCalls));
+  h ^= h >> 16; h *= 0x7FEB352Du; h ^= h >> 15; h *= 0x846CA68Bu; h ^= h >> 16;
+  return static_cast<int32_t>(h & 0x7FFF);
+}
 uint32_t PortXD_CosRand(void) {
   if (!xd::online::Active()) return HSD_Rand();
   CosNext();

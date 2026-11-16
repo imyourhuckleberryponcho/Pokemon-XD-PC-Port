@@ -233,7 +233,7 @@ bool Frame(void*, const PortMenuInput* in) {
 
 const PortMenuPage kPage{"loading", Open, Frame, nullptr, nullptr};
 
-enum class Cover { None, NewGame, Continue };
+enum class Cover { None, NewGame, Continue, Battle, Room };
 struct Landing {
   Cover kind = Cover::None;
   bool ending = false;
@@ -246,6 +246,8 @@ struct Landing {
   int32_t floorAtYes = -1;
   int settled = 0;
   const char* why = "";
+  long blocked = 0;
+  uint16_t prevHeld = 0;
 };
 Landing C;
 kit::Age coverAge;
@@ -267,8 +269,42 @@ void CoverStart(Cover kind, const std::string& label, const char* why) {
   std::fprintf(stderr, "[landing] %s: the loading screen covers the way in (%s)\n", kind == Cover::NewGame ? "new game" : "continue", why);
 }
 
+void CoverBattle(const std::vector<std::string>& chips, bool rematch) {
+  C = Landing();
+  C.kind = Cover::Battle;
+  C.why = rematch ? "the rematch" : "the online battle";
+  I = Info();
+  I.newGame = true;
+  I.title = Tr("Starting the battle");
+  I.sub = Tr("Both sides are ready, the battle begins in a moment");
+  I.face = Rendered("icons", "eevee");
+  for (const std::string& c : chips) I.chips.push_back({c, I.chips.empty()});
+  coverAge.Reset();
+  sLogoDelay = 0.f, sLogoFade = 0.35f, sPanelDelay = 0.05f, sPanelFade = 0.25f;
+  std::fprintf(stderr, "[landing] battle: the loading screen covers the menu presses (%s)\n", C.why);
+}
+
+void CoverRoomResume() {
+  C = Landing();
+  C.kind = Cover::Room;
+  C.why = "started again into the room";
+  I = Info();
+  I.newGame = true;
+  I.title = Tr("Getting back into the room");
+  I.sub = Tr("The game restarts with the room's rules");
+  I.face = Rendered("icons", "eevee");
+  coverAge.Reset();
+  sLogoDelay = 0.f, sLogoFade = 0.35f, sPanelDelay = 0.05f, sPanelFade = 0.25f;
+  std::fprintf(stderr, "[landing] room: the loading screen covers the way back into the room\n");
+}
+
 void CoverNewGame(const std::string& label, const char* why) { CoverStart(Cover::NewGame, label, why); }
 void CoverContinue(const char* why) { CoverStart(Cover::Continue, "", why); }
+
+long GiveUpPolls() {
+  static const long n = [] { const char* v = std::getenv("XD_LANDING_GIVEUP_POLLS"); return v != nullptr ? std::strtol(v, nullptr, 0) : 60L * 90; }();
+  return n > 0 ? n : 60L * 90;
+}
 
 void CoverEnd(const char* why) {
   if (C.kind == Cover::None || C.ending) return;
@@ -282,14 +318,21 @@ bool CoverActive() { return C.kind != Cover::None; }
 
 void CoverMute(PADStatus* status) {
   if (C.kind == Cover::None) return;
+  uint16_t held = 0;
   for (int i = 0; i < PAD_MAX_CONTROLLERS; i++) {
     PADStatus& s = status[i];
     if (s.err != PAD_ERR_NONE) continue;
+    held |= s.button;
     s.button = 0;
     s.stickX = s.stickY = s.substickX = s.substickY = 0;
     s.triggerLeft = s.triggerRight = 0;
     s.analogA = s.analogB = 0;
   }
+  if (const uint16_t fresh = held & static_cast<uint16_t>(~C.prevHeld)) {
+    C.blocked++;
+    if (C.kind == Cover::Battle) std::fprintf(stderr, "[landing] a pressed button (0x%X) kept out of the game (frame %u, %ld so far)\n", static_cast<unsigned>(fresh), PortVI_GetFlipCount(), C.blocked);
+  }
+  C.prevHeld = held;
 }
 
 void CoverDrive(PADStatus* status, const WinWorkLayout* w) {
@@ -311,12 +354,27 @@ void CoverDrive(PADStatus* status, const WinWorkLayout* w) {
   C.lastMenu = menu;
   if (C.ending) {
     if (coverAge.age - C.endAge > 0.35f) {
+      std::fprintf(stderr, "[landing] cover over at game frame %u: %ld button presses were kept out; what is still held (0x%X) counts once released\n",
+                   PortVI_GetFlipCount(), C.blocked, static_cast<unsigned>(C.prevHeld));
       C.kind = Cover::None;
       PortInput_LatchHeld();
     }
     return;
   }
-  if (C.polls > 60 * 90) {
+  if (C.kind == Cover::Room) {
+    if (PortMenu_Active() || PortMenu_Pending() || C.polls > GiveUpPolls()) {
+      std::fprintf(stderr, "[landing] room cover over at game frame %u: %ld button presses kept out\n", PortVI_GetFlipCount(), C.blocked);
+      C.kind = Cover::None;
+      PortInput_LatchHeld();
+    }
+    return;
+  }
+  if (C.kind == Cover::Battle) {
+    if (!ol::D.on && coverAge.age >= 1.2f) CoverEnd("the battle has started");
+    else if (C.polls > GiveUpPolls()) CoverEnd("gave up after 90 seconds (the room's driver did not finish)");
+    return;
+  }
+  if (C.polls > GiveUpPolls()) {
     CoverEnd("gave up after 90 seconds (the way in looked different)");
     return;
   }

@@ -34,6 +34,10 @@ struct LobbyHandOver {
   int mineCount = 3, friendCount = 3;
 };
 void SetLobbyRoom(LobbyHandOver& h);
+uint32_t NewNonce();
+void SetVsNonce(uint32_t nonce);
+void LobbyRestoreVsStyle();
+void LobbyApplyVsStyle();
 int LobbyStartBattle();
 bool LobbyStartBattleThread();
 

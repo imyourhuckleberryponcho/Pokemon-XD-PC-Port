@@ -55,6 +55,22 @@ EXTRA_ARGS=""
 [ -n "${XD_SNAPSHOT_OVERRIDE:-}" ] && EXTRA_ARGS="$EXTRA_ARGS -DXD_SNAPSHOT_OVERRIDE=$XD_SNAPSHOT_OVERRIDE"
 [ "${XD_BUILD_GAME:-1}" = 0 ] && EXTRA_ARGS="$EXTRA_ARGS -DXD_BUILD_GAME=OFF"
 
+# Aurora gets its own clone in the build root (XD_AURORA_DIR). It is checked out with core.autocrlf=true, the same
+# CRLF files the Windows checkout has: patch 0004 holds CRLF lines and only applies to CRLF files (an LF clone fails there). The shared third_party/aurora checkout (junctioned into every Windows worktree, CRLF files) must never be
+# reset from here: that breaks the Windows builds. The clone is of the shared checkout's committed commit.
+AURORA_SHARED="$PWD/third_party/aurora"
+AURORA_CLONE="$BUILD_ROOT/aurora"
+AURORA_WANT="$(git -c safe.directory='*' -C "$AURORA_SHARED" rev-parse HEAD)"
+if [ ! -d "$AURORA_CLONE/.git" ]; then
+  git -c safe.directory='*' -c core.autocrlf=true clone -q --no-hardlinks "$AURORA_SHARED" "$AURORA_CLONE"
+  git -C "$AURORA_CLONE" config core.autocrlf true
+fi
+if [ "$(git -C "$AURORA_CLONE" rev-parse HEAD)" != "$AURORA_WANT" ]; then
+  git -c safe.directory='*' -C "$AURORA_CLONE" fetch -q "$AURORA_SHARED" "$AURORA_WANT"
+  git -C "$AURORA_CLONE" checkout -q -f "$AURORA_WANT"
+fi
+EXTRA_ARGS="$EXTRA_ARGS -DXD_AURORA_DIR=$AURORA_CLONE"
+
 HEADLESS="${XD_LINUX_HEADLESS:-}"
 if [ -z "$HEADLESS" ]; then
   if [ -f /usr/include/X11/Xlib.h ] || [ -f /usr/include/wayland-client.h ]; then HEADLESS=0; else HEADLESS=1; fi

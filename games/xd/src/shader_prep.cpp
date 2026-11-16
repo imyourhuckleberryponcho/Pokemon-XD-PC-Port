@@ -11,6 +11,12 @@
 #include <cwchar>
 #endif
 
+#ifndef _WIN32
+#include <csignal>
+#include <cerrno>
+#include <unistd.h>
+#endif
+
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
@@ -86,15 +92,38 @@ void PrintTotals() {
 
 }
 
+extern "C" void PortXD_BackgroundGuardStart(void) {
+  const char* text = std::getenv("XD_PARENT_PID");
+  if (text == nullptr || text[0] == 0) return;
+  const long parent = std::strtol(text, nullptr, 10);
+  if (parent <= 0) return;
+  std::thread([parent] {
+#ifdef _WIN32
+    HANDLE h = OpenProcess(SYNCHRONIZE, FALSE, static_cast<DWORD>(parent));
+    if (h == nullptr) _Exit(3);
+    WaitForSingleObject(h, INFINITE);
+#else
+    while (kill(static_cast<pid_t>(parent), 0) == 0 || errno == EPERM) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+#endif
+    std::fprintf(stderr, "[background] the launcher that started this run has ended: stopping\n");
+    std::fflush(stderr);
+    _Exit(3);
+  }).detach();
+}
+
 extern "C" bool PortXD_ShadersPrepareMode(void) {
   const char* stamp = std::getenv("XD_PREPARE_SHADERS");
   if (stamp == nullptr || stamp[0] == '\0') return false;
   SetDefault("XD_NO_MESSAGE_BOXES", "1");
   SetDefault("XD_WINDOW_OFFSCREEN", "1");
+  SetDefault("XD_WINDOW_HIDDEN", "1");
   SetDefault("SDL_WINDOW_ACTIVATE_WHEN_SHOWN", "0");
   SetDefault("XD_RECORD", "0");
   SetDefault("SDL_AUDIO_DRIVER", "dummy");
   SetDefault("XD_RUN_LABEL", "prepare shaders");
+  PortXD_BackgroundGuardStart();
   return true;
 }
 

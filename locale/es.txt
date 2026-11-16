@@ -4703,7 +4703,7 @@
 = The game starts again with the room's data and comes back to this room by itself (you wait through the opening again). Your saves stay as they are.
 > El juego se inicia de nuevo con los datos de la sala y vuelve a esta sala por sí solo (esperarás de nuevo durante la intro). Tus partidas guardadas se quedan como están.
 
-= A restart alone can't fix this: use the MODS page (EXTRAS) to switch the mods as the room needs, or play a game without the randomizer, then come back.
+= A restart alone can't fix this: use the MODS page (EXTRAS) to switch the mods as the room needs, then come back.
 > Reiniciar no basta para arreglar esto: usa la página MODS (EXTRAS) para activar o desactivar los mods como necesita la sala, o juega una partida sin el aleatorizador y vuelve después.
 
 = A or B: back
@@ -5377,3 +5377,76 @@
 
 = Your partner Pokemon is not Eevee this time. Choose one of these three to start with.
 > Esta vez tu Pokémon compañero no es Eevee. Elige uno de estos tres para empezar.
+
+= The two games do not hold the same Pokemon for this battle (a team was changed on the way). The battle was not started.
+> Los dos juegos no tienen los mismos Pokémon para este combate (un equipo cambió por el camino). El combate no se inició.
+
+= this copy already is in a player's folder
+> this copy already is in a player's folder
+
+= the folder %s already exists and isn't empty: choose another
+> the folder %s already exists and isn't empty: choose another
+
+= Your saves and settings are kept inside this folder (%s\\portable), so a new folder would start without them: download the new version by hand and move your portable folder over.
+> Your saves and settings are kept inside this folder (%s\\portable), so a new folder would start without them: download the new version by hand and move your portable folder over.
+
+= an earlier unfinished folder couldn't be removed: %s
+> an earlier unfinished folder couldn't be removed: %s
+
+= this download is not a whole player folder (the starter and the game folder): download the new version by hand
+> this download is not a whole player folder (the starter and the game folder): download the new version by hand
+
+= the new folder couldn't be put in place: %s
+> the new folder couldn't be put in place: %s
+
+= Version %s is set up in the new folder %s. Open the launcher in that folder from now on (the old folder can be deleted when you like: your saves and settings are not in it).
+> Version %s is set up in the new folder %s. Open the launcher in that folder from now on (the old folder can be deleted when you like: your saves and settings are not in it).
+
+= This copy isn't in the player's folder layout, so it can't update itself in place.
+> This copy isn't in the player's folder layout, so it can't update itself in place.
+
+= Update now downloads version %s and sets it up in a NEW folder: %s. Nothing is copied from this folder and nothing in it is changed. Your saves, settings and mods stay where they are (they are not kept in the game folder). Afterwards open the launcher in the new folder; this old folder can be deleted.
+> Update now downloads version %s and sets it up in a NEW folder: %s. Nothing is copied from this folder and nothing in it is changed. Your saves, settings and mods stay where they are (they are not kept in the game folder). Afterwards open the launcher in the new folder; this old folder can be deleted.
+
+= Choose another folder...
+> Choose another folder...
+
+= Tip: this folder is inside %s. Keep the game outside synced folders (for example in C:\\Games): a sync can lock or move files while the game runs.
+> Tip: this folder is inside %s. Keep the game outside synced folders (for example in C:\\Games): a sync can lock or move files while the game runs.
+
+= Starting the battle
+> Empieza el combate
+
+= Both sides are ready, the battle begins in a moment
+> Ambos están listos, el combate empieza enseguida
+
+= Gen 4 rules
+> Reglas de Gen 4
+
+= Gen 4 with modern types
+> Gen 4 con tipos modernos
+
+= Split on
+> División activada
+
+= Getting back into the room
+> Volviendo a la sala
+
+= The game restarts with the room's rules
+> El juego se reinicia con las reglas de la sala
+
+= Getting the game ready for your PC...
+> Preparando el juego para tu PC...
+
+= This happens once (and again after a graphics driver or game update) and takes about a minute. It runs quietly in the background: no game window opens, and there is nothing to close. You can look around meanwhile.
+> Esto ocurre una sola vez (y otra vez tras actualizar el controlador gráfico o el juego) y tarda aproximadamente un minuto. Se hace en silencio en segundo plano: no se abre ninguna ventana del juego y no hay nada que cerrar. Mientras tanto puedes echar un vistazo.
+
+= Getting the game ready for your PC (once, about a minute): %d%%
+> Preparando el juego para tu PC (una sola vez, aproximadamente un minuto): %d%%
+
+= Drawing pictures from your disc (once, about a minute). Play stops this and finishes it another time.
+> Dibujando imágenes de tu disco (una sola vez, aproximadamente un minuto). Jugar lo detiene y lo termina otro día.
+
+= the trainer pictures were interrupted
+> Las imágenes de los entrenadores se interrumpieron
+

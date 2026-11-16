@@ -568,6 +568,7 @@ class App {
 
   Background bg_;
   std::mutex pickMutex_;
+  std::string freshPicked_;
   std::string picked_;
   bool pickedReady_ = false;
 
@@ -798,7 +799,8 @@ class App {
   std::string FolderVersionOf(const std::string& folder);
   std::string NewestInstalled();
   void StartUpdateCheck(bool manual);
-  void StartUpdateInstall();
+  void StartUpdateInstall(bool freshFolder = false);
+  fs::path freshRoot_;
   void StopUpdate();
   void FollowUpdate();
   void SkipUpdate();
@@ -1671,7 +1673,8 @@ void App::StartUpdateCheck(bool manual) {
   });
 }
 
-void App::StartUpdateInstall() {
+void App::StartUpdateInstall(bool freshFolder) {
+  freshFolder = freshFolder || (!layout_.valid && !layout_.macApp && !layout_.suggestedRoot.empty());
   eu::Manifest m;
   {
     std::lock_guard<std::mutex> lock(up_.mutex);
@@ -1686,11 +1689,12 @@ void App::StartUpdateInstall() {
   StopUpdate();
   FindVersions();
   const eu::Layout layout = layout_;
+  const fs::path freshRoot = freshFolder ? (freshRoot_.empty() ? layout_.suggestedRoot : freshRoot_) : fs::path();
   Log("updates: Update now: downloading " + m.url + " (" + std::to_string(m.size) + " bytes)");
   up_.done = 0;
   up_.total = m.size;
   up_.busy = true;
-  up_.thread = std::thread([this, m, layout] {
+  up_.thread = std::thread([this, m, layout, freshFolder, freshRoot] {
     const GameInfo::Updates& u = game_.updates;
     const fs::path zip = u.stagingFolder / PathOf("update-" + m.version + (eu::PackageIsTarGz() ? ".tar.gz" : ".zip"));
     eu::FetchOptions options;
@@ -1702,7 +1706,7 @@ void App::StartUpdateInstall() {
       return !up_.stop.load();
     };
     std::string error, installed;
-    bool ok = layout.valid;
+    bool ok = layout.valid || (freshFolder && !layout.macApp && !freshRoot.empty());
     if (!ok) {
       error = layout.why;
     }
@@ -1716,14 +1720,22 @@ void App::StartUpdateInstall() {
     request.manifest = m;
     request.package = zip;
     request.requiredFiles = u.requiredFiles;
-    ok = ok && eu::Install(request, installed, error, [this] { return up_.stop.load(); });
+    if (freshFolder) {
+      ok = ok && eu::SetUpPlayerFolder(request, OwnProgramFolder(), freshRoot, error, [this] { return up_.stop.load(); });
+      installed = Utf8(freshRoot);
+    } else {
+      ok = ok && eu::Install(request, installed, error, [this] { return up_.stop.load(); });
+    }
     std::error_code ec;
     fs::remove(zip, ec);
     std::lock_guard<std::mutex> lock(up_.mutex);
     if (ok) {
       up_.phase = UpdateWork::Phase::Installed;
       up_.installed = installed;
-      up_.message = layout.macApp
+      up_.message = freshFolder
+                        ? Fmt(Tr("Version %s is set up in the new folder %s. Open the launcher in that folder from now on (the old folder can be deleted when you like: your saves and settings are not in it)."),
+                              m.version.c_str(), installed.c_str())
+                        : layout.macApp
                         ? Fmt(Tr("Version %s is ready. It is put in place when you restart %s (the app is replaced after "
                                  "this window closes, then opens again)."),
                               m.version.c_str(), game_.title.c_str())
@@ -2127,34 +2139,67 @@ void App::DrawUpdateWindows() {
       Dim(m.date.empty() ? Fmt(Tr("You have version %s. Download: %s."), NewestInstalled().c_str(), MegaBytes(m.size).c_str())
                          : Fmt(Tr("You have version %s. Published %s. Download: %s."), NewestInstalled().c_str(),
                                m.date.c_str(), MegaBytes(m.size).c_str()));
-      if (!m.notes.empty()) {
+      if (!m.notes.empty() || !m.history.empty()) {
         ImGui::Spacing();
         ImGui::TextUnformatted(Tr("What's new:"));
         ImGui::BeginChild("##notes", ImVec2(wrap, std::min(220 * scale_, ImGui::GetTextLineHeightWithSpacing() * 12)),
                           ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened);
         ImGui::PushTextWrapPos(0);
-        ImGui::TextUnformatted(m.notes.c_str());
+        ImGui::TextUnformatted(eu::NotesSince(m, NewestInstalled()).c_str());
         ImGui::PopTextWrapPos();
         ImGui::EndChild();
       }
       if (m.version == skipVersion_) {
         Dim(Tr("You chose to skip this version earlier."));
       }
-      Dim(layout_.macApp ? Tr("The new app waits beside the one you have and is put in place when you restart; the "
+      if (layout_.valid || layout_.macApp || layout_.suggestedRoot.empty())
+        Dim(layout_.macApp ? Tr("The new app waits beside the one you have and is put in place when you restart; the "
                               "version you have is kept for \"Go back\". Your saves, settings and mods are not touched.")
                          : Tr("Installed next to the version you have, which stays for \"Go back\". Your saves, settings "
                               "and mods are not touched."));
-      if (!layout_.valid) {
+      const bool fresh = !layout_.valid && !layout_.macApp && !layout_.suggestedRoot.empty();
+      if (!layout_.valid && !fresh) {
         ImGui::TextColored(kWarn, "%s", layout_.why.c_str());
       }
+      if (fresh) {
+        const fs::path target = freshRoot_.empty() ? layout_.suggestedRoot : freshRoot_;
+        ImGui::TextColored(kWarn, "%s", Tr("This copy isn't in the player's folder layout, so it can't update itself in place."));
+        ImGui::TextWrapped("%s", Fmt(Tr("Update now downloads version %s and sets it up in a NEW folder: %s. Nothing is copied from this folder and nothing in it is changed. "
+                                        "Your saves, settings and mods stay where they are (they are not kept in the game folder). Afterwards open the launcher in the new folder; this old folder can be deleted."),
+                                     m.version.c_str(), Utf8(target).c_str()).c_str());
+        if (ImGui::Button(Lbl(Tr("Choose another folder..."), "Choose another folder").c_str())) {
+          SDL_ShowOpenFolderDialog(
+              [](void* user, const char* const* files, int) {
+                App* app = static_cast<App*>(user);
+                if (files != nullptr && files[0] != nullptr) {
+                  std::lock_guard<std::mutex> lock(app->pickMutex_);
+                  app->freshPicked_ = files[0];
+                }
+              },
+              this, window_, nullptr, false);
+        }
+        {
+          std::lock_guard<std::mutex> lock(pickMutex_);
+          if (!freshPicked_.empty()) {
+            freshRoot_ = eu::SuggestPlayerFolder(PathOf(freshPicked_) / L"x");
+            freshPicked_.clear();
+          }
+        }
+      }
+      {
+        const std::string synced = eu::SyncedFolderName(fresh ? (freshRoot_.empty() ? layout_.suggestedRoot : freshRoot_) : OwnProgramFolder());
+        if (!synced.empty()) {
+          ImGui::TextColored(kWarn, "%s", Fmt(Tr("Tip: this folder is inside %s. Keep the game outside synced folders (for example in C:\Games): a sync can lock or move files while the game runs."), synced.c_str()).c_str());
+        }
+      }
       ImGui::Spacing();
-      if (!layout_.valid || gameRunning_) {
+      if ((!layout_.valid && !fresh) || gameRunning_) {
         ImGui::BeginDisabled();
       }
       if (PrimaryButton(Lbl(Tr("Update now"), "Update now").c_str())) {
-        StartUpdateInstall();
+        StartUpdateInstall(fresh);
       }
-      if (!layout_.valid || gameRunning_) {
+      if ((!layout_.valid && !fresh) || gameRunning_) {
         ImGui::EndDisabled();
       }
       ImGui::SameLine();
@@ -3556,10 +3601,13 @@ void App::DrawDiscPage() {
       const uint32_t shadersTotal = bg_.shadersTotal;
       if (bg_.preparing && bg_.shadersRunning && v.kind != DiscVerdict::Kind::Problem) {
         ImGui::Dummy(ImVec2(0, 4 * scale_));
-        ImGui::TextColored(kBusy, "%s", Tr("Preparing the game's shaders for this PC..."));
-        Dim(playWhenDrawn_ ? Tr("The game starts as soon as this is done.")
-                           : Tr("Done once (again after a graphics driver or game update), so places never wait for "
-                                "their graphics the first time you see them. You can look around meanwhile."));
+        ImGui::TextColored(kBusy, "%s", Tr("Getting the game ready for your PC..."));
+        Dim(Tr("This happens once (and again after a graphics driver or game update) and takes about a minute. It runs "
+               "quietly in the background: no game window opens, and there is nothing to close. You can look around "
+               "meanwhile."));
+        if (playWhenDrawn_) {
+          Dim(Tr("The game starts as soon as this is done."));
+        }
         const uint32_t done = std::min(bg_.shadersDone.load(), shadersTotal);
         char label[64];
         if (shadersTotal > 0) {
@@ -6229,12 +6277,9 @@ void App::DrawBottomBar() {
   ImGui::SetCursorPos(ImVec2(right - playWidth, playTop));
   std::string why;
   const bool shadersPreparing = bg_.preparing && bg_.shadersRunning;
+  const bool picturesDrawing = bg_.drawing && !bg_.preparing && !bg_.busy && !playWhenDrawn_;
   bool playable = !gameRunning_ && DiscPlayable(why);
-  if (playable && shadersPreparing) {
-    playable = false;
-    why = Tr("Preparing the game's shaders for this PC (once; see the Disc page).");
-  }
-  if (PlayButton(gameRunning_ ? Tr("Running...") : playWhenDrawn_ ? Tr("Starting...") : shadersPreparing ? Tr("Preparing...") : Tr("Play"),
+  if (PlayButton(gameRunning_ ? Tr("Running...") : playWhenDrawn_ ? Tr("Starting...") : Tr("Play"),
                  ImVec2(playWidth, playHeight), playable && !playWhenDrawn_)) {
     Play(false);
   }
@@ -6247,6 +6292,15 @@ void App::DrawBottomBar() {
     ImGui::TextColored(kBad, "%s", playError_.c_str());
   } else if (!saveError_.empty()) {
     ImGui::TextColored(kBad, "%s", saveError_.c_str());
+  } else if (shadersPreparing) {
+    const uint32_t total = bg_.shadersTotal;
+    const int percent = total > 0 ? static_cast<int>(std::min<uint32_t>(bg_.shadersDone, total) * 100ull / total) : 0;
+    char line[320];
+    std::snprintf(line, sizeof line, Tr("Getting the game ready for your PC (once, about a minute): %d%%"), percent);
+    ImGui::TextColored(kBusy, "%s", line);
+  } else if (picturesDrawing) {
+    ImGui::TextColored(kBusy, "%s", Tr("Drawing pictures from your disc (once, about a minute). Play stops this and "
+                                         "finishes it another time."));
   } else if (gameRunning_) {
     ImGui::TextColored(kGood, "%s", Tr("The game is running. Settings changed now are used the next time it starts."));
   } else if (controller_ && !playWhy_.empty()) {
@@ -6297,7 +6351,7 @@ void App::Frame() {
                    ImGuiWindowFlags_NoBringToFrontOnFocus);
   DrawHeader();
   promptH_ = controller_ ? 46 * scale_ : 0.0f;
-  const bool message = !playError_.empty() || !saveError_.empty() || gameRunning_ || (controller_ && !playWhy_.empty());
+  const bool message = !playError_.empty() || !saveError_.empty() || gameRunning_ || (bg_.preparing && bg_.shadersRunning) || (bg_.drawing && !bg_.preparing && !bg_.busy && !playWhenDrawn_) || (controller_ && !playWhy_.empty());
   const int rows = (SlotsOn() ? 4 : 3) - (controller_ ? 1 : 0) + (LanguageRowOn() ? 1 : 0);
   const float bottom = rows * ImGui::GetFrameHeight() + ((rows - 1) * 5 + 2 * 12 + 4 + 6) * scale_ +
                        ImGui::GetStyle().ItemSpacing.y + (message ? ImGui::GetTextLineHeightWithSpacing() : 0.0f) +

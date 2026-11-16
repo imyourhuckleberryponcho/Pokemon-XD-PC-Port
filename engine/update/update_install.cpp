@@ -406,6 +406,7 @@ Layout FindLayout(const fs::path& programFolder, const std::string& starterName)
                 Utf8(own).c_str());
     l.running.clear();
     l.root.clear();
+    l.suggestedRoot = SuggestPlayerFolder(own);
     return l;
   }
   if (!ReadPointer(l.root, l.current, l.previous)) {
@@ -516,6 +517,102 @@ bool Install(const InstallRequest& r, std::string& installed, std::string& error
     }
     RemoveFolder(e.path());
   }
+  return true;
+}
+
+std::string SyncedFolderName(const fs::path& path) {
+  static const char* const kNames[] = {"onedrive", "dropbox", "google drive", "googledrive", "icloud", "nextcloud", "syncthing", "mobile documents",
+                                       "pcloud", "mega", "box sync", "sync.com"};
+  for (const auto& part : path) {
+    std::string n = Utf8(part);
+    std::string low;
+    for (char c : n) low += static_cast<char>(c >= 'A' && c <= 'Z' ? c + 32 : c);
+    for (const char* k : kNames) {
+      if (low == k || low.compare(0, std::strlen(k), k) == 0) {
+        return low.compare(0, 9, "onedrive") == 0 ? "OneDrive" : low == "mobile documents" ? "iCloud Drive" : n;
+      }
+    }
+  }
+  return {};
+}
+
+fs::path SuggestPlayerFolder(const fs::path& programFolder) {
+  std::error_code ec;
+  const fs::path parent = programFolder.parent_path();
+  fs::path pick = parent / L"Pokemon XD PC";
+  for (int i = 2; fs::exists(pick, ec) && i < 100; ++i) {
+    pick = parent / PathOf("Pokemon XD PC (" + std::to_string(i) + ")");
+  }
+  return pick;
+}
+
+bool SetUpPlayerFolder(const InstallRequest& r, const fs::path& runningFolder, const fs::path& newRoot, std::string& error,
+                       const std::function<bool()>& stop) {
+  const Layout& l = r.layout;
+  const Manifest& m = r.manifest;
+  std::error_code ec;
+  if (l.macApp || l.valid) {
+    error = Tr("this copy already is in a player's folder");
+    return false;
+  }
+  if (newRoot.empty() || (fs::exists(newRoot, ec) && !fs::is_empty(newRoot, ec))) {
+    error = Fmt(Tr("the folder %s already exists and isn't empty: choose another"), Utf8(newRoot).c_str());
+    return false;
+  }
+  if (HoldsPlayerData(runningFolder)) {
+    error = Fmt(Tr("Your saves and settings are kept inside this folder (%s\portable), so a new folder would start without them: "
+                   "download the new version by hand and move your portable folder over."),
+                Utf8(runningFolder).c_str());
+    return false;
+  }
+  const uint64_t size = fs::file_size(r.package, ec);
+  if (ec || size != m.size) {
+    error = Fmt(Tr("the downloaded package has the wrong size (%llu bytes, the update information says %llu)"),
+                static_cast<unsigned long long>(ec ? 0 : size), static_cast<unsigned long long>(m.size));
+    return false;
+  }
+  std::string hash;
+  if (!Sha256File(r.package, hash, error)) return false;
+  if (hash != m.sha256) {
+    error = Tr("the downloaded package is not the one the publisher signed (its SHA-256 differs)");
+    return false;
+  }
+  const fs::path partial = fs::path(newRoot).concat(".partial");
+  const auto fail = [&](const std::string& why) {
+    error = why;
+    RemoveFolder(partial);
+    return false;
+  };
+  if (!RemoveFolder(partial)) return fail(Fmt(Tr("an earlier unfinished folder couldn't be removed: %s"), Utf8(partial).c_str()));
+  std::string why;
+  if (!(PackageIsTarGz() ? ExtractTarGz(r.package, partial, why, stop) : ExtractZip(r.package, partial, why, stop))) return fail(why);
+  const auto hasStarter = [&](const fs::path& dir) {
+    for (const std::string& n : l.starterNames) {
+      if (fs::is_regular_file(dir / PathOf(n), ec)) return true;
+    }
+    return false;
+  };
+  fs::path top = partial;
+  if (!hasStarter(top)) {
+    std::vector<fs::path> kids;
+    for (const auto& e : fs::directory_iterator(partial, ec)) kids.push_back(e.path());
+    if (kids.size() == 1 && fs::is_directory(kids[0], ec)) top = kids[0];
+  }
+  std::vector<std::string> required = r.requiredFiles;
+  required.push_back(kVersionFile);
+  if (!hasStarter(top) || !FolderUsable(top / PathOf(kFirstFolder), required)) {
+    return fail(Tr("this download is not a whole player folder (the starter and the game folder): download the new version by hand"));
+  }
+  detail::RestoreExecutableBits(top / PathOf(kFirstFolder));
+  detail::RestoreExecutableBits(top);
+  if (FolderVersion(top / PathOf(kFirstFolder)) != m.version) {
+    return fail(Fmt(Tr("the package holds version %s, not %s"), FolderVersion(top / PathOf(kFirstFolder)).c_str(), m.version.c_str()));
+  }
+  fs::create_directories(newRoot.parent_path(), ec);
+  if (fs::exists(newRoot, ec)) fs::remove(newRoot, ec);
+  fs::rename(top, newRoot, ec);
+  if (ec) return fail(Fmt(Tr("the new folder couldn't be put in place: %s"), ec.message().c_str()));
+  RemoveFolder(partial);
   return true;
 }
 

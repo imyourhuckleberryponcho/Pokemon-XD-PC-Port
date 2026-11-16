@@ -68,7 +68,7 @@ string(REPLACE "\\" "/" _xd_dt_sysinc "${_xd_dt_sysinc}")
 string(REPLACE ";" "\", \"" _xd_dt_sysinc "${_xd_dt_sysinc}")
 if (WIN32)
 file(WRITE "${_xd_dt_dir}/flags.json.new" "{\"defines\": [\"AURORA\", \"AURORA_ENABLE_GX\", \"TARGET_PC=1\", \"WEBGPU_DAWN\", \"XD_PORT=1\", \"WIN32\", \"_WINDOWS\"],
- \"includes\": [\"${PROJECT_SOURCE_DIR}/platform/compat/include\", \"${PROJECT_SOURCE_DIR}/third_party/aurora/include\", \"${XD_SNAPSHOT_DIR}/include\", \"${PROJECT_SOURCE_DIR}/platform/sdk/include\"],
+ \"includes\": [\"${PROJECT_SOURCE_DIR}/platform/compat/include\", \"${XD_AURORA_DIR}/include\", \"${XD_SNAPSHOT_DIR}/include\", \"${PROJECT_SOURCE_DIR}/platform/sdk/include\"],
  \"force_includes\": [\"${CMAKE_CURRENT_SOURCE_DIR}/src/game_code_seg.h\", \"${PROJECT_SOURCE_DIR}/platform/compat/include/cw_compat.h\", \"${PROJECT_SOURCE_DIR}/platform/sdk/include/sdk_port.h\"],
  \"system_includes\": [\"${_xd_dt_sysinc}\"]}
 ")
@@ -85,7 +85,7 @@ elseif (APPLE)
   file(WRITE "${_xd_linux_first}/sys/types.h.new" "#ifndef MSL_SYS_TYPES_H\n#define MSL_SYS_TYPES_H\n#include \"${_xd_sdk}/usr/include/sys/types.h\"\n#endif\n")
   file(COPY_FILE "${_xd_linux_first}/sys/types.h.new" "${_xd_linux_first}/sys/types.h" ONLY_IF_DIFFERENT)
   file(WRITE "${_xd_dt_dir}/flags.json.new" "{\"defines\": [\"AURORA\", \"AURORA_ENABLE_GX\", \"TARGET_PC=1\", \"WEBGPU_DAWN\", \"XD_PORT=1\", \"_XOPEN_SOURCE=700\", \"_DARWIN_C_SOURCE=1\"],
- \"includes\": [\"${PROJECT_SOURCE_DIR}/platform/compat/mac\", \"${PROJECT_SOURCE_DIR}/platform/compat/include\", \"${PROJECT_SOURCE_DIR}/third_party/aurora/include\", \"${XD_SNAPSHOT_DIR}/include\", \"${PROJECT_SOURCE_DIR}/platform/sdk/include\"],
+ \"includes\": [\"${PROJECT_SOURCE_DIR}/platform/compat/mac\", \"${PROJECT_SOURCE_DIR}/platform/compat/include\", \"${XD_AURORA_DIR}/include\", \"${XD_SNAPSHOT_DIR}/include\", \"${PROJECT_SOURCE_DIR}/platform/sdk/include\"],
  \"force_includes\": [\"${CMAKE_CURRENT_SOURCE_DIR}/src/game_code_seg.h\", \"${PROJECT_SOURCE_DIR}/platform/compat/include/cw_compat.h\", \"${PROJECT_SOURCE_DIR}/platform/sdk/include/sdk_port.h\"],
  \"first_includes\": [\"${_xd_linux_first}\"],
  \"system_includes\": [${_xd_mac_sysinc}], \"gc_system_includes\": [${_xd_mac_sysinc}],
@@ -109,7 +109,7 @@ else ()
   file(WRITE "${_xd_linux_first}/sys/types.h.new" "#ifndef MSL_SYS_TYPES_H\n#define MSL_SYS_TYPES_H\n#include \"${_xd_arch_inc}/sys/types.h\"\n#endif\n")
   file(COPY_FILE "${_xd_linux_first}/sys/types.h.new" "${_xd_linux_first}/sys/types.h" ONLY_IF_DIFFERENT)
   file(WRITE "${_xd_dt_dir}/flags.json.new" "{\"defines\": [\"AURORA\", \"AURORA_ENABLE_GX\", \"TARGET_PC=1\", \"WEBGPU_DAWN\", \"XD_PORT=1\"],
- \"includes\": [\"${PROJECT_SOURCE_DIR}/platform/compat/include\", \"${PROJECT_SOURCE_DIR}/third_party/aurora/include\", \"${XD_SNAPSHOT_DIR}/include\", \"${PROJECT_SOURCE_DIR}/platform/sdk/include\"],
+ \"includes\": [\"${PROJECT_SOURCE_DIR}/platform/compat/include\", \"${XD_AURORA_DIR}/include\", \"${XD_SNAPSHOT_DIR}/include\", \"${PROJECT_SOURCE_DIR}/platform/sdk/include\"],
  \"force_includes\": [\"${CMAKE_CURRENT_SOURCE_DIR}/src/game_code_seg.h\", \"${PROJECT_SOURCE_DIR}/platform/compat/include/cw_compat.h\", \"${PROJECT_SOURCE_DIR}/platform/sdk/include/sdk_port.h\"],
  \"first_includes\": [\"${_xd_linux_first}\"],
  \"system_includes\": [\"${_xd_clang_res}/include\"], \"gc_system_includes\": [${_xd_gc_sysinc}],
@@ -176,7 +176,7 @@ endif () # XD_BUILD_GAME
 function(xd_use_decomp_headers target)
   target_include_directories(${target} PRIVATE
     ${PROJECT_SOURCE_DIR}/platform/compat/include
-    ${PROJECT_SOURCE_DIR}/third_party/aurora/include
+    ${XD_AURORA_DIR}/include
     ${XD_SNAPSHOT_DIR}/include
   )
   target_link_libraries(${target} PRIVATE platform_compat platform_sdk aurora::core aurora::gx aurora::os aurora::pad
@@ -448,6 +448,9 @@ foreach (_src ${XD_GAME_SOURCES})
   endif ()
   if (_src MATCHES "/fight/fightTrainer\\.cpp$")
     list(APPEND _defs "fightTrainerGetPrefixNamePtr=PortXD_RealPrefixNamePtr")
+  endif ()
+  if (_src MATCHES "/game/menuCB_Battle(Start)?\\.cpp$") # 0.5.3: the VS menu picks the arena and the music by chance: in a room from the host's number (online_battle.cpp PortXD_VsRand)
+    list(APPEND _defs "HSD_Rand=PortXD_VsRand")
   endif ()
   if (_src MATCHES "/menuCB_BattleStart\\.cpp$") # LOBBY: the VS start screen shows the guest's card (presentation only)
     list(APPEND _defs "heroBiosGetNamePtr=PortXD_VsHeroName" "fightTrainerKindDataBiosGetPrefixName=PortXD_VsPrefixName")
@@ -821,7 +824,7 @@ if (APPLE)
   set_source_files_properties(src/boot.c PROPERTIES COMPILE_OPTIONS "${XD_MAC_COMPAT_OPTION}")
 endif ()
 set_property(SOURCE src/dev_menu.cpp APPEND PROPERTY INCLUDE_DIRECTORIES "${PROJECT_SOURCE_DIR}/platform/compat/include"
-  "${PROJECT_SOURCE_DIR}/third_party/aurora/include" "${XD_SNAPSHOT_DIR}/include") # (as xd_use_decomp_headers)
+  "${XD_AURORA_DIR}/include" "${XD_SNAPSHOT_DIR}/include") # (as xd_use_decomp_headers)
 execute_process(COMMAND git describe --always --dirty --abbrev=10
   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" OUTPUT_VARIABLE _xd_port_commit OUTPUT_STRIP_TRAILING_WHITESPACE
   ERROR_QUIET)
@@ -838,7 +841,7 @@ add_executable(xd ${XD_PROGRAM_PORT_SOURCES} $<TARGET_OBJECTS:xd_game> $<TARGET_
 target_compile_definitions(xd PRIVATE XD_RELGLOBAL_IS_U32=${XD_RELGLOBAL_IS_U32})
 set_property(SOURCE src/warp.cpp src/render_icon.cpp src/settings_menu.cpp src/playthrough.cpp src/audio_categories.cpp src/button_icons.cpp src/settings_switches.cpp src/hd_textures.cpp src/texture_observers.cpp src/type_icons.cpp
   src/replay_pacing.cpp src/widescreen.cpp src/online_mirror.cpp src/fsys_unpack_cost.cpp src/challenges.cpp src/walk_helper.cpp src/gen4_eevee.cpp src/online_draft_game.cpp src/online_vs_row.cpp src/pc_trade.cpp src/starter.cpp APPEND PROPERTY INCLUDE_DIRECTORIES ${PROJECT_SOURCE_DIR}/platform/compat/include
-  ${PROJECT_SOURCE_DIR}/third_party/aurora/include ${XD_SNAPSHOT_DIR}/include)
+  ${XD_AURORA_DIR}/include ${XD_SNAPSHOT_DIR}/include)
 if (MSVC)
   set(XD_PROGRAM_LINK_OPTIONS /BASE:0x40000000 /DYNAMICBASE:NO /INCREMENTAL:NO)
 elseif (APPLE) # macOS (docs/MAC.md, never run): the same address, and the reserved ranges of mac_low_reserve.c
