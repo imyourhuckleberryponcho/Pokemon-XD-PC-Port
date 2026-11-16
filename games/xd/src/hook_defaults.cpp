@@ -8,4 +8,5 @@ int PortXD_MemoAisyouRow(int32_t spriteId, uint16_t* type) {
   return 1;
 }
 
+void* PortXD_get_exp_fight_pokemon_ptr = nullptr;
 }

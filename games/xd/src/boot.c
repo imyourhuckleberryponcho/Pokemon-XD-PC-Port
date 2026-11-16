@@ -145,6 +145,7 @@ void PortXD_SpeedupsFrame(void);
 void PortXD_ReplayPacingInit(void);
 void PortXD_SettingsMenuInit(void);
 void PortXD_SettingsMenuOverlay(void);
+bool PortXD_LandingCoverActive(void);
 
 extern uint32_t* __hsd_rand_seed_hold;
 void PortXD_StateDumpStart(void);
@@ -790,6 +791,7 @@ int aurora_main(int argc, char** argv) {
   PortXD_SettingsMenuInit();
   {
     const char* requireOriginal = getenv("XD_REQUIRE_ORIGINAL");
+    PortFocusPause_SetHold(PortXD_LandingCoverActive);
     PortFocusPause_Init(PortVI_GetFlipCount, testRun || (requireOriginal != NULL && strcmp(requireOriginal, "1") == 0));
   }
   {

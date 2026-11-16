@@ -10,6 +10,8 @@ extern "C" {
 
 void PortFocusPause_Init(uint32_t (*progress)(void), bool testRun);
 
+void PortFocusPause_SetHold(bool (*hold)(void));
+
 void PortFocusPause_Frame(void);
 
 #ifdef __cplusplus

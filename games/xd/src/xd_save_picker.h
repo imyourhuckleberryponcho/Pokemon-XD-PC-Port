@@ -19,6 +19,7 @@ bool SkipLogos();
 void RegisterSkipLogosQuery(bool (*query)());
 void Drive(PADStatus* status, int menuId, bool titleOpen, int select);
 void Done(const char* why);
+bool DropPressNow();
 bool WantsNewGameNow();
 bool WantsContinueNow();
 

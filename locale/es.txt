@@ -5450,3 +5450,6 @@
 = the trainer pictures were interrupted
 > Las imágenes de los entrenadores se interrumpieron
 
+
+= The game did not start by itself: the title menu is yours.
+> El juego no ha arrancado solo: el menú del título es tuyo.

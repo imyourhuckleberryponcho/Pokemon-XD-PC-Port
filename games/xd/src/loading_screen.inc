@@ -245,6 +245,9 @@ struct Landing {
   bool yesDone = false;
   int32_t floorAtYes = -1;
   int settled = 0;
+  uint32_t startFlip = 0;
+  uint32_t titleSince = 0;
+  uint32_t lastLog = 0;
   const char* why = "";
   long blocked = 0;
   uint16_t prevHeld = 0;
@@ -264,6 +267,7 @@ void CoverStart(Cover kind, const std::string& label, const char* why) {
   C.kind = kind;
   C.why = why;
   I = InfoFor(kind == Cover::NewGame, label);
+  C.startFlip = PortVI_GetFlipCount();
   coverAge.Reset();
   sLogoDelay = 0.f, sLogoFade = 0.35f, sPanelDelay = 0.05f, sPanelFade = 0.25f;
   std::fprintf(stderr, "[landing] %s: the loading screen covers the way in (%s)\n", kind == Cover::NewGame ? "new game" : "continue", why);
@@ -316,6 +320,11 @@ void CoverEnd(const char* why) {
 
 bool CoverActive() { return C.kind != Cover::None; }
 
+const char* WaitingFor() {
+  if (C.kind == Cover::NewGame) return C.yesDone ? "the name entry (menu 0x65 / 0x66 / 0x68)" : "the game's question (menu 0x35), then the name entry";
+  return C.yesDone ? "the save's map (a floor other than the title's, running)" : "the CONTINUE summary's question (menu 0x35), then the save's map";
+}
+
 void CoverMute(PADStatus* status) {
   if (C.kind == Cover::None) return;
   uint16_t held = 0;
@@ -352,6 +361,13 @@ void CoverDrive(PADStatus* status, const WinWorkLayout* w) {
                  w != nullptr ? w->state : -1, w != nullptr ? w->cursor : -1, static_cast<unsigned>(floor), floorGetFloorState());
   }
   C.lastMenu = menu;
+  const uint32_t nowFlip = PortVI_GetFlipCount();
+  if (!C.ending && (C.kind == Cover::NewGame || C.kind == Cover::Continue) && nowFlip - (C.lastLog != 0 ? C.lastLog : C.startFlip) >= 900) {
+    C.lastLog = nowFlip;
+    std::fprintf(stderr, "[landing] still waiting after %u game frames for %s: window 0x%X state %d cursor %d, floor 0x%X state %d\n",
+                 nowFlip - C.startFlip, WaitingFor(), menu, w != nullptr ? w->state : -1, w != nullptr ? w->cursor : -1,
+                 static_cast<unsigned>(floor), floorGetFloorState());
+  }
   if (C.ending) {
     if (coverAge.age - C.endAge > 0.35f) {
       std::fprintf(stderr, "[landing] cover over at game frame %u: %ld button presses were kept out; what is still held (0x%X) counts once released\n",
@@ -374,7 +390,21 @@ void CoverDrive(PADStatus* status, const WinWorkLayout* w) {
     else if (C.polls > GiveUpPolls()) CoverEnd("gave up after 90 seconds (the room's driver did not finish)");
     return;
   }
-  if (C.polls > GiveUpPolls()) {
+  const bool titleUp = menu == 0x116 && w != nullptr && w->state == 2;
+  if (!titleUp) {
+    C.titleSince = 0;
+  } else if (C.titleSince == 0) {
+    C.titleSince = nowFlip != 0 ? nowFlip : 1;
+  } else if (nowFlip - C.titleSince >= 720 && C.kind != Cover::None) {
+    std::fprintf(stderr, "[landing] the title menu has been up for %u game frames and is waiting for %s\n", nowFlip - C.titleSince, WaitingFor());
+    PortXD_ShowNote(Tr("The game did not start by itself: the title menu is yours."), 6.f);
+    CoverEnd("the title menu stayed up (the way in was not taken)");
+    return;
+  }
+  if (C.polls > 2 * GiveUpPolls() || nowFlip - C.startFlip > static_cast<uint32_t>(GiveUpPolls())) {
+    std::fprintf(stderr, "[landing] gave up: still waiting for %s; window 0x%X state %d cursor %d, floor 0x%X state %d, the port's YES %s\n", WaitingFor(),
+                 menu, w != nullptr ? w->state : -1, w != nullptr ? w->cursor : -1, static_cast<unsigned>(floor), floorGetFloorState(),
+                 C.yesDone ? "was given" : "was not given");
     CoverEnd("gave up after 90 seconds (the way in looked different)");
     return;
   }

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(xd_port VERSION 0.5.3 LANGUAGES C CXX)
+project(xd_port VERSION 0.5.4 LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 20)
@@ -178,6 +178,16 @@ if (APPLE)
   set(XD_MAC_LOW_LINK_OPTIONS -Wl,-pagezero_size,0x1000 -Wl,-no_pie -Wl,-image_base,0x40000000
     -Wl,-no_fixup_chains -Wl,-no_huge)
   add_link_options(${XD_MAC_LOW_LINK_OPTIONS})
+endif ()
+
+if (MSVC)
+  set(XD_UTF8_MANIFEST "${CMAKE_CURRENT_SOURCE_DIR}/platform/os/utf8_acp.manifest")
+  function(add_executable name)
+    _add_executable(${ARGV})
+    if (NOT "IMPORTED" IN_LIST ARGN AND NOT "ALIAS" IN_LIST ARGN)
+      target_sources(${name} PRIVATE "${XD_UTF8_MANIFEST}")
+    endif ()
+  endfunction()
 endif ()
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/engine/i18n/include)

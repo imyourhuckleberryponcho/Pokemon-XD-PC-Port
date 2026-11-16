@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- Every program of the port (Windows): the system's narrow (ANSI) text is UTF-8 for this program, so argv, fopen,
+     std::filesystem::path(std::string), getenv and the A functions all agree with the UTF-8 strings the launcher,
+     settings.ini and the disc reader use (folders named Radiodiagnóstico, 日本, a user called José).
+     Needs Windows 10 1903 or newer (older: ignored, and nothing changes). Linked in by the top CMakeLists.txt. -->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <activeCodePage xmlns="http://schemas.microsoft.com/SMI/2019/WindowsSettings">UTF-8</activeCodePage>
+    </windowsSettings>
+  </application>
+</assembly>

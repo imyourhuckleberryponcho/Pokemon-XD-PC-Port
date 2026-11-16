@@ -22,6 +22,7 @@ namespace {
 namespace es = engine::settings;
 
 uint32_t (*sProgress)(void) = nullptr;
+bool (*sHold)(void) = nullptr;
 bool sAllowed = false;
 bool sHadFocus = false;
 
@@ -121,8 +122,11 @@ void PortFocusPause_Init(uint32_t (*progress)(void), bool testRun) {
                              : "off (system.pause_on_focus_loss): the game keeps running in the background");
 }
 
+void PortFocusPause_SetHold(bool (*hold)(void)) { sHold = hold; }
+
 void PortFocusPause_Frame(void) {
   if (PortMenu_Active() || PortMenu_Pending() || PortFreeze_Active()) return;
+  if (sHold != nullptr && sHold()) return;
   if (sNextTest < sTests.size() && sProgress != nullptr && sProgress() >= sTests[sNextTest].frame) {
     const Loss t = sTests[sNextTest++];
     if (!SettingOn()) {

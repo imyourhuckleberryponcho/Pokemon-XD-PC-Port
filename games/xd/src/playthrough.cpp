@@ -791,6 +791,9 @@ bool TitleInputImpl(PADStatus* status, int select, u16 newButtons) {
     return true;
   }
   if (select == 0 && sScreen && xd::picker::WantsNewGameNow() && sRestarted) {
+    static bool begun = false;
+    if (begun) return false;
+    begun = true;
     sNewGameTaken = true;
     sContinueAccepted = false;
     ep::Setup s = sRestartSetup;

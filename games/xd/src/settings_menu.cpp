@@ -3008,7 +3008,17 @@ void TitleFilter(PADStatus* status, const WinWorkLayout* w, u16 newDirs, u16 new
 void EntryFilter(PADStatus* status);
 
 u16 sPtPrevButtons = 0;
+struct DropPressGuard {
+  PADStatus* status;
+  ~DropPressGuard() {
+    if (!xd::picker::DropPressNow()) return;
+    for (int i = 0; i < PAD_MAX_CONTROLLERS; i++) {
+      if (status[i].err == PAD_ERR_NONE) status[i].button &= static_cast<u16>(~PAD_BUTTON_A);
+    }
+  }
+};
 void Filter(PADStatus* status) {
+  const DropPressGuard dropPress{status};
   ls::CoverMute(status);
   xd::pt::PadPoll(status);
   if (PortXD_PcTradeSwallowInput()) {
@@ -3408,6 +3418,7 @@ bool PortXD_ShowRuleMessage(const std::string& text) {
   ng::ruleText = text;
   return PortMenu_Open(&ng::kRulePage);
 }
+extern "C" bool PortXD_LandingCoverActive(void) { return ls::CoverActive(); }
 void PortXD_ShowNote(const std::string& text, float seconds) {
   ng::noteText = text;
   ng::noteUntil = std::chrono::steady_clock::now() + std::chrono::milliseconds(static_cast<int>(seconds * 1000.f));

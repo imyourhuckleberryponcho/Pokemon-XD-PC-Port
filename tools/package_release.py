@@ -97,9 +97,18 @@ Public beta {version}
 Thank you for trying it! This is a beta: expect bugs, and keep a copy of your save.
 Questions, bug reports, other players: https://discord.gg/XVbDVXH4Pn
 
-New in 0.5.3
+New in 0.5.4
 ------------
-- Online battles: fixes the two PCs showing different stages and then drifting apart after the first turn
+- Linux and Mac: the game no longer crashes when a Pokemon levels up and learns a new move while it
+  already knows four (the "forget a move" screen). Windows was not affected.
+- The loading screen could stay stuck after "Restart into ..." (the game never got past the title menu). The
+  restart now presses NEW GAME again if the game did not take it, and hands the title over to you with a short
+  note if it still does not start.
+- A folder name with accents or other non-English letters (for example "Diagnostico" with an accent) no longer
+  breaks creating the language pack or starting the game from that folder. Needs Windows 10 version 1903 or newer.
+
+New in 0.5.3
+------------- Online battles: fixes the two PCs showing different stages and then drifting apart after the first turn
   (a "desync"). Both now agree on the arena and the random numbers before the battle starts, and the
   Pokemon are checked to be the same on both sides.
 - Online battles: rooms with one Pokemon per side (singles) now really fight singles.

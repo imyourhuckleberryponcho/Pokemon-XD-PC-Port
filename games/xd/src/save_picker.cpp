@@ -103,6 +103,8 @@ bool SkipLogos() { return Current() != Intent::None || (sSkipQuery != nullptr &&
 
 namespace {
 int sTick = 0, sSettle = 0, sSteer = 0, sPressed = 0;
+int sTries = 0;
+uint32_t sPressEndedAt = 0;
 bool sStartStatusSet = false;
 bool sNewGamePressed = false;
 constexpr int kTitleMenuId = 0x116;
@@ -114,6 +116,10 @@ void Done(const char* why) {
   sIntent = Intent::None;
 }
 
+bool DropPressNow() {
+  static const int drop = std::getenv("XD_RESTART_DROP_PRESS") != nullptr ? std::atoi(std::getenv("XD_RESTART_DROP_PRESS")) : 0;
+  return drop > 0 && sIntent != Intent::None && sTries < drop && sPressed > 0 && sPressed <= 3;
+}
 bool WantsNewGameNow() { return sIntent == Intent::NewGame; }
 bool WantsContinueNow() { return sIntent == Intent::Continue; }
 
@@ -159,7 +165,18 @@ void Drive(PADStatus* status, int menuId, bool titleOpen, int select) {
     pad->button |= PAD_BUTTON_A;
     sPressed++;
     if (sIntent == Intent::NewGame) sNewGamePressed = true;
-    if (sPressed == 3) Done(sIntent == Intent::NewGame ? "NEW GAME pressed" : "CONTINUE pressed");
+    if (sPressed == 3) sPressEndedAt = PortVI_GetFlipCount();
+    return;
+  }
+  if (PortVI_GetFlipCount() - sPressEndedAt >= 60) {
+    if (sTries >= 8) {
+      std::fprintf(stderr, "[restart] the title menu did not take %d presses: the landing gives up here (the title is the player's)\n", sTries + 1);
+      Done("the title menu did not take the press");
+      return;
+    }
+    sTries++;
+    std::fprintf(stderr, "[restart] the title menu is still up a second after the press: pressing again (try %d)\n", sTries + 1);
+    sPressed = 0;
   }
 }
 

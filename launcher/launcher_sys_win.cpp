@@ -86,6 +86,27 @@ std::vector<FontSet> SystemFonts() {
   return {{windows / L"segoeui.ttf", windows / L"seguisb.ttf", windows / L"segoeuib.ttf"}};
 }
 
+std::wstring QuoteArgument(const std::wstring& arg) {
+  std::wstring out = L"\"";
+  size_t backslashes = 0;
+  for (const wchar_t c : arg) {
+    if (c == L'\\') {
+      backslashes++;
+      continue;
+    }
+    if (c == L'"') {
+      out.append(backslashes * 2 + 1, L'\\');
+    } else {
+      out.append(backslashes, L'\\');
+    }
+    backslashes = 0;
+    out.push_back(c);
+  }
+  out.append(backslashes * 2, L'\\');
+  out.push_back(L'"');
+  return out;
+}
+
 struct Process {
   HANDLE handle = nullptr;
   DWORD id = 0;
@@ -94,9 +115,9 @@ struct Process {
 
 Process* StartProgram(const StartRequest& request, std::string& error) {
   const std::wstring program = request.program.wstring();
-  std::wstring command = L"\"" + program + L"\"";
+  std::wstring command = QuoteArgument(program);
   for (const std::string& a : request.arguments) {
-    command += L" \"" + Wide(a) + L"\"";
+    command += L" " + QuoteArgument(Wide(a));
   }
   STARTUPINFOW si{};
   si.cb = sizeof(si);
