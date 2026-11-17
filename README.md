@@ -13,7 +13,7 @@ This repository contains **no game assets, ROMs, ISOs or executables**, and none
 You need your own legally obtained copy of the game (USA, `GXXE01`); the port reads everything from your disc
 image while it runs.
 
-## Status: public beta — version 0.5.4
+## Status: public beta — version 0.5.5
 
 **Playable from New Game into the story, with known bugs.** It is not finished: expect crashes, stalls and
 graphics differences, and keep backups of saves you care about. Downloads are on the [Releases](../../releases)
@@ -27,6 +27,8 @@ page, one per system:
 
 **Found a bug, or want to help test?** Join the [Discord](https://discord.gg/XVbDVXH4Pn) — see
 *Reporting a bug* below.
+
+New in 0.5.5: the Mac launcher no longer closes right after opening when you have a save (and keeps a log file); the Strategy Memo's cry screen shows the right waveform for every Pokémon; and the Mac first-run report no longer reports false problems when Apple's developer tools are not set up. Mac players: approve the new version once in System Settings > Privacy & Security > Open Anyway.
 
 New in 0.5.4: Linux and Mac no longer crash when a Pokémon levels up and learns a move while it already knows four; the loading screen can no longer stay stuck after a restart (the title menu is pressed again, and handed to you with a note if the game still does not start); and folder names with accents no longer break the language pack or starting the game (Windows 10 1903 or newer).
 

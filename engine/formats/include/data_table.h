@@ -45,6 +45,8 @@ bool DataTable_Validate(const TableDesc* desc, char* error, size_t errorSize);
 uint32_t DataTable_Convert(const TableDesc* desc, const uint8_t* gc, uint32_t gcBaseOffset, uint32_t count, void* pc,
                        PointerResolver resolve, void* user);
 
+void DataTable_SetHighAddr32Ok(int ok);
+
 uint32_t DataTable_VerifyRoundTrip(const TableDesc* desc, const uint8_t* gc, uint32_t count, const void* pc);
 
 #ifdef __cplusplus

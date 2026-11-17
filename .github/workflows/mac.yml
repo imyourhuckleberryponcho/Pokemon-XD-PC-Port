@@ -211,7 +211,7 @@ jobs:
                    dsp_core_test disc_check_test mods_test data_mods_test playthrough_test disc_overlay_test \
                    gc_fused_test disc_drive_test gc_memory_test gx_fifo_test card_timing_test input_record_test \
                    game_clock_test os_threads_test keyboard_defaults_test controls_apply_test button_art_test \
-                   low_arena_test dsp_equiv_test; do
+                   low_arena_test dsp_equiv_test low_alloc_ordinary_test; do
             # (xd_rel_link_test is not in the list: it needs a disc image)
             if [ ! -x "$BIN/$t" ]; then echo "MISSING $t"; FAILED="$FAILED $t(missing)"; continue; fi
             mkdir -p "logs/home_$t"
@@ -223,6 +223,15 @@ jobs:
               echo "FAIL $t (exit $?)"; tail -n 15 "logs/test_$t.log"; FAILED="$FAILED $t"
             fi
           done
+          # (0.5.5: the same test with the system said to have NO memory below 4 GB: a program that does not run the game
+          #  must get ordinary memory and go on, not stop; the Mac launcher of 0.5.4 stopped there)
+          if [ -x "$BIN/low_alloc_ordinary_test" ]; then
+            if HOME="$PWD/logs/home_low_alloc_ordinary_test" XD_SETTINGS_DIR="$PWD/logs/home_low_alloc_ordinary_test"                perl -e 'alarm 300; exec @ARGV' "$BIN/low_alloc_ordinary_test" nolow > logs/test_low_alloc_ordinary_test_nolow.log 2>&1; then
+              echo "PASS low_alloc_ordinary_test nolow"
+            else
+              echo "FAIL low_alloc_ordinary_test nolow (exit $?)"; tail -n 15 logs/test_low_alloc_ordinary_test_nolow.log; FAILED="$FAILED low_alloc_ordinary_test_nolow"
+            fi
+          fi
           echo "$FAILED" > logs/tests_failed.txt
           # (os_threads_test has timing tolerances that fail on busy machines, as on Linux: reported, not fatal)
           FATAL="$(echo "$FAILED" | tr ' ' '\n' | grep -v '^os_threads_test$' | grep -v '^$' || true)"
@@ -387,6 +396,26 @@ jobs:
             echo "exit code $?" >> "$GITHUB_WORKSPACE/logs/launcher_handover.txt" )
           tail -n 12 logs/launcher_handover.txt
           grep -q "mac: low memory self-test: OK" logs/launcher_handover.txt || PROBLEMS="$PROBLEMS handover"
+          # 0.5.5: the launcher of 0.5.4 stopped ("no free 256 MB range below 4 GB", PortMem_LowAlloc) as soon as the player
+          # had a save, because the save page reads the disc's names through the converter, which asks for game memory below
+          # 4 GB, and an ordinary program on a Mac has none. XD_LAUNCHER_LOWMEM_PROBE=1 makes this very program make that one
+          # call and print the result: it must now get ordinary memory (zeroed, aligned, usable), say so, and exit 0.
+          ( cd "$APP/Contents/MacOS" && XD_LAUNCHER_LOWMEM_PROBE=1 XD_SETTINGS_DIR="$RUNNER_TEMP/lsmoke/settings" XD_CACHE_DIR="$RUNNER_TEMP/lsmoke/cache"               perl -e 'alarm 60; exec @ARGV' ./xd_launcher > "$GITHUB_WORKSPACE/logs/launcher_lowmem_probe.txt" 2>&1
+            echo "exit code $?" >> "$GITHUB_WORKSPACE/logs/launcher_lowmem_probe.txt" )
+          cat logs/launcher_lowmem_probe.txt
+          grep -q "low-memory probe: .*zeroed and aligned: yes, ordinary memory: yes: OK" logs/launcher_lowmem_probe.txt || PROBLEMS="$PROBLEMS lowmem-probe"
+          grep -q "^exit code 0$" logs/launcher_lowmem_probe.txt || PROBLEMS="$PROBLEMS lowmem-probe-exit"
+          grep -q "Stopped (abort)" logs/launcher_lowmem_probe.txt && PROBLEMS="$PROBLEMS lowmem-probe-abort"
+          # The launcher's own log file (a double-click shows no console): the scripted run above must have left one.
+          LOGDIR="$HOME/Library/Application Support/Pokemon XD/logs"
+          ls -la "$LOGDIR" > logs/launcher_logfile.txt 2>&1
+          NEWEST="$(ls -t "$LOGDIR"/launcher_*.log 2> /dev/null | head -n 1)"
+          if [ -n "$NEWEST" ]; then
+            cp "$NEWEST" logs/launcher_logfile_copy.log
+            grep -q "^\[launcher\]" "$NEWEST" || PROBLEMS="$PROBLEMS launcher-log-empty"
+          else
+            PROBLEMS="$PROBLEMS launcher-log-missing"
+          fi
           # F10 / F12 / crash bundles on the Mac (docs/PARITY.md): the program must hold the real code (the picture
           # read-back and the bundle writer), not the "not on Linux yet" stand-ins. Needs no disc. A real F10 needs a
           # disc and a person: the tester presses F10 in the game and sends reports/report_*.
@@ -405,7 +434,7 @@ jobs:
             PROBLEMS="$PROBLEMS extra-test-missing"
           fi
           if [ -n "$PROBLEMS" ]; then
-            { echo "### The launcher on the Mac: problems"; echo "$PROBLEMS (logs/launcher_run.txt, launcher_handover.txt, launcher_smoke.txt, f10_code.txt, launcher_shots/)"; } >> "$GITHUB_STEP_SUMMARY"
+            { echo "### The launcher on the Mac: problems"; echo "$PROBLEMS (logs/launcher_run.txt, launcher_handover.txt, launcher_lowmem_probe.txt, launcher_logfile.txt, launcher_smoke.txt, f10_code.txt, launcher_shots/)"; } >> "$GITHUB_STEP_SUMMARY"
             echo "PROBLEMS with the launcher:$PROBLEMS"
             exit 1
           fi

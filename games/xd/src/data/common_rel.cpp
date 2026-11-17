@@ -805,6 +805,7 @@ void* convert_table(Loaded* l, const TableDesc* desc, const RelPrologStore& at, 
     return nullptr;
   }
   void* pc = PortMem_LowAlloc(static_cast<size_t>(count ? count : 1) * desc->pcSize, 16);
+  DataTable_SetHighAddr32Ok(PortMem_LowIsOrdinary() ? 1 : 0);
   l->section = at.section;
   const uint8_t* gc = section.data() + at.offset;
   const uint32_t unresolved = DataTable_Convert(desc, gc, at.offset, count, pc, resolve, l);
@@ -847,6 +848,7 @@ void patch_section_addresses(Loaded* l) {
     } else {
       continue;
     }
+    if (reinterpret_cast<uintptr_t>(target) > 0xFFFFFFFFu) continue;
     put_be32(copy.ptr + r.offset, static_cast<uint32_t>(reinterpret_cast<uintptr_t>(target)));
   }
 }
@@ -1195,6 +1197,7 @@ extern "C" bool PortXD_ConvertCommonRel(const uint8_t* relFile, size_t relSize, 
     }
     total = (total + 0xFFFF) & ~size_t{0xFFFF};
     auto* block = static_cast<uint8_t*>(PortMem_LowAlloc(total, 0x10000));
+    if (!PortMem_LowIsOrdinary()) {
 #ifdef _WIN32
     DWORD oldProtect;
     if (!VirtualProtect(block, total, PAGE_NOACCESS, &oldProtect)) {
@@ -1224,6 +1227,7 @@ extern "C" bool PortXD_ConvertCommonRel(const uint8_t* relFile, size_t relSize, 
       handlerInstalled = true;
     }
 #endif
+    }
     size_t at = 0;
     for (size_t k = 0; k < undescribed.size(); k++) {
       const char* name = relglobal_name(stores[undescribed[k]].dolAddress);

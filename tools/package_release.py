@@ -97,6 +97,15 @@ Public beta {version}
 Thank you for trying it! This is a beta: expect bugs, and keep a copy of your save.
 Questions, bug reports, other players: https://discord.gg/XVbDVXH4Pn
 
+New in 0.5.5
+------------
+- Mac: the launcher no longer closes right after opening when you have a save (it opens normally now).
+  It also keeps a log file now.
+- The Strategy Memo's cry screen shows the right waveform for every Pokemon (some showed none, or another
+  Pokemon's).
+- Mac: the first-run report no longer reports false problems when Apple's developer tools are not set up.
+- Mac players: approve the new version once in System Settings > Privacy & Security > Open Anyway.
+
 New in 0.5.4
 ------------
 - Linux and Mac: the game no longer crashes when a Pokemon levels up and learns a new move while it
@@ -108,7 +117,8 @@ New in 0.5.4
   breaks creating the language pack or starting the game from that folder. Needs Windows 10 version 1903 or newer.
 
 New in 0.5.3
-------------- Online battles: fixes the two PCs showing different stages and then drifting apart after the first turn
+------------
+- Online battles: fixes the two PCs showing different stages and then drifting apart after the first turn
   (a "desync"). Both now agree on the arena and the random numbers before the battle starts, and the
   Pokemon are checked to be the same on both sides.
 - Online battles: rooms with one Pokemon per side (singles) now really fight singles.

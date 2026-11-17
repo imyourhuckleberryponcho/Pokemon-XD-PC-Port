@@ -24,7 +24,7 @@ LINUX_TARGETS="settings_test controls_test memcard_test save_backups_test gen3_s
   platform_compat platform_sdk platform_os platform_audio platform_input platform_video
   xd_disc_check xd_data_dump xd_save_dump xd_randomize xd_gba_trade xd_rel_link_test
   xd_settings xd_data_mods xd_save_convert xd_mods_check
-  os_threads_test gc_memory_test gx_fifo_test card_timing_test input_record_test game_clock_test
+  os_threads_test gc_memory_test low_alloc_ordinary_test gx_fifo_test card_timing_test input_record_test game_clock_test
   keyboard_defaults_test controls_apply_test button_art_test dsp_equiv_test
   card_sources_test xd_legality_test xd_legality_check"
 if [ -f "${XD_LINUX_BUILD_ROOT:-build/linux}/targets_extra.txt" ]; then # (local experiments)

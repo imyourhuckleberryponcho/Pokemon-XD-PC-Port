@@ -53,6 +53,9 @@ bool DataTable_Validate(const TableDesc* desc, char* error, size_t errorSize) {
   return ok;
 }
 
+static int sHighAddr32Ok = 0;
+void DataTable_SetHighAddr32Ok(int ok) { sHighAddr32Ok = ok; }
+
 uint32_t DataTable_Convert(const TableDesc* desc, const uint8_t* gc, uint32_t gcBaseOffset, uint32_t count, void* pc,
                            PointerResolver resolve, void* user) {
   uint32_t unresolved = 0;
@@ -104,7 +107,7 @@ uint32_t DataTable_Convert(const TableDesc* desc, const uint8_t* gc, uint32_t gc
           if (f->kind == FIELD_PTR) {
             memcpy(d, &p, sizeof(p));
           } else {
-            if ((uintptr_t)p > 0xFFFFFFFFu) {
+            if ((uintptr_t)p > 0xFFFFFFFFu && !sHighAddr32Ok) {
               unresolved++;
             }
             const uint32_t v = (uint32_t)(uintptr_t)p;

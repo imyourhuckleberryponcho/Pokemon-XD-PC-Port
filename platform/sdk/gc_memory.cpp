@@ -27,8 +27,13 @@ constexpr uintptr_t kLowCandidates[] = {0x70000000, 0x60000000, 0x50000000, 0x30
 constexpr size_t kLowSize = 0x10000000;
 uintptr_t kLowBase = 0;
 bool sLowReserved = false;
+bool sGameProgram = false;
+bool sLowIsOrdinary = false;
 
 bool reserve_low() {
+  if (const char* none = std::getenv("PORT_TEST_NO_LOW_MEMORY"); none != nullptr && none[0] == '1') {
+    return false;
+  }
   for (const uintptr_t base : kLowCandidates) {
 #ifdef _WIN32
     if (VirtualAlloc(reinterpret_cast<void*>(base), kLowSize, MEM_RESERVE, PAGE_NOACCESS) ==
@@ -62,6 +67,7 @@ bool sReserved = false;
 extern "C" {
 
 bool PortMem_ReserveMEM1(void) {
+  sGameProgram = true;
 #ifndef _WIN32
   const int fd = memfd_create("gc_mem1", 0);
   const bool sized = fd >= 0 && ftruncate(fd, kMem1Size) == 0;
@@ -99,20 +105,37 @@ bool PortMem_ReserveMEM1(void) {
 
 void* PortMem_LowAlloc(size_t size, size_t align) {
   std::lock_guard<std::mutex> guard(sLowLock);
-  if (!sLowReserved) {
+  if (!sLowReserved && !sLowIsOrdinary) {
     sLowReserved = reserve_low();
     if (!sLowReserved) {
+      if (!sGameProgram) {
+        sLowIsOrdinary = true;
+        std::fprintf(stderr, "[platform/sdk] no free 256 MB range below 4 GB: this program (not the game) uses ordinary memory for game data\n");
+        std::fflush(stderr);
+      } else {
 #ifdef _WIN32
-      MEMORY_BASIC_INFORMATION mbi{};
-      VirtualQuery(reinterpret_cast<void*>(kLowCandidates[0]), &mbi, sizeof(mbi));
-      std::fprintf(stderr, "[platform/sdk] no free 256 MB range below 4 GB for game data (at 0x70000000: state %lx, "
-                   "allocation base %p)\n", mbi.State, mbi.AllocationBase);
+        MEMORY_BASIC_INFORMATION mbi{};
+        VirtualQuery(reinterpret_cast<void*>(kLowCandidates[0]), &mbi, sizeof(mbi));
+        std::fprintf(stderr, "[platform/sdk] no free 256 MB range below 4 GB for game data (at 0x70000000: state %lx, "
+                     "allocation base %p)\n", mbi.State, mbi.AllocationBase);
 #else
-      std::fprintf(stderr, "[platform/sdk] no free 256 MB range below 4 GB for game data (see /proc/self/maps)\n");
+        std::fprintf(stderr, "[platform/sdk] no free 256 MB range below 4 GB for game data (see /proc/self/maps)\n");
 #endif
-      std::fflush(stderr);
+        std::fflush(stderr);
+        std::abort();
+      }
+    }
+  }
+  if (sLowIsOrdinary) {
+    if (align < 16) {
+      align = 16;
+    }
+    void* raw = std::calloc(1, (size ? size : 1) + align);
+    if (raw == nullptr) {
+      std::fprintf(stderr, "[platform/sdk] out of memory for game data (%zu bytes)\n", size);
       std::abort();
     }
+    return reinterpret_cast<void*>((reinterpret_cast<uintptr_t>(raw) + align - 1) & ~(static_cast<uintptr_t>(align) - 1));
   }
   if (align == 0) {
     align = 16;
@@ -140,6 +163,8 @@ void* PortMem_LowAlloc(size_t size, size_t align) {
   sLowUsed = end;
   return reinterpret_cast<void*>(kLowBase + start);
 }
+
+bool PortMem_LowIsOrdinary(void) { return sLowIsOrdinary; }
 
 uint8_t* PortMem_MEM1(void) { return sReserved ? reinterpret_cast<uint8_t*>(kMem1Base) : nullptr; }
 

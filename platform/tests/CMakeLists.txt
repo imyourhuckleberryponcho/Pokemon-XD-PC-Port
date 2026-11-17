@@ -37,6 +37,10 @@ add_executable(gc_memory_test gc_memory_test.cpp)
 target_link_libraries(gc_memory_test PRIVATE platform_sdk aurora::core aurora::os aurora::main aurora::gx aurora::vi)
 aurora_copy_runtime_dlls(gc_memory_test)
 
+add_executable(low_alloc_ordinary_test low_alloc_ordinary_test.cpp)
+target_link_libraries(low_alloc_ordinary_test PRIVATE platform_sdk aurora::core aurora::os aurora::main aurora::gx aurora::vi)
+aurora_copy_runtime_dlls(low_alloc_ordinary_test)
+
 add_executable(gx_fifo_test gx_fifo_test.cpp)
 target_link_libraries(gx_fifo_test PRIVATE platform_sdk aurora::core aurora::gx aurora::os aurora::main aurora::vi)
 aurora_copy_runtime_dlls(gx_fifo_test)

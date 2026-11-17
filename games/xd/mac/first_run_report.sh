@@ -43,6 +43,39 @@ have() { command -v "$1" > /dev/null 2>&1; }
 # stand-ins that only open an "install the developer tools?" window; "xcode-select -p" fails then. (From Apple's
 # xcode-select(1); not tried on a Mac. Where xcode-select itself is missing, as on Linux, the tool's presence counts.)
 dev_tools() { if have xcode-select; then xcode-select -p > /dev/null 2>&1; else return 0; fi; }
+# macho_read <file>: reads the program's Mach-O header and load commands with od and awk only (both are part of macOS
+# itself; no Xcode tools, no license, no python). Prints "PIE yes|no", "SEGMENT <name> <addr> <size> <filesize>" (hex
+# numbers as 0x...), "CHAINED_FIXUPS" and "HUGE_SECTION" lines, the same facts the otool path collects. Exit 0 = read;
+# 1 = not a plain 64-bit Intel Mach-O (the reason is printed as "WHY ...").
+macho_read() {
+  od -An -v -tu1 -N 65536 "$1" 2> /dev/null | awk '
+    function le(o, n,   i, v) { v = 0; for (i = n - 1; i >= 0; i--) v = v * 256 + b[o + i]; return v }
+    function hex(v,   s, d) { s = ""; if (v == 0) return "0x0"; while (v > 0) { d = v % 16; s = substr("0123456789abcdef", d + 1, 1) s; v = (v - d) / 16 } return "0x" s }
+    function nm(o,   i, s) { s = ""; for (i = 0; i < 16 && b[o + i] != 0; i++) s = s sprintf("%c", b[o + i]); return s }
+    { for (i = 1; i <= NF; i++) b[n++] = $i + 0 }
+    END {
+      if (n < 32) { print "WHY the file is too short to be a program"; exit 1 }
+      if (b[0] == 202 && b[1] == 254 && b[2] == 186 && b[3] == 190) { print "WHY a universal (fat) file: this reader only reads a single-architecture program"; exit 1 }
+      if (!(b[0] == 207 && b[1] == 250 && b[2] == 237 && b[3] == 254)) { print "WHY not a 64-bit Mach-O file (magic bytes " b[0] " " b[1] " " b[2] " " b[3] ")"; exit 1 }
+      ncmds = le(16, 4); size = le(20, 4); flags = le(24, 4)
+      if (32 + size > n) { print "WHY the load commands are larger than the part of the file read"; exit 1 }
+      print "PIE " (int(flags / 2097152) % 2 == 1 ? "yes" : "no")   # MH_PIE = 0x200000
+      o = 32
+      for (c = 0; c < ncmds; c++) {
+        cmd = le(o, 4); sz = le(o + 4, 4)
+        if (sz < 8) { print "WHY a broken load command"; exit 1 }
+        if (cmd == 25) {                                   # LC_SEGMENT_64
+          print "SEGMENT", nm(o + 8), hex(le(o + 24, 8)), hex(le(o + 32, 8)), le(o + 48, 8)
+          ns = le(o + 64, 4)
+          for (s = 0; s < ns; s++) if (nm(o + 72 + s * 80) == "__huge") print "HUGE_SECTION"
+        } else if (cmd == 2147483700) print "CHAINED_FIXUPS" # LC_DYLD_CHAINED_FIXUPS 0x80000034
+        o += sz
+      }
+    }'
+}
+# A tool that only opens "install the developer tools?" or says "You have not agreed to the Xcode license agreements"
+# (exit 69; a Mac with Xcode installed but its license never accepted: the 0.5.4 tester's) is NOT a working tool.
+works() { "$@" > "$WORK/probe.txt" 2>&1; WORKS_RC=$?; return $WORKS_RC; }
 VERDICTS="$WORK/verdicts.txt"
 : > "$VERDICTS"
 verdict() { printf '%-7s %s\n' "$1" "$2" >> "$VERDICTS"; } # OK / PROBLEM / UNKNOWN
@@ -104,23 +137,52 @@ else
     #  the start below fails.)
     verdict INFO "the program is still marked as downloaded (quarantine); fine if it starts, else Read me: Open Anyway"
   fi
+  # The Mach-O facts come from otool when it really works, else from the reader above (od and awk: no Xcode, no
+  # license). If neither can read the file the layout checks are UNKNOWN, with the reason, not PROBLEMs.
+  LAYOUT=""
+  LAYOUT_WHY=""
   if have otool && dev_tools; then
-    run otool -hv "$XD"
-    if otool -hv "$XD" 2> /dev/null | grep -qw PIE; then
+    if works otool -hv "$XD"; then
+      LAYOUT=otool
+    else
+      LAYOUT_WHY="otool failed: $(head -n 2 "$WORK/probe.txt" | tr '\n' ' ')(exit code $WORKS_RC)"
+    fi
+  else
+    LAYOUT_WHY="otool is not usable on this Mac (it comes with Xcode's command line tools:  xcode-select --install )"
+  fi
+  if [ -z "$LAYOUT" ]; then
+    say "$LAYOUT_WHY"
+    say "Reading the program's Mach-O header directly (od + awk) instead."
+    if macho_read "$XD" > "$WORK/macho.txt" 2> /dev/null && ! grep -q '^WHY' "$WORK/macho.txt"; then
+      LAYOUT=direct
+    else
+      LAYOUT_WHY="$LAYOUT_WHY; the direct reader could not read it either: $(grep '^WHY' "$WORK/macho.txt" 2> /dev/null | head -n 1 | cut -c5-)"
+    fi
+  fi
+  if [ -n "$LAYOUT" ]; then
+    if [ "$LAYOUT" = otool ]; then
+      run otool -hv "$XD"
+      if otool -hv "$XD" 2> /dev/null | grep -qw PIE; then PIE=yes; else PIE=no; fi
+      otool -l "$XD" > "$WORK/load.txt" 2>&1
+      # Each segment: name, address, size, bytes in the file.
+      awk '
+        $1 == "cmd" { insegment = ($2 == "LC_SEGMENT_64"); if ($2 == "LC_DYLD_CHAINED_FIXUPS") print "CHAINED_FIXUPS" }
+        insegment && $1 == "segname" { name = $2 }
+        insegment && $1 == "vmaddr" { addr = $2 }
+        insegment && $1 == "vmsize" { size = $2 }
+        insegment && $1 == "filesize" { print "SEGMENT", name, addr, size, $2; insegment = 0 }
+        $1 == "sectname" && $2 == "__huge" { print "HUGE_SECTION" }
+      ' "$WORK/load.txt" > "$WORK/segments.txt"
+    else
+      say "(layout read directly from the file's load commands: no working otool on this Mac)"
+      PIE="$(awk '$1 == "PIE" { print $2 }' "$WORK/macho.txt")"
+      grep -v '^PIE' "$WORK/macho.txt" > "$WORK/segments.txt"
+    fi
+    if [ "$PIE" = yes ]; then
       verdict PROBLEM "the program is position independent (PIE): the linker ignored -no_pie; the game's memory layout cannot work"
     else
       verdict OK "the program is not position independent (no PIE flag)"
     fi
-    otool -l "$XD" > "$WORK/load.txt" 2>&1
-    # Each segment: name, address, size, bytes in the file.
-    awk '
-      $1 == "cmd" { insegment = ($2 == "LC_SEGMENT_64"); if ($2 == "LC_DYLD_CHAINED_FIXUPS") print "CHAINED_FIXUPS" }
-      insegment && $1 == "segname" { name = $2 }
-      insegment && $1 == "vmaddr" { addr = $2 }
-      insegment && $1 == "vmsize" { size = $2 }
-      insegment && $1 == "filesize" { print "SEGMENT", name, addr, size, $2; insegment = 0 }
-      $1 == "sectname" && $2 == "__huge" { print "HUGE_SECTION" }
-    ' "$WORK/load.txt" > "$WORK/segments.txt"
     say "segments (name, address, size, bytes in the file):"
     grep '^SEGMENT' "$WORK/segments.txt" | sed 's/^SEGMENT/   /' >> "$RAW"
     check_segment() { # <name> <address> <size or -> : compares as numbers
@@ -141,15 +203,17 @@ else
     check_segment __XDSTK 0x50000000 0x20000000
     if grep -q HUGE_SECTION "$WORK/segments.txt"; then verdict PROBLEM "the linker moved the reserved memory into a __huge section (-no_huge was ignored)"; fi
     if grep -q CHAINED_FIXUPS "$WORK/segments.txt"; then verdict PROBLEM "the program uses chained fixups (-no_fixup_chains was ignored): its fixed address may be lost"; fi
-    say ""
-    say "libraries the program asks for:"
-    otool -L "$XD" 2>&1 | tail -n +2 >> "$RAW"
-    say ""
-    say "linker / build version commands:"
-    grep -A 6 -E "LC_BUILD_VERSION|LC_VERSION_MIN_MACOSX|LC_MAIN" "$WORK/load.txt" | head -n 40 >> "$RAW"
+    if [ "$LAYOUT" = otool ]; then
+      say ""
+      say "libraries the program asks for:"
+      otool -L "$XD" 2>&1 | tail -n +2 >> "$RAW"
+      say ""
+      say "linker / build version commands:"
+      grep -A 6 -E "LC_BUILD_VERSION|LC_VERSION_MIN_MACOSX|LC_MAIN" "$WORK/load.txt" | head -n 40 >> "$RAW"
+    fi
   else
-    say "otool is not on this Mac (it comes with Xcode's command line tools:  xcode-select --install ). The program's layout was not checked."
-    verdict UNKNOWN "program layout not checked (no otool; install with xcode-select --install)"
+    say "The program's layout was NOT checked: $LAYOUT_WHY"
+    verdict UNKNOWN "program layout not checked: $LAYOUT_WHY"
   fi
   if have codesign; then
     run codesign -dv --verbose=2 "$XD"

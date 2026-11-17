@@ -16,6 +16,7 @@
 #include <i18n.h>
 #include <gs_formats.h>
 #include <port_disc.h>
+#include <port_log.h>
 #include <save_backups.h>
 #include <update.h>
 #include <xd_save.h>
@@ -48,6 +49,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <exception>
 #include <fstream>
 #include <functional>
 #include <iterator>
@@ -55,6 +57,9 @@
 #include <chrono>
 #include <string>
 #include <vector>
+
+extern "C" void* PortMem_LowAlloc(size_t size, size_t align);
+extern "C" bool PortMem_LowIsOrdinary(void);
 
 namespace {
 
@@ -130,6 +135,7 @@ bool IdentifyDisc(const std::string& path, std::string& gameId, std::string& tit
 
 xd::save::GameNames sNames;
 std::string sNamesDisc;
+std::string sNamesFailedDisc;
 std::mutex sOneReader;
 void SummaryOf(const xd::save::Save& save, const std::string& discPath, launcher::SaveSummary& out);
 
@@ -438,9 +444,23 @@ void ReadSetup(const std::vector<uint8_t>& data, SaveSummary& out) {
 
 void SummaryOf(const xd::save::Save& save, const std::string& discPath, SaveSummary& out) {
   namespace xs = xd::save;
-  if (!discPath.empty() && discPath != sNamesDisc) {
+  if (!discPath.empty() && discPath != sNamesDisc && discPath != sNamesFailedDisc) {
     std::string nameError;
-    sNamesDisc = sNames.Load(discPath, nameError) ? discPath : std::string();
+    bool loaded = false;
+    try {
+      loaded = sNames.Load(discPath, nameError);
+    } catch (const std::exception& e) {
+      nameError = e.what();
+    } catch (...) {
+      nameError = "an unknown error";
+    }
+    sNamesDisc = loaded ? discPath : std::string();
+    if (!loaded) {
+      sNamesFailedDisc = discPath;
+      std::fprintf(stderr, "[launcher] the save is shown without Pokemon and item names: the names could not be read from the disc (%s)\n",
+                   nameError.empty() ? "no reason given" : nameError.c_str());
+      std::fflush(stderr);
+    }
   }
   const bool named = !sNamesDisc.empty() && sNames.Loaded();
   const auto species = [&](uint16_t id) {
@@ -485,7 +505,9 @@ void SummaryOf(const xd::save::Save& save, const std::string& discPath, SaveSumm
     }
     out.party.push_back({species(p.species), xs::ToUtf8(p.nickname), std::to_string(p.level), item(p.heldItem), notes});
   }
-  if (!named) {
+  if (!named && !discPath.empty() && discPath == sNamesFailedDisc) {
+    out.notes.push_back("The Pokemon and item names could not be read from the disc, so numbers are shown. The play button is not affected.");
+  } else if (!named) {
     out.notes.push_back(Tr("Pokemon and item names come from your disc: they appear once the disc is chosen and checked."));
   }
 }
@@ -1005,10 +1027,23 @@ int main(int argc, char** argv) {
     std::fprintf(stderr, "[launcher] XD_NO_LAUNCHER=1 but %s can't be started: %s\n", game.c_str(), std::strerror(errno));
     return 1;
   }
+  if (const char* log = std::getenv("XD_LOG"); log == nullptr || std::strcmp(log, "0") != 0) {
+    PortLog_Start("Pokemon XD", "launcher", 10);
+  }
 #else
   (void)argc;
   (void)argv;
 #endif
+  if (const char* probe = std::getenv("XD_LAUNCHER_LOWMEM_PROBE"); probe != nullptr && std::strcmp(probe, "1") == 0) {
+    auto* block = static_cast<unsigned char*>(PortMem_LowAlloc(1 << 20, 64));
+    bool zeroed = block != nullptr && (reinterpret_cast<uintptr_t>(block) & 63) == 0;
+    for (size_t i = 0; zeroed && i < (1 << 20); i++) zeroed = block[i] == 0;
+    if (block != nullptr) std::memset(block, 0xA5, 1 << 20);
+    std::fprintf(stderr, "[launcher] low-memory probe: block at %p, zeroed and aligned: %s, ordinary memory: %s: %s\n",
+                 static_cast<void*>(block), zeroed ? "yes" : "NO", PortMem_LowIsOrdinary() ? "yes" : "no", zeroed ? "OK" : "FAILED");
+    std::fflush(stderr);
+    return zeroed ? 0 : 3;
+  }
   const auto Tr = [](const char* english) { return english; };
   launcher::GameInfo game;
   game.title = "Pokemon XD";

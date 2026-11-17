@@ -26,6 +26,7 @@
 #define GXCopyTex PortGX_CopyTex
 
 #include <stddef.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <dolphin/types.h>
 #include <dolphin/gx/GXVert.h>
@@ -51,6 +52,7 @@ u32 PortGX_ReadCPUFifoWriteReg(void);
 void PortGX_EndOfFrame(void);
 void PortGX_TraceOrigins(void (*describe)(const void* address, char* out, size_t outSize));
 void* PortMem_LowAlloc(size_t size, size_t align);
+bool PortMem_LowIsOrdinary(void);
 uint8_t* PortMem_MEM1(void);
 void PortMem_InitOS(uint32_t arenaLo);
 void SISetSamplingRate(u32 msec);
