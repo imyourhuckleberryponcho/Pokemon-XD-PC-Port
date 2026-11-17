@@ -13,7 +13,7 @@ This repository contains **no game assets, ROMs, ISOs or executables**, and none
 You need your own legally obtained copy of the game (USA, `GXXE01`); the port reads everything from your disc
 image while it runs.
 
-## Status: public beta — version 0.5.5
+## Status: public beta — version 0.5.6
 
 **Playable from New Game into the story, with known bugs.** It is not finished: expect crashes, stalls and
 graphics differences, and keep backups of saves you care about. Downloads are on the [Releases](../../releases)
@@ -27,6 +27,8 @@ page, one per system:
 
 **Found a bug, or want to help test?** Join the [Discord](https://discord.gg/XVbDVXH4Pn) — see
 *Reporting a bug* below.
+
+New in 0.5.6: no more game closing by itself at the start of some randomizer battles (a trainer's Pokémon that knew Conversion); the title screen now appears with a language pack and the Gen 4 rules together (and the loading screen says so if a title ever fails to appear); no more black ground with Resolution set to Match the window when the window's height isn't a multiple of 5; and the lightning at Kaminko's house is fixed.
 
 New in 0.5.5: the Mac launcher no longer closes right after opening when you have a save (and keeps a log file); the Strategy Memo's cry screen shows the right waveform for every Pokémon; and the Mac first-run report no longer reports false problems when Apple's developer tools are not set up. Mac players: approve the new version once in System Settings > Privacy & Security > Open Anyway.
 

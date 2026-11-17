@@ -18,4 +18,16 @@ signed char* pokemonNakigoeDataBiosGetDataAddress(void* data) {
   if (index >= pokemon_nakigoe_data_number) return nullptr;
   return static_cast<signed char*>(pokemon_nakigoe_data[index]);
 }
+
+uint16_t fightTrainer_GetFightTrainerDataId(void* trainer);
+uint16_t fightTrainerDB_GetAiDataId(uint16_t id);
+uint8_t fightTrainerAiDB_GetZokuseiCheckFlag(uint16_t id);
+uint8_t fightSeqGetTextureZokuseiAry(void* pokemon, int32_t* ary);
+int fightTrainerAiCheckTextureZokusei(void* trainer, void* pokemon) {
+  int32_t data[4];
+  if (fightTrainerAiDB_GetZokuseiCheckFlag(fightTrainerDB_GetAiDataId(fightTrainer_GetFightTrainerDataId(trainer))) == 1) {
+    return fightSeqGetTextureZokuseiAry(pokemon, data) >= 1;
+  }
+  return 1;
+}
 }

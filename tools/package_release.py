@@ -97,6 +97,14 @@ Public beta {version}
 Thank you for trying it! This is a beta: expect bugs, and keep a copy of your save.
 Questions, bug reports, other players: https://discord.gg/XVbDVXH4Pn
 
+New in 0.5.6
+------------
+- Fixed the game closing by itself at the start of some battles in randomizer games, when a trainer's Pokemon knew Conversion.
+- Fixed the title screen never appearing (only clouds) when a language pack (Spanish, French, German, Italian) and the Gen 4 rules were both on;
+  if a title ever fails to appear, the loading screen now says so after about 25 seconds.
+- Fixed black ground (grass, paths, battle floors) when Resolution is set to Match the window and the window's height isn't a multiple of 5.
+- Fixed the lightning at Kaminko's house.
+
 New in 0.5.5
 ------------
 - Mac: the launcher no longer closes right after opening when you have a save (it opens normally now).

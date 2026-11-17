@@ -247,6 +247,7 @@ struct Landing {
   int settled = 0;
   uint32_t startFlip = 0;
   uint32_t titleSince = 0;
+  uint32_t startSince = 0;
   uint32_t lastLog = 0;
   const char* why = "";
   long blocked = 0;
@@ -314,6 +315,7 @@ void CoverEnd(const char* why) {
   if (C.kind == Cover::None || C.ending) return;
   C.ending = true;
   C.endAge = coverAge.age;
+  xd::picker::Done("the loading screen handed over");
   std::fprintf(stderr, "[landing] handed over at game frame %u: %s (floor 0x%X)\n", PortVI_GetFlipCount(), why,
                static_cast<unsigned>(GSfloorGetCurrent()));
 }
@@ -399,6 +401,16 @@ void CoverDrive(PADStatus* status, const WinWorkLayout* w) {
     std::fprintf(stderr, "[landing] the title menu has been up for %u game frames and is waiting for %s\n", nowFlip - C.titleSince, WaitingFor());
     PortXD_ShowNote(Tr("The game did not start by itself: the title menu is yours."), 6.f);
     CoverEnd("the title menu stayed up (the way in was not taken)");
+    return;
+  }
+  if (!(menu == 0x11 && w != nullptr && w->state == 2) || C.kind == Cover::None) {
+    C.startSince = 0;
+  } else if (C.startSince == 0) {
+    C.startSince = nowFlip != 0 ? nowFlip : 1;
+  } else if (nowFlip - C.startSince >= 1200) {
+    std::fprintf(stderr, "[landing] the title's first window has been up for %u game frames and nothing came after it; waiting for %s\n", nowFlip - C.startSince, WaitingFor());
+    PortXD_ShowNote(Tr("The game's title screen did not come up. Close the game and start it again; if it happens again, send a report (F10)."), 8.f);
+    CoverEnd("the title screen did not come up");
     return;
   }
   if (C.polls > 2 * GiveUpPolls() || nowFlip - C.startFlip > static_cast<uint32_t>(GiveUpPolls())) {

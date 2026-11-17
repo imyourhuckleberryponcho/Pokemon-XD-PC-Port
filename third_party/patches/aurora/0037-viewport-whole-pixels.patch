@@ -1,0 +1,64 @@
+diff --git a/lib/gx/gx.cpp b/lib/gx/gx.cpp
+index 628bc6e..a531e94 100644
+--- a/lib/gx/gx.cpp
++++ b/lib/gx/gx.cpp
+@@ -267,6 +267,28 @@ float wide_projection_scale() noexcept {
+   return map.projScale;
+ }
+ 
++// A mapped viewport lies on whole pixels, the same pixels map_logical_scissor takes (floor / ceil). With a scale
++// that is not a whole number (the window's own size, e.g. 919 lines for the GameCube's 480) a sub-viewport such as
++// XD's 384x384 shadow map came out with fractional edges: the scissor, the clear and the copy took the whole
++// pixels around it, so the copy's last row and column held only the clear colour, and the ground that samples the
++// copy past its footprint (clamped to its edge) turned black. The small tolerance keeps exact scales (every whole
++// scale, 720 / 900 / 960 lines) exactly as they were.
++gfx::Viewport snap_viewport(const gfx::Viewport& v) noexcept {
++  constexpr float tolerance = 1e-3f;
++  const float left = std::floor(v.left + tolerance);
++  const float top = std::floor(v.top + tolerance);
++  const float right = std::ceil(v.left + v.width - tolerance);
++  const float bottom = std::ceil(v.top + v.height - tolerance);
++  return {
++      .left = left,
++      .top = top,
++      .width = std::max(right - left, 1.f),
++      .height = std::max(bottom - top, 1.f),
++      .znear = v.znear,
++      .zfar = v.zfar,
++  };
++}
++
+ gfx::Viewport map_logical_viewport(const gfx::Viewport& logicalViewport) noexcept {
+   if (g_gxState.viewportPolicy == AURORA_VIEWPORT_NATIVE) {
+     return logicalViewport;
+@@ -280,26 +302,26 @@ gfx::Viewport map_logical_viewport(const gfx::Viewport& logicalViewport) noexcep
+   }
+   if (const auto wide = wide_map(); wide.on && !wide.full_width(logicalViewport.left, logicalViewport.width)) {
+     // Widescreen, a sub-viewport: its 4:3 place in the centred 4:3 area (see WideMap).
+-    return {
++    return snap_viewport({
+         .left = wide.map_x(logicalViewport.left),
+         .top = logicalViewport.top * wide.scaleY,
+         .width = logicalViewport.width * wide.scaleY,
+         .height = logicalViewport.height * wide.scaleY,
+         .znear = logicalViewport.znear,
+         .zfar = logicalViewport.zfar,
+-    };
++    });
+   }
+ 
+   const float scaleX = static_cast<float>(targetWidth) / static_cast<float>(logicalFbWidth);
+   const float scaleY = static_cast<float>(targetHeight) / static_cast<float>(logicalFbHeight);
+-  return {
++  return snap_viewport({
+       .left = logicalViewport.left * scaleX,
+       .top = logicalViewport.top * scaleY,
+       .width = logicalViewport.width * scaleX,
+       .height = logicalViewport.height * scaleY,
+       .znear = logicalViewport.znear,
+       .zfar = logicalViewport.zfar,
+-  };
++  });
+ }
+ 
+ gfx::ClipRect map_logical_scissor(const gfx::ClipRect& logicalScissor) noexcept {

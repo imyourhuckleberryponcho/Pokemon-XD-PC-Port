@@ -18,6 +18,8 @@
 #include <sdk_port.h>
 #include <settings.h>
 
+#include <algorithm>
+#include <cctype>
 #include <cstdarg>
 #include <cstdio>
 #include <string>
@@ -86,6 +88,85 @@ bool ApplyProgramChanges(const std::vector<uint8_t>& program) {
   }
   std::fprintf(stderr, "[mods] main.dol: %zu byte(s) of its tables changed by data mods\n", changed);
   return true;
+}
+}
+
+namespace {
+uint32_t TocBe32(const uint8_t* p) {
+  return static_cast<uint32_t>(p[0]) << 24 | static_cast<uint32_t>(p[1]) << 16 | static_cast<uint32_t>(p[2]) << 8 | p[3];
+}
+void TocPut32(uint8_t* p, uint32_t v) {
+  p[0] = static_cast<uint8_t>(v >> 24), p[1] = static_cast<uint8_t>(v >> 16), p[2] = static_cast<uint8_t>(v >> 8), p[3] = static_cast<uint8_t>(v);
+}
+bool TocValid(const std::vector<uint8_t>& d, uint32_t& count, uint32_t& groups) {
+  if (d.size() < 0x20) return false;
+  count = TocBe32(d.data() + 8);
+  groups = TocBe32(d.data() + 0x10);
+  return groups >= 0x20 && groups <= d.size() && static_cast<uint64_t>(groups) + 16ull * count <= d.size();
+}
+bool ReadAll(const std::filesystem::path& p, std::vector<uint8_t>& out) {
+  std::FILE* f = std::fopen(p.string().c_str(), "rb");
+  if (f == nullptr) return false;
+  uint8_t buf[65536];
+  out.clear();
+  for (size_t n; (n = std::fread(buf, 1, sizeof buf, f)) > 0;) out.insert(out.end(), buf, buf + n);
+  std::fclose(f);
+  return true;
+}
+std::vector<uint8_t> MergeToc(const std::vector<uint8_t>& lang, const std::vector<uint8_t>& other) {
+  uint32_t lc = 0, lg = 0, oc = 0, og = 0;
+  if (!TocValid(lang, lc, lg) || !TocValid(other, oc, og)) return {};
+  std::vector<uint32_t> have;
+  for (uint32_t i = 0; i < lc; i++) have.push_back(TocBe32(lang.data() + lg + 16 * i));
+  std::vector<uint8_t> names(lang.begin() + 0x20, lang.begin() + lg), rows;
+  uint32_t added = 0;
+  for (uint32_t i = 0; i < oc; i++) {
+    const uint8_t* g = other.data() + og + 16 * i;
+    const uint32_t id = TocBe32(g), at = TocBe32(g + 4);
+    if (std::find(have.begin(), have.end(), id) != have.end() || at >= other.size()) continue;
+    uint8_t row[16] = {0};
+    TocPut32(row, id);
+    TocPut32(row + 4, static_cast<uint32_t>(0x20 + names.size()));
+    for (size_t k = at; k < other.size() && other[k] != 0; k++) names.push_back(other[k]);
+    names.push_back(0);
+    rows.insert(rows.end(), row, row + 16);
+    added++;
+  }
+  if (added == 0) return {};
+  while (names.size() % 16 != 0) names.push_back(0);
+  std::vector<uint8_t> out(lang.begin(), lang.begin() + 0x20);
+  TocPut32(out.data() + 8, lc + added);
+  TocPut32(out.data() + 0x10, static_cast<uint32_t>(0x20 + names.size()));
+  out.insert(out.end(), names.begin(), names.end());
+  out.insert(out.end(), lang.begin() + lg, lang.begin() + lg + 16 * lc);
+  out.insert(out.end(), rows.begin(), rows.end());
+  out.insert(out.end(), lang.begin() + lg + 16 * lc, lang.end());
+  return out;
+}
+void MergeLanguageToc(engine::mods::LoadResult& result) {
+  const xd::languages::Language* l = xd::languages::Active();
+  if (std::strcmp(l->id, "us") == 0 || std::strcmp(l->id, "jp") == 0) return;
+  if (const char* off = std::getenv("XD_LANGUAGE_TOC_MERGE"); off != nullptr && std::strcmp(off, "0") == 0) return;
+  std::vector<uint8_t> lang;
+  if (!ReadAll(xd::languages::LoadedPack().folder / (std::string("lang_") + l->id) / "files" / "GSfsys.toc", lang)) return;
+  for (engine::mods::Replacement& r : result.files) {
+    std::string lower = r.discPath;
+    for (char& c : lower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    if (lower != "gsfsys.toc") continue;
+    std::vector<uint8_t> other;
+    if (r.rebuilt ? (other = r.data, true) : ReadAll(r.file, other)) {
+      if (other == lang) return;
+      std::vector<uint8_t> merged = MergeToc(lang, other);
+      if (merged.empty()) merged = lang;
+      r.data = std::move(merged);
+      r.rebuilt = true;
+      r.file.clear();
+      r.entries.clear();
+      r.generated.clear();
+      std::fprintf(stderr, "[languages] archive list: the language's, with the rows of %s added (%zu bytes)\n", r.from.empty() ? "the mods" : r.from.c_str(), r.data.size());
+    }
+    return;
+  }
 }
 }
 
@@ -182,7 +263,8 @@ extern "C" bool PortXD_LoadMods(void) {
     std::filesystem::create_directories(options.modsFolder, ec);
   }
 
-  const em::LoadResult result = em::Load(options);
+  em::LoadResult result = em::Load(options);
+  MergeLanguageToc(result);
   xd::pt::AfterModsLoaded(result, options.modsFolder, options.listFile, options.disc);
   for (const em::Message& m : result.messages) {
     static const char* const kLabel[] = {"", "warning: ", "problem: "};

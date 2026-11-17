@@ -5453,3 +5453,7 @@
 
 = The game did not start by itself: the title menu is yours.
 > Il gioco non è partito da solo: il menu del titolo è tuo.
+
+
+= The game's title screen did not come up. Close the game and start it again; if it happens again, send a report (F10).
+> La schermata del titolo del gioco non è comparsa. Chiudi il gioco e riavvialo; se succede di nuovo, invia un rapporto (F10).
