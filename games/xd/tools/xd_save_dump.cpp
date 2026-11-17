@@ -1,8 +1,10 @@
 #include <gc_memcard.h>
 #include <xd_save.h>
 #include <xd_save_names.h>
+#include <xd_save_region.h>
 
 #include <cstdio>
+#include <fstream>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -92,6 +94,7 @@ int main(int argc, char** argv) {
   const char* savePath = nullptr;
   const char* discPath = nullptr;
   bool full = false, sections = false, shadows = false;
+  const char* convertedOut = nullptr;
   for (int i = 1; i < argc; i++) {
     if (std::strcmp(argv[i], "--full") == 0) {
       full = true;
@@ -99,6 +102,8 @@ int main(int argc, char** argv) {
       sections = true;
     } else if (std::strcmp(argv[i], "--shadows") == 0) {
       shadows = true;
+    } else if (std::strcmp(argv[i], "--write-converted") == 0 && i + 1 < argc) {
+      convertedOut = argv[++i];
     } else if (savePath == nullptr) {
       savePath = argv[i];
     } else if (discPath == nullptr) {
@@ -156,7 +161,40 @@ int main(int argc, char** argv) {
 
   Save save;
   ReadReport report;
-  const bool ok = ReadSave(file->data, save, report, error);
+  std::vector<uint8_t> saveBytes = file->data;
+  {
+    std::string layoutWhy;
+    if (LayoutOf(saveBytes, layoutWhy) == SaveKind::JapaneseLayout) {
+      std::vector<uint8_t> converted;
+      JapaneseReport jp;
+      if (!ConvertJapanese(saveBytes, converted, jp, error)) {
+        std::fprintf(stderr, "FAILED: a Japanese save that can't be converted: %s\n", error.c_str());
+        return 1;
+      }
+      std::printf("Japanese layout (game data section 0x80): shown as converted to the USA layout (slot %d)\n", jp.slotUsed);
+      for (const std::string& n : jp.notes) {
+        std::printf("  - %s\n", n.c_str());
+      }
+      saveBytes = converted;
+      if (convertedOut != nullptr) {
+        mc::CardFile put = *file;
+        put.data = converted;
+        put.entry.gameCode = "GXXE";
+        std::memcpy(put.entry.raw.data(), "GXXE", 4);
+        const std::vector<uint8_t> gci = mc::MakeGci(put);
+        std::ofstream outFile(convertedOut, std::ios::binary);
+        if (!outFile.write(reinterpret_cast<const char*>(gci.data()), static_cast<std::streamsize>(gci.size()))) {
+          std::fprintf(stderr, "FAILED: can't write %s\n", convertedOut);
+          return 1;
+        }
+        std::printf("converted save written: %s\n", convertedOut);
+      }
+    } else if (convertedOut != nullptr) {
+      std::fprintf(stderr, "FAILED: --write-converted: this save is not in the Japanese layout\n");
+      return 1;
+    }
+  }
+  const bool ok = ReadSave(saveBytes, save, report, error);
   for (int s = 0; s < kSlotCount; s++) {
     const SlotReport& r = report.slots[s];
     if (!r.written) {

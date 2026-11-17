@@ -1,6 +1,7 @@
 #include "xd_battles_won.h"
 #include "xd_challenges.h"
 #include "xd_playthrough.h"
+#include "xd_xg.h"
 
 #include <game/winwork.h>
 
@@ -550,6 +551,10 @@ void SetActive(const std::vector<std::string>& ids, const char* why) {
   std::vector<std::string> known = TestSwitch();
   for (const std::string& id : ids) {
     if (std::find(known.begin(), known.end(), id) != known.end()) continue;
+    if (const char* why = xd::xg::OffForRule(id.c_str())) {
+      std::fprintf(stderr, "[challenge] XG mode: rule \"%s\" is off (%s)\n", id.c_str(), why);
+      continue;
+    }
     if (Find(id) != nullptr) known.push_back(id);
     else std::fprintf(stderr, "[challenge] this playthrough has a rule this version doesn't know (\"%s\"): not enforced\n", id.c_str());
   }

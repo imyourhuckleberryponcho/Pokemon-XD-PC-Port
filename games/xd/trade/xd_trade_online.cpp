@@ -14,7 +14,8 @@ namespace xd::trade {
 
 namespace {
 
-const std::vector<uint8_t> kFingerprint = {'X', 'D', 'T', '1'};
+std::vector<uint8_t> FingerprintOf(bool xg) { return {'X', static_cast<uint8_t>(xg ? 'G' : 'D'), 'T', '1'}; }
+bool IsEditionFingerprint(const std::vector<uint8_t>& f) { return f.size() == 4 && f[0] == 'X' && (f[1] == 'D' || f[1] == 'G') && f[2] == 'T' && f[3] == '1'; }
 
 bool ReadBytes(const fs::path& p, Bytes& out) {
   std::ifstream in(p, std::ios::binary);
@@ -119,10 +120,11 @@ bool OnlineTrade::StartJoin(const std::string& typed) {
 void OnlineTrade::Begin(const std::string& code) {
   entries_ = trader_.List();
   offered_ = -1;
+  refusal_.clear();
   session_.reset();
   conn_ = std::make_unique<xdnet::Connection>();
   xdnet::ConnectionConfig cfg = useDefault_ ? xdnet::Connection::defaultConfig() : cfg_;
-  cfg.session.fingerprint = kFingerprint;
+  cfg.session.fingerprint = FingerprintOf(xg_);
   if (!conn_->start(code, cfg)) {
     phase_ = Phase::Over;
     code_ = code;
@@ -133,6 +135,7 @@ void OnlineTrade::Begin(const std::string& code) {
 }
 
 std::string OnlineTrade::connectionText() const {
+  if (!refusal_.empty()) return refusal_;
   if (!conn_) return "";
   const xdnet::ConnectionStatus s = conn_->status();
   std::string t = s.text;
@@ -146,7 +149,11 @@ void OnlineTrade::Update() {
   const xdnet::ConnectionStatus st = conn_->status();
   if (phase_ == Phase::Connecting) {
     if (st.phase == xdnet::Phase::Connected) {
-      if (st.peerFingerprint != kFingerprint) {
+      if (st.peerFingerprint != FingerprintOf(xg_)) {
+        if (IsEditionFingerprint(st.peerFingerprint)) {
+          refusal_ = xg_ ? "Your friend plays Pokemon XD; you play Pokemon XG. XD and XG players cannot trade with each other."
+                         : "Your friend plays Pokemon XG; you play Pokemon XD. XD and XG players cannot trade with each other.";
+        }
         Log("[trade] the friend is not in the trade screen (other fingerprint)");
         conn_->close();
         phase_ = Phase::Over;

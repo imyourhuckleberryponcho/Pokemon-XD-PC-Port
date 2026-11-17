@@ -14,6 +14,7 @@ bool sKnown = false;
 fs::path sRoot;
 std::string sName;
 bool sSlots = false;
+bool sXG = false;
 std::string sRootUtf8, sNameC;
 
 thread_local bool tOverride = false;
@@ -33,7 +34,7 @@ void LookUp() {
     sSlots = false;
     return;
   }
-  sRoot = engine::memcard::slots::ActiveRoot(UserFolder(), &sName);
+  sRoot = engine::memcard::slots::ActiveRoot(SaveDataFolder(sXG), &sName);
   sSlots = true;
 }
 
@@ -58,6 +59,21 @@ bool SaveSlotsInUse() {
   return sSlots;
 }
 
+bool UsingXGSaves() {
+  std::lock_guard<std::mutex> lock(sLock);
+  return sXG;
+}
+
+void UseXGSaves(bool xg) {
+  std::lock_guard<std::mutex> lock(sLock);
+  if (sXG != xg) {
+    sXG = xg;
+    sKnown = false;
+    sRootUtf8.clear();
+    sNameC.clear();
+  }
+}
+
 void ForgetActiveSave() {
   std::lock_guard<std::mutex> lock(sLock);
   sKnown = false;
@@ -74,6 +90,8 @@ CardRootScope::~CardRootScope() {
 }
 
 }
+
+extern "C" void PortXD_UseXGSaves(int xg) { xd::UseXGSaves(xg != 0); }
 
 extern "C" const char* PortXD_CardRootUtf8(void) {
   const std::u8string u8 = xd::CardRoot().u8string();

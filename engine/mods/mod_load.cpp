@@ -1,5 +1,6 @@
 #include "mods.h"
 
+#include "mod_layout.h"
 #include "i18n.h"
 #include <gs_formats.h>
 
@@ -153,6 +154,9 @@ public:
     FindMods();
     ModList list = ReadList();
     CollectExtraLayers();
+    for (const std::string& listed : list.Active().scriptsOff) {
+      if (const FoundMod* f = Find(listed)) mScriptsOff.insert(f->manifest.id);
+    }
     std::vector<const FoundMod*> on = ChooseMods(list);
     for (const FoundMod* mod : on) {
       mResult.active.push_back(mod->manifest);
@@ -161,6 +165,7 @@ public:
     }
     ApplyData(on);
     Build();
+    FinishRows(on);
     if (!mResult.active.empty()) {
       Say(Message::Level::Info, Fmt(Tr("Mods on: %s (%d disc file(s) replaced or added)"), mResult.ActiveText().c_str(),
                                     static_cast<int>(mResult.files.size())));
@@ -174,6 +179,7 @@ private:
   std::map<std::string, std::string> mDiscFiles;
   std::map<std::string, Layer> mLayers;
   std::map<std::string, std::vector<uint8_t>> mBaseCache;
+  std::set<std::string> mScriptsOff;
 
   void Say(Message::Level level, std::string text) { mResult.messages.push_back({level, std::move(text)}); }
 
@@ -260,7 +266,7 @@ private:
         continue;
       }
       const auto& games = mod->manifest.games;
-      if (std::none_of(games.begin(), games.end(), [&](const std::string& g) { return EqualNoCase(g, mOpt.disc.gameId); })) {
+      if (!SupportsGame(mod->manifest, mOpt.disc.gameId)) {
         std::string gameList;
         for (const std::string& g : games) {
           gameList += (gameList.empty() ? "" : ", ") + g;
@@ -271,6 +277,20 @@ private:
         continue;
       }
       on.push_back(mod);
+    }
+    for (bool changed = true; changed;) {
+      changed = false;
+      for (size_t i = 0; i < on.size() && !changed; i++) {
+        for (const std::string& need : on[i]->manifest.onlyWith) {
+          if (std::none_of(on.begin(), on.end(), [&](const FoundMod* o) { return EqualNoCase(o->manifest.id, need); })) {
+            Say(Message::Level::Info, Fmt(Tr("The mod \"%s\" is a compatibility patch for \"%s\", which is not on. It is not used."),
+                                          on[i]->manifest.name.c_str(), need.c_str()));
+            on.erase(on.begin() + static_cast<std::ptrdiff_t>(i));
+            changed = true;
+            break;
+          }
+        }
+      }
     }
     for (bool changed = true; changed;) {
       changed = false;
@@ -338,6 +358,19 @@ private:
         }
       }
     }
+    for (size_t i = 0; i < on.size(); i++) {
+      for (const std::string& want : on[i]->manifest.before) {
+        for (size_t j = 0; j < i; j++) {
+          if (EqualNoCase(on[j]->manifest.id, want)) {
+            Say(Message::Level::Warning,
+                Fmt(Tr("The mod \"%s\" should come before \"%s\" (it says so): move the line \"%s = on\" above \"%s = on\" in "
+                       "%s. Until then the list's order is used."),
+                    on[i]->manifest.name.c_str(), on[j]->manifest.name.c_str(), on[i]->manifest.id.c_str(),
+                    on[j]->manifest.id.c_str(), Utf8(mOpt.listFile.filename()).c_str()));
+          }
+        }
+      }
+    }
     return on;
   }
 
@@ -374,28 +407,17 @@ private:
     return it->second;
   }
 
-  std::vector<std::pair<std::string, fs::path>> FilesIn(const FoundMod& mod, const fs::path& folder) {
+  std::vector<std::pair<std::string, fs::path>> FilesIn(const FoundMod& mod, const char* sub) {
     std::vector<std::pair<std::string, fs::path>> out;
-    std::error_code ec;
-    if (!fs::is_directory(folder, ec)) {
-      return out;
-    }
-    for (auto it = fs::recursive_directory_iterator(folder, ec); !ec && it != fs::recursive_directory_iterator();
-         it.increment(ec)) {
-      if (!it->is_regular_file(ec)) {
-        continue;
-      }
-      const std::u8string generic = fs::relative(it->path(), folder, ec).generic_u8string();
-      const std::string rel(reinterpret_cast<const char*>(generic.data()), generic.size());
-      if (!IsAscii(rel)) {
+    for (LayoutFile& f : LayoutFiles(mod.folder, mOpt.disc.gameId, sub)) {
+      if (!IsAscii(f.rel)) {
         Say(Message::Level::Warning, Fmt(Tr("The mod \"%s\" has \"%s\": disc file names only have English letters, digits and "
                                            "signs; ignored."),
-                                         mod.manifest.name.c_str(), rel.c_str()));
+                                         mod.manifest.name.c_str(), f.rel.c_str()));
         continue;
       }
-      out.emplace_back(rel, it->path());
+      out.emplace_back(std::move(f.rel), std::move(f.path));
     }
-    std::sort(out.begin(), out.end());
     return out;
   }
 
@@ -410,29 +432,30 @@ private:
 
   void CollectScripts(const FoundMod& mod) {
     std::error_code ec;
-    const fs::path folder = mod.folder / "scripts";
     if (!mod.manifest.scripts) {
-      if (fs::is_directory(folder, ec)) {
+      if (HasLayoutFolder(mod.folder, mOpt.disc.gameId, "scripts")) {
         Say(Message::Level::Warning, Fmt(Tr("The mod \"%s\" has a \"scripts\" folder but its mod.json does not say "
                                            "\"scripts\": true; the scripts are not used."),
                                          mod.manifest.name.c_str()));
       }
       return;
     }
-    std::vector<std::pair<std::string, fs::path>> found;
-    if (fs::is_directory(folder, ec)) {
-      for (auto it = fs::directory_iterator(folder, ec); !ec && it != fs::directory_iterator(); it.increment(ec)) {
-        if (!it->is_regular_file(ec)) continue;
-        const std::string name = Utf8(it->path().filename());
-        if (Lower(Utf8(it->path().extension())) != ".lua") {
-          Say(Message::Level::Warning, Fmt(Tr("The mod \"%s\" has \"scripts/%s\": only .lua files are read; ignored."),
-                                           mod.manifest.name.c_str(), name.c_str()));
-          continue;
-        }
-        found.emplace_back(name, it->path());
-      }
+    if (mScriptsOff.count(mod.manifest.id) != 0) {
+      mResult.scriptsSwitchedOff.push_back(mod.manifest.id);
+      Say(Message::Level::Info, Fmt(Tr("The mod \"%s\" has scripts, but running scripts is switched off for it (Mods page); its "
+                                       "scripts are skipped and the rest of the mod is used."),
+                                    mod.manifest.name.c_str()));
+      return;
     }
-    std::sort(found.begin(), found.end());
+    std::vector<std::pair<std::string, fs::path>> found;
+    for (LayoutFile& f : LayoutFiles(mod.folder, mOpt.disc.gameId, "scripts", false)) {
+      if (Lower(Utf8(fs::path(f.rel).extension())) != ".lua") {
+        Say(Message::Level::Warning, Fmt(Tr("The mod \"%s\" has \"scripts/%s\": only .lua files are read; ignored."),
+                                         mod.manifest.name.c_str(), f.rel.c_str()));
+        continue;
+      }
+      found.emplace_back(std::move(f.rel), std::move(f.path));
+    }
     if (found.empty()) {
       Say(Message::Level::Warning,
           Fmt(Tr("The mod \"%s\" says \"scripts\": true but has no scripts/*.lua."), mod.manifest.name.c_str()));
@@ -462,11 +485,10 @@ private:
   size_t CollectFiles(const FoundMod& mod, bool quiet = false) {
     size_t used = 0;
     const std::string& id = mod.manifest.id;
-    const auto whole = FilesIn(mod, mod.folder / "files");
-    const auto entries = FilesIn(mod, mod.folder / "fsys");
-    std::error_code ec;
-    if (!quiet && whole.empty() && entries.empty() && !fs::is_directory(mod.folder / "data", ec) &&
-        !(mod.manifest.scripts && fs::is_directory(mod.folder / "scripts", ec))) {
+    const auto whole = FilesIn(mod, "files");
+    const auto entries = FilesIn(mod, "fsys");
+    if (!quiet && whole.empty() && entries.empty() && !HasLayoutFolder(mod.folder, mOpt.disc.gameId, "data") &&
+        !(mod.manifest.scripts && HasLayoutFolder(mod.folder, mOpt.disc.gameId, "scripts"))) {
       Say(Message::Level::Warning, Fmt(Tr("The mod \"%s\" is on but has no files in \"files\", \"fsys\" or \"data\"."),
                                        mod.manifest.name.c_str()));
     }
@@ -584,11 +606,18 @@ private:
     return true;
   }
 
+  bool HasObjects(const FoundMod& mod) const {
+    return !mod.texturePack && (HasLayoutFolder(mod.folder, mOpt.disc.gameId, "objects") || HasLayoutFolder(mod.folder, mOpt.disc.gameId, "texts"));
+  }
+  bool AnyHasObjects(const std::vector<const FoundMod*>& on) const {
+    return std::any_of(on.begin(), on.end(), [&](const FoundMod* m) { return HasObjects(*m); });
+  }
+
   void ApplyData(const std::vector<const FoundMod*>& on) {
     std::vector<DataModFile> files;
     for (const FoundMod* mod : on) {
       if (mod->texturePack) continue;
-      for (const auto& [rel, path] : FilesIn(*mod, mod->folder / "data")) {
+      for (const auto& [rel, path] : FilesIn(*mod, "data")) {
         const std::string label = "data/" + rel;
         if (Lower(Utf8(fs::path(rel).extension())) != ".json") {
           Say(Message::Level::Warning, Fmt(Tr("The mod \"%s\" has \"%s\": only .json files in \"data\" are read; ignored."),
@@ -603,7 +632,8 @@ private:
         files.push_back(std::move(f));
       }
     }
-    if (files.empty() && !mOpt.generateData) {
+    const bool tablesForScripts = mOpt.catalogForScripts && !mResult.scripts.empty() && static_cast<bool>(mOpt.dataCatalog);
+    if (files.empty() && !mOpt.generateData && !tablesForScripts && !AnyHasObjects(on)) {
       return;
     }
     if (!mOpt.dataCatalog) {
@@ -619,6 +649,10 @@ private:
       Say(Message::Level::Problem, Fmt(Tr("The game's tables could not be found on this disc (%s), so the data mods' changes are not "
                                          "used."),
                                        error.c_str()));
+      return;
+    }
+    if (files.empty() && !mOpt.generateData) {
+      mResult.catalog = catalog;
       return;
     }
     if (mOpt.generateData) {
@@ -705,6 +739,49 @@ private:
     }
   }
 
+  void FinishRows(const std::vector<const FoundMod*>& on) {
+    if (!mOpt.finishRows || !mResult.catalog || (mResult.addedRows.empty() && !AnyHasObjects(on))) return;
+    RowsJob job;
+    job.rows = &mResult.addedRows;
+    job.gameId = mOpt.disc.gameId;
+    for (const FoundMod* m : on) job.modFolders[m->manifest.id] = m->folder;
+    job.discFiles = mOpt.disc.files;
+    job.catalog = mResult.catalog.get();
+    job.checkEntry = mOpt.checkEntry;
+    job.say = [this](Message::Level level, const std::string& text) { Say(level, text); };
+    job.readEntry = [this](const std::string& a, const std::string& e, std::vector<uint8_t>& out) { return ReadEntry(a, e, out); };
+    job.readFile = [this](const std::string& path, std::vector<uint8_t>& out) {
+      for (const Replacement& r : mResult.files) {
+        if (!EqualNoCase(r.discPath, path)) continue;
+        if (r.rebuilt) {
+          out = r.data;
+          return true;
+        }
+        return ReadBytes(r.file, out);
+      }
+      return mOpt.disc.read && mOpt.disc.read(path, out);
+    };
+    mOpt.finishRows(job);
+    for (RowsJob::OutFile& f : job.outFiles) {
+      Replacement* at = nullptr;
+      for (Replacement& r : mResult.files) {
+        if (EqualNoCase(r.discPath, f.discPath)) at = &r;
+      }
+      if (at == nullptr) {
+        mResult.files.emplace_back();
+        at = &mResult.files.back();
+        at->discPath = f.discPath;
+        at->added = mDiscFiles.find(Lower(f.discPath)) == mDiscFiles.end();
+      }
+      at->data = std::move(f.data);
+      at->rebuilt = true;
+      at->file.clear();
+      at->entries.clear();
+      at->generated.clear();
+      if (!f.mods.empty()) at->from += (at->from.empty() ? "" : ", ") + f.mods;
+    }
+  }
+
   std::string NameOf(const std::string& id) const {
     const FoundMod* m = Find(id);
     return m != nullptr ? m->manifest.name : id;
@@ -778,6 +855,8 @@ private:
     std::vector<FsysReplacement> list;
     contents.reserve(layer.entries.size());
     std::set<std::string> from;
+    std::set<uint32_t> skipped;
+    std::map<uint32_t, std::vector<uint8_t>> changed;
     for (const auto& [index, e] : layer.entries) {
       contents.emplace_back();
       if (e.generated) {
@@ -788,6 +867,22 @@ private:
         return false;
       }
       FsysEntry old;
+      if (!e.generated && mOpt.checkEntry && Fsys_Entry(&fsys, index, &old)) {
+        std::string why;
+        const std::vector<uint8_t> asGiven = contents.back();
+        if (mOpt.checkEntry(static_cast<int>(old.type), e.from, contents.back(), mResult.addedRows, why)) {
+          if (contents.back() != asGiven) {
+            changed[index] = contents.back();
+          }
+        } else {
+          Say(Message::Level::Problem,
+              Fmt(Tr("The mod \"%s\": %s in %s is not usable (%s). That file is switched off; the game's own is used."),
+                  NameOf(e.from).c_str(), e.name.c_str(), layer.discPath.c_str(), why.c_str()));
+          contents.pop_back();
+          skipped.insert(index);
+          continue;
+        }
+      }
       if (!e.generated && Fsys_Entry(&fsys, index, &old) && contents.back().size() > old.size) {
         Say(Message::Level::Info, Fmt(Tr("%s: %s in %s is bigger than the original (%u bytes, was %u). If the game runs out of "
                                          "memory there, this may be why."),
@@ -801,6 +896,9 @@ private:
         at = comma + 2;
       }
     }
+    if (list.empty()) {
+      return false;
+    }
     size_t size = 0;
     uint8_t* data = Fsys_Rebuild(base->data(), base->size(), list.data(), list.size(), &size);
     if (data == nullptr) {
@@ -812,7 +910,12 @@ private:
     std::free(data);
     r.rebuilt = true;
     for (const auto& [index, e] : layer.entries) {
-      if (e.generated) {
+      if (skipped.count(index) != 0) {
+        continue;
+      }
+      if (const auto c = changed.find(index); c != changed.end()) {
+        r.generated.emplace_back(index, c->second);
+      } else if (e.generated) {
         r.generated.emplace_back(index, e.data);
       } else {
         r.entries.emplace_back(index, e.file);
@@ -974,15 +1077,18 @@ AppliesVerdict CheckApplies(const ModFolder& mod, const LooksOrSound& looks, con
     v.reason = std::move(why);
     return v;
   };
-  const auto filesIn = [](const fs::path& folder) {
+  const auto filesIn = [&](const char* sub) {
     std::vector<std::string> out;
-    std::error_code ec;
-    if (!fs::is_directory(folder, ec)) return out;
-    for (auto it = fs::recursive_directory_iterator(folder, ec); !ec && it != fs::recursive_directory_iterator();
-         it.increment(ec)) {
-      if (!it->is_regular_file(ec)) continue;
-      const std::u8string generic = fs::relative(it->path(), folder, ec).generic_u8string();
-      out.emplace_back(reinterpret_cast<const char*>(generic.data()), generic.size());
+    for (const fs::path& root : ContentRoots(mod.folder, std::string_view())) {
+      std::error_code ec;
+      const fs::path folder = root / sub;
+      if (!fs::is_directory(folder, ec)) continue;
+      for (auto it = fs::recursive_directory_iterator(folder, ec); !ec && it != fs::recursive_directory_iterator();
+           it.increment(ec)) {
+        if (!it->is_regular_file(ec)) continue;
+        const std::u8string generic = fs::relative(it->path(), folder, ec).generic_u8string();
+        out.emplace_back(reinterpret_cast<const char*>(generic.data()), generic.size());
+      }
     }
     std::sort(out.begin(), out.end());
     return out;
@@ -990,18 +1096,24 @@ AppliesVerdict CheckApplies(const ModFolder& mod, const LooksOrSound& looks, con
   if (mod.manifest.scripts) {
     return downgrade(Tr("it runs scripts (scripts/)"));
   }
-  for (const std::string& f : filesIn(mod.folder / "data")) {
+  for (const std::string& f : filesIn("data")) {
     if (Lower(fs::path(f).extension().string()) == ".json") {
       return downgrade(Fmt(Tr("it changes the game's tables (data/%s)"), f.c_str()));
     }
   }
-  for (const std::string& f : filesIn(mod.folder / "files")) {
+  if (!filesIn("objects").empty()) {
+    return downgrade(Tr("it adds people, zones, chests or music to rooms (objects/)"));
+  }
+  if (!filesIn("texts").empty()) {
+    return downgrade(Tr("it adds text to rooms (texts/)"));
+  }
+  for (const std::string& f : filesIn("files")) {
     if (!looks || !looks(f, -1)) {
       return downgrade(Fmt(Tr("it replaces %s, which isn't only pictures or sound"), f.c_str()));
     }
   }
   std::map<std::string, std::vector<uint8_t>> archives;
-  for (const std::string& f : filesIn(mod.folder / "fsys")) {
+  for (const std::string& f : filesIn("fsys")) {
     const size_t slash = f.rfind('/');
     int type = -2;
     if (slash != std::string::npos && disc != nullptr && disc->read) {

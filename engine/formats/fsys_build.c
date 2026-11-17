@@ -167,3 +167,243 @@ uint8_t* Fsys_Rebuild(const uint8_t* data, size_t size, const FsysReplacement* r
   free(at);
   return out;
 }
+
+enum { kEntryHeader = 0x70, kHeaderAlign = 16 };
+
+static size_t align_to(size_t v, size_t a) { return (v + a - 1) & ~(a - 1); }
+
+uint8_t* Fsys_RebuildAdded(const uint8_t* data, size_t size, const FsysAddition* add, size_t addCount, size_t* outSize) {
+  FsysArchive fsys;
+  if (!Fsys_Open(data, size, &fsys) || addCount == 0 || fsys.count == 0) {
+    return NULL;
+  }
+  const uint32_t info = be32(data + 0x18);
+  if ((size_t)info + 12 > size) {
+    return NULL;
+  }
+  const size_t tableOff = be32(data + info), namesOff = be32(data + info + 4), dataStart = be32(data + info + 8);
+  const size_t n = fsys.count, total = n + addCount;
+  if (tableOff != fsys.entryTable || be32(data + 0x1C) != dataStart || dataStart > size || namesOff < tableOff + 4 * n) {
+    return NULL;
+  }
+  size_t hdrStart = dataStart;
+  for (size_t i = 0; i < n; i++) {
+    const size_t h = be32(data + tableOff + 4 * i);
+    if (h < hdrStart) {
+      hdrStart = h;
+    }
+  }
+  if (hdrStart < namesOff || hdrStart + n * kEntryHeader > dataStart || dataStart - (hdrStart + n * kEntryHeader) >= kAlign) {
+    return NULL;
+  }
+  for (size_t i = 0; i < n; i++) {
+    if (be32(data + tableOff + 4 * i) != hdrStart + i * kEntryHeader) {
+      return NULL;
+    }
+  }
+  const bool footer = size >= kFooterSize && memcmp(data + size - 4, "FSYS", 4) == 0 && be32(data + kSizeField) == size;
+  size_t dataEnd = dataStart;
+  for (size_t i = 0; i < n; i++) {
+    FsysEntry e;
+    if (!Fsys_Entry(&fsys, (uint32_t)i, &e)) {
+      return NULL;
+    }
+    const size_t end = (size_t)e.offset + (e.packed ? e.packedSize : e.size);
+    if (end > dataEnd) {
+      dataEnd = end;
+    }
+  }
+  if (dataEnd > size - (footer ? kFooterSize : 0)) {
+    return NULL;
+  }
+
+  uint8_t** packed = (uint8_t**)calloc(addCount, sizeof(uint8_t*));
+  uint32_t* packedSize = (uint32_t*)calloc(addCount, sizeof(uint32_t));
+  size_t newNames = 0;
+  bool ok = packed != NULL && packedSize != NULL;
+  for (size_t k = 0; ok && k < addCount; k++) {
+    ok = add[k].templateIndex < n && add[k].name != NULL && (add[k].data != NULL || add[k].size == 0);
+    for (size_t j = 0; ok && j < n; j++) {
+      ok = (be32(data + hdrStart + j * kEntryHeader) >> 16) != add[k].id;
+    }
+    for (size_t j = 0; ok && j < k; j++) {
+      ok = add[j].id != add[k].id;
+    }
+    if (!ok) {
+      break;
+    }
+    packed[k] = Lzss_Pack(add[k].data, add[k].size, &packedSize[k]);
+    ok = packed[k] != NULL;
+    newNames += strlen(add[k].name) + 1;
+  }
+  const size_t poolOld = hdrStart - namesOff;
+  const size_t tableSize = align_to(4 * total, kHeaderAlign);
+  const size_t poolSize = align_to(poolOld + newNames, kHeaderAlign);
+  const size_t namesNew = tableOff + tableSize, hdrNew = namesNew + poolSize;
+  const size_t dataStartNew = align_to(hdrNew + total * kEntryHeader, kAlign);
+  const size_t shiftName = namesNew - namesOff, shiftData = dataStartNew - dataStart;
+  const size_t keep = dataEnd - dataStart;
+  size_t pos = dataStartNew + keep;
+  size_t* at = (size_t*)calloc(addCount, sizeof(size_t));
+  ok = ok && at != NULL;
+  for (size_t k = 0; ok && k < addCount; k++) {
+    pos = align_to(pos, kAlign);
+    at[k] = pos;
+    pos += packedSize[k];
+  }
+  const size_t totalSize = align_to(pos, kAlign) + (footer ? kFooterSize : 0);
+  uint8_t* out = NULL;
+  if (ok && totalSize <= 0xFFFFFFFFu) {
+    out = (uint8_t*)calloc(totalSize, 1);
+  }
+  if (out != NULL) {
+    memcpy(out, data, tableOff);
+    put_be32(out + info + 4, (uint32_t)namesNew);
+    put_be32(out + info + 8, (uint32_t)dataStartNew);
+    put_be32(out + 0x0C, (uint32_t)total);
+    put_be32(out + 0x1C, (uint32_t)dataStartNew);
+    put_be32(out + kSizeField, (uint32_t)totalSize);
+    for (size_t i = 0; i < total; i++) {
+      put_be32(out + tableOff + 4 * i, (uint32_t)(hdrNew + i * kEntryHeader));
+    }
+    memcpy(out + namesNew, data + namesOff, poolOld);
+    size_t namePos = poolOld;
+    for (size_t i = 0; i < n; i++) {
+      uint8_t* h = out + hdrNew + i * kEntryHeader;
+      memcpy(h, data + hdrStart + i * kEntryHeader, kEntryHeader);
+      if (be32(h + 0x04) >= dataStart) {
+        put_be32(h + 0x04, be32(h + 0x04) + (uint32_t)shiftData);
+      }
+      if (be32(h + 0x1C) != 0) {
+        put_be32(h + 0x1C, be32(h + 0x1C) + (uint32_t)shiftName);
+      }
+      put_be32(h + 0x24, be32(h + 0x24) + (uint32_t)shiftName);
+    }
+    for (size_t k = 0; k < addCount; k++) {
+      uint8_t* h = out + hdrNew + (n + k) * kEntryHeader;
+      memcpy(h, data + hdrStart + add[k].templateIndex * kEntryHeader, kEntryHeader);
+      put_be32(h, (uint32_t)add[k].id << 16 | (be32(h) & 0xFFFF));
+      put_be32(h + 0x04, (uint32_t)at[k]);
+      put_be32(h + 0x08, add[k].size);
+      put_be32(h + 0x0C, be32(h + 0x0C) | 0x80000000u);
+      put_be32(h + 0x14, packedSize[k]);
+      put_be32(h + 0x1C, 0);
+      put_be32(h + 0x24, (uint32_t)(namesNew + namePos));
+      memcpy(out + namesNew + namePos, add[k].name, strlen(add[k].name) + 1);
+      namePos += strlen(add[k].name) + 1;
+      memcpy(out + at[k], packed[k], packedSize[k]);
+    }
+    memcpy(out + dataStartNew, data + dataStart, keep);
+    if (footer) {
+      memcpy(out + totalSize - kFooterSize, data + size - kFooterSize, kFooterSize);
+    }
+    if (outSize != NULL) {
+      *outSize = totalSize;
+    }
+  }
+  for (size_t k = 0; packed != NULL && k < addCount; k++) {
+    free(packed[k]);
+  }
+  free(packed);
+  free(packedSize);
+  free(at);
+  return out;
+}
+
+enum { kEntryHeaderSize = 0x70, kTablePointer = 0x40, kHeaderSizeField = 0x1C, kCountField = 0x0C };
+
+uint8_t* Fsys_AddEntry(const uint8_t* data, size_t size, uint16_t id, uint32_t type, const char* name, const uint8_t* contents,
+                       uint32_t contentsSize, bool pack, size_t* outSize) {
+  FsysArchive fsys;
+  if (!Fsys_Open(data, size, &fsys) || fsys.count == 0 || name == NULL || (contents == NULL && contentsSize != 0)) {
+    return NULL;
+  }
+  const uint32_t hdr = be32(data + kHeaderSizeField);
+  if (hdr < 0x60 || hdr > size || be32(data + kTablePointer) != fsys.entryTable) {
+    return NULL;
+  }
+  size_t dataEnd = hdr;
+  for (uint32_t i = 0; i < fsys.count; i++) {
+    FsysEntry e;
+    if (!Fsys_Entry(&fsys, i, &e) || e.id == id || e.offset < hdr) {
+      return NULL;
+    }
+    const size_t end = (size_t)e.offset + (e.packed ? e.packedSize : e.size);
+    if (end > dataEnd) {
+      dataEnd = end;
+    }
+  }
+  const bool footer = size >= kFooterSize && memcmp(data + size - 4, "FSYS", 4) == 0 && dataEnd <= size - kFooterSize;
+  const size_t keep = footer ? size - kFooterSize : size;
+  if (dataEnd > keep) {
+    return NULL;
+  }
+
+  uint8_t* stored = NULL;
+  uint32_t storedSize = contentsSize;
+  if (pack) {
+    stored = Lzss_Pack(contents != NULL ? contents : (const uint8_t*)"", contentsSize, &storedSize);
+    if (stored == NULL) {
+      return NULL;
+    }
+  }
+  const size_t nameLen = strlen(name) + 1;
+  const size_t tableAt = (hdr + 3) & ~(size_t)3;
+  const size_t nameAt = tableAt + 4 * (size_t)(fsys.count + 1);
+  const size_t headerAt = (nameAt + nameLen + 3) & ~(size_t)3;
+  const size_t hdr2 = align_up(headerAt + kEntryHeaderSize);
+  const size_t delta = hdr2 - hdr;
+  const size_t entryAt = align_up(keep + delta);
+  const size_t total = align_up(entryAt + storedSize) + (footer ? kFooterSize : 0);
+  uint8_t* out = NULL;
+  if (total <= 0xFFFFFFFFu) {
+    out = (uint8_t*)calloc(total, 1);
+  }
+  if (out == NULL) {
+    free(stored);
+    return NULL;
+  }
+  memcpy(out, data, hdr);
+  memcpy(out + hdr2, data + hdr, keep - hdr);
+  for (uint32_t i = 0; i < fsys.count; i++) {
+    put_be32(out + tableAt + 4 * i, be32(data + fsys.entryTable + 4 * i));
+  }
+  put_be32(out + tableAt + 4 * fsys.count, (uint32_t)headerAt);
+  memcpy(out + nameAt, name, nameLen);
+  const uint32_t lastAt = be32(data + fsys.entryTable + 4 * (fsys.count - 1));
+  uint8_t* h = out + headerAt;
+  if ((size_t)lastAt + kEntryHeaderSize <= hdr) {
+    memcpy(h, data + lastAt, kEntryHeaderSize);
+  }
+  memset(h + 0x10, 0, kEntryHeaderSize - 0x10);
+  put_be32(h, (uint32_t)id << 16 | type << 9);
+  put_be32(h + 0x04, (uint32_t)entryAt);
+  put_be32(h + 0x08, contentsSize);
+  put_be32(h + 0x0C, pack ? 0x80000000u : 0);
+  put_be32(h + 0x14, storedSize);
+  put_be32(h + 0x1C, 0);
+  put_be32(h + 0x20, type);
+  put_be32(h + 0x24, (uint32_t)nameAt);
+  memcpy(out + entryAt, stored != NULL ? stored : contents, storedSize);
+  free(stored);
+  for (uint32_t i = 0; i < fsys.count; i++) {
+    uint8_t* eh = out + be32(data + fsys.entryTable + 4 * i);
+    put_be32(eh + 0x04, be32(eh + 0x04) + (uint32_t)delta);
+  }
+  put_be32(out + kCountField, fsys.count + 1);
+  put_be32(out + kTablePointer, (uint32_t)tableAt);
+  put_be32(out + kHeaderSizeField, (uint32_t)hdr2);
+  if (be32(data + 0x48) == hdr) {
+    put_be32(out + 0x48, (uint32_t)hdr2);
+  }
+  if (footer) {
+    memcpy(out + total - kFooterSize, data + size - kFooterSize, kFooterSize);
+  }
+  if (be32(data + kSizeField) == size) {
+    put_be32(out + kSizeField, (uint32_t)total);
+  }
+  if (outSize != NULL) {
+    *outSize = total;
+  }
+  return out;
+}

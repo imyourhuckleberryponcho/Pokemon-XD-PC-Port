@@ -68,6 +68,10 @@ If it does not work
   ~/Library/Application Support/Pokemon XD/logs  (if that folder exists).
 - Tell us your Mac model and macOS version (Apple menu > About This Mac).
 - Nothing is ever sent by the program itself.
+- Discord: if the Discord app runs on this Mac, the launcher and the game show "In the launcher", "Story mode",
+  "In a battle" or "Online battle" and the time you have been playing, through the app on this same Mac only (no
+  save name, trainer name or place, nothing over the internet). On by default, not part of the presets; to turn
+  it off: Settings, "Discord presence".
 
 Updates: the launcher asks once whether it may check, shows what is new and asks before downloading; the new app is
 unpacked beside this one and put in place when you press "Restart now" (the app must sit in a folder you can write
@@ -77,3 +81,6 @@ Not in this build yet (they exist on Windows): the launcher's icon
 chooser and shortcut buttons, screenshots and bug-report bundles from inside the game (F10/F12), the window icon made
 from your disc.
 Settings can be changed in the game's own SETTINGS page, or in settings.ini in the folder above.
+
+Licence: the port's own code is under the MIT licence (earlier releases stay CC0); the decomp code it builds on is CC0;
+the parts made by others keep their own licences.

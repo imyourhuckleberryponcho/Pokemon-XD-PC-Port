@@ -10,6 +10,7 @@
 #include "data/common_rel.h"
 #include "xd_challenges.h"
 #include "xd_gen4.h"
+#include "xd_xg.h"
 #include "xd_playthrough.h"
 
 #include <random>
@@ -252,7 +253,8 @@ const char* Env(const char* name) {
 xd::online::Capabilities MyCapabilities() {
   xd::online::Capabilities c;
   c.disc = "GXXE01";
-  if (xd::gen4::Loaded() || xd::gen4::PackPresent()) {
+  c.edition = xd::xg::Edition();
+  if (xd::xg::Off(xd::xg::Feature::Gen4) == nullptr && (xd::gen4::Loaded() || xd::gen4::PackPresent())) {
     if (xd::gen4::Loaded()) c.ruleSet = "gen4";
     std::string text;
     std::error_code ec;
@@ -1059,13 +1061,15 @@ BattleSummary LobbySummary() {
   b.desync = S.lastDesync;
   b.dead = S.dead;
   b.notice = S.endNotice;
-  b.rulesText = RulesText(S.rules);
+  b.rulesText = RulesText(S.rules, xd::xg::Edition());
   return b;
 }
 Capabilities LobbyCapabilities() { return MyCapabilities(); }
 PcInfo LobbyPcInfo() {
   PcInfo p;
-  p.gen4PackPresent = xd::gen4::PackPresent();
+  p.edition = xd::xg::Edition();
+  if (const char* why = xd::xg::Off(xd::xg::Feature::Gen4)) p.gen4Off = why;
+  p.gen4PackPresent = xd::gen4::PackPresent() && p.gen4Off.empty();
   p.gen4Loaded = xd::gen4::Loaded();
   return p;
 }
@@ -1424,7 +1428,7 @@ uint8_t PortXD_NetSelectAction(void* trainer, uint32_t side) {
       S.cnt[ownSide]++;
       return sMine.r;
     }
-    LocalChoose(trainer, static_cast<uint32_t>(ownSide), seq);
+    LocalChoose(trainer, side, seq);
     sMine.consumed = true;
     S.cnt[ownSide]++;
     return sMine.r;
@@ -1433,7 +1437,7 @@ uint8_t PortXD_NetSelectAction(void* trainer, uint32_t side) {
   fightTrainerAllInitFightActionBuff(trainer);
   if (fightGetFightResultId() == 1) return 0;
   if (!sMine.have && !sMine.busy) {
-    if (void* lt = FindLocalTrainer(trainer)) LocalChoose(lt, static_cast<uint32_t>(ownSide), ownSeq);
+    if (void* lt = FindLocalTrainer(trainer)) LocalChoose(lt, side, ownSeq);
   }
   while (sMine.busy && !S.dead) fightMainWaitFrame(1);
   if (!WaitMap(sPeerCommit, seq)) { EndWithError(); return 0; }

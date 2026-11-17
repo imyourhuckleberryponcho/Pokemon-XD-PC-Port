@@ -26,6 +26,14 @@ struct TextFix {
   bool Empty() const { return messages.empty(); }
 };
 
+struct StarterBase {
+  uint32_t count = 1;
+  uint32_t species[2] = {0x85, 0};
+  uint32_t level[2] = {10, 0};
+  uint32_t moves[2][4] = {{0x21, 0x27, 0x2C, 0x1C}, {}};
+};
+constexpr StarterBase kXGStarterBase = {2, {0x85, 0x120}, {15, 14}, {{0x1D, 0x2C, 0x130, 0xB6}, {0x21, 0x2D, 0xB6, 0x10E}}};
+
 struct StarterPlan {
   bool on = false;
   uint32_t choice = 0;
@@ -34,6 +42,11 @@ struct StarterPlan {
   uint32_t level = 10;
   bool natural = true;
   uint32_t moves[3][4] = {};
+  StarterBase base;
+  bool second = false;
+  uint32_t species2 = 0;
+  uint32_t level2 = 0;
+  uint32_t moves2[4] = {};
 };
 constexpr uint32_t kStarterEevee = 0x85;
 constexpr uint32_t kStarterEeveeMoves[4] = {0x21, 0x27, 0x2C, 0x1C};
@@ -47,7 +60,7 @@ struct Result {
 };
 
 bool Generate(const engine::mods::DataCatalog& catalog, const engine::mods::EntryReader& read,
-              const engine::randomizer::Settings& s, Result& out, std::string& error);
+              const engine::randomizer::Settings& s, Result& out, std::string& error, const StarterBase* starterBase = nullptr);
 
 bool WriteMod(const Result& r, const engine::randomizer::Settings& s, const std::filesystem::path& folder, std::string& error);
 

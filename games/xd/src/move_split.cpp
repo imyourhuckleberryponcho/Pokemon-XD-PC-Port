@@ -50,6 +50,9 @@ int32_t PortXD_SplitTypeKind(uint16_t type) {
     if (row != nullptr && row[0x16] == 0xA4 && (row[0x37] == 1 || row[0x37] == 2)) {
       return row[0x37];
     }
+    if (row != nullptr && (row[0x37] == 0x81 || row[0x37] == 0x82)) {
+      return row[0x37] - 0x80;
+    }
     return game;
   }
   if (!SplitOn() || sAskedMove < 1 || sAskedMove > sizeof kCategory) {

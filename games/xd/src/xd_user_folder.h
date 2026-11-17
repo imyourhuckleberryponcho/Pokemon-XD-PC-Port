@@ -33,6 +33,9 @@ inline std::filesystem::path SettingsFolder() {
 }
 
 std::filesystem::path CardRoot();
+inline std::filesystem::path SaveDataFolder(bool xg) { return xg ? UserFolder() / L"xg" : UserFolder(); }
+void UseXGSaves(bool xg);
+bool UsingXGSaves();
 std::string ActiveSaveName();
 bool SaveSlotsInUse();
 void ForgetActiveSave();
@@ -50,6 +53,7 @@ private:
 
 }
 
+extern "C" void PortXD_UseXGSaves(int xg);
 extern "C" const char* PortXD_CardRootUtf8(void);
 extern "C" const char* PortXD_CardSaveName(void);
 

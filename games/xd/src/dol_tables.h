@@ -10,6 +10,9 @@ extern "C" {
 #endif
 
 #define XD_DOL_SHA1_GXXE01 "ff9e752ead9914af0b363ae6c831a34ccce189d2"
+#define XD_DOL_SHA1_XG "6b756e98b18c27aa8f8995ad27ad1ea6f3508acd"
+
+int PortXD_IsXG(void);
 
 bool PortXD_LoadDolTables(const uint8_t* dol, size_t dolSize, char* error, size_t errorSize);
 bool PortXD_LoadDspProgram(void);

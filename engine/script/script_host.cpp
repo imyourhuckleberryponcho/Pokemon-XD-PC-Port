@@ -20,6 +20,8 @@ constexpr int kStepSize = 1000;
 constexpr int kMaxHandlersPerHook = 32;
 constexpr size_t kMaxLogLine = 200;
 constexpr const char* kHandlersKey = "port_script_handlers";
+constexpr const char* kFunctionsKey = "port_script_functions";
+constexpr int kMaxStoryFunctions = 64;
 
 struct StateUd {
   size_t used = 0;
@@ -33,7 +35,9 @@ struct StateUd {
   std::string modId;
   const std::set<std::string>* hooks = nullptr;
   const std::vector<std::pair<std::string, Value>>* constants = nullptr;
+  const std::vector<std::pair<std::string, ApiFunction>>* api = nullptr;
   const Logger* logger = nullptr;
+  int storyFunctions = 0;
   std::map<std::string, int> handlerCount;
 };
 
@@ -191,6 +195,15 @@ void PushValue(lua_State* L, const Value& v, int depth = 0) {
   case Value::Kind::Bool: lua_pushboolean(L, v.boolean ? 1 : 0); break;
   case Value::Kind::Int: lua_pushinteger(L, static_cast<lua_Integer>(v.integer)); break;
   case Value::Kind::String: lua_pushlstring(L, v.text.data(), v.text.size()); break;
+  case Value::Kind::List:
+    lua_createtable(L, static_cast<int>(v.fieldValues.size()), 0);
+    if (depth < 6) {
+      for (size_t i = 0; i < v.fieldValues.size(); i++) {
+        PushValue(L, v.fieldValues[i], depth + 1);
+        lua_rawseti(L, -2, static_cast<lua_Integer>(i) + 1);
+      }
+    }
+    break;
   case Value::Kind::Table:
     lua_createtable(L, 0, static_cast<int>(v.fieldNames.size()));
     if (depth < 6) {
@@ -201,6 +214,113 @@ void PushValue(lua_State* L, const Value& v, int depth = 0) {
     }
     break;
   }
+}
+
+int ConstIndex(lua_State* L) {
+  lua_pushvalue(L, 2);
+  lua_rawget(L, lua_upvalueindex(1));
+  if (!lua_isnil(L, -1)) return 1;
+  if (lua_type(L, 2) == LUA_TSTRING) {
+    return luaL_error(L, "%s has no name \"%s\" (find(\"category\", \"name\") returns nil instead of failing, to test for one)",
+                      lua_tostring(L, lua_upvalueindex(2)), lua_tostring(L, 2));
+  }
+  return 1;
+}
+
+int ConstNewIndex(lua_State* L) {
+  return luaL_error(L, "%s is read-only", lua_tostring(L, lua_upvalueindex(1)));
+}
+
+int ConstPairs(lua_State* L) {
+  lua_pushvalue(L, lua_upvalueindex(1));
+  lua_pushvalue(L, lua_upvalueindex(2));
+  lua_pushnil(L);
+  return 3;
+}
+
+int SafeRawSet(lua_State* L) {
+  luaL_checktype(L, 1, LUA_TTABLE);
+  luaL_checkany(L, 2);
+  luaL_checkany(L, 3);
+  if (lua_getmetatable(L, 1)) {
+    lua_getfield(L, -1, "__metatable");
+    if (lua_type(L, -1) == LUA_TSTRING && std::strcmp(lua_tostring(L, -1), "read-only") == 0) return luaL_error(L, "this table is read-only");
+    lua_pop(L, 2);
+  }
+  lua_settop(L, 3);
+  lua_rawset(L, 1);
+  lua_settop(L, 1);
+  return 1;
+}
+
+void PushConstant(lua_State* L, const std::string& name, const Value& v) {
+  PushValue(L, v);
+  if (v.kind != Value::Kind::Table) return;
+  lua_createtable(L, 0, 0);
+  lua_createtable(L, 0, 4);
+  lua_pushvalue(L, -3);
+  lua_pushstring(L, name.c_str());
+  lua_pushcclosure(L, ConstIndex, 2);
+  lua_setfield(L, -2, "__index");
+  lua_pushstring(L, name.c_str());
+  lua_pushcclosure(L, ConstNewIndex, 1);
+  lua_setfield(L, -2, "__newindex");
+  lua_getglobal(L, "next");
+  lua_pushvalue(L, -4);
+  lua_pushcclosure(L, ConstPairs, 2);
+  lua_setfield(L, -2, "__pairs");
+  lua_pushstring(L, "read-only");
+  lua_setfield(L, -2, "__metatable");
+  lua_setmetatable(L, -2);
+  lua_remove(L, -2);
+}
+
+int ApiThunk(lua_State* L) {
+  StateUd* s = UdOf(L);
+  const size_t which = static_cast<size_t>(lua_tointeger(L, lua_upvalueindex(1)));
+  if (s->api == nullptr || which >= s->api->size()) return luaL_error(L, "internal error: unknown game function");
+  const int n = lua_gettop(L);
+  std::vector<Value> args;
+  for (int i = 1; i <= n; i++) {
+    switch (lua_type(L, i)) {
+    case LUA_TNUMBER:
+      args.push_back(lua_isinteger(L, i) ? Value::Int(static_cast<int64_t>(lua_tointeger(L, i)))
+                                         : Value::Int(static_cast<int64_t>(std::trunc(lua_tonumber(L, i)))));
+      break;
+    case LUA_TSTRING: {
+      size_t len = 0;
+      const char* t = lua_tolstring(L, i, &len);
+      args.push_back(Value::Text(std::string(t, len)));
+      break;
+    }
+    case LUA_TBOOLEAN: args.push_back(Value::Bool(lua_toboolean(L, i) != 0)); break;
+    case LUA_TNIL: args.push_back(Value()); break;
+    default: return luaL_argerror(L, i, "a number, text, true/false or nil is expected");
+    }
+  }
+  std::string error;
+  const Value out = (*s->api)[which].second(s->modId, args, error);
+  if (!error.empty()) return luaL_error(L, "%s", error.c_str());
+  PushValue(L, out);
+  return 1;
+}
+
+int LuaStoryFunction(lua_State* L) {
+  const char* name = luaL_checkstring(L, 1);
+  luaL_checktype(L, 2, LUA_TFUNCTION);
+  StateUd* s = UdOf(L);
+  if (std::strlen(name) == 0 || std::strlen(name) > 60 || std::strchr(name, ':') != nullptr) {
+    return luaL_error(L, "a story function's name is 1 to 60 characters and has no ':' in it");
+  }
+  if (s->storyFunctions >= kMaxStoryFunctions) return luaL_error(L, "too many story functions (at most %d)", kMaxStoryFunctions);
+  lua_getfield(L, LUA_REGISTRYINDEX, kFunctionsKey);
+  lua_getfield(L, -1, name);
+  if (!lua_isnil(L, -1)) return luaL_error(L, "the story function \"%s\" is registered twice", name);
+  lua_pop(L, 1);
+  lua_pushvalue(L, 2);
+  lua_setfield(L, -2, name);
+  s->storyFunctions++;
+  return 0;
 }
 
 int Setup(lua_State* L) {
@@ -229,22 +349,35 @@ int Setup(lua_State* L) {
 
   lua_newtable(L);
   lua_setfield(L, LUA_REGISTRYINDEX, kHandlersKey);
+  lua_newtable(L);
+  lua_setfield(L, LUA_REGISTRYINDEX, kFunctionsKey);
 
   lua_pushglobaltable(L);
   lua_pushcfunction(L, SafeToString);
   lua_setfield(L, -2, "tostring");
+  lua_pushcfunction(L, SafeRawSet);
+  lua_setfield(L, -2, "rawset");
   lua_pushcfunction(L, LuaLog);
   lua_setfield(L, -2, "log");
   lua_pushcfunction(L, LuaLog);
   lua_setfield(L, -2, "print");
   lua_pushcfunction(L, LuaOn);
   lua_setfield(L, -2, "on");
+  lua_pushcfunction(L, LuaStoryFunction);
+  lua_setfield(L, -2, "story_function");
   lua_pushinteger(L, 1);
   lua_setfield(L, -2, "API_VERSION");
   const StateUd* s = UdOf(L);
+  if (s->api != nullptr) {
+    for (size_t i = 0; i < s->api->size(); i++) {
+      lua_pushinteger(L, static_cast<lua_Integer>(i));
+      lua_pushcclosure(L, ApiThunk, 1);
+      lua_setfield(L, -2, (*s->api)[i].first.c_str());
+    }
+  }
   if (s->constants != nullptr) {
     for (const auto& [name, value] : *s->constants) {
-      PushValue(L, value);
+      PushConstant(L, name, value);
       lua_setfield(L, -2, name.c_str());
     }
   }
@@ -286,6 +419,8 @@ struct Host::Impl {
   Limits limits;
   Logger logger;
   std::vector<std::pair<std::string, Value>> constants;
+  std::vector<std::pair<std::string, ApiFunction>> api;
+  std::string prelude;
   std::vector<std::unique_ptr<Mod>> mods;
   std::vector<Failure> failures;
   uint64_t digest = 1469598103934665603ull;
@@ -324,6 +459,10 @@ Host::~Host() {
 
 void Host::SetConstants(const std::string& name, const Value& table) { mImpl->constants.emplace_back(name, table); }
 
+void Host::SetPrelude(const std::string& luaSource) { mImpl->prelude = luaSource; }
+
+void Host::SetApi(const std::string& name, ApiFunction function) { mImpl->api.emplace_back(name, std::move(function)); }
+
 bool Host::AddMod(const std::string& modId, const std::vector<Source>& sources, std::string& error) {
   Impl& d = *mImpl;
   d.digest = Fnv(d.digest, modId);
@@ -339,6 +478,7 @@ bool Host::AddMod(const std::string& modId, const std::vector<Source>& sources, 
   ud.modId = modId;
   ud.hooks = &d.hooks;
   ud.constants = &d.constants;
+  ud.api = &d.api;
   ud.logger = &d.logger;
   ud.logPerCall = d.limits.logLinesPerCall;
   ud.logTotalMax = d.limits.logLinesTotal;
@@ -361,6 +501,18 @@ bool Host::AddMod(const std::string& modId, const std::vector<Source>& sources, 
     return false;
   }
   m.alive = true;
+  if (!d.prelude.empty()) {
+    rc = luaL_loadbufferx(L, d.prelude.data(), d.prelude.size(), "=game helpers", "t");
+    if (rc == LUA_OK) {
+      d.Arm(m, d.limits.loadInstructions);
+      rc = lua_pcall(L, 0, 0, 0);
+    }
+    if (rc != LUA_OK) {
+      error = "the game's script helpers failed: " + ErrorText(L, rc, ud);
+      d.Fail(m, error);
+      return false;
+    }
+  }
   for (const Source& s : sources) {
     const std::string chunk = "@" + modId + "/" + s.name;
     rc = luaL_loadbufferx(L, s.text.data(), s.text.size(), chunk.c_str(), "t");
@@ -375,6 +527,23 @@ bool Host::AddMod(const std::string& modId, const std::vector<Source>& sources, 
     }
   }
   return true;
+}
+
+bool CheckSyntax(const Source& source, std::string& error) {
+  StateUd ud;
+  ud.limit = Limits{}.memoryBytes;
+  lua_State* L = lua_newstate(Alloc, &ud);
+  if (L == nullptr) {
+    error = "no memory to read the script";
+    return false;
+  }
+  const std::string chunk = "@" + source.name;
+  const int rc = luaL_loadbufferx(L, source.text.data(), source.text.size(), chunk.c_str(), "t");
+  if (rc != LUA_OK) {
+    error = ErrorText(L, rc, ud);
+  }
+  lua_close(L);
+  return rc == LUA_OK;
 }
 
 bool Host::HasHandlers(const std::string& hook) const {
@@ -440,6 +609,78 @@ int64_t Host::CallInt(const std::string& hook, const Value& event, const std::st
     }
   }
   return value;
+}
+
+namespace {
+void SplitFunctionName(const std::string& full, std::string& mod, std::string& name) {
+  const size_t colon = full.find(':');
+  mod = colon == std::string::npos ? std::string() : full.substr(0, colon);
+  name = colon == std::string::npos ? full : full.substr(colon + 1);
+}
+}
+
+bool Host::HasFunction(const std::string& full) const {
+  std::string wantMod, name;
+  SplitFunctionName(full, wantMod, name);
+  for (const auto& m : mImpl->mods) {
+    if (!m->alive || (!wantMod.empty() && m->id != wantMod)) continue;
+    lua_State* L = m->L;
+    lua_getfield(L, LUA_REGISTRYINDEX, kFunctionsKey);
+    lua_getfield(L, -1, name.c_str());
+    const bool have = lua_isfunction(L, -1);
+    lua_pop(L, 2);
+    if (have) return true;
+  }
+  return false;
+}
+
+bool Host::CallFunction(const std::string& full, const std::vector<Value>& args, int64_t& result, std::string& error) {
+  Impl& d = *mImpl;
+  result = 0;
+  std::string wantMod, name;
+  SplitFunctionName(full, wantMod, name);
+  for (auto& mp : d.mods) {
+    Impl::Mod& m = *mp;
+    if (!m.alive || (!wantMod.empty() && m.id != wantMod)) continue;
+    lua_State* L = m.L;
+    const int top = lua_gettop(L);
+    lua_getfield(L, LUA_REGISTRYINDEX, kFunctionsKey);
+    lua_getfield(L, -1, name.c_str());
+    if (!lua_isfunction(L, -1)) {
+      lua_settop(L, top);
+      continue;
+    }
+    for (const Value& a : args) PushValue(L, a);
+    d.Arm(m, d.limits.callInstructions);
+    const int rc = lua_pcall(L, static_cast<int>(args.size()), 1, 0);
+    std::string problem;
+    if (rc != LUA_OK) {
+      problem = "in the story function \"" + name + "\": " + ErrorText(L, rc, *m.ud);
+    } else if (lua_isinteger(L, -1)) {
+      result = static_cast<int64_t>(lua_tointeger(L, -1));
+    } else if (lua_type(L, -1) == LUA_TNUMBER) {
+      const double n = lua_tonumber(L, -1);
+      if (!std::isfinite(n) || std::fabs(n) > 9e15) {
+        problem = "the story function \"" + name + "\" returned a number that is not usable";
+      } else {
+        result = static_cast<int64_t>(std::trunc(n));
+      }
+    } else if (lua_isboolean(L, -1)) {
+      result = lua_toboolean(L, -1) ? 1 : 0;
+    } else if (!lua_isnil(L, -1)) {
+      problem = "the story function \"" + name + "\" must return a number, true/false or nothing (it returned a " + luaL_typename(L, -1) + ")";
+    }
+    if (!problem.empty()) {
+      result = 0;
+      error = problem;
+      d.Fail(m, problem);
+      return false;
+    }
+    lua_settop(L, top);
+    return true;
+  }
+  error = "no story function called \"" + full + "\" in the mods' scripts";
+  return false;
 }
 
 std::vector<Failure> Host::TakeFailures() {

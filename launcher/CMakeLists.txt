@@ -12,14 +12,14 @@ add_library(launcher_imgui STATIC
 target_include_directories(launcher_imgui PUBLIC ${_imgui_dir})
 target_link_libraries(launcher_imgui PUBLIC ${AURORA_SDL3_TARGET})
 
-add_library(launcher_ui STATIC launcher_app.cpp launcher_icon.cpp launcher_reports.cpp launcher_extra.cpp launcher_pad.cpp)
+add_library(launcher_ui STATIC launcher_app.cpp launcher_modupdate.cpp launcher_icon.cpp launcher_reports.cpp launcher_extra.cpp launcher_pad.cpp)
 if (WIN32)
   target_sources(launcher_ui PRIVATE launcher_sys_win.cpp)
 else ()
   target_sources(launcher_ui PRIVATE launcher_sys_posix.cpp)
 endif ()
 target_include_directories(launcher_ui PUBLIC include)
-target_link_libraries(launcher_ui PUBLIC engine_settings engine_controls engine_settings_ui engine_mods engine_update
+target_link_libraries(launcher_ui PUBLIC engine_presence engine_settings engine_controls engine_settings_ui engine_mods engine_update engine_modupdate
   engine_memcard # the Save page's backups (save_backups.h)
   engine_save_slots # the Save page's "Saves" list (save_slots.h)
   launcher_imgui platform_os
@@ -33,6 +33,10 @@ function(launcher_copy_fonts target)
     COMMAND ${CMAKE_COMMAND} -E copy_if_different "${LAUNCHER_FONT_DIR}/Inter-Regular.ttf"
       "${LAUNCHER_FONT_DIR}/Inter-SemiBold.ttf" "${LAUNCHER_FONT_DIR}/InterDisplay-Bold.ttf"
       "${LAUNCHER_FONT_DIR}/OFL.txt" "$<TARGET_FILE_DIR:${target}>/fonts/"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${LAUNCHER_FONT_DIR}/../noto/NotoSansJP-Regular-subset.ttf"
+      "$<TARGET_FILE_DIR:${target}>/fonts/NotoSansJP-Regular-subset.ttf"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${LAUNCHER_FONT_DIR}/../noto/OFL.txt"
+      "$<TARGET_FILE_DIR:${target}>/fonts/OFL-NotoSansJP.txt"
     VERBATIM)
 endfunction()
 

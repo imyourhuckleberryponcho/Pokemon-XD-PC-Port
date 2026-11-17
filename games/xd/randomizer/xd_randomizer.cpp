@@ -978,15 +978,18 @@ void TutorMoves(const Tables& t, const er::Settings& s, Result& r) {
 
 constexpr uint32_t kNationalLeafeon = 470, kNationalGlaceon = 471;
 
-bool Starter(const Tables& t, const Species& sp, const er::Settings& s, Result& r, std::string& error) {
+bool Starter(const Tables& t, const Species& sp, const er::Settings& s, const StarterBase& base, Result& r, std::string& error) {
   const auto& sc = GetSchema();
   er::Rng rng = er::Rng::Stream(s.seed, "starter");
   StarterPlan& p = r.starter;
   p = StarterPlan{};
   p.on = true;
+  p.base = base;
+  p.level = base.level[0];
   p.choice = s.Get(sc, "starter.choice");
   const bool similar = s.Get(sc, "starter.similar") == 0;
   p.natural = s.Get(sc, "starter.moves") == 0;
+  const bool two = base.count >= 2 && base.species[1] != 0;
   if (kStarterEevee >= sp.bst.size() || sp.bst[kStarterEevee] == 0) {
     error = "the starter's species (Eevee, number " + std::to_string(kStarterEevee) + ") is not in this disc's table";
     return false;
@@ -994,7 +997,7 @@ bool Starter(const Tables& t, const Species& sp, const er::Settings& s, Result& 
   const uint32_t target = sp.bst[kStarterEevee];
   std::vector<uint32_t> pool;
   for (uint32_t x : sp.pool) {
-    if (x == kStarterEevee) continue;
+    if (x == kStarterEevee || (two && x == base.species[1])) continue;
     if (sp.legendary[x] && (similar || s.Get(sc, "legendaries") != 2)) continue;
     if (NaturalMoves(t, x, p.level)[2] == 0) continue;
     pool.push_back(x);
@@ -1025,7 +1028,42 @@ bool Starter(const Tables& t, const Species& sp, const er::Settings& s, Result& 
       const auto moves = NaturalMoves(t, p.species[k], p.level);
       for (uint32_t m = 0; m < 4; m++) p.moves[k][m] = moves[m];
     } else {
-      for (uint32_t m = 0; m < 4; m++) p.moves[k][m] = kStarterEeveeMoves[m];
+      for (uint32_t m = 0; m < 4; m++) p.moves[k][m] = base.moves[0][m];
+    }
+  }
+  if (two) {
+    er::Rng rng2 = er::Rng::Stream(s.seed, "starter2");
+    const uint32_t second = base.species[1];
+    p.second = true;
+    p.level2 = base.level[1];
+    const uint32_t target2 = second < sp.bst.size() && sp.bst[second] != 0 ? sp.bst[second] : target;
+    std::vector<uint32_t> pool2;
+    for (uint32_t x : pool) {
+      bool taken = false;
+      for (uint32_t k = 0; k < p.count; k++) taken |= sp.family[x] == sp.family[p.species[k]];
+      if (!taken && NaturalMoves(t, x, p.level2)[2] != 0) pool2.push_back(x);
+    }
+    if (p.choice == 2) {
+      std::vector<uint32_t> family;
+      if (second < sp.family.size()) {
+        for (uint32_t x : sp.pool) {
+          if (sp.family[x] == sp.family[second]) family.push_back(x);
+        }
+      }
+      p.species2 = family.empty() ? second : family[rng2.Below(static_cast<uint32_t>(family.size()))];
+    } else {
+      if (pool2.empty()) {
+        error = "no species is left for the second starter";
+        return false;
+      }
+      std::vector<bool> used2(sp.bst.size(), false);
+      p.species2 = similar ? er::PickSimilar(rng2, pool2, sp.bst, target2, 10, &used2) : Pick(rng2, pool2, sp, 0, false, &used2);
+    }
+    if (p.natural) {
+      const auto moves = NaturalMoves(t, p.species2, p.level2);
+      for (uint32_t m = 0; m < 4; m++) p.moves2[m] = moves[m];
+    } else {
+      for (uint32_t m = 0; m < 4; m++) p.moves2[m] = base.moves[1][m];
     }
   }
   auto movesOf = [&](uint32_t k) {
@@ -1044,6 +1082,14 @@ bool Starter(const Tables& t, const Species& sp, const er::Settings& s, Result& 
   } else {
     r.mod.spoiler.push_back("Starter: " + t.Name("species", kStarterEevee) + " -> " + t.Name("species", p.species[0]) + " (level " +
                             std::to_string(p.level) + "; moves " + movesOf(0) + ")");
+  }
+  if (p.second) {
+    std::string mv;
+    for (uint32_t m = 0; m < 4; m++) {
+      if (p.moves2[m] != 0) mv += (mv.empty() ? "" : ", ") + t.Name("move", p.moves2[m]);
+    }
+    r.mod.spoiler.push_back("Second starter: " + t.Name("species", base.species[1]) + " -> " + t.Name("species", p.species2) + " (level " +
+                            std::to_string(p.level2) + "; moves " + (mv.empty() ? std::string("no moves") : mv) + ")");
   }
   return true;
 }
@@ -1184,12 +1230,18 @@ bool Verify(const Tables& t, const Species& sp, const StoryTeams& st, const er::
       const uint32_t x = p.species[k];
       if (pool.count(x) == 0) return fail("the starter is a species outside the pool");
       if (p.choice != 2 && x == kStarterEevee) return fail("a randomized starter that is Eevee");
+      if (p.second && p.choice != 2 && x == p.species2) return fail("both starters are the same species");
       if (sp.legendary[x] && (similar || legend != 2) && p.choice != 2) return fail("a legendary starter with those ruled out");
       if (p.choice == 1 && !families.insert(sp.family[x]).second) return fail("two of the three starters from one family");
       if (p.moves[k][0] == 0) return fail("a starter without a first move");
       for (uint32_t m = 0; m < 4; m++) {
-        if (!p.natural && p.moves[k][m] != kStarterEeveeMoves[m]) return fail("a starter's moves are not Eevee's with \"kept\"");
+        if (!p.natural && p.moves[k][m] != p.base.moves[0][m]) return fail("a starter's moves are not Eevee's with \"kept\"");
       }
+    }
+    if (p.second != (p.base.count >= 2 && p.base.species[1] != 0)) return fail("the second starter is not as the game has it");
+    if (p.second) {
+      if (pool.count(p.species2) == 0 && p.choice != 2) return fail("the second starter is a species outside the pool");
+      if (p.moves2[0] == 0) return fail("a second starter without a first move");
     }
   }
   return true;
@@ -1316,7 +1368,8 @@ bool CodeIncludesGen4(const std::string& code) {
   return er::DecodeCode(GetSchema(), code, s, seedOnly, error) && s.Get(GetSchema(), "gen4") != 0;
 }
 
-bool Generate(const em::DataCatalog& catalog, const em::EntryReader& read, const er::Settings& s, Result& out, std::string& error) {
+bool Generate(const em::DataCatalog& catalog, const em::EntryReader& read, const er::Settings& s, Result& out, std::string& error,
+              const StarterBase* starterBase) {
   const auto& sc = GetSchema();
   out = Result{};
   out.code = er::EncodeCode(sc, s);
@@ -1377,7 +1430,7 @@ bool Generate(const em::DataCatalog& catalog, const em::EntryReader& read, const
     }
     TutorMoves(t, s, out);
   }
-  if (s.Get(sc, "starter") && !Starter(t, sp, s, out, error)) return false;
+  if (s.Get(sc, "starter") && !Starter(t, sp, s, starterBase != nullptr ? *starterBase : StarterBase{}, out, error)) return false;
   for (auto ti = out.mod.tables.begin(); ti != out.mod.tables.end();) {
     for (auto ei = ti->second.begin(); ei != ti->second.end();) {
       for (auto fi = ei->second.begin(); fi != ei->second.end();) {

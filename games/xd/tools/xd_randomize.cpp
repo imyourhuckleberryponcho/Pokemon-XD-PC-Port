@@ -938,6 +938,31 @@ int run_selftest(const em::DataCatalog& cat) {
       return r;
     };
     {
+      int bad2 = 0, seeds = 0;
+      for (uint32_t choice = 0; choice < 3; choice++) {
+        for (uint32_t kept = 0; kept < 2; kept++) {
+          for (uint64_t seed = 1; seed <= 12; seed++) {
+            er::Settings st;
+            xr::ApplyStyle(st, xr::Style::Classic);
+            st.seed = seed * 77 + choice;
+            st.Set(sc, "starter", 1);
+            st.Set(sc, "starter.choice", choice);
+            st.Set(sc, "starter.moves", kept);
+            xr::Result r;
+            std::string err;
+            seeds++;
+            if (!xr::Generate(cat, read_disc_entry, st, r, err, &xr::kXGStarterBase)) { bad2++; continue; }
+            const xr::StarterPlan& p = r.starter;
+            bool ok = p.second && p.level == 15 && p.level2 == 14 && p.species2 != 0 && p.moves2[0] != 0 && p.moves[0][0] != 0;
+            for (uint32_t k = 0; k < p.count; k++) ok = ok && (choice == 2 || p.species[k] != p.species2);
+            if (kept) for (uint32_t m = 0; m < 4; m++) ok = ok && p.moves2[m] == xr::kXGStarterBase.moves[1][m] && p.moves[0][m] == xr::kXGStarterBase.moves[0][m];
+            if (!ok) bad2++;
+          }
+        }
+      }
+      check(bad2 == 0, "XG base: two starters (Lv 15 and Lv 14), different species, kept moves are XG's own (" + std::to_string(seeds) + " runs, bad " + std::to_string(bad2) + ")");
+    }
+    {
       bool stylesOff = true;
       for (xr::Style style : {xr::Style::Light, xr::Style::Classic, xr::Style::Chaos}) {
         er::Settings st;

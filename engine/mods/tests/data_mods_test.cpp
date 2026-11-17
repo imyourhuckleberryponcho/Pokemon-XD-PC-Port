@@ -365,6 +365,80 @@ int main(int argc, char** argv) {
     check(r.added.size() == 3 && (r.added[1].bytes[3] & 0x1F) == 7, "a data file can edit a row an earlier file added, by its name");
   }
   {
+    DataCatalog cat = catalog;
+    DataTable& t = cat.tables[0];
+    t.addable = true;
+    t.addMax = 4;
+    t.addFirstId = 6;
+    t.idList = "thing";
+    t.textFields = {"value", "link"};
+    t.primaryText = "value";
+    cat.addedTextGroup = 7;
+    DataField f;
+    f.name = "mark";
+    f.size = 1;
+    f.offset = 2;
+    f.values = "markname";
+    t.fields.push_back(f);
+    cat.lists.push_back({"markname", {{"physical", 0x81}, {"special", 0x82}}, 0});
+    std::vector<Message> m;
+    const DataApplyResult r = ApplyDataMods(
+        cat,
+        {{"a", "A", "data/a.json",
+          "{ \"add\": { \"things\": {\n"
+          "    \"Spec\": { \"copy\": \"Beta\", \"mark\": \"special\" },\n"
+          "    \"Phys\": { \"copy\": \"Beta\", \"mark\": \"physical\" },\n"
+          "    \"Plain\": { \"copy\": \"Beta\" },\n"
+          "    \"Bad\": { \"copy\": \"Beta\", \"mark\": \"both\" }\n"
+          "} } }"}},
+        read, m);
+    check(r.added.size() == 4 && r.added[0].bytes[2] == 0x82 && r.added[1].bytes[2] == 0x81, "a value name on a second field over the same byte: special = 0x82, physical = 0x81");
+    check(r.added.size() == 4 && r.added[2].bytes[2] != 0x81 && r.added[2].bytes[2] != 0x82 && r.added[2].copyOf == 1, "a row with no mark keeps its source's byte");
+    check(has_message(m, Message::Level::Problem, "no markname is called \"both\""), "an unknown category name is refused");
+  }
+  {
+    DataCatalog cat = catalog;
+    cat.tables[0].addable = true;
+    cat.tables[0].addMax = 5;
+    cat.tables[0].addStart.assign(cat.tables[0].entrySize, 0);
+    cat.tables[0].addStart[2] = 0xC1;
+    cat.tables[0].addKeys = {{"bits", 2, 0x3F, 0, 1, 16}};
+    cat.tables[0].addFirstId = 10;
+    std::vector<Message> m;
+    const DataApplyResult r = ApplyDataMods(
+        cat,
+        {{"a", "A", "data/a.json", "{ \"add\": { \"things\": { \"started\": {}, \"count\": { \"bits\": 8 }, \"huge\": { \"bits\": 99 }, \"odd\": { \"colour\": 1 } } } }"},
+         {"b", "B", "data/b.json", "{ \"add\": { \"things\": { \"started\": { \"bits\": 2 } } } }"}},
+        read, m);
+    check(r.added.size() == 5 && r.added[0].key == "started" && r.added[0].id == 10 && r.added[1].id == 11 && r.added[4].mod == "b" && r.added[4].id == 14,
+          "rows with start bytes: no \"copy\" needed, numbers from addFirstId in load order, a name may repeat in another mod");
+    check(r.added.size() == 5 && r.added[0].bytes[2] == 0xC1 && r.added[1].bytes[2] == 0xC8 && r.added[4].bytes[2] == 0xC2,
+          "the key's number is put into the start bytes (bits 1 -> 0xC1, 8 -> 0xC8, 2 -> 0xC2)");
+    check(has_message(m, Message::Level::Problem, "\"bits\" must be a number from 1 to 16") &&
+              has_message(m, Message::Level::Problem, "has no setting \"colour\"; its settings are: bits"),
+          "a value out of range, or a setting the table does not have: refused with the reason");
+    check(!has_message(m, Message::Level::Problem, "needs \"copy\""), "no complaint about a missing copy");
+  }
+  {
+    DataCatalog cat = catalog;
+    DataTable& t = cat.tables[0];
+    t.addable = true;
+    t.addMax = 5;
+    t.addKeyOffset = 0;
+    t.addKeySize = 1;
+    std::vector<uint8_t> bytes;
+    read(t.places[0].archive, t.places[0].entry, bytes);
+    uint32_t top = 0;
+    for (uint32_t i = 0; i < t.count; i++) top = std::max<uint32_t>(top, bytes[t.places[0].offset + i * t.entrySize]);
+    std::vector<Message> m;
+    const DataApplyResult r = ApplyDataMods(
+        cat, {{"a", "A", "data/a.json", "{ \"add\": { \"things\": { \"One\": { \"copy\": 0 }, \"Two\": { \"copy\": 1 } } } }"}}, read, m);
+    check(r.added.size() == 2 && r.added[0].id == top + 1 && r.added[1].id == top + 2 && r.added[0].row == t.count && r.added[1].row == t.count + 1,
+          "rows with a key: the number is the next free key (above every row's), the row the next place");
+    check(r.added.size() == 2 && r.added[0].bytes[0] == top + 1 && r.added[1].bytes[0] == top + 2 && r.added[0].copyOf == 0 && r.added[1].copyOf == 1,
+          "the key is written into the new row (over the copy's own), the rest is the copy's");
+  }
+  {
     std::vector<Message> m;
     const DataApplyResult r = ApplyDataMods(
         catalog, {{"a", "A", "data/a.json", "{ \"add\": { \"things\": { \"X\": { \"copy\": 0 } }, \"nothing\": {} } }"}}, read, m);
@@ -495,6 +569,72 @@ int main(int argc, char** argv) {
     check(r.dataChanges[0].before == 10 && r.dataChanges[0].after == 42, "before = the value under the data mod");
     check(!r.HasWarnings() || !has_message(r, Message::Level::Problem, ""), "no problems");
   }
+  {
+    const fs::path mods3 = root / "rooms" / "mods", list3 = root / "rooms" / "mods.ini";
+    write_file(mods3 / "rooms-mod" / "mod.json", manifest("rooms-mod"));
+    write_file(mods3 / "rooms-mod" / "data" / "things.json", "{ \"add\": { \"things\": { \"Added\": { \"copy\": 0 } } } }");
+    write_file(list3, "[profile default]\nrooms-mod = on\n");
+    LoadOptions g{mods3, list3, disc.View()};
+    g.dataCatalog = [&](const EntryReader&, DataCatalog& out, std::string&) {
+      out = make_catalog();
+      out.tables[0].addable = true;
+      out.tables[0].addMax = 4;
+      return true;
+    };
+    int called = 0;
+    bool sawFolder = false, readOk = false;
+    g.finishRows = [&](RowsJob& job) {
+      called++;
+      sawFolder = job.modFolders.count("rooms-mod") == 1 && job.catalog != nullptr && job.rows->size() == 1;
+      std::vector<uint8_t> bytes;
+      readOk = job.readFile("data.fsys", bytes) && !bytes.empty();
+      job.rows->push_back(AddedRow{"things", 99, 99, 0, "extra", "rooms-mod", "Rooms", "", std::vector<uint8_t>(4, 1)});
+      job.outFiles.push_back({"newroom.fsys", {1, 2, 3, 4}, "rooms-mod"});
+      job.outFiles.push_back({"data.fsys", {9, 9}, "rooms-mod"});
+    };
+    const LoadResult r = Load(g);
+    const Replacement* added = nullptr;
+    const Replacement* replaced = nullptr;
+    for (const Replacement& x : r.files) {
+      added = x.discPath == "newroom.fsys" ? &x : added;
+      replaced = x.discPath == "data.fsys" ? &x : replaced;
+    }
+    check(called == 1 && sawFolder && readOk, "finishRows: called once with the rows, the mods' folders and a reader of the files as the mods leave them");
+    check(r.addedRows.size() == 2 && r.addedRows[1].key == "extra", "finishRows: a row it adds is in LoadResult::addedRows");
+    check(added != nullptr && added->added && added->rebuilt && added->data == std::vector<uint8_t>({1, 2, 3, 4}),
+          "finishRows: a new whole file goes into the overlay as a file the disc doesn't have");
+    check(replaced != nullptr && !replaced->added && replaced->rebuilt && replaced->data == std::vector<uint8_t>({9, 9}),
+          "finishRows: a file of the disc is replaced whole (the archive list)");
+    LoadOptions none = g;
+    none.finishRows = nullptr;
+    called = 0;
+    const LoadResult n = Load(none);
+    check(called == 0 && n.addedRows.size() == 1, "no finishRows: the rows stay as the data mods made them");
+  }
+  {
+    const fs::path mods4 = root / "objects" / "mods", list4 = root / "objects" / "mods.ini";
+    write_file(mods4 / "objects-mod" / "mod.json", manifest("objects-mod"));
+    write_file(mods4 / "objects-mod" / "objects" / "room.json", "{}");
+    write_file(list4, "[profile default]\nobjects-mod = on\n");
+    LoadOptions g{mods4, list4, disc.View()};
+    g.dataCatalog = [&](const EntryReader&, DataCatalog& out, std::string&) {
+      out = make_catalog();
+      return true;
+    };
+    int called = 0;
+    bool sawCatalog = false;
+    g.finishRows = [&](RowsJob& job) {
+      called++;
+      sawCatalog = job.catalog != nullptr && job.modFolders.count("objects-mod") == 1 && job.rows->empty();
+    };
+    Load(g);
+    check(called == 1 && sawCatalog, "objects folder: no data file, yet the tables are read and finishRows is called with the catalog");
+    write_file(mods4 / "plain" / "mod.json", manifest("plain"));
+    write_file(list4, "[profile default]\nplain = on\n");
+    called = 0;
+    Load(g);
+    check(called == 0, "no objects folder and no data file: finishRows is not called");
+  }
   write_file(list, "[profile default]\nstats = on\ntable-file = on\n");
   {
     const LoadResult r = Load(opt);
@@ -528,6 +668,69 @@ int main(int argc, char** argv) {
           "versions compare number by number");
     VersionNeed need{">=", "1.2"};
     check(need.SatisfiedBy("1.2") && need.SatisfiedBy("1.12") && !need.SatisfiedBy("1.1.9"), "version conditions");
+  }
+
+  {
+    const auto be = [](std::vector<uint8_t>& v, size_t at, uint32_t x) { put32(v, at, x); };
+    std::vector<uint8_t> deck(0x10, 0);
+    std::memcpy(deck.data(), "DECK", 4);
+    const auto chunk = [&](const char* id, uint32_t rows, uint32_t rowSize, uint8_t fill) {
+      const size_t at = deck.size();
+      deck.resize(at + 0x10 + rows * rowSize, fill);
+      std::memcpy(deck.data() + at, id, 4);
+      be(deck, at + 4, 0x10 + rows * rowSize);
+      be(deck, at + 8, rows);
+      for (uint32_t r = 0; r < rows; r++) deck[at + 0x10 + r * rowSize] = uint8_t(r);
+    };
+    chunk("TRNR", 3, 8, 0x11);
+    chunk("PKMN", 2, 4, 0x22);
+    chunk("STRS", 0, 1, 0);
+    deck.insert(deck.end(), {'h', 'i', 0, 0});
+    be(deck, 4, uint32_t(deck.size()));
+    const size_t trainerAt = 0x10 + 0x10, pokemonAt = 0x10 + 0x10 + 3 * 8 + 0x10;
+    FakeDisc deckDisc;
+    deckDisc.files["deck.fsys"] = make_fsys({{"deck", "deck.bin", deck, true}});
+    DataCatalog cat;
+    DataTable trainers;
+    trainers.name = "trainers", trainers.entrySize = 8, trainers.count = 3, trainers.places = {{"deck.fsys", "deck.bin", uint32_t(trainerAt)}};
+    trainers.addable = true, trainers.addInChunk = true, trainers.addMax = 4;
+    DataField f;
+    f.name = "team", f.size = 1, f.offset = 1, f.values = "pk";
+    trainers.fields.push_back(f);
+    f = {};
+    f.name = "level", f.size = 1, f.offset = 2;
+    trainers.fields.push_back(f);
+    DataTable pokemon;
+    pokemon.name = "pokemon_rows", pokemon.entrySize = 4, pokemon.count = 2, pokemon.places = {{"deck.fsys", "deck.bin", uint32_t(pokemonAt)}};
+    pokemon.addable = true, pokemon.addInChunk = true, pokemon.addMax = 4, pokemon.entryNames = "pk";
+    f = {};
+    f.name = "species", f.size = 1, f.offset = 1;
+    pokemon.fields.push_back(f);
+    cat.tables = {trainers, pokemon};
+    cat.lists.push_back(NameList{"pk", {}, 0});
+    std::vector<Message> m;
+    const DataApplyResult r = ApplyDataMods(
+        cat,
+        {{"a", "A", "data/a.json",
+          "{ \"add\": { \"pokemon_rows\": { \"mine\": { \"copy\": 1, \"species\": 7 }, \"mine2\": { \"copy\": \"mine\", \"species\": 8 } },\n"
+          "           \"trainers\": { \"rival\": { \"copy\": 2, \"team\": \"mine2\", \"level\": 9 } } } }"}},
+        disc_reader(deckDisc), m);
+    check(m.empty(), "chunk rows: a correct file says nothing");
+    const auto it = r.entries.find({"deck.fsys", "deck.bin"});
+    check(it != r.entries.end(), "chunk rows: the deck file is rebuilt");
+    if (it != r.entries.end()) {
+      const std::vector<uint8_t>& d = it->second;
+      const auto get = [&](size_t at) { return uint32_t(d[at]) << 24 | uint32_t(d[at + 1]) << 16 | uint32_t(d[at + 2]) << 8 | d[at + 3]; };
+      check(d.size() == deck.size() + 8 + 8, "chunk rows: the file grew by one trainer row (8) and two Pokemon rows (8)");
+      check(get(4) == d.size(), "chunk rows: the file's own size field follows");
+      check(get(0x10 + 8) == 4 && get(0x10 + 4) == 0x10 + 4 * 8, "chunk rows: the trainer chunk's count and size grew");
+      const size_t pk = 0x10 + 0x10 + 4 * 8;
+      check(std::memcmp(&d[pk], "PKMN", 4) == 0 && get(pk + 8) == 4 && get(pk + 4) == 0x10 + 4 * 4, "chunk rows: the next chunk moved and grew");
+      check(d[0x20 + 3 * 8 + 1] == 3 && d[0x20 + 3 * 8 + 2] == 9, "chunk rows: the new trainer row has its team (the row number of mine2: 3) and level");
+      check(d[pk + 0x10 + 2 * 4] == 1 && d[pk + 0x10 + 2 * 4 + 1] == 7 && d[pk + 0x10 + 3 * 4 + 1] == 8, "chunk rows: the new Pokemon rows are in, in order, with their fields");
+      check(std::memcmp(&d[d.size() - 4], "hi\0\0", 4) == 0, "chunk rows: the chunk after them (and the text) moved with the rest");
+    }
+    check(r.added.size() == 3 && r.added[0].inFile && r.added[1].inFile && r.added[2].inFile, "chunk rows: the rows are listed, marked as already in the file");
   }
 
   fs::remove_all(root, ec);

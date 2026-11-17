@@ -1,8 +1,10 @@
 #include "common_rel.h"
+#include "xd_objects.h"
 
 #include <data_table.h>
 #include <gs_formats.h>
 #include <port_disc.h>
+#include <dol_tables.h>
 
 #include <game/pxdvs/app/fight/fightData.h>
 #include <game/pxdvs/app/item/itemData.h>
@@ -752,6 +754,7 @@ struct Loaded {
   RelModule rel{};
   std::vector<LowBytes> sectionCopies;
   uint8_t section = 0;
+  const char* table = nullptr;
   uint32_t* counts = nullptr;
 };
 
@@ -773,11 +776,36 @@ int resolve_main(uint32_t gcAddress, void** out) {
   return -1;
 }
 
+static int32_t (*sAbilityCapsule)(uint32_t item, int32_t* consume) = nullptr;
+extern "C" void PortXD_SetAbilityCapsuleFunction(int32_t (*f)(uint32_t, int32_t*)) { sAbilityCapsule = f; }
+
+int resolve_xg_unrelocated(Loaded* l, uint32_t gcEntryOffset, uint32_t fieldGcOffset, void** out) {
+  if (!PortXD_IsXG() || l->table == nullptr || std::strcmp(l->table, "item_data_prime") != 0) {
+    return 0;
+  }
+  const uint8_t* b = l->sectionCopies[l->section].data() + gcEntryOffset + fieldGcOffset;
+  const uint32_t raw = (uint32_t)b[0] << 24 | (uint32_t)b[1] << 16 | (uint32_t)b[2] << 8 | b[3];
+  if (raw < 0x80000000u || raw >= 0x81800000u) {
+    return 0;
+  }
+  if (raw == 0x80B9AB08u) {
+    *out = reinterpret_cast<void*>(sAbilityCapsule);
+    return 1;
+  }
+  if (resolve_main(raw, out) == 1) {
+    return 1;
+  }
+  std::fprintf(stderr, "[xg] %s entry at module offset 0x%X field +0x%X: 0x%08X is not an address the port knows; stored as NULL\n", l->table,
+               gcEntryOffset, fieldGcOffset, raw);
+  *out = nullptr;
+  return 1;
+}
+
 int resolve(void* user, uint32_t gcEntryOffset, uint32_t fieldGcOffset, void** out) {
   auto* l = static_cast<Loaded*>(user);
   const RelReloc* r = Rel_FindReloc(&l->rel, l->section, gcEntryOffset + fieldGcOffset);
   if (r == nullptr) {
-    return 0;
+    return resolve_xg_unrelocated(l, gcEntryOffset, fieldGcOffset, out);
   }
   if (r->type != REL_R_ADDR32) {
     return -1;
@@ -807,6 +835,7 @@ void* convert_table(Loaded* l, const TableDesc* desc, const RelPrologStore& at, 
   void* pc = PortMem_LowAlloc(static_cast<size_t>(count ? count : 1) * desc->pcSize, 16);
   DataTable_SetHighAddr32Ok(PortMem_LowIsOrdinary() ? 1 : 0);
   l->section = at.section;
+  l->table = desc->name;
   const uint8_t* gc = section.data() + at.offset;
   const uint32_t unresolved = DataTable_Convert(desc, gc, at.offset, count, pc, resolve, l);
   if (unresolved != 0) {
@@ -869,6 +898,81 @@ XDRelGlobalValue* global_named(XDCommonTables* out, const char* name) {
   return nullptr;
 }
 
+uint32_t read_be32_at(const void* p) {
+  const uint8_t* b = static_cast<const uint8_t*>(p);
+  return static_cast<uint32_t>(b[0]) << 24 | static_cast<uint32_t>(b[1]) << 16 | static_cast<uint32_t>(b[2]) << 8 | b[3];
+}
+
+bool apply_floor_chars(XDCommonTables* out, std::string& problem) {
+  XDRelGlobalValue* table = global_named(out, "floordata");
+  XDRelGlobalValue* number = global_named(out, "floordata_number");
+  if (table == nullptr || number == nullptr) {
+    problem = "story mods add people to rooms, but the module has no floordata";
+    return false;
+  }
+  constexpr uint32_t kEntry = 0x24;
+  for (const AddedRowCopy& r : sAddedRows) {
+    if (r.table != "floor_chars") continue;
+    if (r.row >= *static_cast<uint32_t*>(number->value) || r.bytes.size() % kEntry != 0) {
+      problem = "a mod's people list for a room does not fit the room table";
+      return false;
+    }
+    auto* row = reinterpret_cast<FloorData*>(static_cast<uint8_t*>(table->value) + static_cast<size_t>(r.row) * sizeof(FloorData));
+    const auto readable = [](uint32_t a) { return a >= 0x10000u && !(a >= 0x80000000u && a < 0x81800000u); };
+    const uint8_t* ownInfo = nullptr;
+    uint32_t ownCount = 0;
+    if (r.copyOf == 0 && row->chars != nullptr) {
+      const uint32_t holder = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(row->chars));
+      bool ok = readable(holder) && reinterpret_cast<uintptr_t>(row->chars) <= 0xFFFFFFFFu;
+      uint32_t list = 0, countAt = 0, infoAt = 0;
+      if (ok) {
+        list = read_be32_at(reinterpret_cast<const void*>(static_cast<uintptr_t>(holder)));
+        ok = readable(list) || list == 0;
+      }
+      if (ok && list != 0) {
+        countAt = read_be32_at(reinterpret_cast<const void*>(static_cast<uintptr_t>(list)));
+        infoAt = read_be32_at(reinterpret_cast<const void*>(static_cast<uintptr_t>(list + 4)));
+        ok = readable(countAt) && readable(infoAt);
+      }
+      if (!ok) {
+        std::fprintf(stderr, "[mods] floor %u: its own people list holds no PC addresses here (no game running): the mod's people are not added in this run\n", row->floorID);
+        continue;
+      }
+      if (list != 0) {
+        ownCount = read_be32_at(reinterpret_cast<const void*>(static_cast<uintptr_t>(countAt)));
+        ownInfo = reinterpret_cast<const uint8_t*>(static_cast<uintptr_t>(infoAt));
+      }
+    }
+    std::vector<uint8_t> entries = xd::objects::MergePeople(ownInfo, ownCount, r.bytes, r.id, r.copyOf != 0, problem);
+    if (entries.empty()) return false;
+    const uint32_t count = static_cast<uint32_t>(entries.size() / kEntry);
+    auto* mem = static_cast<uint8_t*>(PortMem_LowAlloc(0x20 + entries.size(), 16));
+    std::memset(mem, 0, 0x20);
+    put_be32(mem, static_cast<uint32_t>(reinterpret_cast<uintptr_t>(mem + 4)));
+    put_be32(mem + 4, static_cast<uint32_t>(reinterpret_cast<uintptr_t>(mem + 0x10)));
+    put_be32(mem + 8, static_cast<uint32_t>(reinterpret_cast<uintptr_t>(mem + 0x20)));
+    put_be32(mem + 0x10, count);
+    std::memcpy(mem + 0x20, entries.data(), entries.size());
+    row->chars = reinterpret_cast<decltype(row->chars)>(mem);
+    std::fprintf(stderr, "[mods] floor %u: %u people in the list (%zu of the mod, from #%u)\n", row->floorID, count, r.bytes.size() / kEntry, r.id);
+    {
+      uint32_t loadInit = 0, chests = 0;
+      for (size_t at = 0; at + kEntry <= entries.size(); at += kEntry) loadInit += (entries[at] & 0x40) != 0;
+      XDRelGlobalValue* chestTable = global_named(out, "floor_tresure_list");
+      XDRelGlobalValue* chestNumber = global_named(out, "floor_tresure_list_number");
+      if (chestTable != nullptr && chestNumber != nullptr) {
+        const auto* rowsOf = static_cast<const FloorTresure*>(chestTable->value);
+        for (uint32_t q = 0; q < *static_cast<uint32_t*>(chestNumber->value); q++) chests += rowsOf[q].floorID == row->floorID;
+      }
+      if (loadInit + chests >= 40) {
+        std::fprintf(stderr, "[mods] floor %u: WARNING %u people that load on entry + %u chests = %u of the game's pool of 48 people (the hero and 3 party members use 4): keep it at 44 or fewer, or some people / chests are silently missing\n",
+                     row->floorID, loadInit, chests, loadInit + chests);
+      }
+    }
+  }
+  return true;
+}
+
 bool apply_added_rows(Loaded* l, XDCommonTables* out, const RelPrologStore* stores, int n, std::string& problem) {
   const auto store_of = [&](const std::string& name) -> const RelPrologStore* {
     for (int i = 0; i < n; i++) {
@@ -890,8 +994,9 @@ bool apply_added_rows(Loaded* l, XDCommonTables* out, const RelPrologStore* stor
     }
     const uint32_t oldCount = *static_cast<uint32_t*>(number->value);
     if (newCount <= oldCount) return true;
-    auto* rows = static_cast<uint8_t*>(PortMem_LowAlloc(static_cast<size_t>(newCount) * desc->pcSize, 16));
-    std::memset(rows, 0, static_cast<size_t>(newCount) * desc->pcSize);
+    const uint32_t spare = std::strcmp(name, "flag_data") == 0 ? 1 : 0;
+    auto* rows = static_cast<uint8_t*>(PortMem_LowAlloc(static_cast<size_t>(newCount + spare) * desc->pcSize, 16));
+    std::memset(rows, 0, static_cast<size_t>(newCount + spare) * desc->pcSize);
     std::memcpy(rows, table->value, static_cast<size_t>(oldCount) * desc->pcSize);
     for (const AddedRowCopy& r : sAddedRows) {
       if (r.table != kind) continue;
@@ -913,9 +1018,20 @@ bool apply_added_rows(Loaded* l, XDCommonTables* out, const RelPrologStore* stor
     std::fprintf(stderr, "[mods] %s grown: %u -> %u rows\n", name, oldCount, newCount);
     return true;
   };
-  uint32_t species = 0, moves = 0, itemRows = 0, itemIds = 0;
+  uint32_t faceRows = 0, species = 0, moves = 0, itemRows = 0, itemIds = 0, flags = 0, firstFlag = 0xFFFFFFFFu, floors = 0, doorRows = 0, chestRows = 0, eventRows = 0, soundRows = 0, battleRows = 0;
   for (const AddedRowCopy& r : sAddedRows) {
-    if (r.table == "pokemon_data") species = std::max(species, r.row + 1);
+    if (r.table == "flag_data") {
+      flags = std::max(flags, r.row + 1);
+      firstFlag = std::min(firstFlag, r.row);
+    } else if (r.table == "floordata") floors = std::max(floors, r.row + 1);
+    else if (r.table == "floor_door_list") doorRows = std::max(doorRows, r.row + 1);
+    else if (r.table == "floor_tresure_list") chestRows = std::max(chestRows, r.row + 1);
+    else if (r.table == "floor_event_list") eventRows = std::max(eventRows, r.row + 1);
+    else if (r.table == "floorsoundTbl") soundRows = std::max(soundRows, r.row + 1);
+    else if (r.table == "fight_encount_data") battleRows = std::max(battleRows, r.row + 1);
+    else if (r.table == "floor_chars" || r.table == "floor_zone") continue;
+    else if (r.table == "poke_face") faceRows = std::max(faceRows, r.row + 1);
+    else if (r.table == "pokemon_data") species = std::max(species, r.row + 1);
     else if (r.table == "waza_data") moves = std::max(moves, r.row + 1);
     else if (r.table == "item_data_prime") {
       itemRows = std::max(itemRows, r.row + 1);
@@ -925,6 +1041,22 @@ bool apply_added_rows(Loaded* l, XDCommonTables* out, const RelPrologStore* stor
       return false;
     }
   }
+  if (flags != 0) {
+    XDRelGlobalValue* number = global_named(out, "flag_data_number");
+    if (number == nullptr || *static_cast<uint32_t*>(number->value) != firstFlag) {
+      problem = "a mod's story flags start at flag " + std::to_string(firstFlag) + ", but the game's flag table has " +
+                std::to_string(number != nullptr ? *static_cast<uint32_t*>(number->value) : 0) + " rows";
+      return false;
+    }
+    if (!grow("flag_data", flags, "flag_data", &AddedRowCopy::row)) return false;
+  }
+  if (floors != 0 && !grow("floordata", floors, "floordata", &AddedRowCopy::row)) return false;
+  if (doorRows != 0 && !grow("floor_door_list", doorRows, "floor_door_list", &AddedRowCopy::row)) return false;
+  if (chestRows != 0 && !grow("floor_tresure_list", chestRows, "floor_tresure_list", &AddedRowCopy::row)) return false;
+  if (eventRows != 0 && !grow("floor_event_list", eventRows, "floor_event_list", &AddedRowCopy::row)) return false;
+  if (soundRows != 0 && !grow("floorsoundTbl", soundRows, "floorsoundTbl", &AddedRowCopy::row)) return false;
+  if (faceRows != 0 && !grow("poke_face", faceRows, "poke_face", &AddedRowCopy::row)) return false;
+  if (battleRows != 0 && !grow("fight_encount_data", battleRows, "fight_encount_data", &AddedRowCopy::row)) return false;
   if (species != 0 && !grow("pokemon_data", species, "pokemon_data", &AddedRowCopy::row)) return false;
   if (moves != 0 && !grow("waza_data", moves, "waza_data", &AddedRowCopy::row)) return false;
   if (itemRows != 0) {
@@ -989,8 +1121,9 @@ bool apply_extra_rows(Loaded* l, XDCommonTables* out, const RelPrologStore* stor
     for (const ExtraRowCopy& r : sExtraRows) {
       if (r.table == first.table) newCount = (r.row == 0xFFFFFFFFu ? newCount : std::max(newCount, r.row)) + r.count;
     }
-    auto* rows = static_cast<uint8_t*>(PortMem_LowAlloc(static_cast<size_t>(newCount) * desc->pcSize, 16));
-    std::memset(rows, 0, static_cast<size_t>(newCount) * desc->pcSize);
+    const uint32_t spare = first.table == "flag_data" ? 1 : 0;
+    auto* rows = static_cast<uint8_t*>(PortMem_LowAlloc(static_cast<size_t>(newCount + spare) * desc->pcSize, 16));
+    std::memset(rows, 0, static_cast<size_t>(newCount + spare) * desc->pcSize);
     std::memcpy(rows, table->value, static_cast<size_t>(oldCount) * desc->pcSize);
     uint32_t expected = oldCount;
     for (const ExtraRowCopy& r : sExtraRows) {
@@ -1089,6 +1222,44 @@ extern "C" void PortXD_SetModernType(bool on, uint32_t kind, uint32_t sprite, ui
 extern "C" void PortXD_SetMainProgramMap(const XDMainProgramAddress* map, size_t count) {
   sMainMap = map;
   sMainMapCount = count;
+}
+
+constexpr uint32_t kXGCommonRelBase = 0x80B18DC0u;
+static void (*sScriptBlockSink)(uint32_t gcAddress, void* bytes, uint32_t size) = nullptr;
+extern "C" void PortXD_SetScriptBlockSink(void (*sink)(uint32_t, void*, uint32_t)) { sScriptBlockSink = sink; }
+
+static void register_xg_module_image(Loaded* l) {
+  if (!PortXD_IsXG() || sScriptBlockSink == nullptr) return;
+  const uint32_t size = static_cast<uint32_t>(l->relFile.size());
+  auto* image = new uint8_t[size];
+  std::memcpy(image, l->relFile.data(), size);
+  const auto section_offset = [&](uint32_t sec) -> uint64_t {
+    const RelSection& s = l->rel.sections[sec];
+    return s.data != nullptr ? static_cast<uint64_t>(s.data - l->relFile.data()) : 0;
+  };
+  uint32_t patched = 0;
+  for (uint32_t i = 0; i < l->rel.numRelocs; i++) {
+    const RelReloc& r = l->rel.relocs[i];
+    if (r.section >= l->rel.numSections || l->rel.sections[r.section].code || r.type != REL_R_ADDR32 ||
+        l->rel.sections[r.section].data == nullptr) {
+      continue;
+    }
+    uint32_t value;
+    if (r.module == 0) {
+      value = r.addend;
+    } else if (r.module == l->rel.id && r.targetSection < l->rel.numSections && l->rel.sections[r.targetSection].data != nullptr) {
+      value = kXGCommonRelBase + static_cast<uint32_t>(section_offset(r.targetSection)) + r.addend;
+    } else {
+      continue;
+    }
+    const uint64_t at = section_offset(r.section) + r.offset;
+    if (at + 4 > size) continue;
+    put_be32(image + at, value);
+    patched++;
+  }
+  sScriptBlockSink(kXGCommonRelBase, image, size);
+  std::fprintf(stderr, "[xg] common.rel mapped at %08X (0x%X bytes, %u address slots as GameCube addresses)\n", kXGCommonRelBase, size,
+               patched);
 }
 
 extern "C" bool PortXD_ConvertCommonRel(const uint8_t* relFile, size_t relSize, XDCommonTables* out, char* error,
@@ -1294,6 +1465,14 @@ extern "C" bool PortXD_ConvertCommonRel(const uint8_t* relFile, size_t relSize, 
     }
   }
   patch_section_addresses(l);
+  if (!sAddedRows.empty() && !sPristine && global_named(out, "floordata") != nullptr) {
+    std::string problem;
+    if (!apply_floor_chars(out, problem)) {
+      delete l;
+      return fail(error, errorSize, problem);
+    }
+  }
+  if (!sPristine && global_named(out, "pokemon_data_number") != nullptr) register_xg_module_image(l);
   (void)l;
   return true;
 }

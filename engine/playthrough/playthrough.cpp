@@ -342,6 +342,7 @@ bool FromJson(std::string_view text, Setup& out, std::string& error) {
   out.options = Texts(root, "options");
   out.split = Text(root, "physical_special_split");
   if (out.split != "on" && out.split != "off") out.split.clear();
+  out.edition = Text(root, "edition");
   out.started = Text(root, "started");
   out.portVersion = Text(root, "port_version");
   out.chosenBy = Text(root, "chosen_by");
@@ -500,7 +501,7 @@ std::vector<std::string> BoundProblems(const Setup& setup, const std::vector<Add
   std::vector<std::string> problems;
   std::set<std::string> said;
   const auto kind = [](const std::string& table) {
-    return table == "pokemon_data" ? Tr("Pokemon") : table == "waza_data" ? Tr("move") : table == "item_data_prime" ? Tr("item") : Tr("entry");
+    return table == "pokemon_data" ? Tr("Pokemon") : table == "waza_data" ? Tr("move") : table == "item_data_prime" ? Tr("item") : table == "flag_data" ? Tr("story flag") : Tr("entry");
   };
   for (const AddedRowRef& want : setup.addedRows) {
     if (std::find(now.begin(), now.end(), want) != now.end()) continue;

@@ -68,6 +68,7 @@ struct Setup {
   std::vector<std::string> challenges;
   std::vector<std::string> options;
   std::string split;
+  std::string edition;
   std::string started;
   std::string portVersion;
   std::string chosenBy;

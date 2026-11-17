@@ -16,5 +16,6 @@ const char* Tr(const char* english);
 std::string Tr(const std::string& english);
 
 size_t ParseForTest(std::string_view text);
+std::string_view EmbeddedLocaleText(std::string_view code);
 
 }

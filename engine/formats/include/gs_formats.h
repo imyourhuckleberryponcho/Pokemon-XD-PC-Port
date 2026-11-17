@@ -45,6 +45,32 @@ typedef struct {
 uint8_t* Fsys_Rebuild(const uint8_t* data, size_t size, const FsysReplacement* replacements, size_t count,
                       size_t* outSize);
 
+typedef struct {
+  uint16_t id;
+  const char* name;
+  const uint8_t* data;
+  uint32_t size;
+  uint32_t templateIndex;
+} FsysAddition;
+
+uint8_t* Fsys_RebuildAdded(const uint8_t* data, size_t size, const FsysAddition* add, size_t addCount, size_t* outSize);
+uint8_t* Fsys_AddEntry(const uint8_t* data, size_t size, uint16_t id, uint32_t type, const char* name, const uint8_t* contents,
+                       uint32_t contentsSize, bool pack, size_t* outSize);
+
+int Tiga_Validate(const uint8_t* data, size_t size, char* why, size_t whySize);
+
+uint32_t Tiga_FlagPlaceholder(const char* name);
+uint32_t Tiga_FloorPlaceholder(const char* name);
+uint32_t Tiga_BattlePlaceholder(const char* name);
+uint32_t Tiga_ItemPlaceholder(const char* name);
+uint32_t Tiga_SpeciesPlaceholder(const char* name);
+size_t Tiga_ReplaceInts(uint8_t* data, size_t size, const uint32_t* from, const uint32_t* to, size_t n);
+
+#define TIGA_THIS_ROOM 0x7C000000u
+uint32_t Tiga_PersonPlaceholder(const char* name);
+int32_t Tiga_FindFunction(const uint8_t* data, size_t size, const char* name);
+size_t Tiga_RemapPeople(uint8_t* data, size_t size, int field, const uint32_t* from, const uint32_t* to, size_t n);
+
 enum {
   REL_R_ADDR32 = 1,
   REL_R_ADDR16_LO = 4,

@@ -19,3 +19,20 @@ extern "C" void GSlogWrite(const char* fmt, ...) {
   while (n > 0 && (text[n - 1] == '\n' || text[n - 1] == '\r')) text[--n] = 0;
   std::fprintf(stderr, "[gslog] %s\n", text);
 }
+
+extern "C" void (*PortXD_GSlogWritefSink)(const char* text);
+namespace {
+void GslogfToLog(const char* text) {
+  char line[512];
+  std::snprintf(line, sizeof line, "%s", text != nullptr ? text : "");
+  size_t n = std::strlen(line);
+  while (n > 0 && (line[n - 1] == '\n' || line[n - 1] == '\r')) line[--n] = 0;
+  std::fprintf(stderr, "[gslogf] %s\n", line);
+}
+struct GslogfInit {
+  GslogfInit() {
+    const char* v = std::getenv("XD_GSLOGF");
+    if (v != nullptr && v[0] == '1') PortXD_GSlogWritefSink = GslogfToLog;
+  }
+} gGslogfInit;
+}

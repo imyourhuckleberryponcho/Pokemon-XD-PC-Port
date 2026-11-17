@@ -245,12 +245,13 @@ Each is small and could go upstream:
   letters and particles (positions in the command) are told apart by their corners and texture coordinates and
   blended only in steady motion (or when they hardly moved). New `AuroraInterpInfo` fields: fresh, unknown,
   unsteady, sprites, slipped.
-- `0037-viewport-whole-pixels.patch` (lib/gx/gx.cpp): a mapped viewport lies on whole pixels, the pixels `map_logical_scissor`
-  takes (floor / ceil, with a tolerance of 0.001 so an exact scale changes nothing). With a scale that is not a whole number
-  ("Resolution: Match the window" in a window whose height is not a multiple of 5, e.g. 919 lines for the GameCube's 480) XD's
-  384x384 shadow-map viewport had fractional edges while the scissor, the clear and the copy took whole pixels; the copy's
-  last row and column held only the clear colour and every shadow-receiving ground (grass, paths, the HQ lab yard) came out
-  black. Found 2026-11-17 (player report "black void"); buildgent_blackvoid\HANDOFF.md has the proof.
+- `0037-widescreen-camera-veils.patch` (on top of 0016/0027; the weather tint box, 2026-11-16): widescreen stretches a
+  full-screen layer over the wide picture (`wide_stretch_draw`), but only an orthographic one. Sunny Day's sunlight is a
+  camera-facing glow: a PERSPECTIVE blended quad (additive, 256x256 intensity texture, 4 vertices) whose corners are exactly
+  the view's four corners, and its projection was squeezed to the 4:3 middle like all 3D, so the tint showed as a lighter
+  4:3 box with untouched sides. Now a perspective, blended draw of at most 8 vertices whose corners, after the divide by w,
+  fit x and y -1..1 (0.99..1.02) is stretched too (`g_wideStretchDraw`: projection not squeezed). Bigger planes (skies)
+  and everything else stay as the camera puts them. Draw only; widescreen off changes nothing.
 
 - `0038-skip-all-ones-position-index.patch` (the lightning at Kaminko's house, 2026-11-17): the GX hardware does not draw a
   vertex whose indexed position is all ones (0xFF for INDEX8, 0xFFFF for INDEX16); the primitive goes on with the next
@@ -259,6 +260,13 @@ Each is small and could go upstream:
   triangles: purple beams from the roof across the yard at Kaminko's house, in 4:3 and widescreen, that Dolphin never
   shows. `draw_prim` now takes such vertices out of the stream before the draw (same strip, fewer vertices). Draw only; a
   draw without an all-ones position index is untouched (checked: other scenes and a battle byte for byte equal).
+
+- `0039-viewport-whole-pixels.patch` (lib/gx/gx.cpp): a mapped viewport lies on whole pixels, the pixels `map_logical_scissor`
+  takes (floor / ceil, with a tolerance of 0.001 so an exact scale changes nothing). With a scale that is not a whole number
+  ("Resolution: Match the window" in a window whose height is not a multiple of 5, e.g. 919 lines for the GameCube's 480) XD's
+  384x384 shadow-map viewport had fractional edges while the scissor, the clear and the copy took whole pixels; the copy's
+  last row and column held only the clear colour and every shadow-receiving ground (grass, paths, the HQ lab yard) came out
+  black. Found 2026-11-17 (player report "black void").
 
 `patches/aurora-32bit-experiment.patch`: the three small fixes Aurora needed to compile as 32-bit
 (2026-11-04 experiment, ARCHITECTURE.md "hard parts" 2). Not applied (the port is 64-bit).

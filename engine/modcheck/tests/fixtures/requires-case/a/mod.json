@@ -1,0 +1,10 @@
+{
+  "id": "a",
+  "name": "Mod a",
+  "version": "1.0",
+  "author": "Test Author",
+  "description": "Made up.",
+  "game": "GXXE01",
+  "requires": ["b >= 2"],
+  "conflicts": ["c"]
+}

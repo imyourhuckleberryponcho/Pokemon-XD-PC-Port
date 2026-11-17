@@ -63,7 +63,11 @@ const ScriptBlock* FindScriptBlockPc(const void* p) {
 }
 }
 
+extern "C" void PortXD_SetScriptBlockSink(void (*sink)(uint32_t, void*, uint32_t));
+extern "C" void PortXD_AddScriptBlock(uint32_t gcAddress, void* bytes, uint32_t size);
+
 extern "C" void PortXD_RegisterMainProgramMap(void) {
+  PortXD_SetScriptBlockSink(&PortXD_AddScriptBlock);
   PortXD_SetMainProgramMap(kMap, kMapCount);
   sSorted.clear();
   for (const auto& m : kMap) {
@@ -74,6 +78,12 @@ extern "C" void PortXD_RegisterMainProgramMap(void) {
 }
 
 extern "C" void PortXD_AddScriptBlock(uint32_t gcAddress, void* bytes, uint32_t size) {
+  for (ScriptBlock& b : sScriptBlocks) {
+    if (b.gc == gcAddress) {
+      b = {gcAddress, static_cast<unsigned char*>(bytes), size};
+      return;
+    }
+  }
   sScriptBlocks.push_back({gcAddress, static_cast<unsigned char*>(bytes), size});
 }
 

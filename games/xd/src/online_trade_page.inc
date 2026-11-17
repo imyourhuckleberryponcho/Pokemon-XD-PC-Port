@@ -177,6 +177,7 @@ void MakeNet() {
     if (P.live) return true;
     return xd::trade::WriteCardSave(P.card, nf, e);
   });
+  P.net->SetEdition(xd::xg::On());
   P.net->SetLog([](const std::string& s) { std::fprintf(stderr, "%s\n", s.c_str()); });
   if (const char* direct = std::getenv("XD_ONLINE_DIRECT")) {
     xdnet::ConnectionConfig nc = xdnet::Connection::defaultConfig();
@@ -190,6 +191,7 @@ void MakeNet() {
 void ChooseSlot(int i);
 
 void Open(void*) {
+  sOnlineKind = 2;
   const bool live = sLive;
   sLive = false;
   P = PageState{};
@@ -267,6 +269,7 @@ void ChooseSlot(int i) {
 }
 
 void Close(void*) {
+  sOnlineKind = 0;
   if (P.net) P.net->Leave();
   P.net.reset();
   P.trader.reset();

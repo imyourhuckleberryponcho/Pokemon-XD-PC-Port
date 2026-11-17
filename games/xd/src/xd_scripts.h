@@ -6,9 +6,13 @@
 namespace engine::mods {
 struct LoadResult;
 }
+namespace engine::script {
+class Names;
+}
 
 namespace xd::scripts {
 
+engine::script::Names BuildNames(const engine::mods::LoadResult& result);
 void Install(const engine::mods::LoadResult& result);
 std::string ActiveText();
 

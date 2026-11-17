@@ -75,6 +75,10 @@ int main() {
 
   const std::vector<std::string> lines = RoomLines(r);
   CHECK(lines.size() >= 7 && lines[0].find("Classic XD") != std::string::npos);
+  CHECK(RoomLines(r, "xg")[0].find("Classic XG") != std::string::npos);
+  PcInfo xgPc;
+  xgPc.edition = "xg";
+  CHECK(SettingRows(r, xgPc)[0].options[0].label == "Classic XG");
 
   Peer p;
   CHECK(Apply(p, Msg("ACCEPT")) && p.accepted);

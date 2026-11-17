@@ -27,6 +27,7 @@ class OnlineTrade {
   OnlineTrade(Trader& trader, Writer writer, bool useDefaultNet = true);
   ~OnlineTrade();
   void SetNetConfig(const xdnet::ConnectionConfig& cfg) { cfg_ = cfg; useDefault_ = false; }
+  void SetEdition(bool xg) { xg_ = xg; }
   void SetLog(std::function<void(const std::string&)> log) { log_ = std::move(log); }
 
   std::string StartHost();
@@ -57,6 +58,8 @@ class OnlineTrade {
   Writer writer_;
   xdnet::ConnectionConfig cfg_;
   bool useDefault_;
+  bool xg_ = false;
+  std::string refusal_;
   std::unique_ptr<xdnet::Connection> conn_;
   std::unique_ptr<xdnet::trade::TradeSession> session_;
   std::vector<Entry> entries_;

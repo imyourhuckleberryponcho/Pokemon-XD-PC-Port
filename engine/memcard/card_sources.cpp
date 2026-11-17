@@ -169,8 +169,10 @@ std::vector<Found> FindDolphinCardFiles(const std::vector<fs::path>& userFolders
       for (const auto& e : fs::directory_iterator(user / "GC", ec)) {
         if (e.is_regular_file(ec) && CardImageName(e.path())) {
           const std::string name = Utf8(e.path().filename());
-          const bool otherRegion = (name.find(".EUR.") != std::string::npos || name.find(".JAP.") != std::string::npos);
-          if (!otherRegion) raws.push_back(e.path());
+          const bool namesOther = (name.find(".EUR.") != std::string::npos && region != "EUR") ||
+                                  (name.find(".JAP.") != std::string::npos && region != "JAP") ||
+                                  (name.find(".USA.") != std::string::npos && region != "USA");
+          if (!namesOther) raws.push_back(e.path());
         }
       }
       std::sort(raws.begin(), raws.end());

@@ -607,6 +607,14 @@ int aurora_main(int argc, char** argv) {
     PortXD_DiscFailed(discPath);
     return 1;
   }
+  {
+    extern int PortXD_IsXG(void);
+    extern void PortXD_UseXGSaves(int xg);
+    PortXD_UseXGSaves(PortXD_IsXG());
+    if (PortXD_IsXG()) {
+      fprintf(stderr, "[xg] XG mode: the Pokemon XG romhack disc; its own saves; Gen 4 rules, Fairy types, language packs and data-mod add rows are off; mods, randomizer, challenges and online (XG players only) are on\n");
+    }
+  }
   if (interactive) {
     PortXD_RememberDisc(discPath);
   }
@@ -862,6 +870,11 @@ int aurora_main(int argc, char** argv) {
   PortOS_SetResetShutdown(reset_shutdown);
 
   PortXD_RegisterMainProgramMap();
+  {
+    extern int PortXD_XG_UseAbilityCapsule(unsigned int item, int* consume);
+    extern void PortXD_SetAbilityCapsuleFunction(int (*f)(unsigned int, int*));
+    PortXD_SetAbilityCapsuleFunction(&PortXD_XG_UseAbilityCapsule);
+  }
   PortXD_RegisterModuleHandlers();
 
   OSGetCurrentThread();

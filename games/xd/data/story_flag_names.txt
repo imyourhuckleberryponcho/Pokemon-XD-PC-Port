@@ -1,0 +1,12 @@
+# Names for the game's own story flags that come from the game's CODE alone (not from the disc): used by Lua scripts (FLAG.NAME, flag("NAME"))
+# and story scripts (flag game.NAME). One per line:  number  NAME  what it means.   NAME = capitals, digits and _, starting with a letter.
+# The flags named by the disc's own text (SEEN_<species>, CAUGHT_<species>, CHEST_..., DOOR_...) and the story steps (STORY.BEAT_CHOBIN) are NOT here:
+# the game builds them at start-up from the player's disc (games/xd/src/data/xd_data_mods.cpp add_flag_names), so no game text is in the repo.
+# This file may grow: add a line when a flag's meaning is known from the code. A flag without a name is still reached by its number.
+# Meanings from the decomp's code.
+781  MT_BATTLE_OR_NON_STORY_MODE  set while in Colosseum battle mode; checked by isStoryMode and the play-time count; a scripted battle is skipped when set
+782  BATTLE_RETURNED              cleared when a battle starts, set when it returns to the field normally
+793  PREMIUM_POINTS               a value: Poke Coupons
+803  BATTLE_NO_FADE_IN            set during a scripted battle so the battle does not fade back in by itself
+964  STORY_PROGRESS               the story VALUE (0x3C4), not a bit: compare it with STORY.<step> numbers (the story steps)
+990  DEBUG_STORY_JUMPED           set to 1 by the debug story-jump menu together with the story value

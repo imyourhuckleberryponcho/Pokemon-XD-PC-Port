@@ -132,6 +132,16 @@ message(STATUS "xd: ${_xd_dt_out}")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/tools/gen_disc_tables.py"
   "${CMAKE_CURRENT_SOURCE_DIR}/src/data/disc_table_addresses.tsv")
 include("${_xd_dt_dir}/files.cmake")
+set(_xd_as "${_xd_dt_dir}/stripped/game/pxdvs/app/script/appScript.cpp")
+if (EXISTS "${_xd_as}")
+  file(READ "${_xd_as}" _xd_as_text)
+  string(FIND "${_xd_as_text}" "PortXD_ScriptGlobalExt" _xd_as_has)
+  if (_xd_as_has EQUAL -1)
+    message(FATAL_ERROR "xd: this snapshot's appScript.cpp has no PortXD_ScriptGlobalExt (decomp commit fe644c04 or later is needed)")
+  endif ()
+else ()
+  message(FATAL_ERROR "xd: the game's appScript.cpp is not among the files compiled without their tables any more (games/xd/CMakeLists.txt 'Lua from scripts')")
+endif ()
 foreach (_src ${XD_DISC_TABLE_SOURCES})
   list(REMOVE_ITEM XD_GAME_SOURCES "${XD_SNAPSHOT_DIR}/src/${_src}")
   set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${XD_SNAPSHOT_DIR}/src/${_src}")
@@ -207,21 +217,6 @@ endforeach ()
 foreach (_src ${XD_GAME_SOURCES})
   if (_src MATCHES "/GSfsys/GSfsys2\\.cpp$")
     set_property(SOURCE "${_src}" APPEND PROPERTY COMPILE_DEFINITIONS _fsysFreeBlock=PortXD_fsysFreeBlock)
-  endif ()
-endforeach ()
-foreach (_src ${XD_GAME_SOURCES})
-  if (_src MATCHES "/fightSeq/fightSeq(Basis|SpAction)\\.cpp$")
-    set_property(SOURCE "${_src}" APPEND PROPERTY COMPILE_DEFINITIONS get_exp_fight_pokemon_ptr=PortXD_get_exp_fight_pokemon_ptr)
-  endif ()
-endforeach ()
-foreach (_src ${XD_GAME_SOURCES})
-  if (_src MATCHES "/pokemon/pokemonBios\.cpp$")
-    set_property(SOURCE "${_src}" APPEND PROPERTY COMPILE_DEFINITIONS pokemonNakigoeDataBiosGetDataAddress=PortXD_unused_pokemonNakigoeDataBiosGetDataAddress)
-  endif ()
-endforeach ()
-foreach (_src ${XD_GAME_SOURCES})
-  if (_src MATCHES "/fightTrainerAi2\.cpp$")
-    set_property(SOURCE "${_src}" APPEND PROPERTY COMPILE_DEFINITIONS fightTrainerAiCheckTextureZokusei=PortXD_unused_fightTrainerAiCheckTextureZokusei)
   endif ()
 endforeach ()
 foreach (_src ${XD_GAME_SOURCES})
@@ -381,6 +376,7 @@ foreach (_src ${XD_GAME_SOURCES})
     list(APPEND _defs "HSD_Rand=PortXD_CosRand" "HSD_Randf=PortXD_CosRandf" "HSD_Randi=PortXD_CosRandi")
   endif ()
   if (_src MATCHES "/fightSeq/fightSeqBasis\\.cpp$")
+    list(APPEND _defs "WS_DAMAGE_LOSS=PortXD_RealWsDamageLoss" "WS_DAMAGE_LOSS_ONLY=PortXD_RealWsDamageLossOnly")
     list(APPEND _defs "zokuseiGetWazaJoutai=PortXD_Gen4TypeJoutai" "wazaDB_GetAvg=PortXD_Gen4GetAvg"
       "fightOutPokemonGetZokuseiDataId=PortXD_Gen4GetType" "fightWaza_SetCritical=PortXD_Gen4SetCritical"
       "fightWaza_GetHitDamage=PortXD_Gen4GetHitDamage" "fightOutPokemonGetSoubiItemSoubiDataId=PortXD_Gen4GetSoubi"
@@ -595,9 +591,19 @@ add_executable(xd_dsp_run tools/xd_dsp_run.cpp)
 target_link_libraries(xd_dsp_run PRIVATE platform_dsp platform_dsp_reference platform_disc)
 aurora_copy_runtime_dlls(xd_dsp_run)
 
-add_library(xd_datamods STATIC src/data/xd_data_mods.cpp)
-target_include_directories(xd_datamods PUBLIC src/data)
-target_link_libraries(xd_datamods PUBLIC engine_mods xd_port)
+add_library(xd_objects STATIC src/data/xd_objects.cpp)
+target_include_directories(xd_objects PUBLIC src/data PRIVATE ${CMAKE_SOURCE_DIR}/engine/mods) # (json.h)
+add_executable(xd_objects_test tests/xd_objects_test.cpp)
+target_link_libraries(xd_objects_test PRIVATE xd_objects)
+add_test(NAME xd_objects_test COMMAND xd_objects_test)
+
+add_library(xd_datamods STATIC src/data/xd_data_mods.cpp src/data/xd_rooms.cpp src/data/xd_faces.cpp)
+target_include_directories(xd_datamods PUBLIC src/data PRIVATE ${CMAKE_SOURCE_DIR}/engine/mods) # (json.h: texts/<room>.json)
+target_link_libraries(xd_datamods PUBLIC engine_mods xd_port xd_objects engine_save_thumbnail)
+target_link_libraries(xd_port PUBLIC xd_objects) # (common_rel.cpp calls xd::objects::MergePeople: every program that links xd_port needs it)
+add_executable(xd_faces_test tests/xd_faces_test.cpp)
+target_link_libraries(xd_faces_test PRIVATE xd_datamods)
+add_test(NAME xd_faces_test COMMAND xd_faces_test)
 
 add_executable(xd_data_mods_tool tools/xd_data_mods.cpp)
 set_target_properties(xd_data_mods_tool PROPERTIES OUTPUT_NAME xd_data_mods)
@@ -628,11 +634,17 @@ xd_use_decomp_headers(xd_data_dump)
 aurora_copy_runtime_dlls(xd_data_dump)
 
 add_library(xd_save STATIC save/xd_save.cpp save/xd_save_crypto.cpp save/xd_save_convert.cpp
-  save/xd_save_write.cpp)
+  save/xd_save_write.cpp save/xd_save_edition.cpp save/xd_save_region.cpp)
 target_include_directories(xd_save PUBLIC save/include)
 
+add_executable(xd_save_edition_test save/tests/xd_save_edition_test.cpp)
+target_link_libraries(xd_save_edition_test PRIVATE xd_save)
+add_test(NAME xd_save_edition_test COMMAND xd_save_edition_test)
 add_executable(xd_save_test save/tests/xd_save_test.cpp)
 target_link_libraries(xd_save_test PRIVATE xd_save)
+
+add_executable(xd_save_region_test save/tests/xd_save_region_test.cpp)
+target_link_libraries(xd_save_region_test PRIVATE xd_save)
 
 add_library(xd_save_names STATIC save/xd_save_names.cpp)
 target_include_directories(xd_save_names PUBLIC save/include)
@@ -709,8 +721,8 @@ add_executable(xd_extra_sources_test tools/xd_extra_sources_test.cpp)
 target_link_libraries(xd_extra_sources_test PRIVATE xd_extra_sources xd_settings_list)
 
 add_executable(xd_launcher WIN32 launcher/xd_launcher.cpp launcher/xd_gba_page.cpp launcher/xd_colosseum_page.cpp src/disc_verify.c)
-target_include_directories(xd_launcher PRIVATE src)
-target_link_libraries(xd_launcher PRIVATE xd_playthrough_files xd_randomizer xd_extra_sources engine_card_sources xd_gba_disc xd_legality_disc xd_colosseum) # (Save page: the randomizer's style)
+target_include_directories(xd_launcher PRIVATE src tools)
+target_link_libraries(xd_launcher PRIVATE xd_modrules xd_playthrough_files xd_randomizer xd_extra_sources engine_card_sources xd_gba_disc xd_legality_disc xd_colosseum) # (Save page: the randomizer's style)
 target_link_libraries(xd_launcher PRIVATE launcher_ui xd_settings_list engine_disc_check platform_os xd_save
   xd_save_names engine_memcard ${AURORA_SDL3_TARGET})
 target_compile_options(xd_launcher PRIVATE ${XD_FLAG_UTF8})
@@ -810,15 +822,21 @@ target_compile_definitions(xd_rel_link_test PRIVATE XD_RELGLOBAL_IS_U32=0)
 aurora_copy_runtime_dlls(xd_rel_link_test)
 
 if (XD_BUILD_GAME)
-set(XD_PROGRAM_LIBS xd_port engine_net xd_legality xd_legality_disc engine_memcard engine_gs engine_disc_check engine_settings engine_controls xd_settings_list engine_mods engine_script xd_datamods xd_randomizer platform_compat platform_sdk platform_os platform_audio platform_input platform_video engine_hdtex
+set(XD_PROGRAM_LIBS xd_port engine_presence engine_net xd_legality xd_legality_disc engine_memcard engine_gs engine_disc_check engine_settings engine_controls xd_settings_list engine_mods engine_script xd_datamods xd_randomizer platform_compat platform_sdk platform_os platform_audio platform_input platform_video engine_hdtex
   aurora::core aurora::gx aurora::os aurora::pad aurora::vi aurora::mtx aurora::card aurora::dvd aurora::si
   aurora::thp aurora::main)
 
 set(XD_PROGRAM_PORT_SOURCES src/boot.c src/disc_tables.cpp src/disc_verify.c src/disc_choice.cpp src/game_new.cpp src/heap_check.cpp src/heap_model.cpp src/musyx_dsp_program.c
   src/renderdoc_capture.c src/screenshot.cpp src/bug_report.cpp src/settings_boot.cpp src/mods_boot.cpp src/languages_boot.cpp src/gslog_port.cpp src/state_dump.cpp src/timing_log.cpp src/cpu_cost_hooks.cpp src/fsys_unpack_cost.cpp src/dvd_open_cost.cpp src/bound_walk_cost.cpp src/perf_marks.cpp src/cpu_counters.cpp src/warp.cpp src/render_icon.cpp src/shader_prep.cpp src/pc_load.cpp src/dsp_coef.cpp
   src/data/rel_link.cpp src/data/main_program_map.cpp src/dev_menu.cpp src/task_stacks.cpp src/input_ticks.cpp
-  src/particle_check.cpp src/settings_menu.cpp src/speedups.cpp src/move_split.cpp src/gen4_moves.cpp src/gen4_abilities.cpp src/gen4_ability_effects.cpp src/script_hooks.cpp src/online_battle.cpp src/trainer_card.cpp src/trainer_card_game.cpp src/trainer_card_page.cpp src/online_lobby.cpp src/online_mirror.cpp src/online_room.cpp src/online_team.cpp src/online_commit.cpp src/online_draft.cpp src/online_draft_game.cpp src/online_vs_row.cpp src/added_rows.cpp src/gen4_pack.cpp src/gen4_machines.cpp src/replay_pacing.cpp src/audio_categories.cpp src/button_icons.cpp src/settings_switches.cpp src/hook_defaults.cpp src/tm_names.cpp src/shiny_odds.cpp src/hd_textures.cpp src/texture_observers.cpp src/type_icons.cpp src/modern_types.cpp src/speedrun.cpp
-  src/widescreen.cpp src/save_picker.cpp src/playthrough.cpp src/challenges.cpp src/level_caps.cpp src/battles_won.cpp src/walk_helper.cpp src/gen4_evolutions.cpp src/gen4_eevee.cpp src/pc_trade.cpp src/starter.cpp)
+  src/particle_check.cpp src/settings_menu.cpp src/speedups.cpp src/move_split.cpp src/gen4_moves.cpp src/xg_calc_harness.cpp src/xg_calc_questions.cpp src/gen4_abilities.cpp src/gen4_ability_effects.cpp src/script_hooks.cpp src/script_global_ext.cpp src/online_battle.cpp src/trainer_card.cpp src/trainer_card_game.cpp src/trainer_card_page.cpp src/online_lobby.cpp src/online_mirror.cpp src/online_room.cpp src/online_team.cpp src/online_commit.cpp src/online_draft.cpp src/online_draft_game.cpp src/online_vs_row.cpp src/added_rows.cpp src/gen4_pack.cpp src/gen4_machines.cpp src/replay_pacing.cpp src/audio_categories.cpp src/button_icons.cpp src/settings_switches.cpp src/hook_defaults.cpp src/tm_names.cpp src/shiny_odds.cpp src/hd_textures.cpp src/texture_observers.cpp src/type_icons.cpp src/modern_types.cpp src/speedrun.cpp
+  src/widescreen.cpp src/save_picker.cpp src/playthrough.cpp src/challenges.cpp src/level_caps.cpp src/battles_won.cpp src/discord_presence.cpp src/walk_helper.cpp src/gen4_evolutions.cpp src/gen4_eevee.cpp src/pc_trade.cpp src/starter.cpp)
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/story_flag_names_data.cpp"
+  COMMAND ${CMAKE_COMMAND} -DTEXT_FILE=${CMAKE_CURRENT_SOURCE_DIR}/data/story_flag_names.txt
+          -DOUT=${CMAKE_CURRENT_BINARY_DIR}/story_flag_names_data.cpp -DSYMBOL=kStoryFlagNamesText -P ${CMAKE_CURRENT_SOURCE_DIR}/embed_text.cmake
+  DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/data/story_flag_names.txt ${CMAKE_CURRENT_SOURCE_DIR}/embed_text.cmake
+  VERBATIM)
+list(APPEND XD_PROGRAM_PORT_SOURCES src/script_names.cpp "${CMAKE_CURRENT_BINARY_DIR}/story_flag_names_data.cpp")
 if (NOT WIN32)
   list(REMOVE_ITEM XD_PROGRAM_PORT_SOURCES src/bug_report.cpp src/screenshot.cpp src/state_dump.cpp)
   if (APPLE)
@@ -840,6 +858,8 @@ if (APPLE)
 endif ()
 set_property(SOURCE src/dev_menu.cpp APPEND PROPERTY INCLUDE_DIRECTORIES "${PROJECT_SOURCE_DIR}/platform/compat/include"
   "${XD_AURORA_DIR}/include" "${XD_SNAPSHOT_DIR}/include") # (as xd_use_decomp_headers)
+set_property(SOURCE src/script_global_ext.cpp APPEND PROPERTY INCLUDE_DIRECTORIES "${PROJECT_SOURCE_DIR}/platform/compat/include"
+  "${XD_AURORA_DIR}/include" "${XD_SNAPSHOT_DIR}/include") # (as xd_use_decomp_headers)
 execute_process(COMMAND git describe --always --dirty --abbrev=10
   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" OUTPUT_VARIABLE _xd_port_commit OUTPUT_STRIP_TRAILING_WHITESPACE
   ERROR_QUIET)
@@ -854,6 +874,10 @@ set_property(SOURCE src/boot.c APPEND PROPERTY COMPILE_DEFINITIONS "XD_SNAPSHOT_
 set_property(SOURCE src/boot.c APPEND PROPERTY COMPILE_DEFINITIONS "XD_PORT_VERSION=\"${PROJECT_VERSION}\"")
 add_executable(xd ${XD_PROGRAM_PORT_SOURCES} $<TARGET_OBJECTS:xd_game> $<TARGET_OBJECTS:xd_musyx>)
 target_compile_definitions(xd PRIVATE XD_RELGLOBAL_IS_U32=${XD_RELGLOBAL_IS_U32})
+file(STRINGS "${XD_SNAPSHOT_DIR}/src/game/pxdvs/app/fight/fightSeq/fightSeqWazaseq.cpp" _xd_metro_never REGEX "pc_metronome_never_pick_count")
+if (_xd_metro_never)
+  set_property(SOURCE src/added_rows.cpp APPEND PROPERTY COMPILE_DEFINITIONS XD_HAVE_METRONOME_NEVER_PICK=1)
+endif ()
 set_property(SOURCE src/warp.cpp src/render_icon.cpp src/settings_menu.cpp src/playthrough.cpp src/audio_categories.cpp src/button_icons.cpp src/settings_switches.cpp src/hd_textures.cpp src/texture_observers.cpp src/type_icons.cpp
   src/replay_pacing.cpp src/widescreen.cpp src/online_mirror.cpp src/fsys_unpack_cost.cpp src/challenges.cpp src/walk_helper.cpp src/gen4_eevee.cpp src/online_draft_game.cpp src/online_vs_row.cpp src/pc_trade.cpp src/starter.cpp APPEND PROPERTY INCLUDE_DIRECTORIES ${PROJECT_SOURCE_DIR}/platform/compat/include
   ${XD_AURORA_DIR}/include ${XD_SNAPSHOT_DIR}/include)
@@ -955,6 +979,23 @@ endif () # XD_BUILD_GAME
 add_executable(xd_mods_check tools/xd_mods_check.cpp)
 target_link_libraries(xd_mods_check PRIVATE engine_mods xd_datamods platform_disc platform_os aurora::core aurora::dvd aurora::gx aurora::vi)
 aurora_copy_runtime_dlls(xd_mods_check)
+
+add_library(xd_modrules STATIC tools/xd_mod_rules.cpp)
+target_include_directories(xd_modrules PUBLIC tools)
+target_include_directories(xd_modrules PRIVATE ${CMAKE_SOURCE_DIR}/engine/mods) # (json.h)
+target_link_libraries(xd_modrules PUBLIC engine_modcheck xd_datamods platform_disc platform_os)
+add_executable(xd_mod_check tools/xd_mod_check.cpp)
+target_link_libraries(xd_mod_check PRIVATE xd_modrules aurora::core aurora::dvd aurora::gx aurora::vi)
+aurora_copy_runtime_dlls(xd_mod_check)
+add_executable(xd_mod_pack tools/xd_mod_pack.cpp)
+target_link_libraries(xd_mod_pack PRIVATE xd_modrules aurora::core aurora::dvd aurora::gx aurora::vi)
+aurora_copy_runtime_dlls(xd_mod_pack)
+add_executable(xd_mod_rules_test tools/xd_mod_rules_test.cpp)
+target_link_libraries(xd_mod_rules_test PRIVATE xd_modrules aurora::core aurora::dvd aurora::gx aurora::vi)
+target_compile_definitions(xd_mod_rules_test PRIVATE
+  MODCHECK_FIXTURES="${CMAKE_SOURCE_DIR}/engine/modcheck/tests/fixtures"
+  XD_SCRIPT_HOOKS_CPP="${CMAKE_CURRENT_SOURCE_DIR}/src/script_hooks.cpp")
+aurora_copy_runtime_dlls(xd_mod_rules_test)
 
 add_library(xd_language_pack STATIC src/xd_languages.cpp)
 target_include_directories(xd_language_pack PUBLIC src)

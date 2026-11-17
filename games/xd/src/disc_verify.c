@@ -79,6 +79,17 @@ static void check_content(const char* discPath, const PortDiscInfo* info, PortDi
                           PortXDDiscVerdict* out) {
   const char* skip = getenv("XD_SKIP_DISC_HASH");
   if (skip != NULL && skip[0] == '1') {
+    char cache[2048], full[2048], sha1[41];
+    DiscFileStamp stamp;
+    if (cache_file(cache, sizeof(cache)) && DiscCheck_Stamp(discPath, full, sizeof(full), &stamp) &&
+        DiscCheck_Recall(cache, full, &stamp, sha1) && strcmp(sha1, XD_DISC_SHA1_XG) == 0) {
+      out->kind = XD_DISC_GOOD;
+      out->xg = true;
+      out->remembered = true;
+      snprintf(out->text, sizeof(out->text),
+               "XD_SKIP_DISC_HASH=1: Pokemon XG v1.2.1 (romhack of Pokemon XD, " XD_GAME_ID "), XG mode (checked before).");
+      return;
+    }
     out->kind = XD_DISC_USABLE;
     snprintf(out->text, sizeof(out->text), "XD_SKIP_DISC_HASH=1: not checking the disc's content.");
     return;
@@ -100,6 +111,14 @@ static void check_content(const char* discPath, const PortDiscInfo* info, PortDi
   case DISC_CHECK_HASHED:
   case DISC_CHECK_REMEMBERED:
     out->remembered = result == DISC_CHECK_REMEMBERED;
+    if (strcmp(sha1, XD_DISC_SHA1_XG) == 0) {
+      out->kind = XD_DISC_GOOD;
+      out->xg = true;
+      snprintf(out->text, sizeof(out->text),
+               "Disc OK: Pokemon XG v1.2.1 (romhack of Pokemon XD, " XD_GAME_ID "), XG mode%s.",
+               out->remembered ? " (checked before)" : "");
+      return;
+    }
     if (strcmp(sha1, XD_DISC_SHA1_GXXE01) == 0) {
       out->kind = XD_DISC_GOOD;
       snprintf(out->text, sizeof(out->text),

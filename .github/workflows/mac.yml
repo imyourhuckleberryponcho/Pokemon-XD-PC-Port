@@ -473,6 +473,72 @@ jobs:
           fi
           echo "### The updater on the Mac: unit test and the launcher with a local feed passed (logs/updater_posix_test.log)" >> "$GITHUB_STEP_SUMMARY"
 
+      # 0.6.0 pieces (docs/MAC.md, "Mac pass for 0.6.0"): everything new since the last real Mac run that needs no disc. Each
+      # item prints one "[0.6.0] ..." line into logs/v060_summary.txt (and the step summary); a game disc is not on this
+      # machine, so XG detection and the Japanese pack build are proven only as far as the code being present and
+      # the tool starting from inside the app. continue-on-error: findings, never a lost zip. UNRUN on a Mac.
+      - name: The 0.6.0 pieces (region save import, XG code, Japanese/PAL pack tool, fonts, new tests)
+        if: success() && inputs.stage == 'all'
+        continue-on-error: true
+        run: |
+          set +e
+          APP="$(find "$RUNNER_TEMP/unzipped" -name "Pokemon XD.app" -maxdepth 3 | head -n 1)"
+          S=logs/v060_summary.txt; : > "$S"
+          say() { echo "[0.6.0] $*" | tee -a "$S"; }
+          PROBLEMS=""
+          # 1. The new unit tests: JP/PAL/USA region save import and edition, the PAL/JP source table, the string table,
+          #    the Dolphin-folder finder (Mac paths), legality, Colosseum/GBA saves, online rooms and trades, HD textures.
+          TESTS="xd_save_region_test xd_save_edition_test xd_extra_sources_test card_sources_test i18n_test xd_legality_test hdtex_test colo_save_test colo_pkx_test xd_colosseum_test net_test net_trade_test save_thumbnail_test online_room_test online_commit_test online_draft_test online_lobby_test online_team_test trainer_card_test"
+          cmake --build build/mac/mac-release --target $TESTS -- -k 0 > logs/v060_tests_build.log 2>&1
+          tail -n 3 logs/v060_tests_build.log
+          for t in $TESTS; do
+            if [ ! -x "$BIN/$t" ]; then say "test $t: NOT BUILT (logs/v060_tests_build.log)"; PROBLEMS="$PROBLEMS $t-build"; continue; fi
+            mkdir -p "logs/home_$t"
+            HOME="$PWD/logs/home_$t" XD_SETTINGS_DIR="$PWD/logs/home_$t" XD_NO_MESSAGE_BOXES=1 perl -e 'alarm 300; exec @ARGV' "$BIN/$t" > "logs/v060_$t.log" 2>&1
+            rc=$?
+            ok=$(grep -c "^ok" "logs/v060_$t.log"); bad=$(grep -c "^FAIL" "logs/v060_$t.log")
+            if [ $rc = 0 ]; then say "test $t: PASS (exit 0, $ok ok lines)"; else say "test $t: FAIL (exit $rc, $bad FAIL lines; logs/v060_$t.log)"; PROBLEMS="$PROBLEMS $t"; fi
+          done
+          # (the name the owner looks for) the region save import test, in words
+          grep -q "^\[0.6.0\] test xd_save_region_test: PASS" "$S" && say "save import region test (Japanese / European / USA saves): PASSED" || say "save import region test: FAILED"
+          # 2. The language pack tool, from inside the app (libraries, link, no disc): starts, and refuses a missing disc cleanly.
+          X="$APP/Contents/MacOS/xd_languages/xd_languages"
+          "$X" --version > logs/v060_xd_languages.txt 2>&1; echo "exit $?" >> logs/v060_xd_languages.txt
+          mkdir -p "$RUNNER_TEMP/jp_out"
+          perl -e 'alarm 120; exec @ARGV' "$X" --jp-disc /nonexistent/jp.iso --xd-disc /nonexistent/xd.iso --out "$RUNNER_TEMP/jp_out/pack" >> logs/v060_xd_languages.txt 2>&1; echo "bad-disc exit $?" >> logs/v060_xd_languages.txt
+          cat logs/v060_xd_languages.txt
+          grep -q "^xd_languages " logs/v060_xd_languages.txt && say "language/Japanese pack tool starts from inside the app: yes ($(head -n 1 logs/v060_xd_languages.txt))" || { say "language/Japanese pack tool starts from inside the app: NO"; PROBLEMS="$PROBLEMS xd_languages-start"; }
+          grep -qi "^error can't read" logs/v060_xd_languages.txt && say "Japanese pack tool refuses a missing disc with a message: yes" || { say "Japanese pack tool refuses a missing disc with a message: NO"; PROBLEMS="$PROBLEMS jp-baddisc"; }
+          [ ! -e "$RUNNER_TEMP/jp_out/pack" ] && [ ! -e "$RUNNER_TEMP/jp_out/pack.tmp" ] && say "no half-made pack folder left behind: yes" || say "no half-made pack folder left behind: NO (a leftover exists)"
+          # 3. Fonts for the Japanese launcher text, and the launcher's own list of fonts through the link
+          F="$APP/Contents/MacOS/fonts/NotoSansJP-Regular-subset.ttf"
+          if [ -s "$F" ]; then say "Noto Sans JP subset in the app: yes ($(wc -c < "$F" | tr -d ' ') bytes, through the Contents/MacOS/fonts link)"; else say "Noto Sans JP subset in the app: NO"; PROBLEMS="$PROBLEMS noto"; fi
+          # 4. XG mode: the code is in the program (a real XG disc is needed to run it)
+          nm "$APP/Contents/MacOS/xd" > logs/v060_xd_symbols.txt 2>&1
+          for sym in PortXD_IsXG PortXD_AddScriptBlock PortXD_XG_UseAbilityCapsule PortXD_UseXGSaves; do
+            grep -q "_$sym\$" logs/v060_xd_symbols.txt && say "XG: $sym in xd: yes" || { say "XG: $sym in xd: NO"; PROBLEMS="$PROBLEMS xg-$sym"; }
+          done
+          strings -a "$APP/Contents/MacOS/xd" | grep -q "common.rel mapped at" && say "XG: the 'common.rel mapped at 80B18DC0' log line is in xd: yes" || say "XG: log line missing from xd"
+          # 5. The background-run guard and the hidden window (docs/MAC.md): code present; the Mac keeps XD_WINDOW_HIDDEN off by default
+          strings -a "$APP/Contents/MacOS/xd" | grep -q "the launcher that started this run has ended" && say "background guard (XD_PARENT_PID poll) in xd: yes" || { say "background guard in xd: NO"; PROBLEMS="$PROBLEMS guard"; }
+          # 6. The guard itself, on macOS: a child that polls a parent pid with kill(pid, 0) ends when the parent is gone
+          cat > "$RUNNER_TEMP/guard.c" <<'EOT'
+          #include <errno.h>
+          #include <signal.h>
+          #include <stdio.h>
+          #include <stdlib.h>
+          #include <sys/types.h>
+          #include <unistd.h>
+          int main(int argc, char** argv) { pid_t p = (pid_t)atol(argv[1]); int n = 0; while (kill(p, 0) == 0 || errno == EPERM) { usleep(100000); if (++n > 100) { puts("guard: parent still there after 10 s"); return 2; } } puts("guard: parent gone, ending"); return 3; }
+          EOT
+          cc -o "$RUNNER_TEMP/guard" "$RUNNER_TEMP/guard.c" 2>> "$S"
+          sleep 2 & PARENT=$!
+          "$RUNNER_TEMP/guard" $PARENT > logs/v060_guard.txt 2>&1; echo "exit $?" >> logs/v060_guard.txt
+          cat logs/v060_guard.txt
+          grep -q "exit 3" logs/v060_guard.txt && say "parent-pid poll on macOS ends the child when the parent is gone: yes" || { say "parent-pid poll on macOS: NO"; PROBLEMS="$PROBLEMS guard-poll"; }
+          { echo "### 0.6.0 pieces"; echo '```'; cat "$S"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$PROBLEMS" ]; then echo "PROBLEMS with the 0.6.0 pieces:$PROBLEMS"; exit 1; fi
+
       - name: Upload the Mac zip
         if: success() && inputs.stage == 'all'
         uses: actions/upload-artifact@v7
@@ -490,6 +556,7 @@ jobs:
           path: |
             logs/**/*.log
             logs/*.txt
+            logs/v060_*.txt
             logs/launcher_shots/*.png
             logs/updater_shots/*.png
             logs/updater_launcher_logs/*.log

@@ -6,6 +6,8 @@
 
 namespace xd::battles {
 
+bool InFight();
+
 void Frame();
 
 bool Won(unsigned battle);

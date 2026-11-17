@@ -28,9 +28,11 @@ Time per choice
 Shadow Pokemon
 Shadow Pokemon obey
 Classic XD
+Classic XG
 Gen 4
 Gen 4 + modern types
 Off (as in XD)
+Off (as in XG)
 On (as in Gen 4)
 Single battle
 Double battle
@@ -65,3 +67,5 @@ No limit
 As in the story (they may refuse)
 Like purified ones
 This PC has no Gen 4 pack yet (make it from your Pokemon Battle Revolution disc in the launcher).
+shared parts only
+nothing for it in this mod

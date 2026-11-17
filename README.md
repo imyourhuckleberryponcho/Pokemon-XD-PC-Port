@@ -13,7 +13,7 @@ This repository contains **no game assets, ROMs, ISOs or executables**, and none
 You need your own legally obtained copy of the game (USA, `GXXE01`); the port reads everything from your disc
 image while it runs.
 
-## Status: public beta — version 0.5.6
+## Status: public beta — version 0.6.0
 
 **Playable from New Game into the story, with known bugs.** It is not finished: expect crashes, stalls and
 graphics differences, and keep backups of saves you care about. Downloads are on the [Releases](../../releases)
@@ -27,6 +27,8 @@ page, one per system:
 
 **Found a bug, or want to help test?** Join the [Discord](https://discord.gg/XVbDVXH4Pn) — see
 *Reporting a bug* below.
+
+New in 0.6.0: Pokémon XG (the fan romhack) can be played from your own XG disc, with the randomizer, the challenges and online XG-to-XG battles; a Japanese language pack can be built from your own Japanese disc; Japanese and European saves can be imported (Dolphin or GameCube); Discord presence shows what you are playing (a setting, on by default); and the weather tint in widescreen and a black first picture after pausing are fixed. Japanese name entry shows the name once, on its boxes; in Pokémon XG trainers judge benched Pokémon as XG does and a Pokémon with Download no longer freezes the game; online double battles let the host choose moves for both Pokémon again. The port's own code is now under the MIT license (earlier releases stay CC0).
 
 New in 0.5.6: no more game closing by itself at the start of some randomizer battles (a trainer's Pokémon that knew Conversion); the title screen now appears with a language pack and the Gen 4 rules together (and the loading screen says so if a title ever fails to appear); no more black ground with Resolution set to Match the window when the window's height isn't a multiple of 5; and the lightning at Kaminko's house is fixed.
 
@@ -254,7 +256,13 @@ on. Available now: **higher internal resolution**, anti-aliasing and texture fil
 rate 60**; **frame pacing** for monitors that aren't 60 Hz; full screen; fast-forward, text speed and fast battle
 animations; separate volumes; photo mode. Options that are listed but say "not yet" come later. The same settings
 can be changed inside the game: SETTINGS below EXIT in the field menu, or left of OPTIONS on the title screen
-(the game is paused completely while that page is open). Mods: see `xd_data_mods` and `xd_mods_check` (game data and file replacement mods, loaded from
+(the game is paused completely while that page is open). **Discord presence**: if the Discord app is running on
+the same PC, the launcher and the game show "In the launcher" / "Story mode" / "In a battle" / "Online battle" and the
+elapsed time in your Discord status. It talks only to the Discord app on your own PC through its local connection
+(a named pipe on Windows, a socket on Linux and Mac): nothing is sent over the internet by the port, and no save
+name, trainer name or place is included. It is on by default, is a preference (not part of the presets, so also on in
+Original, where it never touches the game) and is never active in test runs; "Discord presence" in the launcher's
+Settings or the in-game SETTINGS turns it off (docs/PRESENCE.md). Mods: see `xd_data_mods` and `xd_mods_check` (game data and file replacement mods, loaded from
 `%APPDATA%\Pokemon XD\mods`).
 
 ## Building
@@ -351,5 +359,5 @@ Company (2005). Pokémon is a trademark of Nintendo, Creatures Inc. and GAME FRE
 ## Legal
 
 This project is not affiliated with or endorsed by Nintendo, The Pokémon Company, Genius Sonority, Creatures
-or GAME FREAK. It contains no copyrighted game data. Released under CC0 1.0 (see `LICENSE`); the third-party
-libraries in `third_party/` keep their own licenses.
+or GAME FREAK. It contains no copyrighted game data. The port's own code is released under the MIT license (see `LICENSE`; releases before 0.6.0 stay CC0); the decomp code it
+builds on is CC0, and the third-party libraries in `third_party/` keep their own licenses.

@@ -15,6 +15,12 @@
 #include <cstring>
 #include <fstream>
 
+extern "C" uint16_t pc_metronome_first_mod_move;
+#ifdef XD_HAVE_METRONOME_NEVER_PICK
+extern "C" uint16_t pc_metronome_never_pick[1024];
+extern "C" uint16_t pc_metronome_never_pick_count;
+#endif
+
 namespace {
 
 std::vector<engine::mods::AddedRow> sRows;
@@ -36,12 +42,32 @@ void Install(const engine::mods::LoadResult& result) {
   }
   std::vector<XDAddedRow> rows;
   for (const auto& r : sRows) {
+    if (r.inFile) continue;
     rows.push_back({r.table.c_str(), r.id, r.row, r.copyOf, r.bytes.data(), r.bytes.size()});
   }
   PortXD_SetAddedRows(rows.data(), rows.size());
+  uint16_t firstMove = 0;
+  for (const auto& r : sRows) {
+    if (r.table == "waza_data" && r.bytes.size() > 0x16 && r.bytes[0x16] != 0xA4 && r.id <= 0xFFFF && (firstMove == 0 || r.id < firstMove)) {
+      firstMove = static_cast<uint16_t>(r.id);
+    }
+  }
+  std::vector<uint16_t> never;
+  for (const auto& r : sRows) {
+    if (r.table == "waza_data" && firstMove != 0 && r.id >= firstMove && r.id <= 0xFFFF && r.bytes.size() > 0x0C && r.bytes[0x0C] == 0 &&
+        r.bytes[0x16] != 0xA4 && never.size() < 1024) {
+      never.push_back(static_cast<uint16_t>(r.id));
+    }
+  }
+#ifdef XD_HAVE_METRONOME_NEVER_PICK
+  for (size_t i = 0; i < never.size(); i++) pc_metronome_never_pick[i] = never[i];
+  pc_metronome_never_pick_count = static_cast<uint16_t>(never.size());
+#endif
+  pc_metronome_first_mod_move = firstMove;
+  if (firstMove != 0) std::fprintf(stderr, "[mods] Metronome: moves %u and up can be picked, %zu never (metronome: false)\n", firstMove, never.size());
   for (const auto& r : sRows) {
     std::fprintf(stderr, "[mods] added: %s \"%s\" = %s #%u (from the mod %s, copy of #%u)\n", r.table.c_str(), r.key.c_str(),
-                 r.table == "pokemon_data" ? "species" : r.table == "waza_data" ? "move" : "item", r.id, r.mod.c_str(), r.copyOf);
+                 r.table == "pokemon_data" ? "species" : r.table == "waza_data" ? "move" : r.table == "poke_face" ? "face row" : r.table == "flag_data" ? "story flag" : r.table == "floordata" ? "room (floor)" : r.table == "floor_door_list" ? "door row" : r.table == "floor_tresure_list" ? "chest row" : r.table == "floor_event_list" ? "event zone row" : r.table == "floorsoundTbl" ? "music row" : r.table == "floor_chars" ? "room people" : r.table == "floor_zone" ? "area zone" : "item", r.id, r.mod.c_str(), r.copyOf);
   }
   if (!xd::PlayerFilesReadOnly()) {
     std::ofstream out(xd::SettingsFolder() / L"added_ids.json", std::ios::binary | std::ios::trunc);

@@ -1,0 +1,9 @@
+{
+  "id": "bad-lua",
+  "name": "Bad script mod",
+  "version": "1.0",
+  "author": "Test Author",
+  "description": "Made up to be wrong.",
+  "game": "GXXE01",
+  "scripts": true
+}

@@ -76,6 +76,8 @@ void EndListReplay() {
 }
 
 std::vector<uint8_t> sFrame;
+std::vector<uint8_t> sPartial;
+ListCopies sPartialLists;
 bool sActive = false;
 bool sRedrawing = false;
 float sSpeed = 1.f;
@@ -144,6 +146,8 @@ bool PortFreeze_Begin(void) {
     std::lock_guard<std::mutex> lock(sTapLock);
     sFrame = sLast;
     sFrameLists = sLastLists;
+    sPartial = sCurrent;
+    sPartialLists = sCurrentLists;
   }
   if (sFrame.empty()) {
     return false;
@@ -193,6 +197,14 @@ void PortFreeze_Present(void (*pump)(void)) {
 
 void PortFreeze_End(void) {
   if (!sActive) return;
+  if (!sPartial.empty()) {
+    EndListReplay();
+    sFrameLists = std::move(sPartialLists);
+    sPartialLists.clear();
+    BeginListReplay();
+    PortGX_ReplayWrite(sPartial.data(), static_cast<uint32_t>(sPartial.size()));
+    sPartial.clear();
+  }
   PortGX_ReplayEnd();
   EndListReplay();
   sReplaying.store(false, std::memory_order_release);

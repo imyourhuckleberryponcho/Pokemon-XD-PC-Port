@@ -168,7 +168,9 @@ int Effect(uint16_t moveType, void* defender, bool scrappy) {
 
 extern "C" {
 
+void PortXD_CalcHarness(void* attacker, void* defender, void* attackSide);
 int32_t fightSeqWazaDamageCalc(void* attacker, void* defender, void* attackSide, uint16_t waza, uint16_t iryoku, int32_t zokusei) {
+  PortXD_CalcHarness(attacker, defender, attackSide);
   xd::gen4::StageGuard stages(attacker, defender);
   if (Gen4On() && attacker != nullptr && defender != nullptr) {
     if (const uint16_t p = PowerOverride(waza, attacker, defender)) iryoku = p;

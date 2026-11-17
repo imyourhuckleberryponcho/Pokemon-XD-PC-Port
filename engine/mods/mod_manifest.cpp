@@ -166,7 +166,10 @@ bool ParseManifest(std::string_view json, Manifest& out, std::string& error) {
       !TextField(root, "version", out.version, error) || !TextField(root, "author", out.author, error) ||
       !TextField(root, "description", out.description, error) || !ListField(root, "game", out.games, error) ||
       !ListField(root, "requires", out.required, error) || !ListField(root, "conflicts", out.conflicts, error) ||
-      !ListField(root, "after", out.after, error) ||
+      !ListField(root, "after", out.after, error) || !ListField(root, "before", out.before, error) ||
+      !ListField(root, "works_with", out.worksWith, error) || !ListField(root, "recommends", out.recommends, error) ||
+      !ListField(root, "only_with", out.onlyWith, error) || !TextField(root, "updates", out.updates, error) ||
+      !TextField(root, "author_key", out.authorKey, error) ||
       !IntField(root, "priority", out.priority, error) || !IntField(root, "format", format, error)) {
     return false;
   }
@@ -241,6 +244,41 @@ bool ParseManifest(std::string_view json, Manifest& out, std::string& error) {
     if (!ValidModId(other)) {
       error = Fmt(Tr("\"after\" has \"%s\", which isn't a mod id"), other.c_str());
       return false;
+    }
+  }
+  {
+    const auto links = root.fields.find("links");
+    if (links != root.fields.end() && links->second.kind != Value::Kind::Null) {
+      if (links->second.kind != Value::Kind::Object) {
+        error = Tr("\"links\" must be a block like {\"other-mod\": \"https://...\"}");
+        return false;
+      }
+      for (const auto& [id, value] : links->second.fields) {
+        if (!ValidModId(id) || value.kind != Value::Kind::String) {
+          error = Fmt(Tr("\"links\" has \"%s\": a mod id and an address in quotes are expected"), id.c_str());
+          return false;
+        }
+        out.links[id] = value.text;
+      }
+    }
+  }
+  if (!out.authorKey.empty()) {
+    bool hex = out.authorKey.size() == 64;
+    for (char c : out.authorKey) hex = hex && ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'));
+    if (!hex) {
+      error = Tr("\"author_key\" must be 64 lower case hex digits (the author's public key)");
+      return false;
+    }
+  }
+  for (const auto& [field, ids] : {std::pair<const char*, const std::vector<std::string>*>{"before", &out.before},
+                                   {"works_with", &out.worksWith},
+                                   {"recommends", &out.recommends},
+                                   {"only_with", &out.onlyWith}}) {
+    for (const std::string& other : *ids) {
+      if (!ValidModId(other)) {
+        error = Fmt(Tr("\"%s\" has \"%s\", which isn't a mod id"), field, other.c_str());
+        return false;
+      }
     }
   }
   for (const std::string& other : out.conflicts) {

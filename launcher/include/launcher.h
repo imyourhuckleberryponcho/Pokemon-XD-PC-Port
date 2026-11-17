@@ -3,6 +3,9 @@
 
 #include "launcher_icon.h"
 
+namespace engine::modcheck {
+struct GameRules;
+}
 #include <mods.h>
 #include <settings.h>
 
@@ -21,6 +24,7 @@ struct DiscVerdict {
   std::string text;
   std::string gameId;
   std::string title;
+  std::string edition;
 };
 
 struct SaveSummary {
@@ -54,11 +58,21 @@ struct GameInfo {
   bool playerFilesReadOnly = false;
   std::string readOnlyNote;
 
+  struct Presence {
+    std::string clientId;
+    std::string endpoint;
+    std::string largeImage, largeText;
+    std::function<std::string()> details;
+    std::string state;
+    bool allowed = true;
+  } presence;
+
   std::function<void(engine::settings::Registry&)> registerSettings;
   std::function<DiscVerdict(const std::string& path, const std::function<bool(uint64_t, uint64_t)>& progress)>
       checkDisc;
   std::function<SaveSummary(const std::string& discPath)> readSave;
   engine::mods::LooksOrSound modLooks;
+  const engine::modcheck::GameRules* modRules = nullptr;
 
   struct DiscPicture {
     std::string id;
@@ -96,6 +110,8 @@ struct GameInfo {
     std::string who;
     std::string time;
     std::string setup;
+    std::string edition;
+    std::string warn;
   };
   struct ImportCheck {
     std::string name;
@@ -103,6 +119,7 @@ struct GameInfo {
     std::string cardFileName;
     std::vector<uint8_t> gci;
     SaveSummary preview;
+    bool editionUnknown = false;
   };
   struct ImportOffer {
     std::filesystem::path path;
@@ -111,7 +128,13 @@ struct GameInfo {
   };
   struct Saves {
     std::filesystem::path dataFolder;
+    std::function<std::filesystem::path(const std::string& edition)> dataFolderFor;
+    std::function<void(const std::string& edition)> setEdition;
     std::function<void()> changed;
+    std::string editionQuestion;
+    std::vector<std::string> editionAnswers;
+    std::function<std::string(int answer)> editionRefusal;
+    std::function<std::string(const std::filesystem::path& gciFile)> wrongEdition;
     std::function<SaveRow(const std::filesystem::path& cardRoot)> row;
     std::function<SaveSummary(const std::filesystem::path& cardRoot, const std::string& discPath)> read;
     std::function<std::filesystem::path(const std::filesystem::path& cardRoot, const std::string& card)> cardFolder;

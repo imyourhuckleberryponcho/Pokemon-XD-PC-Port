@@ -877,7 +877,9 @@ extern "C" bool PortXD_RenderIconPrepare(void) {
   };
   setDefault("XD_NO_MESSAGE_BOXES", "1");
   setDefault("XD_WINDOW_OFFSCREEN", "1");
+#ifndef __APPLE__
   setDefault("XD_WINDOW_HIDDEN", "1");
+#endif
   setDefault("SDL_WINDOW_ACTIVATE_WHEN_SHOWN", "0");
   setDefault("XD_RECORD", "0");
   setDefault("XD_DISC_TIMING", "fast");

@@ -8,6 +8,7 @@
 #include <charconv>
 #include <cstdarg>
 #include <cstdio>
+#include <cstring>
 #include <set>
 #include <tuple>
 
@@ -189,7 +190,7 @@ public:
         continue;
       }
       if (!t->addable || !Usable(*t)) {
-        Problem(file, tv.line, "adds rows to " + Quote(t->name) + ", which can't get new rows (new rows work for the Pokemon, move and item tables)");
+        Problem(file, tv.line, "adds rows to " + Quote(t->name) + ", which can't get new rows (new rows work for the Pokemon, move, item, flag, room, battle and trainer-deck tables)");
         continue;
       }
       if (tv.kind != Value::Kind::Object) {
@@ -267,9 +268,73 @@ public:
     }
   }
 
+  void FinishChunkRows() {
+    struct Job {
+      const DataTable* table;
+      DataPlace place;
+    };
+    std::map<std::pair<std::string, std::string>, std::vector<Job>> perFile;
+    for (const Decl& d : mDecl) {
+      if (!d.table->addInChunk || d.row.bytes.empty()) {
+        continue;
+      }
+      for (const DataPlace& p : d.table->places) {
+        std::vector<Job>& jobs = perFile[{p.archive, p.entry}];
+        const bool have = std::any_of(jobs.begin(), jobs.end(), [&](const Job& j) { return j.table == d.table && j.place.offset == p.offset; });
+        if (!have) {
+          jobs.push_back({d.table, p});
+        }
+      }
+    }
+    for (auto& [file, jobs] : perFile) {
+      std::sort(jobs.begin(), jobs.end(), [](const Job& a, const Job& b) { return a.place.offset > b.place.offset; });
+      for (const Job& job : jobs) {
+        Work& w = WorkFor(job.place);
+        const DataTable& t = *job.table;
+        std::vector<const Decl*> rows;
+        for (const Decl& d : mDecl) {
+          if (d.table == &t && !d.row.bytes.empty()) {
+            rows.push_back(&d);
+          }
+        }
+        std::sort(rows.begin(), rows.end(), [](const Decl* a, const Decl* b) { return a->row.row < b->row.row; });
+        const size_t head = job.place.offset >= 0x10 ? job.place.offset - 0x10 : 0;
+        const auto be32 = [&](size_t at) {
+          return static_cast<uint32_t>(w.now[at]) << 24 | static_cast<uint32_t>(w.now[at + 1]) << 16 | static_cast<uint32_t>(w.now[at + 2]) << 8 | w.now[at + 3];
+        };
+        const auto put32 = [&](size_t at, uint32_t v) {
+          for (int b = 0; b < 4; b++) {
+            w.now[at + b] = static_cast<uint8_t>(v >> (8 * (3 - b)));
+          }
+        };
+        const size_t rowsEnd = static_cast<size_t>(job.place.offset) + static_cast<size_t>(t.count) * t.entrySize;
+        if (!w.ok || job.place.offset < 0x10 || head + 0x10 > w.now.size() || be32(head + 8) != t.count || be32(head + 4) != 0x10 + t.count * t.entrySize ||
+            rowsEnd > w.now.size() || w.now.size() < 0x10 || std::memcmp(w.now.data(), "DECK", 4) != 0 || be32(4) != w.now.size()) {
+          Say(Message::Level::Problem, Fmt(Tr("The new rows of %s can't be put into %s: its layout is not the one this knows. They are left out."),
+                                           Quote(t.name).c_str(), job.place.entry.c_str()));
+          continue;
+        }
+        std::vector<uint8_t> add;
+        for (const Decl* d : rows) {
+          add.insert(add.end(), d->row.bytes.begin(), d->row.bytes.end());
+        }
+        w.now.insert(w.now.begin() + static_cast<std::ptrdiff_t>(rowsEnd), add.begin(), add.end());
+        put32(head + 4, be32(head + 4) + static_cast<uint32_t>(add.size()));
+        put32(head + 8, t.count + static_cast<uint32_t>(rows.size()));
+        put32(4, static_cast<uint32_t>(w.now.size()));
+      }
+    }
+    for (Decl& d : mDecl) {
+      if (d.table->addInChunk) {
+        d.row.inFile = true;
+      }
+    }
+  }
+
   DataApplyResult Finish() {
     DataApplyResult out;
     FinishTexts(out);
+    FinishChunkRows();
     for (auto& [key, w] : mWork) {
       if (w.now != w.before) {
         out.entries.emplace(key, std::move(w.now));
@@ -384,7 +449,7 @@ private:
       }
     }
     for (const Decl& d : mDecl) {
-      if (d.table == &t && NameKey(d.row.key) == nk) {
+      if (d.table == &t && NameKey(d.row.key) == nk && (t.addStart.empty() || d.row.mod == file.mod)) {
         Problem(file, line, "the new row " + Quote(key) + " is also added by the mod " + Quote(d.row.modName) +
                                 " (" + d.row.where + "); only the first is used");
         return;
@@ -406,6 +471,24 @@ private:
       const DataTable* idt = mCatalog.FindTable(t.idTable);
       d.row.row = t.count + n;
       d.row.id = std::max(idt != nullptr ? idt->count : 0u, t.addFirstId) + n;
+    } else if (t.addKeySize != 0) {
+      d.row.row = t.count + n;
+      uint32_t top = 0;
+      if (!t.places.empty()) {
+        const Work& w = WorkFor(t.places[0]);
+        for (uint32_t i = 0; i < t.count; i++) {
+          const size_t at = t.places[0].offset + static_cast<size_t>(i) * t.entrySize + t.addKeyOffset;
+          if (at + t.addKeySize > w.before.size()) break;
+          uint32_t v = 0;
+          for (uint32_t b = 0; b < t.addKeySize; b++) v = (v << 8) | w.before[at + b];
+          top = std::max(top, v);
+        }
+      }
+      d.row.id = std::max(top + 1, t.addFirstId) + n;
+      if (t.addKeySize < 4 && d.row.id >= (1u << (8 * t.addKeySize))) {
+        Problem(file, line, "no number left for the new row " + Quote(key) + " in " + t.name);
+        return;
+      }
     } else {
       d.row.row = d.row.id = std::max(t.count, t.addFirstId) + n;
     }
@@ -421,6 +504,29 @@ private:
     AddedRow& r = d.row;
     mModNames[file.mod] = file.modName;
     const size_t size = t.entrySize;
+    if (!t.addStart.empty()) {
+      r.bytes = t.addStart;
+      r.bytes.resize(size, 0);
+      r.copyOf = 0;
+      for (const std::string& k : rv.order) {
+        if (k.empty() || k[0] == '_') {
+          continue;
+        }
+        const auto key = std::find_if(t.addKeys.begin(), t.addKeys.end(), [&](const DataTable::AddKey& a) { return Lower(a.name) == Lower(k); });
+        const Value& v = rv.fields.at(k);
+        if (key == t.addKeys.end()) {
+          Problem(file, v.line, "the new row " + Quote(r.key) + " has no setting " + Quote(k) + "; its settings are: " +
+                                    [&] { std::string l; for (const auto& a : t.addKeys) l += (l.empty() ? "" : ", ") + a.name; return l; }());
+        } else if (v.kind != Value::Kind::Number || v.number < key->min || v.number > key->max ||
+                   v.number != static_cast<double>(static_cast<uint32_t>(v.number))) {
+          Problem(file, v.line, Quote(k) + " must be a number from " + std::to_string(key->min) + " to " + std::to_string(key->max));
+        } else if (key->offset < r.bytes.size()) {
+          uint8_t& b = r.bytes[key->offset];
+          b = static_cast<uint8_t>((b & ~(key->mask << key->shift)) | ((static_cast<uint32_t>(v.number) & key->mask) << key->shift));
+        }
+      }
+      return;
+    }
     uint32_t source = 0;
     bool haveSource = false;
     const auto cp = rv.fields.find("copy");
@@ -460,8 +566,25 @@ private:
       r.bytes = s->row.bytes;
       r.copyOf = s->row.copyOf;
     }
+    if (t.addKeySize != 0) {
+      for (uint32_t b = 0; b < t.addKeySize && t.addKeyOffset + b < r.bytes.size(); b++) {
+        r.bytes[t.addKeyOffset + b] = static_cast<uint8_t>(r.id >> (8 * (t.addKeySize - 1 - b)));
+      }
+    }
     for (const std::string& k : rv.order) {
       if (k.empty() || k[0] == '_' || k == "copy" || k == "text") {
+        continue;
+      }
+      if (const auto asset = std::find_if(t.assetKeys.begin(), t.assetKeys.end(), [&](const std::string& a) { return Lower(a) == Lower(k); });
+          asset != t.assetKeys.end()) {
+        const Value& av = rv.fields.at(k);
+        if (av.kind != Value::Kind::String || av.text.empty()) {
+          Problem(file, av.line, Quote(k) + " of the new row " + Quote(r.key) + " must be a text in quotes (a picture file of the mod, or a name)");
+        } else if (av.text.find("..") != std::string::npos || av.text.find('\\') != std::string::npos || av.text[0] == '/' || (av.text.find(':') == 1 && av.text.size() > 2)) {
+          Problem(file, av.line, Quote(k) + " of the new row " + Quote(r.key) + " must be a path inside the mod with '/' (no \"..\", no drive letter)");
+        } else {
+          r.assets[*asset] = av.text;
+        }
         continue;
       }
       Field(file, t, r.row, k, rv.fields.at(k));

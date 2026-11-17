@@ -1,0 +1,9 @@
+{
+  "id": "bad mod!",
+  "name": 5,
+  "version": "one",
+  "game": 7,
+  "requires": ["bad-mod", "other >= "],
+  "aplies": "any_time",
+  "updates": "http://example.com/u.json"
+}

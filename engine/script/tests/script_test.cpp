@@ -1,4 +1,5 @@
 #include <script_host.h>
+#include <script_names.h>
 
 #include <cstdio>
 #include <string>
@@ -165,6 +166,137 @@ int main() {
     f.Add("a", "on('test.value', function(e) return TYPE.WATER end)");
     f.Add("b", "on('test.value', function(e) return e.value + 1 end)");
     check(f.Call(0) == 12, "constants are there, and mods answer in order (11, then +1)");
+  }
+  {
+    Fixture f;
+    f.host.SetApi("get_flag", [](const std::string& mod, const std::vector<Value>& args, std::string& error) -> Value {
+      if (args.size() != 1 || args[0].kind != Value::Kind::Int) { error = "get_flag(number)"; return Value(); }
+      return Value::Int(args[0].integer * 10 + (mod == "quest" ? 1 : 2));
+    });
+    f.host.SetApi("party", [](const std::string&, const std::vector<Value>&, std::string&) -> Value {
+      Value list = Value::List();
+      list.Add(Value::Table().Set("species", 133).Set("level", 15));
+      list.Add(Value::Table().Set("species", 25).Set("level", 9));
+      return list;
+    });
+    check(f.Add("quest",
+                "story_function('has_pikachu', function(extra)\n"
+                "  local n = 0\n"
+                "  for _, p in ipairs(party()) do if p.species == 25 then n = n + p.level end end\n"
+                "  return n + extra + get_flag(4)\n"
+                "end)\n"
+                "story_function('truth', function() return true end)\n"
+                "story_function('nothing', function() end)"),
+          "a mod registers story functions");
+    check(f.Add("other", "story_function('has_pikachu', function() return 1000 end) story_function('only_other', function() return 5 end)"),
+          "a second mod may use the same name");
+    int64_t r = -1;
+    std::string err;
+    check(f.host.HasFunction("has_pikachu") && f.host.HasFunction("quest:truth") && !f.host.HasFunction("quest:only_other") &&
+              f.host.HasFunction("only_other") && !f.host.HasFunction("nope"),
+          "HasFunction: plain name or mod:name");
+    check(f.host.CallFunction("has_pikachu", {Value::Int(100)}, r, err) && r == 9 + 100 + 41, "the first mod's function runs with the API's answers (150)");
+    check(f.host.CallFunction("other:has_pikachu", {}, r, err) && r == 1000, "mod:name picks the mod");
+    check(f.host.CallFunction("quest:truth", {}, r, err) && r == 1, "true is 1");
+    check(f.host.CallFunction("quest:nothing", {}, r, err) && r == 0, "nothing is 0");
+    check(!f.host.CallFunction("quest:missing", {}, r, err) && Contains(err, "no story function") && r == 0, "a missing function: false + a message");
+    check(f.host.LiveMods() == 2, "no mod was switched off so far");
+  }
+  {
+    Fixture f;
+    f.Add("bad", "story_function('boom', function() local x = nil; return x.y end)");
+    f.Add("good", "story_function('boom', function() return 7 end)");
+    int64_t r = -1;
+    std::string err;
+    check(!f.host.CallFunction("bad:boom", {}, r, err) && Contains(err, "boom") && f.host.LiveMods() == 1, "an error in a story function: false, mod off");
+    check(f.host.CallFunction("boom", {}, r, err) && r == 7, "the other mod's function still runs");
+    Fixture g;
+    g.Add("loop", "story_function('spin', function() while true do end end)");
+    check(!g.host.CallFunction("spin", {}, r, err) && Contains(err, "ran too long"), "a story function has an instruction budget");
+    Fixture h;
+    std::string why;
+    check(!h.Add("twice", "story_function('a', function() end) story_function('a', function() end)", &why) && Contains(why, "twice"),
+          "a name registered twice is refused");
+    Fixture k;
+    k.Add("api", "story_function('e', function() return get_flag() end)");
+    k.host.SetApi("get_flag", [](const std::string&, const std::vector<Value>&, std::string& error) -> Value { error = "no"; return Value(); });
+    check(k.host.LiveMods() == 1, "(an API added after AddMod is not seen by that mod: no crash)");
+  }
+  {
+    check(NameIdentifier("Mr. Mime") == "MR_MIME" && NameIdentifier("ELECTR") == "ELECTR", "NameIdentifier: capitals, dots and spaces to _");
+    check(NameIdentifier("Nidoran\xE2\x99\x80") == "NIDORAN_F" && NameIdentifier("Nidoran\xE2\x99\x82") == "NIDORAN_M", "NameIdentifier: female / male signs");
+    check(NameIdentifier("Pok\xC3\xA9 Ball") == "POKE_BALL" && NameIdentifier("1st") == "_1ST" && NameIdentifier("?").empty() && NameIdentifier("---").empty(),
+          "NameIdentifier: accents, leading digit, nothing usable");
+    check(NameKey("Mr. Mime") == "mrmime" && NameKey("MR_MIME") == "mrmime", "NameKey ignores case, spaces and signs");
+    Names names;
+    names.Add("type", {{"NORMAL", 0}, {"FIRE", 10}, {"?", 9}, {"GRASS", 12}});
+    names.Add("species", {{"EEVEE", 133}, {"MR. MIME", 122}, {"Eevee", 900}, {"Zorblat", 415}});
+    names.Add("move", {{"TACKLE", 33}});
+    check(names.Count("type") == 3 && names.Count("species") == 4, "a text with no usable name is left out; a repeated one is kept as _2");
+    check(names.NameOf("species", 900) == "EEVEE_2" && names.NameOf("species", 133) == "EEVEE" && names.NameOf("type", 9).empty(), "NameOf; the first keeps the plain name");
+    int64_t v = 0;
+    check(names.Find("species", "mr mime", v) && v == 122 && names.Find("species", "Eevee", v) && v == 133 && !names.Find("species", "nope", v), "Find: letter case, spaces and signs don't count; first wins");
+    check(!names.Notes().empty(), "Notes say what was skipped or renamed");
+    Fixture f;
+    names.Install(f.host);
+    check(f.Add("n", R"(
+      local seen = {}
+      on('test.value', function(e)
+        local sum = TYPE.GRASS * 1000 + SPECIES.EEVEE + MOVE.TACKLE * 100000
+        if name_of('species', 133) ~= 'EEVEE' or name_of('species', 7) ~= nil then return -1 end
+        if find('species', 'Zorblat') ~= 415 or find('species', 'nothing') ~= nil then return -2 end
+        local n = 0
+        for k, v in pairs(TYPE) do n = n + 1 end
+        if n ~= 3 then return -3 end
+        return sum
+      end))"), "a script using the names loads");
+    check(f.Call(0) == 3312133, "TYPE.GRASS, SPECIES.EEVEE, MOVE.TACKLE, name_of, find and pairs work");
+    Fixture g;
+    names.Install(g.host);
+    std::string why;
+    g.Add("w", "on('test.value', function(e) TYPE.GRASS = 5 return 1 end)", &why);
+    check(g.Call(100) == 100 && g.host.LiveMods() == 0, "writing to TYPE is an error: the mod is off, the game's value stays");
+    Fixture h;
+    names.Install(h.host);
+    h.Add("typo", "on('test.value', function(e) return TYPE.GRASSS end)");
+    check(h.Call(100) == 100 && h.host.LiveMods() == 0 && Contains(h.host.TakeFailures().at(0).message, "TYPE has no name"), "a misspelt name is a clear error");
+    Fixture i;
+    names.Install(i.host);
+    i.Add("raw", "on('test.value', function(e) if getmetatable(TYPE) ~= 'read-only' then return -2 end rawset(TYPE, 'FIRE', 99) return -1 end)");
+    check(i.Call(100) == 100 && i.host.LiveMods() == 0 && Contains(i.host.TakeFailures().at(0).message, "read-only"), "the metatable is hidden and rawset cannot get round it");
+    Fixture j;
+    names.Install(j.host);
+    j.Add("cat", "on('test.value', function(e) return find('flags', 'x') end)");
+    check(j.Call(100) == 100 && Contains(j.host.TakeFailures().at(0).message, "no names for"), "an unknown category is an error that lists the ones there are");
+    Names other;
+    other.Add("type", {{"WATER", 3}});
+    Fixture k;
+    other.Install(k.host);
+    k.Add("o", "on('test.value', function(e) return TYPE.WATER end)");
+    check(k.Call(0) == 3, "another game's table through the same API");
+    std::vector<NameEntry> list;
+    std::vector<std::string> problems;
+    const bool ok = ParseNameFile("# comment\n964 STORY_PROGRESS the story value\n0x3d6 SECOND\r\nbad name\n965 lower\n964 STORY_PROGRESS\n", list, problems);
+    check(!ok && list.size() == 2 && list[0].value == 964 && list[1].value == 982 && problems.size() == 3, "ParseNameFile: good lines kept, 3 bad ones reported");
+  }
+  {
+    Fixture f;
+    f.host.SetPrelude("local on = on\nfunction on_value(fn) on('test.value', function(e) return fn(e.value, e.who.n) end) end\n");
+    check(f.Add("short", "on_value(function(v, n) return v + n end)"), "a mod uses the game's helper");
+    check(f.Call(10, 5) == 15, "the helper's function gets plain arguments (10 + 5)");
+    check(f.host.HasHandlers("test.value"), "the helper registered a handler of the hook");
+    Fixture g;
+    g.host.SetPrelude("local on = on\nfunction on_other(fn) on('no.such.hook', fn) end\n");
+    std::string why;
+    check(g.Add("ok", "local x = 1", &why), "a helper that is never called costs the mod nothing");
+    check(!g.Add("bad", "on_other(function() end)", &why) && Contains(why, "no hook called"), "a helper that names a hook the game lacks: the mod is switched off with the reason");
+    Fixture h;
+    h.host.SetPrelude("this is not lua");
+    check(!h.Add("x", "local x = 1", &why) && Contains(why, "helpers"), "a prelude that does not load is reported, not run");
+    Fixture k;
+    k.host.SetPrelude("function helper_only() return 1 end");
+    check(k.Add("a", "if io or os or pcall then error('leak') end"), "the prelude runs in the same sandbox");
+    check(k.Add("b", "if rawget(_G, 'helper_only') == nil then error('no helper') end"), "and its functions are in the mod's world");
   }
   std::printf(sOk ? "script_test: all passed\n" : "script_test: FAILED\n");
   return sOk ? 0 : 1;

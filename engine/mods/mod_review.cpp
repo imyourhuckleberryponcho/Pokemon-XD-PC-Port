@@ -1,5 +1,7 @@
 #include "mods.h"
 
+#include "mod_layout.h"
+
 #include "i18n.h"
 
 #include <algorithm>
@@ -85,12 +87,17 @@ std::string FirstOf(const std::vector<std::string>& names) {
 
 }
 
-ModChanges ChangesOf(const ModFolder& mod) {
+ModChanges ChangesOf(const ModFolder& mod, std::string_view gameId) {
   ModChanges c;
   if (mod.texturePack) return c;
-  c.files = FilesIn(mod.folder / "files");
-  c.entries = FilesIn(mod.folder / "fsys");
-  for (const std::string& f : FilesIn(mod.folder / "data")) {
+  const auto names = [&](const char* sub) {
+    std::vector<std::string> out;
+    for (const LayoutFile& f : LayoutFiles(mod.folder, gameId, sub)) out.push_back(f.rel);
+    return out;
+  };
+  c.files = names("files");
+  c.entries = names("fsys");
+  for (const std::string& f : names("data")) {
     if (Lower(fs::path(f).extension().string()) == ".json") c.dataFiles.push_back(f);
   }
   return c;
@@ -130,12 +137,22 @@ Review ReviewList(const ModList::Profile& profile, const std::vector<ModFolder>&
       continue;
     }
     const std::vector<std::string>& games = row.mod->manifest.games;
-    if (!gameId.empty() && std::none_of(games.begin(), games.end(), [&](const std::string& g) { return Same(g, gameId); })) {
+    if (!gameId.empty() && !SupportsGame(row.mod->manifest, gameId)) {
       std::string list;
       for (const std::string& g : games) list += (list.empty() ? "" : ", ") + g;
       row.problems.push_back(Fmt(Tr("Made for another game or game version (%s); this disc is %s. It isn't used."), list.c_str(),
                                  std::string(gameId).c_str()));
       continue;
+    }
+    if (!gameId.empty() && !row.mod->texturePack) {
+      for (const GameSupport& s : SupportOf(row.mod->folder, row.mod->manifest)) {
+        if (GameCodeMatches(s.code, gameId) && s.level != GameSupport::Level::Full) {
+          row.warnings.push_back(s.level == GameSupport::Level::SharedOnly
+                                     ? Tr("This mod has no part made for this game: only its shared parts (pictures, shared scripts) apply.")
+                                     : Tr("This mod has nothing for this game, so it changes nothing."));
+          break;
+        }
+      }
     }
     if (row.on) alive.push_back(i);
   }
@@ -143,6 +160,25 @@ Review ReviewList(const ModList::Profile& profile, const std::vector<ModFolder>&
     review.rows[alive[at]].problems.push_back(std::move(why));
     alive.erase(alive.begin() + static_cast<std::ptrdiff_t>(at));
   };
+  const auto dropOnlyWith = [&]() {
+    for (bool changed = true; changed;) {
+      changed = false;
+      for (size_t a = 0; a < alive.size() && !changed; a++) {
+        const Manifest& m = review.rows[alive[a]].mod->manifest;
+        for (const std::string& need : m.onlyWith) {
+          const bool there = std::any_of(alive.begin(), alive.end(), [&](size_t o) { return Same(review.rows[o].mod->manifest.id, need); });
+          if (!there) {
+            const ModFolder* other = findMod(need);
+            drop(a, Fmt(Tr("A compatibility patch: it is only used when \"%s\" is on too, and that is not the case. Not used."),
+                        other != nullptr ? other->manifest.name.c_str() : need.c_str()));
+            changed = true;
+            break;
+          }
+        }
+      }
+    }
+  };
+  dropOnlyWith();
   for (bool changed = true; changed;) {
     changed = false;
     for (size_t a = 0; a < alive.size() && !changed; a++) {
@@ -181,6 +217,19 @@ Review ReviewList(const ModList::Profile& profile, const std::vector<ModFolder>&
       }
     }
   }
+  dropOnlyWith();
+  for (size_t a = 0; a < alive.size(); a++) {
+    const Manifest& m = review.rows[alive[a]].mod->manifest;
+    for (const std::string& want : m.before) {
+      for (size_t b = 0; b < a; b++) {
+        const Manifest& earlier = review.rows[alive[b]].mod->manifest;
+        if (Same(earlier.id, want)) {
+          review.rows[alive[a]].warnings.push_back(
+              Fmt(Tr("Wants to come before \"%s\": move it further up the list."), earlier.name.c_str()));
+        }
+      }
+    }
+  }
   for (size_t a = 0; a < alive.size(); a++) {
     const Manifest& m = review.rows[alive[a]].mod->manifest;
     for (const std::string& want : m.after) {
@@ -194,7 +243,7 @@ Review ReviewList(const ModList::Profile& profile, const std::vector<ModFolder>&
     }
   }
   std::vector<Keys> keys;
-  for (size_t a : alive) keys.push_back(KeysOf(ChangesOf(*review.rows[a].mod)));
+  for (size_t a : alive) keys.push_back(KeysOf(ChangesOf(*review.rows[a].mod, gameId)));
   for (size_t a = 0; a < alive.size(); a++) {
     for (size_t b = a + 1; b < alive.size(); b++) {
       const std::vector<std::string> shared = Shared(keys[a], keys[b]);
@@ -205,6 +254,41 @@ Review ReviewList(const ModList::Profile& profile, const std::vector<ModFolder>&
                                                    nameB.c_str(), FirstOf(shared).c_str(), nameB.c_str()));
       review.rows[alive[b]].warnings.push_back(Fmt(Tr("Clashes with \"%s\" over %s: this one, further down the list, wins."),
                                                    nameA.c_str(), FirstOf(shared).c_str()));
+    }
+  }
+  {
+    std::vector<const ModFolder*> inOrder;
+    for (size_t a : alive) inOrder.push_back(review.rows[a].mod);
+    for (const FineConflict& c : FineConflicts(inOrder, gameId)) {
+      const ModFolder* early = findMod(c.earlier);
+      const ModFolder* late = findMod(c.later);
+      if (early == nullptr || late == nullptr) continue;
+      const char* kind = c.kind == FineConflict::Kind::DataField ? Tr("the same table value") : c.kind == FineConflict::Kind::StoryRoom
+                                                                                          ? Tr("the same story room")
+                                                                                          : Tr("the same script hook");
+      std::string what = c.what;
+      if (what.rfind("room ", 0) == 0 || what.rfind("hook ", 0) == 0) what = what.substr(5);
+      for (ReviewRow& row : review.rows) {
+        if (Same(row.id, c.earlier)) {
+          row.warnings.push_back(Fmt(Tr("This one and \"%s\" both change %s (%s). \"%s\", further down the list, wins."), late->manifest.name.c_str(),
+                                     kind, what.c_str(), late->manifest.name.c_str()));
+        } else if (Same(row.id, c.later)) {
+          row.warnings.push_back(Fmt(Tr("This one and \"%s\" both change %s (%s). This one, further down the list, wins."),
+                                     early->manifest.name.c_str(), kind, what.c_str()));
+        }
+      }
+    }
+  }
+  for (size_t a : alive) {
+    ReviewRow& row = review.rows[a];
+    for (const std::vector<std::string>* ids : {&row.mod->manifest.recommends, &row.mod->manifest.worksWith}) {
+      for (const std::string& id : *ids) {
+        const bool on = std::any_of(alive.begin(), alive.end(), [&](size_t o) { return Same(review.rows[o].mod->manifest.id, id); });
+        if (on) continue;
+        const ModFolder* other = findMod(id);
+        row.suggestions.push_back(other != nullptr ? Fmt(Tr("Works well with \"%s\" (it is in your mods folder, but not on)."), other->manifest.name.c_str())
+                                                   : Fmt(Tr("Works well with \"%s\" (not installed)."), id.c_str()));
+      }
     }
   }
   return review;

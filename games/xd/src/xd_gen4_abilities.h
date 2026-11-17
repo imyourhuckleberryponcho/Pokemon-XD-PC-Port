@@ -10,6 +10,7 @@ namespace xd::gen4 {
 
 void AppendAbilityTexts(std::vector<std::pair<uint32_t, std::string>>& texts);
 void InstallAbilityRows();
+void AppendAbilityNames(std::vector<std::pair<std::string, int64_t>>& out);
 
 class StageGuard {
  public:

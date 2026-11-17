@@ -62,10 +62,10 @@ bool LevelValid(const std::string& v) {
   return level >= 1 && level <= 100;
 }
 
-std::string GenName(const std::string& ruleSet) {
+std::string GenName(const std::string& ruleSet, const std::string& edition) {
   if (ruleSet == "gen4") return "Gen 4 Pokemon and rules";
   if (ruleSet == "gen4mt") return "Gen 4 Pokemon and rules with the modern types";
-  return "the classic XD rules";
+  return edition == "xg" ? "the classic XG rules" : "the classic XD rules";
 }
 
 }
@@ -117,9 +117,9 @@ bool ParseRules(const std::string& text, RoomRules& out, std::string* error) {
   return true;
 }
 
-std::string RulesText(const RoomRules& r) {
+std::string RulesText(const RoomRules& r, const std::string& edition) {
   std::ostringstream o;
-  o << GenName(r.ruleSet);
+  o << GenName(r.ruleSet, edition);
   o << "; items: " << (r.items == "none" ? "none" : r.items == "bag" ? "your bag items (not used up in your save)" : "standard kit (Max Potion, Full Heal, Revive)");
   o << "; time per choice: ";
   if (r.timerSeconds == 0) o << "no limit"; else o << r.timerSeconds << " s";
@@ -142,6 +142,7 @@ std::vector<uint8_t> Encode(const Fingerprint& f) {
     o << "XDB1\n";
     o << "proto=" << f.caps.protocol << "\n";
     o << "disc=" << f.caps.disc << "\n";
+    o << "edition=" << f.caps.edition << "\n";
     o << "loaded=" << f.caps.ruleSet << "\n";
     o << "pack=" << f.caps.gen4Pack << "\n";
     o << "modsum=" << Hex(Fnv64(f.caps.mods.data(), f.caps.mods.size())) << "\n";
@@ -179,6 +180,7 @@ bool Decode(const std::vector<uint8_t>& blob, Fingerprint& out) {
   Fingerprint f;
   f.caps.protocol = std::atoi(get("proto").c_str());
   f.caps.disc = get("disc");
+  f.caps.edition = kv.count("edition") ? get("edition") : std::string("xd");
   f.caps.ruleSet = get("loaded");
   f.caps.gen4Pack = get("pack");
   f.caps.mods = get("mods");
@@ -229,6 +231,14 @@ Verdict Judge(const Capabilities& room, const RoomRules& rules, const Capabiliti
                                     std::to_string(mine.protocol) + "). Update the game."
                               : "Your friend's game has another version of the online battles (theirs " + std::to_string(mine.protocol) +
                                     ", yours " + std::to_string(room.protocol) + "). Ask them to update.");
+    return v;
+  }
+  if (room.edition != mine.edition) {
+    auto name = [](const std::string& e) { return e == "xg" ? "Pokemon XG" : "Pokemon XD"; };
+    v.refuse.push_back(joiner ? std::string("This room is for ") + name(room.edition) + " players; your game is " + name(mine.edition) +
+                                    ". XD and XG players cannot battle or trade with each other."
+                              : std::string("Your friend plays ") + name(mine.edition) + "; your game is " + name(room.edition) +
+                                    ". XD and XG players cannot battle or trade with each other.");
     return v;
   }
   if (room.disc != mine.disc) {

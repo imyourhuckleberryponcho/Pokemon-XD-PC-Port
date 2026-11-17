@@ -1,4 +1,4 @@
-add_library(engine_formats STATIC formats/lzss_fsys.c formats/fsys_build.c formats/rel.c formats/data_table.c)
+add_library(engine_formats STATIC formats/lzss_fsys.c formats/fsys_build.c formats/rel.c formats/data_table.c formats/tiga_check.c)
 target_include_directories(engine_formats PUBLIC formats/include)
 
 add_subdirectory(formats/pbr)
@@ -85,14 +85,18 @@ target_link_libraries(disc_check_test PRIVATE engine_disc_check)
 target_compile_options(disc_check_test PRIVATE ${XD_FLAG_UTF8}) # (a test path with a non-English letter)
 aurora_copy_runtime_dlls(disc_check_test)
 
-add_library(engine_mods STATIC mods/mod_manifest.cpp mods/mod_list.cpp mods/mod_load.cpp mods/mod_review.cpp mods/mods_disc.cpp
-  mods/data_mods.cpp mods/mod_packs.cpp)
+add_library(engine_mods STATIC mods/mod_manifest.cpp mods/mod_list.cpp mods/mod_load.cpp mods/mod_review.cpp mods/mod_deps.cpp mods/mods_disc.cpp
+  mods/data_mods.cpp mods/mod_packs.cpp mods/mod_layout.cpp)
 target_include_directories(engine_mods PUBLIC mods/include)
 target_link_libraries(engine_mods PUBLIC engine_formats platform_disc engine_hdtex engine_i18n)
 
 add_executable(mods_test mods/tests/mods_test.cpp)
 target_link_libraries(mods_test PRIVATE engine_mods)
 aurora_copy_runtime_dlls(mods_test)
+
+add_executable(mod_layout_test mods/tests/mod_layout_test.cpp)
+target_link_libraries(mod_layout_test PRIVATE engine_mods)
+aurora_copy_runtime_dlls(mod_layout_test)
 
 add_executable(data_mods_test mods/tests/data_mods_test.cpp)
 target_link_libraries(data_mods_test PRIVATE engine_mods)
@@ -120,12 +124,22 @@ else ()
   target_compile_options(lua54 PRIVATE -w)
 endif ()
 
-add_library(engine_script STATIC script/script_host.cpp)
+add_library(engine_script STATIC script/script_host.cpp script/script_names.cpp)
 target_include_directories(engine_script PUBLIC script/include)
 target_link_libraries(engine_script PUBLIC lua54)
 
 add_executable(script_test script/tests/script_test.cpp)
 target_link_libraries(script_test PRIVATE engine_script)
+
+add_library(engine_modcheck STATIC modcheck/modcheck.cpp modcheck/modsafety.cpp modcheck/modpack.cpp modcheck/modsign.cpp)
+target_include_directories(engine_modcheck PUBLIC modcheck/include PRIVATE mods) # (mods: json.h, a header by itself)
+target_link_libraries(engine_modcheck PUBLIC engine_mods engine_script engine_formats engine_update ZLIB::ZLIB)
+xd_link_windows_libs(engine_modcheck PRIVATE bcrypt)
+
+add_executable(modcheck_test modcheck/tests/modcheck_test.cpp)
+target_link_libraries(modcheck_test PRIVATE engine_modcheck)
+target_compile_definitions(modcheck_test PRIVATE MODCHECK_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/modcheck/tests/fixtures")
+aurora_copy_runtime_dlls(modcheck_test)
 
 add_library(engine_playthrough STATIC playthrough/playthrough.cpp)
 target_include_directories(engine_playthrough PUBLIC playthrough/include PRIVATE mods)
@@ -162,6 +176,19 @@ target_link_libraries(engine_update PRIVATE monocypher ZLIB::ZLIB)
 target_link_libraries(engine_update PUBLIC engine_i18n)
 xd_link_windows_libs(engine_update PRIVATE winhttp bcrypt)
 
+if (WIN32)
+  add_library(engine_modupdate STATIC modupdate/modupdate.cpp modupdate/modupdate_av_win.cpp)
+else ()
+  add_library(engine_modupdate STATIC modupdate/modupdate.cpp)
+endif ()
+target_include_directories(engine_modupdate PUBLIC modupdate/include PRIVATE mods)
+target_link_libraries(engine_modupdate PUBLIC engine_modcheck engine_mods engine_update engine_playthrough)
+xd_link_windows_libs(engine_modupdate PRIVATE ole32 uuid)
+
+add_executable(modupdate_test modupdate/tests/modupdate_test.cpp)
+target_link_libraries(modupdate_test PRIVATE engine_modupdate)
+aurora_copy_runtime_dlls(modupdate_test)
+
 add_executable(update_test update/tests/update_test.cpp)
 target_link_libraries(update_test PRIVATE engine_update ZLIB::ZLIB)
 aurora_copy_runtime_dlls(update_test)
@@ -191,3 +218,12 @@ target_include_directories(engine_hdtex PUBLIC hdtex/include)
 
 add_executable(hdtex_test hdtex/tests/hdtex_test.cpp)
 target_link_libraries(hdtex_test PRIVATE engine_hdtex)
+
+add_library(engine_presence STATIC presence/presence.cpp)
+target_include_directories(engine_presence PUBLIC presence/include)
+find_package(Threads REQUIRED)
+target_link_libraries(engine_presence PUBLIC Threads::Threads)
+add_executable(presence_test presence/tests/presence_test.cpp)
+target_link_libraries(presence_test PRIVATE engine_presence)
+add_executable(presence_fake_server presence/tests/presence_fake_server.cpp) # (scripted runs: records what the launcher / game send)
+target_link_libraries(presence_fake_server PRIVATE Threads::Threads)

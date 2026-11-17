@@ -96,6 +96,7 @@ bool ResumeDue(const WinWorkLayout* w) {
 }
 
 void Open(void*) {
+  sOnlineKind = 1;
   L = State();
   L.pc = xd::online::LobbyPcInfo();
   L.mine = xd::online::LobbyCapabilities();
@@ -121,6 +122,7 @@ void Open(void*) {
 }
 
 void Close(void*) {
+  sOnlineKind = 0;
   if (!L.started) L.conn.reset();
 }
 
@@ -399,7 +401,7 @@ bool StepConnect(ImDrawList* dl, const Screen& sc, const PortMenuInput* in) {
 
 std::vector<std::string> RoomLinesTr(const RoomRules& r) {
   std::vector<std::string> l;
-  l.push_back(Fmt(Tr("Rules: %s"), r.ruleSet == "gen4" ? Tr("Gen 4 Pokemon and moves") : r.ruleSet == "gen4mt" ? Tr("Gen 4 Pokemon and moves with the modern types") : Tr("Classic XD")));
+  l.push_back(Fmt(Tr("Rules: %s"), r.ruleSet == "gen4" ? Tr("Gen 4 Pokemon and moves") : r.ruleSet == "gen4mt" ? Tr("Gen 4 Pokemon and moves with the modern types") : L.pc.edition == "xg" ? Tr("Classic XG") : Tr("Classic XD")));
   l.push_back(Fmt(Tr("Battle: %s, physical/special split %s"), r.style == "double" ? Tr("double") : Tr("single"), r.split ? Tr("on") : Tr("off")));
   l.push_back(Fmt(Tr("Teams: %s"), r.team == "preset"   ? Tr("preset teams")
                                    : r.team == "save"   ? Tr("you bring a team from one of your saves")
@@ -1048,7 +1050,7 @@ void StartDrive(bool rematch) {
   static RoomRules sRules;
   if (!rematch) sRules = L.rules;
   std::vector<std::string> chips;
-  chips.push_back(sRules.ruleSet == "gen4" ? Tr("Gen 4 rules") : sRules.ruleSet == "gen4mt" ? Tr("Gen 4 with modern types") : Tr("Classic XD"));
+  chips.push_back(sRules.ruleSet == "gen4" ? Tr("Gen 4 rules") : sRules.ruleSet == "gen4mt" ? Tr("Gen 4 with modern types") : L.pc.edition == "xg" ? Tr("Classic XG") : Tr("Classic XD"));
   chips.push_back(sRules.style == "double" ? Tr("Double battle") : Tr("Single battle"));
   if (sRules.split) chips.push_back(Tr("Split on"));
   ls::CoverBattle(chips, rematch);

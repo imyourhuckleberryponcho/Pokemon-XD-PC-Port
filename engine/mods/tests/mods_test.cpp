@@ -178,6 +178,37 @@ void dump(const LoadResult& r) {
 
 }
 
+std::vector<uint8_t> junk_for_people() { return std::vector<uint8_t>(100, 7); }
+
+std::vector<uint8_t> make_script(const std::vector<uint8_t>& code = {0x01, 0, 0, 0}, const std::vector<std::pair<uint32_t, uint32_t>>& people = {}) {
+  std::vector<uint8_t> t(16, 0);
+  std::memcpy(t.data(), "TCOD", 4);
+  auto chunk = [&](const char* tag, uint32_t count, uint32_t u14, const std::vector<uint8_t>& payload) {
+    const size_t at = t.size();
+    t.resize(at + 0x20 + ((payload.size() + 15) & ~size_t(15)), 0);
+    std::memcpy(t.data() + at, tag, 4);
+    put32(t, at + 4, uint32_t(t.size() - at));
+    put32(t, at + 0x10, count);
+    put32(t, at + 0x14, u14);
+    std::copy(payload.begin(), payload.end(), t.begin() + std::ptrdiff_t(at + 0x20));
+  };
+  std::vector<uint8_t> ftbl(8 + 5, 0);
+  put32(ftbl, 4, 0x28);
+  std::memcpy(ftbl.data() + 8, "main", 4);
+  chunk("FTBL", 1, 0x28, ftbl);
+  chunk("HEAD", 1, 0, std::vector<uint8_t>(8, 0));
+  chunk("CODE", 1, uint32_t(code.size() / 4), code);
+  chunk("GVAR", 0, 8, {});
+  chunk("STRG", 1, 0, std::vector<uint8_t>{'h', 'i', 0});
+  chunk("VECT", 0, 12, {});
+  std::vector<uint8_t> giri(people.size() * 8, 0);
+  for (size_t i = 0; i < people.size(); i++) put32(giri, i * 8, people[i].first), put32(giri, i * 8 + 4, people[i].second);
+  chunk("GIRI", uint32_t(people.size()), 0, giri);
+  chunk("ARRY", 0, 0, std::vector<uint8_t>(4, 0));
+  put32(t, 4, uint32_t(t.size()));
+  return t;
+}
+
 int main(int argc, char** argv) {
   const fs::path root = argc >= 2 ? fs::path(argv[1]) : fs::temp_directory_path() / "xd_mods_test";
   std::error_code ec;
@@ -240,6 +271,40 @@ int main(int argc, char** argv) {
     check(Fsys_Rebuild(archive.data(), archive.size(), twice, 2, &size) == nullptr, "FSYS: the same entry twice is refused");
     const uint8_t junk[64] = {'J', 'U', 'N', 'K'};
     check(Fsys_Rebuild(junk, sizeof junk, nullptr, 0, &size) == nullptr, "FSYS: not an archive is refused");
+    {
+      const std::string words = "a new message bank, a new message bank";
+      size_t addedSize = 0;
+      uint8_t* added = Fsys_AddEntry(archive.data(), archive.size(), 0x7E00, 5, "mod_text", reinterpret_cast<const uint8_t*>(words.data()),
+                                     uint32_t(words.size()), true, &addedSize);
+      check(added != nullptr, "FSYS add: one new entry");
+      std::vector<uint8_t> grown(added, added + addedSize);
+      std::free(added);
+      FsysArchive g;
+      FsysEntry ne;
+      check(Fsys_Open(grown.data(), grown.size(), &g) && g.count == 5 && Fsys_Entry(&g, 4, &ne) && ne.id == 0x7E00 && ne.type == 5 &&
+                std::string(ne.name) == "mod_text" && ne.packed,
+            "FSYS add: the archive has 5 entries, the new one last with its id, type and name");
+      check(extract(grown, "", 4) == words, "FSYS add: the new entry reads back");
+      check(extract(grown, "menu.msg") == "original menu text, original menu text" && extract(grown, "menu.dat") == "model data" &&
+                extract(grown, "raw_entry") == "stored as it is" && extract(grown, "", 3) == "no name",
+            "FSYS add: the old entries read back as before (their data moved)");
+      check(get32(grown, 0x20) == grown.size() && std::memcmp(grown.data() + grown.size() - 4, "FSYS", 4) == 0 && grown.size() % 32 == 0 &&
+                get32(grown, 0x1C) % 32 == 0 && get32(grown, 0x1C) > get32(archive, 0x1C),
+            "FSYS add: size field, closing block and header-block size are right");
+      FsysEntry old0;
+      Fsys_Entry(&g, 0, &old0);
+      check(old0.offset >= get32(grown, 0x1C), "FSYS add: no old entry starts inside the longer header block");
+      check(Fsys_AddEntry(archive.data(), archive.size(), 0x100, 5, "x", nullptr, 0, false, &addedSize) == nullptr,
+            "FSYS add: an id the archive already has is refused");
+      uint8_t* again = Fsys_AddEntry(grown.data(), grown.size(), 0x7E01, 5, "second", reinterpret_cast<const uint8_t*>("two"), 3, false, &addedSize);
+      check(again != nullptr, "FSYS add: a second entry on the grown archive");
+      if (again != nullptr) {
+        std::vector<uint8_t> twice2(again, again + addedSize);
+        std::free(again);
+        check(extract(twice2, "", 4) == words && extract(twice2, "", 5) == "two" && extract(twice2, "menu.dat") == "model data",
+              "FSYS add: both new entries and the old ones read back");
+      }
+    }
   }
 
   {
@@ -510,6 +575,11 @@ int main(int argc, char** argv) {
     v = CheckApplies(data, looks, &view);
     check(v.Downgraded() && v.effective == Applies::NewPlaythrough && v.reason.find("tables") != std::string::npos,
           "CheckApplies: any_time with a data folder counts as new_playthrough");
+    ModFolder objects = folder("objects", "any_time");
+    write_file(objects.folder / "objects" / "room.json", "{}");
+    v = CheckApplies(objects, looks, &view);
+    check(v.Downgraded() && v.effective == Applies::NewPlaythrough && v.reason.find("objects/") != std::string::npos,
+          "CheckApplies: any_time with room objects (people, chests...) counts as new_playthrough");
     ModFolder entry = folder("entry", "any_time");
     write_file(entry.folder / "fsys" / "common.fsys" / "menu.dat", "x");
     v = CheckApplies(entry, looks, &view);
@@ -693,6 +763,33 @@ int main(int argc, char** argv) {
   }
 
   {
+    const fs::path sm = root / "scriptsoff";
+    write_file(sm / "lua1" / "mod.json", manifest("lua1", "\"scripts\": true"));
+    write_file(sm / "lua1" / "scripts" / "a.lua", "-- first");
+    write_file(sm / "lua1" / "files" / "extra.bin", "mod file");
+    write_file(sm / "lua2" / "mod.json", manifest("lua2", "\"scripts\": true"));
+    write_file(sm / "lua2" / "scripts" / "c.lua", "-- other mod");
+    write_file(sm / "list.ini", "[profile default]\nlua1 = on, scripts off\nlua2 = on\n");
+    std::vector<std::string> warnings;
+    const ModList parsed = ParseModList("[profile default]\nlua1 = on, scripts off\nlua2 = off\nlua3 = on\n", warnings);
+    check(warnings.empty() && parsed.profiles[0].mods.size() == 3 && parsed.profiles[0].mods[0].second && !parsed.profiles[0].mods[1].second &&
+              parsed.profiles[0].scriptsOff.count("lua1") == 1 && parsed.profiles[0].scriptsOff.count("lua2") == 0,
+          "scripts off: the mod list reads \"id = on, scripts off\"");
+    check(FormatModList(parsed).find("lua1 = on, scripts off\n") != std::string::npos && FormatModList(parsed).find("lua3 = on\n") != std::string::npos,
+          "scripts off: and writes it back, other mods' lines unchanged");
+    warnings.clear();
+    ParseModList("[profile default]\nlua1 = on, nonsense\n", warnings);
+    check(warnings.size() == 1, "scripts off: an unknown word after the comma is a warning");
+    FakeDisc d;
+    LoadOptions so{sm, sm / "list.ini", d.View()};
+    const LoadResult r = Load(so);
+    check(r.scripts.size() == 1 && r.scripts[0].modId == "lua2" && r.scriptsSwitchedOff == std::vector<std::string>{"lua1"},
+          "scripts off: that mod's scripts are skipped, another mod's still run");
+    check(find(r, "extra.bin") != nullptr && has_message(r, Message::Level::Info, "running scripts is switched off") && !r.HasWarnings(),
+          "scripts off: the rest of the mod (its files) is used, an Info message says so, no warning");
+  }
+
+  {
     const fs::path sm = root / "scriptmods";
     write_file(sm / "lua1" / "mod.json", manifest("lua1", "\"scripts\": true, \"applies\": \"any_time\""));
     write_file(sm / "lua1" / "scripts" / "b.lua", "-- second");
@@ -727,6 +824,122 @@ int main(int argc, char** argv) {
     const AppliesVerdict v = CheckApplies(folder, nullptr);
     check(v.Downgraded() && v.effective == Applies::NewPlaythrough && v.reason.find("scripts") != std::string::npos,
           "scripts: a mod that runs scripts is never any_time");
+  }
+
+  {
+    const std::vector<uint8_t> good = make_script();
+    char why[160];
+    check(Tiga_Validate(good.data(), good.size(), why, sizeof(why)), "script check: a made-up well formed script passes");
+    std::vector<uint8_t> bad = good;
+    bad.resize(good.size() - 7);
+    check(!Tiga_Validate(bad.data(), bad.size(), why, sizeof(why)) && std::string(why).find("size") != std::string::npos,
+          "script check: a cut-off script fails (size field)");
+    bad = good;
+    bad[0] = 'X';
+    check(!Tiga_Validate(bad.data(), bad.size(), why, sizeof(why)), "script check: no TCOD mark fails");
+    bad = good;
+    std::memcpy(bad.data() + 16 + 0x20 + 16, "HEAX", 4);
+    check(!Tiga_Validate(bad.data(), bad.size(), why, sizeof(why)) && std::string(why).find("HEAD") != std::string::npos,
+          "script check: a missing sub-chunk is named");
+    check((Tiga_BattlePlaceholder("rival") >> 24) == 0x7A && (Tiga_ItemPlaceholder("rival") >> 24) == 0x79 && (Tiga_SpeciesPlaceholder("rival") >> 24) == 0x78 &&
+              (Tiga_BattlePlaceholder("rival") & 0xFFFFFF) == (Tiga_FlagPlaceholder("rival") & 0xFFFFFF),
+          "script check: battle, item and species stand-ins are the flag's hash with 0x7A / 0x79 / 0x78 in front");
+    bad = good;
+    put32(bad, 16 + 0x10, 500);
+    check(!Tiga_Validate(bad.data(), bad.size(), why, sizeof(why)), "script check: a function count past the chunk fails");
+    bad = good;
+    put32(bad, 16 + 0x20 + 4, 0x400);
+    check(!Tiga_Validate(bad.data(), bad.size(), why, sizeof(why)), "script check: a name offset outside the chunk fails");
+    check(!Tiga_Validate(good.data(), 5, why, sizeof(why)) && !Tiga_Validate(nullptr, 0, nullptr, 0), "script check: tiny input fails");
+    std::vector<uint8_t> noise(1680);
+    uint32_t seed = 99;
+    for (auto& b : noise) b = uint8_t((seed = seed * 1103515245 + 12345) >> 16);
+    check(!Tiga_Validate(noise.data(), noise.size(), why, sizeof(why)), "script check: random bytes fail");
+
+    {
+      check(Tiga_FlagPlaceholder("my_quest_started") == 0x7e7a6aa9u && Tiga_FlagPlaceholder("a") == 0x7e0c29c8u,
+            "story flags: the stand-in number of a name (FNV-1a folded to 24 bits, 0x7E in front)");
+      const uint32_t standIn = Tiga_FlagPlaceholder("my_quest_started");
+      std::vector<uint8_t> code = {2, 1, 0, 0, uint8_t(standIn >> 24), uint8_t(standIn >> 16), uint8_t(standIn >> 8), uint8_t(standIn),
+                                   2, 2, 0, 0, uint8_t(standIn >> 24), uint8_t(standIn >> 16), uint8_t(standIn >> 8), uint8_t(standIn),
+                                   2, 1, 0, 0, 0, 0, 0, 5,
+                                   9, 0, 0, 1};
+      std::vector<uint8_t> withFlag = make_script(code);
+      check(Tiga_Validate(withFlag.data(), withFlag.size(), why, sizeof(why)), "story flags: the made-up script with pushes is valid");
+      const uint32_t from[2] = {standIn, 5}, to[2] = {2400, 7};
+      check(Tiga_ReplaceInts(withFlag.data(), withFlag.size(), from, to, 1) == 1, "story flags: one push.int replaced");
+      std::vector<uint8_t> expected = make_script({2, 1, 0, 0, 0, 0, 0x09, 0x60, 2, 2, 0, 0, uint8_t(standIn >> 24), uint8_t(standIn >> 16),
+                                                    uint8_t(standIn >> 8), uint8_t(standIn), 2, 1, 0, 0, 0, 0, 0, 5, 9, 0, 0, 1});
+      check(withFlag == expected, "story flags: only the push.int changed (the push.float with the same bits and the other int stay)");
+      check(Tiga_ReplaceInts(withFlag.data(), withFlag.size(), from, to, 2) == 1 && withFlag != expected, "story flags: a second pass changes the 5 only");
+      std::vector<uint8_t> junk(100, 7);
+      check(Tiga_ReplaceInts(junk.data(), junk.size(), from, to, 2) == 0, "story flags: a file that is no script is left alone");
+      check(Tiga_FloorPlaceholder("my_quest_started") == 0x7d7a6aa9u && Tiga_FloorPlaceholder("a") != Tiga_FlagPlaceholder("a"),
+            "new rooms: the stand-in number of a room is the flag's with 0x7D in front (same hash)");
+    }
+    {
+      check(Tiga_PersonPlaceholder("guard") == (0x7B000000u | (Tiga_FlagPlaceholder("guard") & 0xFFFFFF)), "people: the stand-in of a person is the flag's hash with 0x7B in front");
+      const uint32_t guard = Tiga_PersonPlaceholder("guard");
+      std::vector<uint8_t> sc = make_script({0x01, 0, 0, 0}, {{0, 0x64}, {TIGA_THIS_ROOM, guard}, {106, 0}});
+      check(Tiga_Validate(sc.data(), sc.size(), why, sizeof(why)), "people: a script with a people table is valid");
+      check(Tiga_FindFunction(sc.data(), sc.size(), "main") == 0 && Tiga_FindFunction(sc.data(), sc.size(), "nope") == -1 &&
+                Tiga_FindFunction(junk_for_people().data(), 100, "main") == -1,
+            "people: a function is found by its name (its number in the table), else -1");
+      const uint32_t pf[1] = {guard}, pt[1] = {128};
+      check(Tiga_RemapPeople(sc.data(), sc.size(), 1, pf, pt, 1) == 1, "people: the person's stand-in becomes its number in the room's list");
+      const uint32_t gf[2] = {TIGA_THIS_ROOM, 106}, gt[2] = {5001, 5001};
+      check(Tiga_RemapPeople(sc.data(), sc.size(), 0, gf, gt, 2) == 2, "people: this room's stand-in and the copied room's own group both become the new group");
+      check(sc == make_script({0x01, 0, 0, 0}, {{0, 0x64}, {5001, 128}, {5001, 0}}), "people: only the group and object fields asked for changed (the hero's pair stays)");
+      std::vector<uint8_t> junk(100, 7);
+      check(Tiga_RemapPeople(junk.data(), junk.size(), 0, gf, gt, 2) == 0, "people: a file that is no script is left alone");
+    }
+    std::vector<uint8_t> room = make_fsys({{"room", "room.scd", std::string(good.begin(), good.end()), true},
+                                           {"text", "room.msg", "some text", true}});
+    put32(room, get32(room, 0x60) + 0x20, 7);
+    FakeDisc d2;
+    d2.files["room.fsys"] = room;
+    const fs::path mods2 = root / "scripts" / "mods";
+    const fs::path list2 = root / "scripts" / "mods.ini";
+    write_file(mods2 / "goodmod" / "mod.json", manifest("goodmod"));
+    write_file(mods2 / "goodmod" / "fsys" / "room.fsys" / "#0.bin", std::string(good.begin(), good.end()));
+    write_file(mods2 / "badmod" / "mod.json", manifest("badmod"));
+    write_file(mods2 / "badmod" / "fsys" / "room.fsys" / "#0.bin", std::string(noise.begin(), noise.end()));
+    write_file(mods2 / "badmod" / "fsys" / "room.fsys" / "#1.bin", "new text");
+    write_file(list2, "[profile default]\ngoodmod = on\nbadmod = on\n");
+    LoadOptions o2{mods2, list2, d2.View()};
+    o2.checkEntry = [](int type, const std::string&, std::vector<uint8_t>& data, const std::vector<AddedRow>&, std::string& w) {
+      char buf[160];
+      if (type != 7 || Tiga_Validate(data.data(), data.size(), buf, sizeof(buf))) return true;
+      w = buf;
+      return false;
+    };
+    {
+      write_file(list2, "[profile default]\ngoodmod = on\nbadmod = off\n");
+      const LoadResult r = Load(o2);
+      check(!r.HasWarnings() && find(r, "room.fsys") != nullptr && extract(find(r, "room.fsys")->data, "room.scd") == std::string(good.begin(), good.end()),
+            "script check: a good script is used, no message");
+    }
+    {
+      write_file(list2, "[profile default]\ngoodmod = off\nbadmod = on\n");
+      const LoadResult r = Load(o2);
+      const Replacement* f = find(r, "room.fsys");
+      check(r.HasWarnings() && has_message(r, Message::Level::Problem, "badmod") && has_message(r, Message::Level::Problem, "#0.bin") &&
+                has_message(r, Message::Level::Problem, "switched off"),
+            "script check: a bad script gives a message naming the mod and the file");
+      check(f != nullptr && extract(f->data, "room.scd") == std::string(good.begin(), good.end()) && extract(f->data, "room.msg") == "new text",
+            "script check: the original script stays, the mod's other file (text, type 0) is still used");
+      check(!r.active.empty() && r.active[0].id == "badmod", "script check: the mod itself stays on");
+    }
+    {
+      write_file(mods2 / "badmod" / "fsys" / "room.fsys" / "#1.bin", "x");
+      fs::remove(mods2 / "badmod" / "fsys" / "room.fsys" / "#1.bin");
+      const LoadResult r = Load(o2);
+      check(find(r, "room.fsys") == nullptr && has_message(r, Message::Level::Problem, "switched off"),
+            "script check: when the only file is bad, nothing is replaced");
+    }
+    LoadOptions o3{mods2, list2, d2.View()};
+    write_file(mods2 / "badmod" / "fsys" / "room.fsys" / "#1.bin", "new text");
+    check(!Load(o3).HasWarnings(), "script check: without the game's check nothing is refused");
   }
 
   fs::remove_all(root, ec);

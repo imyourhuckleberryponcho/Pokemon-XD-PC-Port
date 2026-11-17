@@ -129,7 +129,19 @@ ModList ParseModList(std::string_view text, std::vector<std::string>& warnings) 
       continue;
     }
     bool on = false;
-    if (!ValidModId(key) || !ParseOnOff(value, on)) {
+    bool scriptsOff = false;
+    std::string_view onValue = value;
+    if (const size_t comma = value.find(','); comma != std::string_view::npos) {
+      onValue = Trim(value.substr(0, comma));
+      const std::string extra = Lower(Trim(value.substr(comma + 1)));
+      if (extra == "scripts off" || extra == "scripts = off" || extra == "no scripts") {
+        scriptsOff = true;
+      } else if (extra != "scripts on") {
+        warnings.push_back(where + Tr("expected \"<mod id> = on\" or \"= off\", optionally followed by \", scripts off\"; ignored"));
+        continue;
+      }
+    }
+    if (!ValidModId(key) || !ParseOnOff(onValue, on)) {
       warnings.push_back(where + Tr("expected \"<mod id> = on\" or \"= off\"; ignored"));
       continue;
     }
@@ -142,6 +154,7 @@ ModList ParseModList(std::string_view text, std::vector<std::string>& warnings) 
       continue;
     }
     section->mods.emplace_back(std::string(key), on);
+    if (scriptsOff) section->scriptsOff.insert(std::string(key));
   }
   if (list.active.empty()) {
     list.active = list.profiles.empty() ? "default" : list.profiles.front().name;
@@ -155,7 +168,7 @@ std::string FormatModList(const ModList& list) {
   for (const ModList::Profile& p : list.profiles) {
     out += "\n[profile " + p.name + "]\n";
     for (const auto& [id, on] : p.mods) {
-      out += id + (on ? " = on\n" : " = off\n");
+      out += id + (on ? " = on" : " = off") + (p.scriptsOff.count(id) != 0 ? ", scripts off\n" : "\n");
     }
   }
   return out;

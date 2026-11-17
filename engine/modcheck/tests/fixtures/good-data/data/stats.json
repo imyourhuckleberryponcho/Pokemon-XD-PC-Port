@@ -1,0 +1,9 @@
+{
+  "_comment": "made-up numbers",
+  "pokemon": {
+    "#1": { "hp": 50, "types": [1, 2] },
+    "Zorblat": { "note": "x" }
+  },
+  "text": { "#10200": "Sharply raises{00}the ATTACK stat." },
+  "add": { "pokemon": { "Zorblat": { "copy": "Eevee", "text": { "name": "Zorblat" } } } }
+}

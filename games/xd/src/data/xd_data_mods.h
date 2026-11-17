@@ -2,6 +2,7 @@
 #define XD_DATA_MODS_H
 
 #include <data_mods.h>
+#include <mods.h>
 
 #include <cstdint>
 #include <string>
@@ -11,6 +12,12 @@
 namespace xd::data {
 
 bool BuildDataCatalog(const engine::mods::EntryReader& read, engine::mods::DataCatalog& out, std::string& error);
+
+bool CheckModEntry(int fsysType, const std::string& mod, std::vector<uint8_t>& data, const std::vector<engine::mods::AddedRow>& rows,
+                   std::string& why);
+void BuildRooms(engine::mods::RowsJob& job);
+bool CheckMessageText(const std::string& text, std::string& why);
+void SetFlagRowsTaken(uint32_t count);
 
 void AddDeckTables(const engine::mods::EntryReader& read, engine::mods::DataCatalog& out);
 

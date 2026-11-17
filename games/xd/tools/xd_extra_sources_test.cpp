@@ -27,7 +27,7 @@ int main() {
   xd_settings::Register(r);
 
   const auto& sources = xd::ExtraSources();
-  check(sources.size() == 3, "three sources: Pokemon Battle Revolution, Pokemon Colosseum, the European disc (languages)");
+  check(sources.size() == 4, "four sources: Pokemon Battle Revolution, Pokemon Colosseum, the European disc (languages), the Japanese disc");
   std::set<std::string> ids;
   for (const auto& s : sources) {
     const std::string who = "source " + s.id + ": ";
@@ -72,7 +72,7 @@ int main() {
     const size_t li = r.Find("system.language");
     check(li != es::kNoSetting && r.Get(li).type == es::Type::Enum && r.Get(li).preference && r.Get(li).implemented,
           "the Language setting is an enum preference that works");
-    check(li != es::kNoSetting && r.Get(li).choices.size() == 5 && r.Get(li).choices[0].id == "us", "Language: us first, then four more");
+    check(li != es::kNoSetting && r.Get(li).choices.size() == 6 && r.Get(li).choices[0].id == "us", "Language: us first, then five more (German, French, Italian, Spanish, Japanese)");
     check(li != es::kNoSetting && r.DefaultOf(li, es::Preset::Original).i == 0 && r.DefaultOf(li, es::Preset::Enhanced).i == 0,
           "English (US) in Original and in Enhanced");
   }

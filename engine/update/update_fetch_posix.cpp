@@ -86,9 +86,10 @@ bool Curl(const std::string& url, const fs::path& file, const FetchOptions& opti
   const std::string connect = std::to_string(std::max(1, options.timeoutMs / 1000));
   const std::string uaText = options.userAgent;
   const std::string outFile = detail::Utf8(file);
+  const std::string protos = options.httpsOnly ? "=https" : "=http,https";
   const std::vector<std::string> args = {"curl",          "--disable",     "--silent",     "--show-error",
-                                         "--fail",        "--location",    "--proto",      "=http,https",
-                                         "--proto-redir", "=http,https",   "--max-redirs", "5",
+                                         "--fail",        "--location",    "--proto",      protos,
+                                         "--proto-redir", protos,          "--max-redirs", "5",
                                          "--noproxy",     "127.0.0.1,localhost", "--connect-timeout", connect,
                                          "--speed-limit", "1",             "--speed-time", connect,
                                          "--max-filesize", maxSize,        "-A",           uaText,
@@ -194,6 +195,10 @@ bool FetchToFile(const std::string& url, const fs::path& file, const FetchOption
   fs::remove(file, ec);
   bool ok;
   fs::path local;
+  if (options.httpsOnly && url.rfind("https://", 0) != 0) {
+    error = Tr("only https:// addresses are used here");
+    return false;
+  }
   if (FilePathOf(url, local)) {
     ok = CopyLimited(local, part, options.maxBytes, options, error);
   } else if (url.rfind("http://", 0) == 0 || url.rfind("https://", 0) == 0) {
@@ -221,6 +226,10 @@ bool FetchToString(const std::string& url, const FetchOptions& options, std::str
   FetchOptions small = options;
   bool ok;
   fs::path local;
+  if (options.httpsOnly && url.rfind("https://", 0) != 0) {
+    error = Tr("only https:// addresses are used here");
+    return false;
+  }
   if (FilePathOf(url, local)) {
     ok = CopyLimited(local, temp, options.maxBytes, small, error);
   } else if (url.rfind("http://", 0) == 0 || url.rfind("https://", 0) == 0) {

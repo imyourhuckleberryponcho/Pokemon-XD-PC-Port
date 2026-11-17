@@ -1,6 +1,7 @@
 #include "xd_starter.h"
 
 #include "xd_test_run.h"
+#include "xd_xg.h"
 
 #include <dolphin/types.h>
 #include <game/pxdvs/app/hero/hero.hpp>
@@ -31,39 +32,62 @@ bool sSwappedLog = false;
 constexpr uint16_t kFriendLevel = 0xD7;
 constexpr uint32_t kEeveeExpIntoLevel = 250, kEeveeExpLevelSpan = 331;
 
-uint32_t StartExp(uint16_t species, uint32_t level) {
+uint32_t StartExp(uint16_t species, uint32_t level, bool intoLevel) {
   PokemonGrowDataBios* grow = pokemonGrowDataBiosGetPtr(static_cast<uint8_t>(pokemonDB_GetGrowDataId(species)));
   if (grow == nullptr) return 0;
   const uint32_t from = static_cast<uint32_t>(pokemonGrowDataBiosGetExp(grow, static_cast<uint8_t>(level)));
   const uint32_t to = static_cast<uint32_t>(pokemonGrowDataBiosGetExp(grow, static_cast<uint8_t>(level + 1)));
-  if (to <= from) return from;
+  if (to <= from || !intoLevel) return from;
   return from + (to - from) * kEeveeExpIntoLevel / kEeveeExpLevelSpan;
+}
+
+void SwapSlot(int slot, uint32_t species, uint32_t plannedLevel, const uint32_t* moves) {
+  Hero* hero = static_cast<Hero*>(savedataGetStatus(nullptr, 2));
+  if (hero == nullptr) return;
+  Pokemon* orig = hero->getPokemon(slot);
+  const bool xg = xd::xg::On() && orig != nullptr && orig->checkValid();
+  HeroPokemonGetParam param;
+  std::memset(&param, 0, sizeof param);
+  param.pokemonDataID = static_cast<u16>(species);
+  param.shadowPokemonDataID = 0;
+  uint32_t level = plannedLevel;
+  if (xg) {
+    level = pokemonBiosGetLevel(orig);
+    if (level != plannedLevel) std::fprintf(stderr, "[starter] XG slot %d: the game's own is level %u (the plan said %u): level %u is used\n", slot + 1, level, plannedLevel, level);
+    param.friendLevel = pokemonBiosGetFriend(orig);
+    param.catchFloorID = pokemonBiosGetCatchFloorId(orig);
+  } else {
+    param.friendLevel = kFriendLevel;
+    param.catchFloorID = 0;
+  }
+  param.catchLevel = static_cast<u8>(level);
+  for (int m = 0; m < 4; m++) param.moves[m] = static_cast<u16>(moves[m]);
+  param.trainerSexID = heroBiosGetSexDataId(hero);
+  param.trainerRnd = heroBiosGetRnd(hero);
+  param.trainerNamePtr = reinterpret_cast<char16*>(heroBiosGetNamePtr(hero));
+  param.exp = xg ? StartExp(static_cast<uint16_t>(species), level, false) : StartExp(static_cast<uint16_t>(species), level, true);
+  hero->deletePokemon(slot);
+  const int got = hero->pokemonGet(&param, true);
+  std::fprintf(stderr, "[starter] party slot %d: species %u, level %u%s%s\n", got + 1, species, level, sSwappedLog ? " (chosen)" : "", xg ? " (XG: level, friendship and place as the game's own)" : "");
 }
 
 void Swap(uint32_t k) {
   if (k >= sPlan.count) return;
   const uint32_t species = sPlan.species[k];
-  Hero* hero = static_cast<Hero*>(savedataGetStatus(nullptr, 2));
-  if (hero == nullptr) return;
   if (species == xr::kStarterEevee && !sPlan.natural) {
     std::fprintf(stderr, "[starter] the starter stays Eevee (the plan's species and moves are the game's)\n");
     return;
   }
-  HeroPokemonGetParam param;
-  std::memset(&param, 0, sizeof param);
-  param.pokemonDataID = static_cast<u16>(species);
-  param.shadowPokemonDataID = 0;
-  param.catchLevel = static_cast<u8>(sPlan.level);
-  param.friendLevel = kFriendLevel;
-  for (int m = 0; m < 4; m++) param.moves[m] = static_cast<u16>(sPlan.moves[k][m]);
-  param.trainerSexID = heroBiosGetSexDataId(hero);
-  param.trainerRnd = heroBiosGetRnd(hero);
-  param.trainerNamePtr = reinterpret_cast<char16*>(heroBiosGetNamePtr(hero));
-  param.catchFloorID = 0;
-  param.exp = StartExp(static_cast<uint16_t>(species), sPlan.level);
-  hero->deletePokemon(0);
-  const int slot = hero->pokemonGet(&param, true);
-  std::fprintf(stderr, "[starter] party slot %d: species %u, level %u%s\n", slot + 1, species, sPlan.level, sSwappedLog ? " (chosen)" : "");
+  SwapSlot(0, species, sPlan.level, sPlan.moves[k]);
+}
+
+void SwapSecond() {
+  if (!sPlan.second || !xd::xg::On()) return;
+  if (sPlan.species2 == sPlan.base.species[1] && !sPlan.natural) {
+    std::fprintf(stderr, "[starter] the second starter stays as the game has it\n");
+    return;
+  }
+  SwapSlot(1, sPlan.species2, sPlan.level2, sPlan.moves2);
 }
 
 bool PickByScript() { return std::getenv("XD_MENU_SCRIPT") != nullptr && std::getenv("XD_MENU_SCRIPT")[0] != 0; }
@@ -97,6 +121,7 @@ void Choose(int index) {
 extern "C" void PortXD_NewGameCreate(void* save, uint16_t* name) {
   savedataCreate(save, name);
   if (!sPlan.on || sPlan.count == 0) return;
+  SwapSecond();
   if (sPlan.choice != 1 || sPlan.count < 2) {
     Swap(0);
     return;

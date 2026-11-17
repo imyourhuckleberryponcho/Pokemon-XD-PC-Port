@@ -46,6 +46,7 @@ struct FetchOptions {
   uint64_t maxBytes = kMaxManifestBytes;
   std::string userAgent = "PortUpdater/1";
   int timeoutMs = 20000;
+  bool httpsOnly = false;
   std::function<bool(uint64_t done, uint64_t total)> progress;
 };
 bool FetchToString(const std::string& url, const FetchOptions& options, std::string& out, std::string& error);

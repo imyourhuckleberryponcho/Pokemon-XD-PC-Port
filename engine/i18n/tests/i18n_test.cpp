@@ -25,10 +25,10 @@ int main() {
   SetLanguage("us");
   CHECK(std::strcmp(Tr("Hello"), "Hello") == 0);
   CHECK(std::strcmp(Language(), "en") == 0);
-  for (const char* id : {"ge", "fr", "it", "sp"}) {
+  for (const char* id : {"ge", "fr", "it", "sp", "jp"}) {
     CHECK(SetLanguage(id));
   }
-  CHECK(std::strcmp(Language(), "es") == 0);
+  CHECK(std::strcmp(Language(), "ja") == 0);
   SetLanguage("us");
   std::printf(failures == 0 ? "i18n_test: OK\n" : "i18n_test: %d FAILED\n", failures);
   return failures == 0 ? 0 : 1;

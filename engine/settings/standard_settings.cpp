@@ -270,6 +270,12 @@ std::vector<Definition> StandardSettings() {
           .Preference()
           .Implemented(),
 
+      D::Bool("system.discord_presence", C::System, "Discord presence",
+              "Show what you're playing in Discord (only on this PC, through the Discord app).",
+              true, true)
+          .Preference()
+          .Implemented(),
+
       D::Bool("system.settings_entry", C::System, "SETTINGS in the game's menu",
               "Adds SETTINGS after EXIT in the menu the game opens with START, and left of OPTIONS on the title "
               "screen: picture, sound and the other settings you may change while playing. The game is paused while it is open and never notices it.",

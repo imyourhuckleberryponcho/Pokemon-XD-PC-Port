@@ -1,3 +1,4 @@
+#include "xd_xg.h"
 #include "xd_languages.h"
 #include "xd_user_folder.h"
 
@@ -16,6 +17,7 @@
 
 extern "C" uint8_t* PortXD_GetDolTable(const char* name);
 extern "C" void* GSmsgFontOpen(void* font);
+extern "C" void PortXD_SetTextJapanese(int on);
 extern "C" void fn_8005C068(uint32_t value);
 
 namespace {
@@ -32,7 +34,8 @@ State sState;
 uint8_t* LoadTable(const std::string& name) {
   const auto it = sState.tables.find(name);
   if (it != sState.tables.end()) return it->second;
-  std::ifstream in(xd::languages::TableFile(sState.pack, name), std::ios::binary);
+  const bool jp = name.size() > 3 && name.compare(name.size() - 3, 3, "_jp") == 0;
+  std::ifstream in(jp ? xd::languages::JpTableFile(sState.pack, name) : xd::languages::TableFile(sState.pack, name), std::ios::binary);
   const std::vector<char> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
   uint8_t* data = nullptr;
   if (!bytes.empty()) {
@@ -49,6 +52,10 @@ void Read() {
   sState.active = xd::languages::Find("us");
   if (const char* off = std::getenv("XD_MODS"); off != nullptr && std::strcmp(off, "0") == 0) {
     sState.note = "XD_MODS=0: no mods, no language pack: English (US)";
+    return;
+  }
+  if (const char* why = xd::xg::Off(xd::xg::Feature::LanguagePacks)) {
+    sState.note = std::string("XG mode: no language pack, English (US) (") + why + ")";
     return;
   }
   namespace es = engine::settings;
@@ -68,6 +75,17 @@ void Read() {
   }
   if (!sState.pack.Has(wanted)) {
     sState.note = "language " + wanted + " chosen, but the pack does not have it: English (US)";
+    return;
+  }
+  if (wanted == xd::languages::kJpId) {
+    if (LoadTable("common_tbl_jp") == nullptr || LoadTable("system_error_tbl_jp") == nullptr || LoadTable("resident_fnt_jp") == nullptr ||
+        LoadTable("common_fnt_jp") == nullptr || LoadTable("common_fnt2_jp") == nullptr || LoadTable("table_res_jp") == nullptr) {
+      sState.note = "language jp: the Japanese pack's tables could not be read: English (US)";
+      return;
+    }
+    sState.active = l;
+    sState.note = "language Japanese (number 2, text banks JP)";
+    PortXD_SetTextJapanese(1);
     return;
   }
   if (LoadTable(std::string("common_tbl_") + l->id) == nullptr || LoadTable(std::string("system_error_tbl_") + l->id) == nullptr ||
@@ -102,7 +120,19 @@ extern "C" const char* PortXD_LanguageText(void) {
 
 extern "C" void* PortXD_LanguageBank(void* bank) {
   const xd::languages::Language* l = xd::languages::Active();
+  if (std::getenv("XD_LANGUAGE_LOG") != nullptr) {
+    const uint8_t* b = static_cast<const uint8_t*>(bank);
+    std::fprintf(stderr, "[languages] bank %p: %02x%02x%02x%02x %02x%02x %c%c\n", bank, b ? b[0] : 0, b ? b[1] : 0, b ? b[2] : 0, b ? b[3] : 0,
+                 b ? b[4] : 0, b ? b[5] : 0, b ? b[6] : '?', b ? b[7] : '?');
+  }
   if (std::strcmp(l->id, "us") == 0) return bank;
+  if (std::strcmp(l->id, "jp") == 0) {
+    if (bank == PortXD_GetDolTable("common_tbl")) return LoadTable("common_tbl_jp");
+    if (bank == PortXD_GetDolTable("system_error_tbl")) return LoadTable("system_error_tbl_jp");
+    const uint8_t* b = static_cast<const uint8_t*>(bank);
+    if (b != nullptr && b[0] == 0 && b[1] == 0 && b[4] == 0x07 && b[5] == 0x8B && std::memcmp(b + 6, "US", 2) == 0) return LoadTable("table_res_jp");
+    return bank;
+  }
   if (bank == PortXD_GetDolTable("common_tbl")) return LoadTable(std::string("common_tbl_") + l->id);
   if (bank == PortXD_GetDolTable("system_error_tbl")) return LoadTable(std::string("system_error_tbl_") + l->id);
   {
@@ -122,6 +152,13 @@ extern "C" void* PortXD_FontOpen(void* font) {
     first = false;
     fn_8005C068(static_cast<uint32_t>(l->number));
   }
+  if (std::strcmp(l->id, "jp") == 0) {
+    if (font == LoadTable("common_fnt_jp")) {
+      GSmsgFontOpen(font);
+      return GSmsgFontOpen(LoadTable("common_fnt2_jp"));
+    }
+    return GSmsgFontOpen(font);
+  }
   if (std::strcmp(l->id, "us") != 0) {
     if (font == PortXD_GetDolTable("resident_fnt")) font = LoadTable("resident_fnt");
     else if (font == PortXD_GetDolTable("common_fnt")) font = LoadTable("common_fnt");
@@ -139,6 +176,13 @@ namespace {
 uint8_t* PackTableFor(const char* name) {
   const xd::languages::Language* l = xd::languages::Active();
   if (std::strcmp(l->id, "us") == 0) return nullptr;
+  if (std::strcmp(l->id, "jp") == 0) {
+    const std::string n = name;
+    for (const char* t : {"common_tbl_jp", "system_error_tbl_jp", "resident_fnt_jp", "common_fnt_jp"}) {
+      if (n == t) return LoadTable(n);
+    }
+    return nullptr;
+  }
   const std::string n = name, suffix = std::string("_") + l->id;
   if (n.size() <= suffix.size() || n.compare(n.size() - suffix.size(), suffix.size(), suffix) != 0) return nullptr;
   const std::string base = n.substr(0, n.size() - suffix.size());
@@ -153,6 +197,12 @@ struct Register {
 
 extern "C" bool PortXD_LanguageMenuTable(void) {
   const xd::languages::Language* l = xd::languages::Active();
+  if (std::strcmp(l->id, "jp") == 0) {
+    uint8_t* mem = PortMem_MEM1();
+    const uint8_t* jt = LoadTable("_menu_sprite_jp");
+    if (mem != nullptr && jt != nullptr) std::memcpy(mem + (0x803001A8u - 0x80000000u), jt, 0x11E98);
+    return true;
+  }
   if (std::strcmp(l->id, "us") == 0) return true;
   uint8_t* mem1 = PortMem_MEM1();
   const uint8_t* table = LoadTable("_menu_sprite");
@@ -194,3 +244,9 @@ extern "C" bool PortXD_LanguageMenuTable(void) {
 extern "C" void PortXD_FloorSetLanguage(uint32_t) {
   fn_8005C068(static_cast<uint32_t>(xd::languages::Active()->number));
 }
+
+#ifdef _MSC_VER
+#pragma comment(linker, "/alternatename:?fightSeqOpenMsg@@YAEI@Z=fightSeqOpenMsg")
+#pragma comment(linker, "/alternatename:?fightMainWaitFrame@@YAXI@Z=fightMainWaitFrame")
+#pragma comment(linker, "/alternatename:?itemDB_GetName@@YAIG@Z=itemDB_GetName")
+#endif

@@ -387,8 +387,19 @@ extern "C" int PortXD_FillDiscTables(char* error, unsigned errorSize) {
           old = make_writable(t->pc, t->pcSize);
           std::memset(t->pc, 0, t->pcSize);
         }
-        convert(t, gc, dest(t));
-        check_back(t, gc, dest(t));
+        if (PortXD_IsXG() && std::strcmp(t->name, "pokemon_tokusei_data") == 0) {
+          const uint32_t rows = be32(mem1 + (0x804E83B8u - kMem1Base));
+          if (rows * 8 > t->gcSize || rows * 8 > t->pcSize) throw Failure{"pokemon_tokusei_data: XG's row count doesn't fit the table"};
+          uint8_t* d = dest(t);
+          for (uint32_t k = 0; k < rows * 2; k++) {
+            const uint32_t v = be32(gc + 4 * k);
+            std::memcpy(d + 4 * k, &v, 4);
+          }
+          std::fprintf(stderr, "[xg] pokemon_tokusei_data: %u rows of 8 bytes\n", rows);
+        } else {
+          convert(t, gc, dest(t));
+          check_back(t, gc, dest(t));
+        }
         if (old != 0) {
           DWORD ignored;
           VirtualProtect(t->pc, t->pcSize, old, &ignored);

@@ -1,0 +1,9 @@
+{
+  "id": "good-scripts",
+  "name": "Good script mod",
+  "version": "1.0",
+  "author": "Test Author",
+  "description": "Halves damage. Made up for the checker tests.",
+  "game": "GXXE01",
+  "scripts": true
+}

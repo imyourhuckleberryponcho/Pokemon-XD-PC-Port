@@ -65,12 +65,12 @@ RoomRules DefaultRoom() {
 std::vector<Row> SettingRows(const RoomRules& r, const PcInfo& pc) {
   std::vector<Row> rows;
   const bool g4 = r.ruleSet != "classic";
-  const std::string noPack = kNoPack;
+  const std::string noPack = pc.gen4Off.empty() ? std::string(kNoPack) : pc.gen4Off;
   rows.push_back(MakeRow("rules", "Rules",
-                         {Opt("classic", "Classic XD"), Opt("gen4", "Gen 4", pc.gen4PackPresent, noPack),
+                         {Opt("classic", pc.edition == "xg" ? "Classic XG" : "Classic XD"), Opt("gen4", "Gen 4", pc.gen4PackPresent, noPack),
                           Opt("gen4mt", "Gen 4 + modern types", pc.gen4PackPresent, noPack)},
                          r.ruleSet));
-  rows.push_back(MakeRow("split", "Physical / special split", {Opt("off", "Off (as in XD)"), Opt("on", "On (as in Gen 4)")}, r.split ? "on" : "off"));
+  rows.push_back(MakeRow("split", "Physical / special split", {Opt("off", pc.edition == "xg" ? "Off (as in XG)" : "Off (as in XD)"), Opt("on", "On (as in Gen 4)")}, r.split ? "on" : "off"));
   rows.push_back(MakeRow("style", "Battle style", {Opt("single", "Single battle"), Opt("double", "Double battle")}, r.style));
   rows.push_back(MakeRow("team", "Teams",
                          {Opt("preset", "Preset teams"), Opt("save", "From a save (party or PC)"), Opt("free12", "Free pick, Gen 1-3"),
@@ -203,9 +203,9 @@ bool Cycle(RoomRules& r, const std::string& id, int dir, const PcInfo& pc) {
   return RulesToText(r) != RulesToText(before);
 }
 
-std::vector<std::string> RoomLines(const RoomRules& r) {
+std::vector<std::string> RoomLines(const RoomRules& r, const std::string& edition) {
   std::vector<std::string> l;
-  l.push_back(std::string("Rules: ") + (r.ruleSet == "gen4" ? "Gen 4 Pokemon and moves" : r.ruleSet == "gen4mt" ? "Gen 4 Pokemon and moves with the modern types" : "Classic XD"));
+  l.push_back(std::string("Rules: ") + (r.ruleSet == "gen4" ? "Gen 4 Pokemon and moves" : r.ruleSet == "gen4mt" ? "Gen 4 Pokemon and moves with the modern types" : (edition == "xg" ? "Classic XG" : "Classic XD")));
   l.push_back(std::string("Battle: ") + (r.style == "double" ? "double" : "single") + ", physical/special split " + (r.split ? "on" : "off"));
   std::string team = r.team == "preset"   ? "preset teams"
                      : r.team == "save"   ? "you bring a team from one of your saves"

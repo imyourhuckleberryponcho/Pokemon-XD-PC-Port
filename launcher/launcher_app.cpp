@@ -1,10 +1,12 @@
 #include "launcher.h"
 #include "launcher_extra.h"
+#include "launcher_modupdate.h"
 #include "launcher_pad.h"
 #include "launcher_reports.h"
 #include "launcher_sys.h"
 
 #include <mods.h>
+#include <mod_layout.h>
 #include <save_backups.h>
 #include <save_slots.h>
 #include <i18n.h>
@@ -29,7 +31,10 @@
 #include <deque>
 #include <cstring>
 #include <cwctype>
+#include <map>
 #include <memory>
+#include <ctime>
+#include "presence.h"
 #include <mutex>
 #include <string>
 #include <thread>
@@ -239,6 +244,24 @@ Fonts LoadFonts(float scale) {
   config.OversampleH = 2;
   config.OversampleV = 2;
   std::error_code ec;
+  static ImVector<ImWchar> jpRanges;
+  const fs::path jpFont = own / L"fonts" / L"NotoSansJP-Regular-subset.ttf";
+  const bool haveJp = fs::exists(jpFont, ec);
+  if (haveJp) {
+    ImFontGlyphRangesBuilder builder;
+    const std::string_view ja = engine::i18n::EmbeddedLocaleText("ja");
+    builder.AddText(std::string(ja).c_str());
+    static const ImWchar kKana[] = {0x3000, 0x30FF, 0xFF00, 0xFF5F, 0};
+    builder.AddRanges(kKana);
+    builder.AddText("\xE6\x97\xA5\xE6\x9C\xAC\xE8\xAA\x9E");
+    builder.BuildRanges(&jpRanges);
+  }
+  const auto mergeJp = [&](float size) {
+    if (!haveJp || jpRanges.Size == 0) return;
+    ImFontConfig merge = config;
+    merge.MergeMode = true;
+    io.Fonts->AddFontFromFileTTF(Utf8(jpFont).c_str(), size * scale, &merge, jpRanges.Data);
+  };
   for (const Choice& c : choices) {
     if (!fs::exists(c.regular, ec)) {
       continue;
@@ -252,11 +275,17 @@ Fonts LoadFonts(float scale) {
     if (f.body == nullptr) {
       continue;
     }
+    mergeJp(17.0f);
     f.heading = add(strong, 20.0f);
+    mergeJp(20.0f);
     f.nav = add(strong, 16.5f);
+    mergeJp(16.5f);
     f.caption = add(c.regular, 15.0f);
+    mergeJp(15.0f);
     f.play = add(display, 23.0f);
+    mergeJp(23.0f);
     f.title = add(display, 27.0f);
+    mergeJp(27.0f);
     break;
   }
   if (f.body == nullptr) {
@@ -577,9 +606,27 @@ class App {
   std::vector<em::Message> modMessages_;
   std::string modError_;
   std::string newProfile_;
+  modupd::Updater modUpd_;
+  em::Review review_;
+  bool reviewDirty_ = true;
+  std::map<std::string, std::string> offHints_;
+  std::map<std::string, std::string> worksWith_;
+  std::map<std::string, engine::modupdate::PreviousInfo> prevInfo_;
+  std::vector<std::string> updaterLines_;
+  std::string turnOnRequest_;
+  std::string modPicked_;
+  bool modPickedReady_ = false;
+  std::function<void(const std::string&)> modPickDone_;
+  void InitModUpdater();
+  void RebuildReview();
+  void DrawModUpdateWindows();
 
   sys::Process* gameProcess_ = nullptr;
   bool gameRunning_ = false;
+  std::unique_ptr<engine::presence::Client> presence_;
+  std::chrono::steady_clock::time_point presenceAt_{};
+  int64_t presenceStart_ = 0;
+  void PresenceFrame();
   std::string playError_;
   bool askStartAnyway_ = false;
   bool playWhenDrawn_ = false;
@@ -672,9 +719,10 @@ class App {
   int importSel_ = -1;
   std::string importError_;
   void ImportFind();
+  void ImportChooseFile();
   void StopImportScan();
   bool ImportPick(const std::string& arg);
-  bool ImportConfirm();
+  bool ImportConfirm(int answer = -1);
   bool ImportCommit(const fs::path& file, const GameInfo::ImportCheck& check);
   void DrawImport(bool locked);
   std::string NamesDisc();
@@ -855,6 +903,17 @@ class App {
   void RestoreBackup();
   fs::path BackupsFolder() const;
   bool SlotsOn() const { return !game_.saves.dataFolder.empty(); }
+  fs::path SavesFolder() const {
+    std::string edition;
+    {
+      std::lock_guard<std::mutex> lock(editionMutex_);
+      edition = savesEdition_;
+    }
+    return game_.saves.dataFolderFor ? game_.saves.dataFolderFor(edition) : game_.saves.dataFolder;
+  }
+  mutable std::mutex editionMutex_;
+  std::string savesEdition_;
+  std::string slotsEdition_;
   void LookAtSlots(bool now);
   bool SlotsLocked(std::string& why) const;
   bool SlotDone(bool ok, const std::string& message);
@@ -1065,6 +1124,13 @@ void App::StartWorker(const std::string& discPath) {
         return !bg_.stop.load();
       });
       usable = verdict.kind != DiscVerdict::Kind::Problem;
+      if (usable) {
+        {
+          std::lock_guard<std::mutex> lock(editionMutex_);
+          savesEdition_ = verdict.edition;
+        }
+        if (game_.saves.setEdition) game_.saves.setEdition(verdict.edition);
+      }
       std::lock_guard<std::mutex> lock(bg_.mutex);
       bg_.verdict = verdict;
       bg_.haveVerdict = true;
@@ -1450,6 +1516,7 @@ void App::ReloadMods() {
     modMessages_.push_back({em::Message::Level::Warning, w});
   }
   const std::vector<std::string> fresh = em::AddNewMods(mods_, found_);
+  reviewDirty_ = true;
   for (const std::string& id : fresh) {
     const bool pack = std::any_of(found_.begin(), found_.end(), [&](const em::ModFolder& f) { return f.texturePack && f.manifest.id == id; });
     modMessages_.push_back({em::Message::Level::Info,
@@ -1462,6 +1529,7 @@ void App::ReloadMods() {
 }
 
 void App::SaveMods() {
+  reviewDirty_ = true;
   if (game_.playerFilesReadOnly) {
     Log("mods: " + game_.readOnlyNote);
     std::fprintf(stderr, "[mods] %s (mods.ini)\n", game_.readOnlyNote.c_str());
@@ -1473,6 +1541,114 @@ void App::SaveMods() {
   } else {
     modError_ = Fmt(Tr("The mod list couldn't be saved to %s."), Utf8(game_.modListFile).c_str());
   }
+}
+
+bool PrimaryButton(const char* label);
+
+void App::InitModUpdater() {
+  modupd::Host host;
+  host.modsFolder = game_.modsFolder;
+  host.stateFolder = game_.settingsFolder / L"mod_updates";
+  host.rules = game_.modRules;
+  host.testRun = game_.playerFilesReadOnly;
+  host.mods = &mods_;
+  host.found = &found_;
+  host.discGameId = [this] {
+    std::lock_guard<std::mutex> lock(bg_.mutex);
+    return bg_.haveVerdict ? bg_.verdict.gameId : std::string();
+  };
+  host.cardRoots = [this] {
+    std::vector<std::pair<std::string, fs::path>> roots;
+    if (SlotsOn()) {
+      const sl::Index index = sl::Load(SavesFolder());
+      for (const sl::Slot& slot : index.slots) roots.emplace_back(slot.name, sl::RootOf(SavesFolder(), slot.id));
+    }
+    return roots;
+  };
+  host.saveList = [this] { SaveMods(); };
+  host.reload = [this] { ReloadMods(); };
+  host.log = [](const std::string& text) { Log(text); };
+  host.say = [this](const std::string& text) {
+    updaterLines_.push_back(text);
+    if (updaterLines_.size() > 6) updaterLines_.erase(updaterLines_.begin());
+    Log("mods: " + text);
+  };
+  host.chooseFile = [this](const fs::path& name, bool save, std::function<void(const std::string&)> done) {
+    modPickDone_ = std::move(done);
+    static SDL_DialogFileFilter kJson[1];
+    kJson[0] = {Tr("Mod lists (*.json)"), "json"};
+    const auto callback = [](void* user, const char* const* files, int) {
+      App* app = static_cast<App*>(user);
+      if (files != nullptr && files[0] != nullptr) {
+        std::lock_guard<std::mutex> lock(app->pickMutex_);
+        app->modPicked_ = files[0];
+        app->modPickedReady_ = true;
+      }
+    };
+    if (save) {
+      const std::string where = Utf8(sys::KnownFolder(sys::Folder::Documents, false) / name);
+      ShowSaveDialog(callback, this, window_, kJson, 1, where.c_str());
+    } else {
+      ShowOpenDialog(callback, this, window_, kJson, 1, nullptr, false);
+    }
+  };
+  modUpd_.Init(host);
+}
+
+void App::RebuildReview() {
+  std::string game;
+  {
+    std::lock_guard<std::mutex> lock(bg_.mutex);
+    if (bg_.haveVerdict) game = bg_.verdict.gameId;
+  }
+  review_ = em::ReviewList(mods_.Active(), found_, game);
+  offHints_.clear();
+  worksWith_.clear();
+  for (const em::ModFolder& f : found_) {
+    if (!f.texturePack) worksWith_[f.manifest.id] = em::SupportText(em::SupportOf(f.folder, f.manifest));
+  }
+  prevInfo_.clear();
+  std::vector<std::string> onIds;
+  for (const auto& [id, on] : mods_.Active().mods) {
+    if (on) onIds.push_back(id);
+  }
+  for (const auto& [id, on] : mods_.Active().mods) {
+    const em::ModFolder* mod = nullptr;
+    for (const em::ModFolder& f : found_) {
+      if (Lower(f.manifest.id) == Lower(id)) mod = &f;
+    }
+    if (mod == nullptr) continue;
+    prevInfo_[id] = modUpd_.Previous(mod->manifest.id);
+    if (on) continue;
+    const em::Requirements req = em::ResolveRequirements(*mod, found_, onIds, game);
+    std::string hint;
+    for (const auto& m : req.missing) {
+      hint += (hint.empty() ? "" : " ") + (m.have.empty() ? Fmt(Tr("Needs \"%s\", which isn't installed."), m.id.c_str())
+                                                          : Fmt(Tr("Needs \"%s\" in version %s %s; you have %s."), m.id.c_str(), m.op.c_str(),
+                                                                m.version.c_str(), m.have.c_str()));
+    }
+    for (const std::string& c : req.conflicts) hint += (hint.empty() ? "" : " ") + c;
+    if (!game.empty() && !em::SupportsGame(mod->manifest, game)) {
+      hint += (hint.empty() ? "" : " ") + std::string(Tr("Made for another game or game version."));
+    }
+    if (!hint.empty()) offHints_[id] = hint;
+  }
+  reviewDirty_ = false;
+}
+
+void App::DrawModUpdateWindows() {
+  modupd::Ui ui;
+  ui.scale = scale_;
+  ui.good = kGood;
+  ui.warn = kWarn;
+  ui.bad = kBad;
+  ui.dim = kDim;
+  ui.heading = [this](const char* t) { Heading(t); };
+  ui.dimText = [this](const std::string& t) { Dim(t); };
+  ui.primary = [](const char* label) { return PrimaryButton(label); };
+  ui.back = [this] { return BackPressed(); };
+  ui.closeNow = [this] { return closeWindows_; };
+  modUpd_.Draw(ui);
 }
 
 bool App::StartGame(std::string& error) {
@@ -1510,6 +1686,15 @@ void App::Play(bool confirmed) {
     playWhenDrawn_ = true;
     return;
   }
+  if (SlotsOn() && game_.saves.wrongEdition && game_.saves.saveFile) {
+    const fs::path file = game_.saves.saveFile(sl::RootOf(SavesFolder(), slots_.Active().id));
+    const std::string wrong = file.empty() ? std::string() : game_.saves.wrongEdition(file);
+    if (!wrong.empty()) {
+      playError_ = wrong;
+      Log("play refused: " + wrong);
+      return;
+    }
+  }
   SaveSettingsIfChanged();
   SaveMods();
   Log("play: " + registry_.Summary());
@@ -1522,6 +1707,50 @@ void App::Play(bool confirmed) {
   if (!stay && step_ >= script_.size()) {
     quit_ = true;
   }
+}
+
+void App::PresenceFrame() {
+  const auto now = std::chrono::steady_clock::now();
+  if (presenceAt_ != std::chrono::steady_clock::time_point{} && now - presenceAt_ < std::chrono::seconds(1)) {
+    return;
+  }
+  presenceAt_ = now;
+  const GameInfo::Presence& p = game_.presence;
+  const bool want = !p.clientId.empty() && p.allowed && registry_.Bool("system.discord_presence").Get();
+  if (want && !presence_) {
+    engine::presence::Config cfg;
+    cfg.clientId = p.clientId;
+    cfg.endpointOverride = p.endpoint;
+    const char* l = std::getenv("XD_DISCORD_LOG");
+    cfg.log = l != nullptr && l[0] == '1';
+    if (!p.endpoint.empty()) {
+      cfg.minIntervalMs = 1000;
+      cfg.retryIntervalMs = 1000;
+    }
+    cfg.stopWaitMs = 1500;
+    presence_ = std::make_unique<engine::presence::Client>();
+    presence_->Start(cfg);
+    if (presenceStart_ == 0) {
+      presenceStart_ = static_cast<int64_t>(std::time(nullptr));
+    }
+  } else if (!want && presence_) {
+    presence_->Stop();
+    presence_.reset();
+  }
+  if (!presence_) {
+    return;
+  }
+  if (gameRunning_ || playWhenDrawn_) {
+    presence_->Clear();
+    return;
+  }
+  engine::presence::Activity a;
+  a.details = p.details ? p.details() : std::string();
+  a.state = p.state;
+  a.largeImage = p.largeImage;
+  a.largeText = p.largeText;
+  a.startSeconds = presenceStart_;
+  presence_->Set(a);
 }
 
 void App::PollGame() {
@@ -2645,7 +2874,7 @@ bool App::DoStep(const std::string& step) {
       return ImportPick(arg);
     }
     if (verb == "importconfirm") {
-      return ImportConfirm();
+      return ImportConfirm(arg.empty() ? -1 : std::atoi(arg.c_str()) - 1);
     }
     if (verb == "importcancel") {
       importOpen_ = false;
@@ -2695,6 +2924,12 @@ bool App::DoStep(const std::string& step) {
     return backupOk_;
   } else if (verb == "shortcut") {
     Shortcut(Lower(arg) == "desktop");
+  } else if (verb == "modupdate" || verb == "modneeds" || verb == "modlist" || verb == "modsort") {
+    page_ = Page::Mods;
+    bool ok = true;
+    modUpd_.DoStep(verb, arg, ok);
+    if (!ok) Log("expected modupdate:check|yes|always|no|get|install|keep|skip|close|rollback=<id>|rollbackyes, modneeds:<id|yes|download|no>, modlist:export=<f>|import=<f>|apply|download|close, modsort");
+    return ok;
   } else if (verb == "update") {
     const std::string what = Lower(arg);
     if (what == "check") {
@@ -2779,6 +3014,9 @@ void App::RunScript() {
       return;
     }
     if (waitFor_ == "update" && (up_.busy || up_.serial != upSeen_)) {
+      return;
+    }
+    if (waitFor_ == "modupdate" && modUpd_.WaitPending()) {
       return;
     }
     if (waitFor_ == "icon" && (bg_.busy || iconShown_ != bg_.iconVersion || registry_.Text(kIconSetting) != iconApplied_)) {
@@ -3592,6 +3830,9 @@ void App::DrawDiscPage() {
       case DiscVerdict::Kind::Problem: ImGui::TextColored(kBad, "%s", Tr("This disc image can't be used")); break;
       }
       ImGui::PopFont();
+      if (!v.edition.empty()) {
+        ImGui::TextColored(kGood, "%s", (v.edition + " mode").c_str());
+      }
       ImGui::TextWrapped("%s", Tr(v.text).c_str());
       if (v.kind == DiscVerdict::Kind::Problem && game_.extra.otherVersion && game_.extra.otherVersion(v.gameId) &&
           !game_.extra.sources.empty()) {
@@ -3944,6 +4185,7 @@ void App::DrawControlsPage() {
 }
 
 void App::DrawModsPage() {
+  if (reviewDirty_) RebuildReview();
   PageTitle(Tr("Mods"), "");
   Dim(Tr("Mods change the game's files (on top of your disc; the disc itself is never changed). A mod is only used "
          "when it is switched on here. Further down the list wins when two mods change the same thing."));
@@ -3976,6 +4218,21 @@ void App::DrawModsPage() {
   ImGui::SameLine();
   if (ImGui::Button(Lbl(Tr("Look again"), "Look again").c_str())) {
     ReloadMods();
+  }
+  if (ImGui::Button(Lbl(Tr("Check for mod updates"), "Check for mod updates").c_str())) {
+    modUpd_.RequestCheck(true);
+  }
+  ImGui::SameLine();
+  if (ImGui::Button(Lbl(Tr("Put in working order"), "Put in working order").c_str())) {
+    modUpd_.SortList(true);
+  }
+  ImGui::SameLine();
+  if (ImGui::Button(Lbl(Tr("Save this list to a file..."), "Save this list to a file...").c_str())) {
+    modUpd_.StartExport();
+  }
+  ImGui::SameLine();
+  if (ImGui::Button(Lbl(Tr("Use a list from a file..."), "Use a list from a file...").c_str())) {
+    modUpd_.StartImport();
   }
   if (ImGui::BeginPopupModal(Lbl(Tr("New mod list"), "newmodlist").c_str(), nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
     ImGui::TextUnformatted(Tr("A name for the new list (for example \"randomizer run\"):"));
@@ -4041,8 +4298,14 @@ void App::DrawModsPage() {
       ImGui::PushID(i);
       ImGui::TableNextRow();
       ImGui::TableSetColumnIndex(0);
-      if (ImGui::Checkbox("##on", &on)) {
-        SaveMods();
+      bool wantOn = on;
+      if (ImGui::Checkbox("##on", &wantOn)) {
+        if (wantOn && mod != nullptr) {
+          turnOnRequest_ = id;
+        } else {
+          on = wantOn;
+          SaveMods();
+        }
       }
       ImGui::TableSetColumnIndex(1);
       ImGui::TextUnformatted(mod != nullptr && !mod->manifest.name.empty() ? mod->manifest.name.c_str() : id.c_str());
@@ -4051,6 +4314,19 @@ void App::DrawModsPage() {
       } else {
         if (!mod->manifest.description.empty()) {
           Dim(mod->manifest.description);
+        }
+        if (mod->manifest.scripts) {
+          std::set<std::string>& scriptsOff = mods_.Active().scriptsOff;
+          bool allow = scriptsOff.count(id) == 0;
+          ImGui::TextColored(allow ? kWarn : kDim, "%s", Tr("Runs scripts (Lua)"));
+          ImGui::SameLine();
+          if (ImGui::Checkbox(Lbl(Tr("Allow"), "Allow").c_str(), &allow)) {
+            if (allow) scriptsOff.erase(id); else scriptsOff.insert(id);
+            SaveMods();
+          }
+          Dim(allow ? Tr("Its scripts run in a locked box: they cannot touch your files, but they can change how the game plays. "
+                         "Untick Allow to skip them; the rest of the mod stays.")
+                    : Tr("Its scripts are skipped. The rest of the mod (files, data) is still used."));
         }
         {
           const em::AppliesVerdict v = em::CheckApplies(*mod, game_.modLooks);
@@ -4066,10 +4342,35 @@ void App::DrawModsPage() {
           Dim(when);
         }
         if (!discGame.empty()) {
-          const auto& games = mod->manifest.games;
-          if (std::none_of(games.begin(), games.end(), [&](const std::string& g) { return Lower(g) == Lower(discGame); })) {
+          if (!em::SupportsGame(mod->manifest, discGame)) {
             ImGui::TextColored(kWarn, "%s", Tr("Made for another game or game version: it won't be used with this disc."));
           }
+        }
+        if (const auto works = worksWith_.find(mod->manifest.id); works != worksWith_.end() && !works->second.empty()) {
+          Dim(Fmt(Tr("Works with: %s"), works->second.c_str()));
+        }
+        for (const em::ReviewRow& row : review_.rows) {
+          if (Lower(row.id) != Lower(id)) continue;
+          if (on) {
+            for (const std::string& p : row.problems) {
+              if (p.rfind("Made for another game", 0) == 0) continue;
+              ImGui::PushStyleColor(ImGuiCol_Text, kBad);
+              ImGui::TextWrapped("%s", (std::string(Tr("Not used: ")) + p).c_str());
+              ImGui::PopStyleColor();
+            }
+          }
+          for (const std::string& w : row.warnings) {
+            ImGui::PushStyleColor(ImGuiCol_Text, kWarn);
+            ImGui::TextWrapped("%s", w.c_str());
+            ImGui::PopStyleColor();
+          }
+          if (on) {
+            for (const std::string& w : row.suggestions) Dim(w);
+          }
+        }
+        if (!on) {
+          const auto hint = offHints_.find(id);
+          if (hint != offHints_.end()) Dim(std::string(Tr("Can't be used yet. ")) + hint->second);
         }
       }
       ImGui::TableSetColumnIndex(2);
@@ -4077,6 +4378,16 @@ void App::DrawModsPage() {
         ImGui::TextUnformatted(mod->manifest.version.c_str());
         if (!mod->manifest.author.empty()) {
           Dim(mod->manifest.author);
+        }
+        std::string newer, why;
+        if (modUpd_.Offers(mod->manifest.id, newer, &why)) {
+          ImGui::TextColored(kGood, "%s", Fmt(Tr("Update %s found"), newer.c_str()).c_str());
+          if (!why.empty()) Dim(Tr("It can't be installed from here (see \"Check for mod updates\")."));
+        }
+        const auto prev = prevInfo_.find(id);
+        if (prev != prevInfo_.end() && prev->second.exists &&
+            ImGui::SmallButton((Fmt(Tr("Roll back to %s"), prev->second.version.c_str()) + "##rb").c_str())) {
+          modUpd_.AskRollBack(mod->manifest.id);
         }
       }
       ImGui::TableSetColumnIndex(3);
@@ -4108,8 +4419,18 @@ void App::DrawModsPage() {
       if (em::MoveMod(mods_.Active(), static_cast<size_t>(moveFrom), moveTo - moveFrom)) SaveMods();
     }
   }
+  if (!turnOnRequest_.empty()) {
+    const std::string want = turnOnRequest_;
+    turnOnRequest_.clear();
+    modUpd_.BeginTurnOn(want);
+  }
   if (!modError_.empty()) {
     ImGui::TextColored(kBad, "%s", modError_.c_str());
+  }
+  for (const std::string& line : updaterLines_) {
+    ImGui::PushStyleColor(ImGuiCol_Text, kGood);
+    ImGui::TextWrapped("%s", line.c_str());
+    ImGui::PopStyleColor();
   }
   for (const em::Message& m : modMessages_) {
     ImGui::PushStyleColor(ImGuiCol_Text, m.level == em::Message::Level::Info ? kDim : kWarn);
@@ -4173,9 +4494,18 @@ void App::RestoreBackup() {
       const sl::Slot* open = SlotsOn() ? OpenSlot() : nullptr;
       const bool other = open != nullptr && open->id != slots_.Active().id;
       const fs::path card = other ? (game_.saves.cardFolder
-                                         ? game_.saves.cardFolder(sl::RootOf(game_.saves.dataFolder, open->id), b.card)
+                                         ? game_.saves.cardFolder(sl::RootOf(SavesFolder(), open->id), b.card)
                                          : fs::path())
                                   : game_.cardFolder ? game_.cardFolder(b.card) : fs::path();
+      if (game_.saves.wrongEdition) {
+        const std::string wrong = game_.saves.wrongEdition(b.folder / f.name);
+        if (!wrong.empty()) {
+          backupOk_ = false;
+          backupMessage_ = wrong;
+          Log("restore backup refused: " + wrong);
+          return;
+        }
+      }
       backupOk_ = !card.empty() && bk::Restore(b, f.name, card, BackupsFolder(), bk::kKeep, error);
       backupMessage_ = backupOk_ ? Fmt(Tr("Restored the backup of %s. The save you had before is in the list too."),
                                        b.when.c_str())
@@ -4324,7 +4654,7 @@ fs::path App::BackupsFolder() const {
     return game_.saveBackupsFolder;
   }
   const sl::Slot* open = OpenSlot();
-  return bk::FolderFor(sl::RootOf(game_.saves.dataFolder, open != nullptr ? open->id : slots_.Active().id));
+  return bk::FolderFor(sl::RootOf(SavesFolder(), open != nullptr ? open->id : slots_.Active().id));
 }
 
 void App::LookAtSlots(bool now) {
@@ -4335,10 +4665,25 @@ void App::LookAtSlots(bool now) {
   if (!now && slotsLookedAt_ != 0 && tick - slotsLookedAt_ < 2000) {
     return;
   }
+  {
+    std::string edition;
+    {
+      std::lock_guard<std::mutex> lock(editionMutex_);
+      edition = savesEdition_;
+    }
+    if (edition != slotsEdition_) {
+      slotsEdition_ = edition;
+      slots_ = sl::Index{};
+      slotRows_.clear();
+      openSlotSet_ = false;
+      openSlot_.clear();
+      now = true;
+    }
+  }
   const bool first = slots_.slots.empty();
   slotsLookedAt_ = tick == 0 ? 1 : tick;
   std::string note;
-  sl::Index index = sl::Load(game_.saves.dataFolder, &note);
+  sl::Index index = sl::Load(SavesFolder(), &note);
   if (!note.empty() && note != slotNote_) {
     Log("saves: " + note);
   }
@@ -4347,7 +4692,7 @@ void App::LookAtSlots(bool now) {
   slots_ = std::move(index);
   slotRows_.clear();
   for (const sl::Slot& s : slots_.slots) {
-    slotRows_.push_back(game_.saves.row ? game_.saves.row(sl::RootOf(game_.saves.dataFolder, s.id)) : GameInfo::SaveRow());
+    slotRows_.push_back(game_.saves.row ? game_.saves.row(sl::RootOf(SavesFolder(), s.id)) : GameInfo::SaveRow());
   }
   if (!openSlotSet_) {
     openSlotSet_ = true;
@@ -4412,7 +4757,7 @@ bool App::OpenSummary(SaveSummary& save) {
     openReadKey_ = key;
     openReadAgain_ = false;
     openRead_.busy = true;
-    openRead_.thread = std::thread([this, key, disc, root = sl::RootOf(game_.saves.dataFolder, open->id)] {
+    openRead_.thread = std::thread([this, key, disc, root = sl::RootOf(SavesFolder(), open->id)] {
       SaveSummary read = game_.saves.read(root, disc);
       {
         std::lock_guard<std::mutex> lock(openRead_.mutex);
@@ -4505,7 +4850,7 @@ bool App::ChooseSlot(const std::string& id) {
     return SlotDone(false, why);
   }
   const std::string name = slot->name;
-  if (!sl::SetActive(game_.saves.dataFolder, id, error)) {
+  if (!sl::SetActive(SavesFolder(), id, error)) {
     return SlotDone(false, error);
   }
   LookAtSlots(true);
@@ -4519,7 +4864,7 @@ bool App::NewSlot(const std::string& name) {
   }
   LookAtSlots(true);
   const std::string wanted = name.empty() ? sl::NextName(slots_) : name;
-  if (!sl::Create(game_.saves.dataFolder, wanted, id, error) || !sl::SetActive(game_.saves.dataFolder, id, error)) {
+  if (!sl::Create(SavesFolder(), wanted, id, error) || !sl::SetActive(SavesFolder(), id, error)) {
     LookAtSlots(true);
     return SlotDone(false, error);
   }
@@ -4542,7 +4887,7 @@ bool App::RenameSlot(const std::string& name) {
     return SlotDone(false, OpenFirst());
   }
   const std::string id = open->id, before = open->name;
-  if (!sl::Rename(game_.saves.dataFolder, id, name, error)) {
+  if (!sl::Rename(SavesFolder(), id, name, error)) {
     return SlotDone(false, error);
   }
   LookAtSlots(true);
@@ -4561,7 +4906,7 @@ bool App::DuplicateSlot() {
     return SlotDone(false, OpenFirst());
   }
   const std::string from = open->name;
-  if (!sl::Duplicate(game_.saves.dataFolder, open->id, id, error)) {
+  if (!sl::Duplicate(SavesFolder(), open->id, id, error)) {
     return SlotDone(false, error);
   }
   LookAtSlots(true);
@@ -4618,7 +4963,7 @@ bool App::DeleteSlot() {
       bg_.haveVerdict = false;
     }
   }
-  const bool ok = sl::Delete(game_.saves.dataFolder, gone.id,
+  const bool ok = sl::Delete(SavesFolder(), gone.id,
                              [this](const fs::path& folder, std::string& e) { return BinFolder(folder, e); }, error);
   LookAtSlots(true);
   if (chosen && slots_.Active().id == gone.id) {
@@ -4654,6 +4999,9 @@ bool App::ImportSlot(const std::string& file) {
   if (!game_.saves.checkImport || !game_.saves.checkImport(PathOf(file), NamesDisc(), check, error)) {
     return SlotDone(false, error.empty() ? std::string(Tr("This file can't be imported.")) : error);
   }
+  if (check.editionUnknown) {
+    return SlotDone(false, game_.saves.editionQuestion);
+  }
   return ImportCommit(PathOf(file), check);
 }
 
@@ -4665,10 +5013,10 @@ bool App::ImportCommit(const fs::path& file, const GameInfo::ImportCheck& check)
   LookAtSlots(true);
   const std::string name = sl::CleanName(check.name).empty() ? sl::NextName(slots_) : check.name;
   const bool made = check.gci.empty()
-                        ? sl::Import(game_.saves.dataFolder, file, name, check.cardFolder, check.cardFileName, id, error)
-                        : sl::ImportBytes(game_.saves.dataFolder, check.gci, name, check.cardFolder,
+                        ? sl::Import(SavesFolder(), file, name, check.cardFolder, check.cardFileName, id, error)
+                        : sl::ImportBytes(SavesFolder(), check.gci, name, check.cardFolder,
                                           check.cardFileName, id, error);
-  if (!made || !sl::SetActive(game_.saves.dataFolder, id, error)) {
+  if (!made || !sl::SetActive(SavesFolder(), id, error)) {
     LookAtSlots(true);
     return SlotDone(false, error);
   }
@@ -4739,7 +5087,7 @@ bool App::ImportPick(const std::string& arg) {
   return true;
 }
 
-bool App::ImportConfirm() {
+bool App::ImportConfirm(int answer) {
   GameInfo::ImportOffer chosen;
   if (importSel_ == -2 && importHaveFile_) {
     chosen = importFile_;
@@ -4752,6 +5100,17 @@ bool App::ImportConfirm() {
   } else {
     return SlotDone(false, "Choose a save first.");
   }
+  if (chosen.check.editionUnknown) {
+    if (answer < 0) {
+      return SlotDone(false, game_.saves.editionQuestion);
+    }
+    const std::string refusal = game_.saves.editionRefusal ? game_.saves.editionRefusal(answer) : std::string();
+    if (!refusal.empty()) {
+      importError_ = refusal;
+      Log("import refused: " + refusal);
+      return false;
+    }
+  }
   const bool ok = ImportCommit(chosen.path, chosen.check);
   if (ok) {
     importOpen_ = false;
@@ -4761,6 +5120,21 @@ bool App::ImportConfirm() {
   return ok;
 }
 
+void App::ImportChooseFile() {
+  static const SDL_DialogFileFilter kCard[] = {{"GameCube saves and memory cards", "gci;raw;gcp;mcd;sav;gcs"},
+                                               {"All files", "*"}};
+  ShowOpenDialog(
+      [](void* user, const char* const* files, int) {
+        App* app = static_cast<App*>(user);
+        if (files != nullptr && files[0] != nullptr) {
+          std::lock_guard<std::mutex> lock(app->pickMutex_);
+          app->slotPicked_ = files[0];
+          app->slotPickedKind_ = 1;
+        }
+      },
+      this, window_, kCard, 2, nullptr, false);
+}
+
 void App::DrawImport(bool locked) {
   if (!importOpen_) {
     return;
@@ -4768,9 +5142,11 @@ void App::DrawImport(bool locked) {
   ImGui::PushID("import");
   ImGui::Spacing();
   Heading("Import from Dolphin / GameCube");
-  Dim("Pokemon XD saves (the USA game) that this PC already has: in Dolphin's folders, found by themselves below, or in a "
-      "file you choose (a .gci, a memory card image, a GameCube card dump). Look at what is in one, then add it. It is "
-      "added as a NEW save: your other saves are never replaced, and the file is only copied.");
+  Dim(Tr("Pokemon XD saves that this PC already has: in Dolphin's folders, found by themselves below, or in a file you "
+         "choose (a .gci, a memory card image, a GameCube card dump). The USA game's saves are added as they are; a Japanese "
+         "save is converted to the USA game's layout (names stay in Japanese characters), and a European save is added as "
+         "it is. Look at what is in one, then add it. It is added as a NEW save: your other saves are never replaced, and the "
+         "file is only copied."));
   if (locked) {
     ImGui::BeginDisabled();
   }
@@ -4781,19 +5157,8 @@ void App::DrawImport(bool locked) {
     }
     ImGui::SameLine();
   }
-  if (ImGui::Button("Choose a file...")) {
-    static const SDL_DialogFileFilter kCard[] = {{"GameCube saves and memory cards", "gci;raw;gcp;mcd;sav;gcs"},
-                                                 {"All files", "*"}};
-    ShowOpenDialog(
-        [](void* user, const char* const* files, int) {
-          App* app = static_cast<App*>(user);
-          if (files != nullptr && files[0] != nullptr) {
-            std::lock_guard<std::mutex> lock(app->pickMutex_);
-            app->slotPicked_ = files[0];
-            app->slotPickedKind_ = 1;
-          }
-        },
-        this, window_, kCard, 2, nullptr, false);
+  if (ImGui::Button(Lbl(Tr("Choose a file..."), "Choose a file...").c_str())) {
+    ImportChooseFile();
   }
   ImGui::SameLine();
   if (ImGui::Button("Close")) {
@@ -4859,7 +5224,17 @@ void App::DrawImport(bool locked) {
     if (locked) {
       ImGui::BeginDisabled();
     }
-    if (ImGui::Button("Add as a new save")) {
+    if (shown->editionUnknown) {
+      ImGui::TextWrapped("%s", game_.saves.editionQuestion.c_str());
+      for (size_t a = 0; a < game_.saves.editionAnswers.size(); a++) {
+        if (a > 0) {
+          ImGui::SameLine();
+        }
+        if (ImGui::Button((game_.saves.editionAnswers[a] + "##ed").c_str())) {
+          ImportConfirm(static_cast<int>(a));
+        }
+      }
+    } else if (ImGui::Button("Add as a new save")) {
       ImportConfirm();
     }
     if (locked) {
@@ -4879,7 +5254,7 @@ bool App::ExportSlot(const std::string& file) {
     return SlotDone(false, OpenFirst());
   }
   std::string error;
-  const fs::path from = game_.saves.saveFile ? game_.saves.saveFile(sl::RootOf(game_.saves.dataFolder, open->id))
+  const fs::path from = game_.saves.saveFile ? game_.saves.saveFile(sl::RootOf(SavesFolder(), open->id))
                                              : fs::path();
   if (!sl::Export(from, PathOf(file), error)) {
     return SlotDone(false, error);
@@ -4907,6 +5282,13 @@ void App::DrawSlots() {
       importOpen_ = false;
     } else {
       ImportFind();
+    }
+  }
+  if (game_.saves.checkImport) {
+    ImGui::SameLine();
+    if (ImGui::Button(Lbl(Tr("Import a Japanese save..."), "Import a Japanese save...").c_str())) {
+      ImportFind();
+      ImportChooseFile();
     }
   }
   if (locked) {
@@ -4996,12 +5378,21 @@ void App::DrawSlots() {
       } else {
         ImGui::TextColored(kDim, "%s", row.who.empty() ? Tr("empty") : Tr(row.who).c_str());
       }
+      if (!row.edition.empty()) {
+        ImGui::SameLine();
+        ImGui::TextColored(row.warn.empty() ? kGood : kBad, "[%s]", row.edition.c_str());
+      }
       ImGui::TableSetColumnIndex(2);
       ImGui::AlignTextToFramePadding();
       ImGui::TextUnformatted(row.time.c_str());
       ImGui::TableSetColumnIndex(3);
       ImGui::AlignTextToFramePadding();
       ImGui::TextWrapped("%s", row.setup.c_str());
+      if (!row.warn.empty()) {
+        ImGui::PushStyleColor(ImGuiCol_Text, kBad);
+        ImGui::TextWrapped("%s", row.warn.c_str());
+        ImGui::PopStyleColor();
+      }
       ImGui::PopID();
     }
     if (open) {
@@ -5107,7 +5498,7 @@ bool App::TradePick(const std::string& file) {
   tradeError_.clear();
   tradeHave_ = false;
   tradeMine_ = tradeTheirs_ = -1;
-  if (!game_.saves.tradeOpen(sl::RootOf(game_.saves.dataFolder, open->id), tradeFile_, NamesDisc(), tradeView_, tradeError_)) {
+  if (!game_.saves.tradeOpen(sl::RootOf(SavesFolder(), open->id), tradeFile_, NamesDisc(), tradeView_, tradeError_)) {
     Log("trade: " + tradeError_);
     return false;
   }
@@ -5138,7 +5529,7 @@ bool App::TradeConfirm() {
     return SlotDone(false, "Choose one Pokemon on each side.");
   }
   const std::string id = open->id;
-  const GameInfo::Saves::TradeResult r = game_.saves.tradeDo(sl::RootOf(game_.saves.dataFolder, id), tradeFile_, NamesDisc(), tradeMine_, tradeTheirs_);
+  const GameInfo::Saves::TradeResult r = game_.saves.tradeDo(sl::RootOf(SavesFolder(), id), tradeFile_, NamesDisc(), tradeMine_, tradeTheirs_);
   tradeOk_ = r.ok;
   tradeMessage_ = r.message;
   SlotDone(r.ok, r.message);
@@ -5256,7 +5647,7 @@ bool App::MonsPick(const std::string& file) {
   monsError_.clear();
   monsHave_ = false;
   monsPicked_.clear();
-  if (!game_.saves.monsOpen(sl::RootOf(game_.saves.dataFolder, open->id), monsFile_, NamesDisc(), monsView_, monsError_)) {
+  if (!game_.saves.monsOpen(sl::RootOf(SavesFolder(), open->id), monsFile_, NamesDisc(), monsView_, monsError_)) {
     Log("mons: " + monsError_);
     return false;
   }
@@ -5293,7 +5684,7 @@ bool App::MonsConfirm() {
     return SlotDone(false, "Tick at least one Pokemon.");
   }
   const std::string id = open->id;
-  const GameInfo::Saves::TradeResult r = game_.saves.monsDo(sl::RootOf(game_.saves.dataFolder, id), monsFile_, NamesDisc(), rows);
+  const GameInfo::Saves::TradeResult r = game_.saves.monsDo(sl::RootOf(SavesFolder(), id), monsFile_, NamesDisc(), rows);
   SlotDone(r.ok, r.message);
   if (r.ok) {
     LookAtSlots(true);
@@ -5413,7 +5804,7 @@ void App::DrawSlotBox(const sl::Slot& slot, bool locked, bool& duplicate) {
     ImGui::TextColored(kBusy, "%s", Tr("Reading the memory card..."));
   } else if (save.state == SaveSummary::State::None) {
     ImGui::TextUnformatted(Tr("No save yet: the game offers New Game."));
-    Dim(Fmt(Tr("Folder: %s"), Utf8(sl::RootOf(game_.saves.dataFolder, slot.id)).c_str()));
+    Dim(Fmt(Tr("Folder: %s"), Utf8(sl::RootOf(SavesFolder(), slot.id)).c_str()));
   } else if (!found) {
     ImGui::PushStyleColor(ImGuiCol_Text, kWarn);
     ImGui::TextWrapped("%s", Tr(save.message).c_str());
@@ -6167,7 +6558,8 @@ void App::DrawBottomBar() {
                           : bg_.verdict.kind == DiscVerdict::Kind::Problem ? Tr("can't be used")
                           : bg_.verdict.kind == DiscVerdict::Kind::Warning ? Tr("changed or damaged")
                                                                           : Tr("OK");
-      ImGui::TextColored(color, "%s (%s)", name.c_str(), state);
+      ImGui::TextColored(color, "%s (%s%s%s)", name.c_str(), have && !bg_.verdict.edition.empty() ? bg_.verdict.edition.c_str() : "",
+                         have && !bg_.verdict.edition.empty() ? ", " : "", state);
     }
   }
   if (!controller_) {
@@ -6195,7 +6587,7 @@ void App::DrawBottomBar() {
     Label(Tr("LANGUAGE"));
     const auto offered = game_.languages.offered();
     const std::string current = registry_.ValueText(registry_.Find(game_.languages.setting));
-    static const char* const kLanguageIds[] = {"us", "ge", "fr", "it", "sp"};
+    static const char* const kLanguageIds[] = {"us", "ge", "fr", "it", "sp", "jp"};
     const auto inPack = [&](const std::string& id) {
       return std::any_of(offered.begin(), offered.end(), [&](const auto& o) { return o.first == id; });
     };
@@ -6396,6 +6788,8 @@ void App::Frame() {
   DrawNotOpenedWindow();
   DrawWelcomeWindow();
   DrawUpdateWindows();
+  modUpd_.Poll();
+  DrawModUpdateWindows();
   DrawPadUi();
   if (controller_) {
     pad::WarnAboutChildWindows();
@@ -6415,11 +6809,13 @@ int App::Run() {
   options_.hiddenPrefixes.push_back("system.extra_disc.");
   script_ = Split(game_.script, '|');
   ReloadMods();
+  InitModUpdater();
+  modUpd_.OnStart();
   ExtraStart();
   LookAtSlots(true);
   if (SlotsOn()) {
     Log("save: \"" + slots_.Active().name + "\" of " + std::to_string(slots_.slots.size()) + " (" +
-        Utf8(sl::RootOf(game_.saves.dataFolder, slots_.Active().id)) + ")");
+        Utf8(sl::RootOf(SavesFolder(), slots_.Active().id)) + ")");
   }
 
   SDL_SetHint(SDL_HINT_APP_NAME, game_.title.c_str());
@@ -6634,6 +7030,7 @@ int App::Run() {
     if (rescale_) {
       ApplyScale();
     }
+    PresenceFrame();
     padIn_.Update(PadInfos(), (SDL_GetWindowFlags(window_) & SDL_WINDOW_INPUT_FOCUS) != 0 && !gameRunning_);
     if (padIn_.Activity() && !controllerFixed_) {
       SetController(true);
@@ -6659,6 +7056,12 @@ int App::Run() {
       if (pickedReady_) {
         pickedReady_ = false;
         SelectDisc(picked_);
+      }
+      if (modPickedReady_) {
+        modPickedReady_ = false;
+        auto done = std::move(modPickDone_);
+        modPickDone_ = nullptr;
+        if (done) done(modPicked_);
       }
       if (extraPickedReady_) {
         extraPickedReady_ = false;
@@ -6758,6 +7161,10 @@ int App::Run() {
   ImGui::DestroyContext();
   for (SDL_Gamepad* pad : pads_) {
     SDL_CloseGamepad(pad);
+  }
+  if (presence_) {
+    presence_->Stop();
+    presence_.reset();
   }
   SDL_DestroyRenderer(renderer_);
   SDL_DestroyWindow(window_);

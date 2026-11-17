@@ -9,6 +9,7 @@
 #include "xd_randomizer.h"
 #include "xd_starter.h"
 #include "xd_user_folder.h"
+#include "xd_xg.h"
 #include "xd_test_run.h"
 #include "online_battle.h"
 #include "online_lobby.h"
@@ -24,6 +25,7 @@
 #include <memory>
 #include <net_crypto.h>
 #include <save_slots.h>
+#include <mod_layout.h>
 #include <xd_legality_disc.h>
 #include <xd_trade_online.h>
 #include "xd_pc_trade.h"
@@ -824,6 +826,7 @@ const Row kRows[] = {
     {"gameplay.tm_move_names", [] { return Tr("TMs show their move"); }, 0, true, ""},
     {"video.battle_revolution_models", [] { return Tr("Battle Revolution models"); }, 0, true, ""},
     {"system.pause_on_focus_loss", [] { return Tr("Pause in the background"); }, 0, true, ""},
+    {"system.discord_presence", [] { return Tr("Discord presence"); }, 0, false, ""},
     {nullptr, [] { return Tr("Back"); }, 0, false, ""},
 };
 
@@ -866,7 +869,9 @@ xd::languages::Pack LanguagePack() {
   }
   return pack;
 }
-bool LanguageInGame(const std::string& id) { return id == "us" || LanguagePack().Has(id); }
+bool LanguageInGame(const std::string& id) {
+  return id == "us" || (xd::xg::Off(xd::xg::Feature::LanguagePacks) == nullptr && LanguagePack().Has(id));
+}
 bool sLangAck = false;
 bool sLangConfirm = false;
 bool IsActionRow(const char* id) { return id != nullptr && std::strncmp(id, "language.", 9) == 0; }
@@ -1102,7 +1107,9 @@ std::string Description(const Row& r) {
                : Tr("Keeps the new language for the next time the game starts. Nothing happens now.");
   }
   if (IsLanguageRow(r.id)) {
-    if (!LanguageInGame(reg.ValueText(reg.Find(r.id)))) {
+    if (const char* xg = xd::xg::Off(xd::xg::Feature::LanguagePacks)) {
+      if (!LanguageInGame(reg.ValueText(reg.Find(r.id)))) return Fmt(Tr("Game text stays as it is on XG: %s Menus added by this port are translated."), Tr(xg));
+    } else if (!LanguageInGame(reg.ValueText(reg.Find(r.id)))) {
       return Tr("Game text needs the European disc pack; menus added by this port are translated.");
     }
     if (LanguagePending() && sLangAck) return Tr("The new language is used the next time the game starts.");
@@ -1425,6 +1432,12 @@ struct State {
   std::string gen4Why;
 } s;
 
+std::string RuleBlockedWhy(const char* id) {
+  if (const char* xg = xd::xg::OffForRule(id)) return Tr(xg);
+  if (!s.gen4Why.empty() && std::string(id).rfind("gen4_", 0) == 0) return s.gen4Why;
+  return {};
+}
+
 const char* RandomizerStyleName(int style) {
   switch (style) {
   case 1: return Tr("Light");
@@ -1654,6 +1667,7 @@ void BuildRows() {
     for (int i = 0; i < static_cast<int>(schema.switches.size()); i++) {
       const int parent = SwitchParent(i);
       if (parent >= 0 && rs.Get(schema, schema.switches[parent].id) == 0) continue;
+      if (schema.switches[i].id == "gen4" && xd::xg::Off(xd::xg::Feature::Gen4) != nullptr) continue;
       if (schema.switches[i].id == "starter.similar" && rs.Get(schema, "starter.choice") == 2) continue;
       s.rows.push_back({Kind::RandomizerSwitch, nullptr, -1, i});
     }
@@ -1704,8 +1718,11 @@ std::string RowLabel(const SRow& r) {
     }
   }
   case Kind::Setting: return r.setting->label();
-  case Kind::Mod: return s.defaults.mods[r.mod].name;
-  case Kind::Randomizer: return Tr("Randomizer");
+  case Kind::Mod:
+    return xd::xg::Off(xd::xg::Feature::Mods) != nullptr ? Fmt(Tr("%s (not available)"), s.defaults.mods[r.mod].name.c_str())
+                                                          : s.defaults.mods[r.mod].name;
+  case Kind::Randomizer:
+    return xd::xg::Off(xd::xg::Feature::Randomizer) != nullptr ? std::string(Tr("Randomizer (not available)")) : std::string(Tr("Randomizer"));
   case Kind::RandomizerSwitch: {
     const auto& def = xd::randomizer::GetSchema().switches[r.sw];
     const SwitchText* t = SwitchTextOf(def.id);
@@ -1719,7 +1736,7 @@ std::string RowLabel(const SRow& r) {
   case Kind::ShinyGift: return Tr("Shiny gift Pokemon");
   case Kind::ShinySpot: return Tr("Shiny Bonsly / Munchlax");
   case Kind::Challenges:
-    if (!s.gen4Why.empty() && std::string(xd::challenges::Rules()[r.sw].id).rfind("gen4_", 0) == 0) {
+    if (!RuleBlockedWhy(xd::challenges::Rules()[r.sw].id).empty()) {
       return Fmt(Tr("%s (not available)"), xd::challenges::Rules()[r.sw].label());
     }
     return xd::challenges::Rules()[r.sw].label();
@@ -1744,6 +1761,7 @@ std::string RowInfo(const SRow& r) {
               "off, also Faithful. Change it later on the SETTINGS page.");
   case Kind::Setting: return Description(*r.setting);
   case Kind::Mod: {
+    if (const char* xg = xd::xg::Off(xd::xg::Feature::Mods)) return Tr(xg);
     const xd::pt::ModChoice& m = s.defaults.mods[r.mod];
     std::string t = Fmt(Tr("%s mod, version %s."), engine::mods::AppliesName(m.applies), m.version.c_str());
     if (!m.reason.empty()) t += " " + Fmt(Tr("Counted as new playthrough only: %s."), m.reason.c_str());
@@ -1751,6 +1769,7 @@ std::string RowInfo(const SRow& r) {
     return t;
   }
   case Kind::Randomizer:
+    if (const char* xg = xd::xg::Off(xd::xg::Feature::Randomizer)) return Tr(xg);
     return Tr("Makes a new game from your disc: other Pokemon in the Poke Spots, other Shadow Pokemon, items in other "
               "places. Light: those only. Classic: also trainers, abilities, TM learners, similar strength. Chaos: all, no "
               "fairness. Custom: each switch yourself.");
@@ -1780,6 +1799,7 @@ std::string RowInfo(const SRow& r) {
   case Kind::RandomizerPaste:
     return s.rMessage.empty() ? std::string(Tr("Copy a code (or a seed number) on the PC, then press A here to use it.")) : s.rMessage;
   case Kind::Challenges:
+    if (const char* xg = xd::xg::OffForRule(xd::challenges::Rules()[r.sw].id)) return Tr(xg);
     if (!s.gen4Why.empty() && std::string(xd::challenges::Rules()[r.sw].id).rfind("gen4_", 0) == 0) {
       return Fmt(Tr("Not available: %s. The Gen 4 Pokemon, moves, cries and models are made from your own Pokemon Battle "
                     "Revolution disc (launcher, Extra assets page)."),
@@ -1804,6 +1824,9 @@ void SetEngine(engine::playthrough::Engine e) {
 void Open(void*) {
   s = State{};
   s.defaults = xd::pt::NewGameDefaults();
+  if (xd::xg::Off(xd::xg::Feature::Mods) != nullptr) {
+    for (xd::pt::ModChoice& m : s.defaults.mods) m.on = false;
+  }
   s.engine = s.defaults.engine;
   for (int w = 0; w < 4; w++) s.timer[w] = xd::speedrun::RowValue(w);
   if (!s.defaults.randomizer.empty()) {
@@ -2050,14 +2073,14 @@ bool Frame(void*, const PortMenuInput* in) {
     }
     break;
   case Kind::Mod:
-    if (left || right || a) {
+    if ((left || right || a) && xd::xg::Off(xd::xg::Feature::Mods) == nullptr) {
       bool& on = s.defaults.mods[r.mod].on;
       on = left ? true : right ? false : !on;
       event = kSoundMove;
     }
     break;
   case Kind::Randomizer:
-    if (left || right || a) {
+    if ((left || right || a) && xd::xg::Off(xd::xg::Feature::Randomizer) == nullptr) {
       SetRandomizerStyle(a ? (s.rStyle == 0 ? 2 : 0) : (s.rStyle + (left ? 4 : 1)) % 5);
       BuildRows();
       event = kSoundMove;
@@ -2080,7 +2103,7 @@ bool Frame(void*, const PortMenuInput* in) {
     break;
   case Kind::Challenges:
     if (left || right || a) {
-      const bool blocked = !s.gen4Why.empty() && std::string(xd::challenges::Rules()[r.sw].id).rfind("gen4_", 0) == 0;
+      const bool blocked = !RuleBlockedWhy(xd::challenges::Rules()[r.sw].id).empty();
       if (blocked) break;
       s.rules[r.sw] = left ? true : right ? false : !s.rules[r.sw];
       event = kSoundMove;
@@ -2584,7 +2607,10 @@ void Details(const PRow& r, std::string& summary, std::string& text) {
     for (const std::string& p : row.problems) add(p);
     for (const std::string& w : row.warnings) add(w);
     add(m.description);
-    add(Fmt(Tr("Changes: %s."), em::DescribeChanges(em::ChangesOf(*row.mod)).c_str()));
+    add(Fmt(Tr("Changes: %s."), em::DescribeChanges(em::ChangesOf(*row.mod, s.gameId)).c_str()));
+    if (const std::string works = em::SupportText(em::SupportOf(row.mod->folder, m)); !works.empty()) {
+      add(Fmt(Tr("Works with: %s."), works.c_str()));
+    }
     const em::AppliesVerdict v = xd::pt::ModApplies(*row.mod);
     switch (v.effective) {
     case em::Applies::AnyTime: add(Tr("Looks and sound only.")); break;
@@ -2600,6 +2626,11 @@ void Details(const PRow& r, std::string& summary, std::string& text) {
       break;
     }
     if (v.Downgraded()) add(Fmt(Tr("(It says %s, but %s.)"), em::AppliesName(v.claimed), v.reason.c_str()));
+    if (m.scripts) {
+      const bool allowed = s.list.Active().scriptsOff.count(row.id) == 0;
+      add(allowed ? Tr("Runs scripts (Lua): allowed. They run in a locked box and cannot touch your files, but they can change how the game plays. Press Z to skip them (the rest of the mod stays).")
+                  : Tr("Runs scripts (Lua): skipped. The rest of the mod is still used. Press Z to allow them."));
+    }
     if (InIds(s.loaded, row.id)) add(Tr("In use now."));
     return;
   }
@@ -2790,6 +2821,14 @@ bool Frame(void*, const PortMenuInput* in) {
       Rebuild();
       event = kSoundMove;
     }
+    if (row.mod != nullptr && row.mod->manifest.scripts && (in->pressed & PAD_TRIGGER_Z) != 0) {
+      auto& off = s.list.Active().scriptsOff;
+      if (off.count(entry.first) != 0) off.erase(entry.first);
+      else off.insert(entry.first);
+      s.notice.clear();
+      Rebuild();
+      event = kSoundMove;
+    }
     const int dir = (in->pressed & (PAD_TRIGGER_L | PAD_BUTTON_X)) != 0 ? -1 : (in->pressed & (PAD_TRIGGER_R | PAD_BUTTON_Y)) != 0 ? 1 : 0;
     if (dir != 0 && em::MoveMod(s.list.Active(), static_cast<size_t>(r.index), dir)) {
       s.cursor += dir;
@@ -2845,6 +2884,7 @@ const PortMenuPage kModsPage{"mods", Open, Frame, Close, nullptr};
 
 }
 
+int sOnlineKind = 0;
 #include "online_trade_page.inc"
 void Neutral(PADStatus& s);
 void Filter(PADStatus* status);
@@ -2897,6 +2937,12 @@ bool Frame(void*, const PortMenuInput* in) {
   }
   if (in->pressed & PAD_BUTTON_A) {
     if (top) {
+      const bool xgOff = (cursor == 0 && xd::xg::Off(xd::xg::Feature::Online) != nullptr) ||
+                         (cursor == 1 && xd::xg::Off(xd::xg::Feature::Mods) != nullptr);
+      if (xgOff) {
+        PlayMenuSound(kTitleMenu, kSoundBack);
+        return true;
+      }
       PlayMenuSound(kTitleMenu, kSoundChoose);
       if (cursor == 0) level = Level::Online, cursor = 0;
       else if (cursor == 1) sPageFromTitle = true, RunSub(&mm::kModsPage);
@@ -2929,13 +2975,15 @@ bool Frame(void*, const PortMenuInput* in) {
   kit::Window(dl, sc, 150.f, 96.f, 490.f, 96.f + 52.f * static_cast<float>(n) + 20.f);
   for (int i = 0; i < n; i++) {
     const float y = 112.f + 52.f * static_cast<float>(i);
-    const bool grey = !top && i == 1 && sBattle == nullptr;
+    const bool grey = (!top && i == 1 && sBattle == nullptr) ||
+                      (top && ((i == 0 && xd::xg::Off(xd::xg::Feature::Online) != nullptr) || (i == 1 && xd::xg::Off(xd::xg::Feature::Mods) != nullptr)));
     const bool sel = i == cursor;
     if (sel) kit::RowSel(dl, sc, 156.f, 484.f, y, 40.f);
     kit::Text(dl, sc, 192.f, y + 8.f, (top ? topItems : onItems)[i], grey ? kit::kDim : sel ? kit::kText : kit::kSoft, 1.f, 270.f, kTitleFont);
   }
   kit::Window(dl, sc, 60.f, 342.f, 580.f, 432.f);
-  const std::string info = !top && cursor == 1 && sBattle == nullptr ? std::string(Tr("Online battles are not in this build yet."))
+  const char* xgWhy = top && cursor == 0 ? xd::xg::Off(xd::xg::Feature::Online) : top && cursor == 1 ? xd::xg::Off(xd::xg::Feature::Mods) : nullptr;
+  const std::string info = xgWhy != nullptr ? std::string(Tr(xgWhy)) : !top && cursor == 1 && sBattle == nullptr ? std::string(Tr("Online battles are not in this build yet."))
                                                                      : std::string((top ? topInfo : onInfo)[cursor]);
   kit::Para(dl, sc, 86.f, 364.f, 468.f, info, kit::kText, 0.9f, 24.f, 2);
   kit::HintBar(dl, sc, Tr("A: choose   B: back"));
@@ -3384,6 +3432,7 @@ void PortXD_RegisterOnlineBattlePage(const PortMenuPage* page) { ex::sBattle = p
 namespace xd::online {
 void LobbyBattleOver() { PortMenu_Open(&::ol::kResultPage); }
 }
+int PortXD_OnlineScreenKind() { return sOnlineKind; }
 bool PortXD_OpenOnlineTrade() { ot::sLive = false; return PortMenu_Open(&ot::kPage); }
 bool PortXD_OpenOnlineTradeLive() {
   ot::sLive = true;

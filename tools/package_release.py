@@ -36,7 +36,8 @@ PIPELINE_LIST = 'initial_pipeline_cache.db'
 LIBRARIES = ['SDL3.dll', 'webgpu_dawn.dll', 'nod.dll', 'dxcompiler.dll', 'dxil.dll', 'zlib1.dll', 'libpng16.dll']
 RUNTIME = ['msvcp140.dll', 'msvcp140_1.dll', 'msvcp140_2.dll', 'msvcp140_atomic_wait.dll', 'vcruntime140.dll',
            'vcruntime140_1.dll']
-FONTS = ['Inter-Regular.ttf', 'Inter-SemiBold.ttf', 'InterDisplay-Bold.ttf', 'OFL.txt']
+FONTS = ['Inter-Regular.ttf', 'Inter-SemiBold.ttf', 'InterDisplay-Bold.ttf', 'OFL.txt', 'NotoSansJP-Regular-subset.ttf',
+         'OFL-NotoSansJP.txt']
 
 READ_ME = """Pokemon XD PC port
 ==================
@@ -64,6 +65,11 @@ data_location.json next to "Pokemon XD Launcher.exe" containing
 Your things are then kept in the "portable" folder next to it. (The same file inside the "game"
 folder works too; its portable folder is then game\\portable.)
 
+Licence
+-------
+The port's own code is under the MIT licence (earlier releases stay CC0). The decomp code it builds on is CC0.
+The parts made by others keep their own licences (game\\licenses).
+
 Shortcuts
 ---------
 The launcher's Disc page has "Create Start menu shortcut" and "Create desktop shortcut". They point to
@@ -88,6 +94,14 @@ In the game, F10 writes a bug report (screenshot, log, settings, the button pres
 %APPDATA%\\Pokemon XD\\reports. A crash or a freeze writes one by itself. The launcher's Reports page
 lists them; "Export..." saves one as a .zip file, with a name and in a place you choose, to send
 yourself. Nothing is ever sent anywhere by the program.
+
+Discord
+-------
+If the Discord app is running on this PC, the launcher and the game show what you are doing ("In the launcher",
+"Story mode", "In a battle", "Online battle") and for how long, next to your name in Discord. It talks only to the
+Discord app on this same PC; nothing goes over the internet from the program, and no save name, trainer name or
+place is shown. It is on by default and is not part of the presets (Original too). To turn it off: Settings page
+of the launcher, or SETTINGS in the game, "Discord presence".
 """
 
 # Appended for test builds (--tester): what a tester needs to know.
@@ -96,6 +110,20 @@ Public beta {version}
 =====================
 Thank you for trying it! This is a beta: expect bugs, and keep a copy of your save.
 Questions, bug reports, other players: https://discord.gg/XVbDVXH4Pn
+
+New in 0.6.0
+------------
+- The port's own code is now under the MIT license (earlier releases stay CC0).
+- Japanese name entry: the name now shows once, on its boxes.
+- Pokemon XG: trainers judge benched Pokemon the same way XG does on Dolphin.
+- Pokemon XG: a Pokemon with Download no longer freezes the game when it comes out.
+- Online double battles: the host can choose moves for both Pokemon again.
+- Pokemon XG (the fan romhack) is supported: play it from your own XG disc, with the randomizer, the challenges and online XG-to-XG battles.
+- Japanese language pack: build it from your own Japanese disc (Extra assets in the launcher) and play the game in Japanese.
+- Japanese and European save import: saves from Dolphin or a GameCube memory card can be brought in (the launcher's save import).
+- Discord presence: if the Discord app is running, it shows what you are playing and for how long. It is a setting and is on by default.
+- Fixed the weather tint (Sunny Day and the others) not covering the whole picture in widescreen.
+- Fixed the first picture after pausing the game sometimes being black.
 
 New in 0.5.6
 ------------
@@ -394,6 +422,7 @@ libpng                 libpng licence                       http://www.libpng.or
 zlib                   zlib licence                         https://zlib.net
 fmt, abseil, nlohmann json, xxHash, zstd, FreeType   their licences (files here)
 Inter font             SIL Open Font License 1.1 (fonts\\OFL.txt)   https://rsms.me/inter
+Noto Sans JP font      SIL Open Font License 1.1 (fonts\\OFL-NotoSansJP.txt)   https://fonts.google.com/noto/specimen/Noto+Sans+JP
 Microsoft C++ runtime (msvcp140*.dll, vcruntime140*.dll)  Visual Studio redistributable files
 """
 
@@ -518,6 +547,8 @@ def main():
         shutil.copy2(src, os.path.join(game, 'licenses', name))
     shutil.copy2(os.path.join(ROOT, 'third_party', 'fonts', 'inter', 'OFL.txt'),
                  os.path.join(game, 'licenses', 'Inter font (OFL).txt'))
+    shutil.copy2(os.path.join(ROOT, 'third_party', 'fonts', 'noto', 'OFL.txt'),
+                 os.path.join(game, 'licenses', 'Noto Sans JP font (OFL).txt'))
     with open(os.path.join(game, 'licenses', 'Third-party notices.txt'), 'w', encoding='utf-8', newline='\r\n') as f:
         f.write(NOTICES)
     # The version, next to the programs: the launcher shows it, and its updater compares the published one with it

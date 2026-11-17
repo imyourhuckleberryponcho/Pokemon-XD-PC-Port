@@ -48,6 +48,17 @@ struct DataTable {
   uint32_t addMax = 0;
   std::string idList;
   std::string idTable;
+  std::vector<uint8_t> addStart;
+  struct AddKey {
+    std::string name;
+    uint32_t offset = 0, mask = 0, shift = 0;
+    uint32_t min = 0, max = 0;
+  };
+  std::vector<AddKey> addKeys;
+  uint32_t addKeyOffset = 0;
+  uint8_t addKeySize = 0;
+  std::vector<std::string> assetKeys;
+  bool addInChunk = false;
   std::vector<std::string> textFields;
   std::string primaryText;
 };
@@ -114,6 +125,8 @@ struct AddedRow {
   std::string mod, modName;
   std::string where;
   std::vector<uint8_t> bytes;
+  std::map<std::string, std::string> assets;
+  bool inFile = false;
 };
 struct AddedText {
   uint32_t key = 0;

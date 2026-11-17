@@ -64,6 +64,16 @@ Choose your disc, how you want to play, your controls and mods, then press **Pla
   Each mod shows its kind (looks and sound: any time; read at start: restart; changes the world or the rules: new
   playthrough). New-playthrough mods are chosen for a new game on the game's New Game setup screen (after NEW GAME;
   setting "New Game setup screen", off in Original) and then stay with that save (docs/PLAY_SETUP.md).
+  0.6.0: turning a mod on offers to turn on what it requires and puts the list in a working order ("Put in working
+  order" does it on demand); a mod that can't be used says why (missing or too old requirement, conflict, another game,
+  a compatibility patch without its mod); same table value / story room / script hook clashes are named with which mod
+  wins. "Check for mod updates" asks first, then asks the mods' update links (https only), shows version, notes and
+  permissions (an added one is named), downloads into a temp folder, checks size, sha256, the system's virus scan
+  (Windows) and the full safety scan, installs after a second yes and keeps the old version ("Roll back to x"); updates
+  must be signed by the author's key, pinned on first use; an update that changes what a playthrough uses is held back
+  unless chosen. "Save this list to a file..." / "Use a list from a file..." share "these mods, these versions, this
+  order". Code: launcher_modupdate.cpp, engine/modupdate; docs/modding/sharing.md, docs/UPDATER.md "0.6.0". Test:
+  `python tools/test_modupdate.py --build <bin>`.
 - **Save**: **Saves**: the list of your saves (README section "Several saves" below). The circle at the left of
   a row marks the save the game loads. A click on a row opens that save right under it: trainer, play time,
   money, party (only shown), its playthrough setup, and **Backups**: one line ("4 kept, newest <when>") with
@@ -311,16 +321,23 @@ Script steps `tradefile:<file>`, `tradepick:<yours>,<theirs>`, `tradeconfirm`. T
 ## Importing a save from Dolphin or a GameCube
 
 Save page > "Import from Dolphin / GameCube..." (docs/SAVE_TRANSFERS.md has the design). Same on Windows, Linux and Mac.
-- The panel **looks by itself** in Dolphin's folders (USA only): Windows `%APPDATA%\Dolphin Emulator` and the older
+- The panel **looks by itself** in Dolphin's folders (USA, European and Japanese cards): Windows `%APPDATA%\Dolphin Emulator` and the older
   `Documents\Dolphin Emulator`, Linux `~/.local/share/dolphin-emu`, `~/.dolphin-emu` and the Flatpak's folder, Mac
-  `~/Library/Application Support/Dolphin`; inside, the GCI folders (`GC/USA/Card A|B/*.gci`) and the memory card files
+  `~/Library/Application Support/Dolphin`; inside, the GCI folders (`GC/USA|EUR|JAP/Card A|B/*.gci`) and the memory card files
   (`GC/*.raw`), and the paths Dolphin.ini names (`MemcardAPath`, `GCIFolderAPath`...). Only files that hold a Pokemon XD
-  (USA) save are listed (other games' files, other regions' saves and damaged ones are left out), newest first. Each row:
+  save (USA, European or Japanese) are listed (other games' files and damaged ones are left out), newest first. Each row:
   trainer, play time, where it is. A click shows what is in it (trainer, ID, play time, money, party, with the disc's
   names) before anything is added.
 - **Choose a file...** opens the system's file window for anything else: a `.gci`, a whole memory card image (`.raw`,
   `.gcp`, `.mcd`; the Pokemon XD file is taken out of it), or a cheat device's `.gcs` / `.sav` wrapper. A file that isn't
-  one is refused in plain words (a Game Boy Advance save says so; another region's XD save says so).
+  one is refused in plain words (a Game Boy Advance save says so).
+- **Import a Japanese save...** (next to the Dolphin button) opens the same panel and the file window at once. A Japanese
+  save (`GXXJ`) is converted to the USA game's layout on the way in: trainer, party, PC boxes, bag, Pokedex, story flags
+  and Shadow Pokemon list are kept, names stay in Japanese characters (they show as kana), and the game continues at
+  the entrance of the map you saved in (the 'save anywhere' room state is dropped). A **European** save (`GXXP`) is
+  added as it is (same layout); the preview says which language it was played in and whether the language pack
+  (Extra assets page) has it: with the Language setting on that language the game reads as it was played, otherwise
+  the game shows English text. Which layout a file has is decided from the save's own section table, not its name.
 - **Add as a new save** makes a NEW save named after the trainer, chosen and opened. It never replaces a save; the file
   chosen is only copied (a save taken out of a card image is written as a `.gci`). The card always holds the GameCube
   byte order (the game's own view is made at the card, `GameViewOf`), so a GameCube / Dolphin save needs no conversion;
@@ -334,7 +351,7 @@ Save page > "Import from Dolphin / GameCube..." (docs/SAVE_TRANSFERS.md has the 
   `XD_DOLPHIN_USER_DIR=<folder>[;<folder>]` names Dolphin folders outright (tests).
 - Tests: `card_sources_test.exe` (Dolphin's folders on made-up Windows / Linux / Mac trees, file kinds);
   `python tools/test_save_import.py --build <bin>` (the scripted launcher on a made-up Dolphin folder: finds the saves,
-  shows them, adds them, refuses a GBA file and a PAL save; Save 1 and Dolphin's folder byte for byte unchanged).
+  shows them, adds them, refuses a GBA file; Japanese and European saves: tools/test_save_import_regions.py; Save 1 and Dolphin's folder byte for byte unchanged).
 
 - **The player's existing save is "Save 1" and nothing of it moves**: the first save's folder is the data folder
   itself, where the save has always been.
@@ -599,6 +616,16 @@ loop's input step (`padIn_.Update`, `osk_.Update`, `padIn_.Feed` before `ImGui::
 `DrawPadUi`. Input goes to Dear ImGui's gamepad navigation (`NavEnableGamepad`, with its own button mapping instead of
 the backend's, so that Confirm is the button labelled A and the shoulders stay free). A page added later needs nothing
 if it uses ordinary widgets; check that its `BeginChild` calls are `NavFlattened`.
+
+## Discord presence
+
+While the launcher is open (and the Discord app runs on the same PC) it shows "In the launcher" in the Discord status,
+with the elapsed time; when Play starts the game it goes quiet and the game shows its own line. Setting
+`system.discord_presence` ("Discord presence", Settings > System; on by default, a preference that is not part of the
+presets, so it is on in Original too). It talks only to the Discord app on this PC over its local pipe / socket; nothing
+goes over the internet and no save or trainer name is sent. Never active in scripted (test) runs unless
+`XD_DISCORD_TEST=<pipe / socket name>` points at a fake chat program. Details: docs/PRESENCE.md. The shared launcher knows
+nothing of Discord's id or the pictures: the game's layer fills `GameInfo::presence`.
 
 ## Original means nothing extra
 

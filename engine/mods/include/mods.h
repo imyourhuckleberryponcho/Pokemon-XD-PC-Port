@@ -5,7 +5,9 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <map>
 #include <memory>
+#include <set>
 #include <functional>
 #include <string>
 #include <string_view>
@@ -34,6 +36,12 @@ struct Manifest {
   std::vector<std::string> required, conflicts;
   std::vector<VersionNeed> requiredVersions;
   std::vector<std::string> after;
+  std::vector<std::string> before;
+  std::vector<std::string> worksWith, recommends;
+  std::vector<std::string> onlyWith;
+  std::string updates;
+  std::map<std::string, std::string> links;
+  std::string authorKey;
   int priority = 0;
   Applies applies = Applies::NewPlaythrough;
   bool appliesGiven = false;
@@ -53,6 +61,7 @@ struct ModList {
   struct Profile {
     std::string name;
     std::vector<std::pair<std::string, bool>> mods;
+    std::set<std::string> scriptsOff;
   };
   std::string active = "default";
   std::vector<Profile> profiles;
@@ -89,6 +98,9 @@ struct Replacement {
 
 using LooksOrSound = std::function<bool(const std::string& path, int fsysType)>;
 
+using CheckEntry = std::function<bool(int fsysType, const std::string& mod, std::vector<uint8_t>& data,
+                                      const std::vector<AddedRow>& rows, std::string& why)>;
+
 struct AppliesVerdict {
   Applies claimed = Applies::NewPlaythrough;
   Applies effective = Applies::NewPlaythrough;
@@ -96,16 +108,37 @@ struct AppliesVerdict {
   bool Downgraded() const { return effective != claimed; }
 };
 
+struct RowsJob {
+  std::vector<AddedRow>* rows = nullptr;
+  std::map<std::string, std::filesystem::path> modFolders;
+  std::string gameId;
+  std::function<bool(const std::string& path, std::vector<uint8_t>& out)> readFile;
+  EntryReader readEntry;
+  const DataCatalog* catalog = nullptr;
+  std::vector<std::string> discFiles;
+  CheckEntry checkEntry;
+  std::function<void(Message::Level, const std::string&)> say;
+  struct OutFile {
+    std::string discPath;
+    std::vector<uint8_t> data;
+    std::string mods;
+  };
+  std::vector<OutFile> outFiles;
+};
+
 struct LoadOptions {
   std::filesystem::path modsFolder;
   std::filesystem::path listFile;
   DiscView disc;
   CatalogBuilder dataCatalog;
+  bool catalogForScripts = false;
+  CheckEntry checkEntry;
   LooksOrSound looksOrSound;
   bool usePlaythroughMods = false;
   std::vector<std::string> playthroughMods;
   std::function<bool(const DataCatalog& catalog, const EntryReader& read, std::vector<DataModFile>& out, std::string& error)>
       generateData;
+  std::function<void(RowsJob& job)> finishRows;
   bool listReadOnly = false;
   struct ExtraLayer {
     std::string id;
@@ -141,6 +174,7 @@ struct LoadResult {
   std::shared_ptr<const DataCatalog> catalog;
   std::vector<uint8_t> program;
   std::vector<ScriptFile> scripts;
+  std::vector<std::string> scriptsSwitchedOff;
 
   bool HasWarnings() const;
   std::string Report() const;
@@ -179,7 +213,7 @@ struct ModChanges {
   std::vector<std::string> dataFiles;
   bool Empty() const { return files.empty() && entries.empty() && dataFiles.empty(); }
 };
-ModChanges ChangesOf(const ModFolder& mod);
+ModChanges ChangesOf(const ModFolder& mod, std::string_view gameId = std::string_view());
 std::string DescribeChanges(const ModChanges& changes);
 
 struct ReviewRow {
@@ -188,12 +222,42 @@ struct ReviewRow {
   const ModFolder* mod = nullptr;
   std::vector<std::string> problems;
   std::vector<std::string> warnings;
+  std::vector<std::string> suggestions;
   bool Usable() const { return mod != nullptr && problems.empty(); }
 };
 struct Review {
   std::vector<ReviewRow> rows;
 };
 Review ReviewList(const ModList::Profile& profile, const std::vector<ModFolder>& found, std::string_view gameId);
+
+struct OrderResult {
+  std::vector<std::string> order;
+  std::vector<std::string> cycle;
+  bool changed = false;
+};
+OrderResult SortMods(const std::vector<const ModFolder*>& mods);
+bool SortProfile(ModList::Profile& profile, const std::vector<ModFolder>& found, OrderResult* result = nullptr);
+
+struct Requirements {
+  std::vector<const ModFolder*> turnOn;
+  struct Missing {
+    std::string id, op, version;
+    std::string have;
+    std::string link;
+    std::string neededBy;
+  };
+  std::vector<Missing> missing;
+  std::vector<std::string> conflicts;
+};
+Requirements ResolveRequirements(const ModFolder& mod, const std::vector<ModFolder>& found, const std::vector<std::string>& onIds,
+                                 std::string_view gameId);
+
+struct FineConflict {
+  enum class Kind { DataField, StoryRoom, LuaHook } kind = Kind::DataField;
+  std::string what;
+  std::string earlier, later;
+};
+std::vector<FineConflict> FineConflicts(const std::vector<const ModFolder*>& inOrder, std::string_view gameId = std::string_view());
 
 bool MoveMod(ModList::Profile& profile, size_t index, int dir);
 

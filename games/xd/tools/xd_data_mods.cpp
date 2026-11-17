@@ -366,6 +366,7 @@ int run_mods(const fs::path& modsFolder, const fs::path& listFile, bool printIds
   options.modsFolder = modsFolder;
   options.listFile = listFile;
   options.disc = em::OpenDiscView();
+  options.finishRows = xd::data::BuildRooms;
   options.dataCatalog = xd::data::BuildDataCatalog;
   options.listReadOnly = true;
   std::printf("disc %s, mods in %s, list %s\n", options.disc.gameId.c_str(), modsFolder.string().c_str(), listFile.string().c_str());
@@ -387,9 +388,9 @@ int run_mods(const fs::path& modsFolder, const fs::path& listFile, bool printIds
     std::vector<XDAddedRow> rows;
     for (const em::AddedRow& r : result.addedRows) {
       std::printf("  %s \"%s\" = %s #%u (entry %u, a copy of #%u)   [%s, %s]\n", r.table.c_str(), r.key.c_str(),
-                  r.table == "pokemon_data" ? "species" : r.table == "waza_data" ? "move" : "item", r.id, r.row, r.copyOf, r.mod.c_str(),
+                  r.table == "pokemon_data" ? "species" : r.table == "waza_data" ? "move" : r.table == "poke_face" ? "face" : r.table == "item_data_prime" ? "item" : "row", r.id, r.row, r.copyOf, r.mod.c_str(),
                   r.where.c_str());
-      rows.push_back({r.table.c_str(), r.id, r.row, r.copyOf, r.bytes.data(), r.bytes.size()});
+      if (!r.inFile) rows.push_back({r.table.c_str(), r.id, r.row, r.copyOf, r.bytes.data(), r.bytes.size()});
     }
     for (const em::AddedText& t : result.addedTexts) std::printf("  text %u (%s): \"%s\"\n", t.key, t.label.c_str(), t.text.c_str());
     std::vector<uint8_t> original;

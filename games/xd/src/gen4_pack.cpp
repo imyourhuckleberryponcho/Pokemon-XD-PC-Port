@@ -47,8 +47,8 @@ extern uint32_t pokemon_nakigoe_data_number;
 namespace {
 
 constexpr int kPackVersion = 2;
-constexpr uint32_t kPkxSpare = 256;
-constexpr uint32_t kWaveOld = 389, kWaveSpare = 256;
+constexpr uint32_t kPkxSpare = 1024;
+constexpr uint32_t kWaveOld = 389, kWaveSpare = 1024;
 
 bool sLoaded = false;
 bool sSpots = false;
@@ -261,6 +261,13 @@ bool PackPresent(std::string* why) {
 }
 
 bool Loaded() { return sLoaded; }
+uint32_t ExtraRowCount(const char* table) {
+  uint32_t n = 0;
+  if (sLoaded) {
+    for (const RowSpec& r : sRows) n += r.table == table ? r.count : 0;
+  }
+  return n;
+}
 bool SpotsLoaded() { return sLoaded && sSpots; }
 
 void Prepare(bool wanted, bool spots, engine::mods::LoadOptions& options, std::vector<engine::mods::DataModFile>& dataFiles) {

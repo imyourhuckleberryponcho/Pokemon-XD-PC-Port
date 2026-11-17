@@ -158,6 +158,14 @@ done
 if [ -d "$BIN/fonts" ]; then
   cp -R "$BIN/fonts" "$APP/Contents/Resources/fonts"
   ln -s "../Resources/fonts" "$APP/Contents/MacOS/fonts"
+  # 0.6.0: the Japanese launcher text needs Noto Sans JP (a subset); a log line the workflow checks
+  if [ -f "$APP/Contents/Resources/fonts/NotoSansJP-Regular-subset.ttf" ]; then
+    echo "  fonts: Noto Sans JP subset included ($(wc -c < "$APP/Contents/Resources/fonts/NotoSansJP-Regular-subset.ttf" | tr -d ' ') bytes), licence $([ -f "$APP/Contents/Resources/fonts/OFL-NotoSansJP.txt" ] && echo included || echo MISSING)"
+  else
+    echo "  fonts: Noto Sans JP subset NOT included (the launcher's Japanese text would show blanks)"
+  fi
+else
+  echo "  fonts: NOT included ($BIN/fonts is not there)"
 fi
 if [ -x "$APP/Contents/Resources/xd_languages/xd_languages" ]; then
   ln -s "../Resources/xd_languages" "$APP/Contents/MacOS/xd_languages"

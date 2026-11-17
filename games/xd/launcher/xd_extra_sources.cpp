@@ -75,6 +75,24 @@ const std::vector<launcher::GameInfo::ExtraSource>& ExtraSources() {
     languages.converterArguments = {"--pal-disc", "{disc}", "--xd-disc", "{game_disc}", "--out", "{out}"};
     languages.doneText = Tr("Choose the language on the Play bar (or in the game's SETTINGS): it applies the next time the game starts.");
     v.push_back(languages);
+    launcher::GameInfo::ExtraSource japanese;
+    japanese.id = xd::languages::kJpFolderName;
+    japanese.name = "Pokemon XD (Japanese)";
+    japanese.gameIds = {xd::languages::kJpGameId};
+    japanese.provides = Tr("Japanese (from the Japanese disc)");
+    japanese.makeLabel = Tr("Make the Japanese pack");
+    japanese.how = Tr("The program xd_languages, which ships with the game, copies the Japanese texts, fonts and pictures with words "
+                      "from that disc into the folder extra_assets\\languages_jp in your data folder; the game itself stays the USA "
+                      "game and only its text and pictures change. Your USA copy (the Disc page) is needed too: the game's code comes "
+                      "from it.");
+    japanese.discSetting = "system.extra_disc.languages_jp";
+    japanese.manifestId = xd::languages::kJpManifestId;
+    japanese.converterStem = "xd_languages";
+    japanese.converterFolder = "xd_languages";
+    japanese.converterOverrideEnv = "XD_LANGUAGES_EXE";
+    japanese.converterArguments = {"--jp-disc", "{disc}", "--xd-disc", "{game_disc}", "--out", "{out}"};
+    japanese.doneText = Tr("Choose Japanese on the Play bar (or in the game's SETTINGS): it applies the next time the game starts.");
+    v.push_back(japanese);
     return v;
   }();
   return sources;

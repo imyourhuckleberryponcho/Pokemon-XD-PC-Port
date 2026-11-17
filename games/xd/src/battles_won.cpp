@@ -70,6 +70,7 @@ void Frame() {
 }
 
 bool Won(unsigned battle) { return sWon.count(battle) != 0; }
+bool InFight() { return sInFight; }
 bool Complete() { return sComplete; }
 std::vector<uint32_t> List() { return std::vector<uint32_t>(sWon.begin(), sWon.end()); }
 std::vector<uint32_t> SinceStart() { return std::vector<uint32_t>(sSinceStart.begin(), sSinceStart.end()); }

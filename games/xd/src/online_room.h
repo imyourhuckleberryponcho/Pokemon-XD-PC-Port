@@ -26,6 +26,7 @@ struct RoomRules {
 struct Capabilities {
   int protocol = kBattleProtocol;
   std::string disc = "GXXE01";
+  std::string edition = "xd";
   std::string ruleSet = "classic";
   std::string gen4Pack;
   std::string mods;
@@ -40,7 +41,7 @@ struct Fingerprint {
 
 bool ParseRules(const std::string& text, RoomRules& out, std::string* error);
 bool RulesValid(const RoomRules& r, std::string* error);
-std::string RulesText(const RoomRules& r);
+std::string RulesText(const RoomRules& r, const std::string& edition = "xd");
 
 std::vector<uint8_t> Encode(const Fingerprint& f);
 bool Decode(const std::vector<uint8_t>& blob, Fingerprint& out);

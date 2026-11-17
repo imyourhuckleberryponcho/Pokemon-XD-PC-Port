@@ -1,0 +1,62 @@
+# Japanese texts made by the port (machine translation, not from the Japanese disc): the texts the Japanese game does not have
+# and that the Colosseum-style screens need. Read by games/xd/tools/xd_languages_jp_gen.py (-> xd_languages_jp_texts.inc, compiled into xd_languages).
+# id <TAB> kind <TAB> text.  kind: D = dialogue / menu text (every character must be in fonts 0 and 1 of the Japanese main.dol),
+# L = label (kana only: the label fonts 2 / 3 / 4), K = kept as the USA text on purpose (no words), C = the Japanese bank's own text of
+# the id after @ (the Japanese game has these classes under other ids).
+# Text: {HH} or {HH:args} = a control code as in the USA text (HH hex; {00} = new line); {04}kanji{05}reading{06} = ruby.
+# The build checks that every control code of the USA text is still there and that every character exists in its font.
+0xF3	D	{07:00}メモリーカードを　フォーマットすると{00}いままでの　セーブデータが　すべて{00}きえてしまいます。{00}よろしいですか？
+0x445B	L	{07:03}とくせい：
+0xC753	L	おわる
+0xC4AC	L	{07:01}おわる
+0x445C	L	{07:01}{53:01}おわる
+0x4459	L	{07:01}グループバトル
+0x445A	L	{07:01}クイックバトル
+0x4651	L	げんご
+0x444A	L	{07:01}{53:01}プレイ{00}{53:01}デモ
+0x4423	D	ＧＢＡ　ポケモンソフトの　げんごが{00}ゲームキューブと　ちがいます。{6E}ＧＢＡ　ポケモンソフトと{00}ゲームキューブの　げんごを{00}おなじに　してください。{6D}
+0xD15F	K	Lv
+0xD160	L	{07:02}テンポ
+0xD161	L	{07:03}ならびを　きめる
+0xD2FA	D	{07:00}もちものが　いっぱいなので{00}{2D}を　{2F}{04}個{05}こ{06}　パソコンに{00}{04}転送{05}てんそう{06}しました。{02}
+0xD2FB	D	{07:00}パソコンも　いっぱいなので{00}{2D}を　{2F}{04}個{05}こ{06}　あきらめるしかない！{02}
+0xDB44	K	:
+0xDB45	K	:
+0x1B7F	D	{07:00}シャドー{04}幹部{05}かんぶ{06}
+0x1B80	C	@0x1B65
+0x1B81	C	@0x1B66
+0x1B82	C	@0x1B67
+0x1B83	C	@0x1B68
+0x1B84	C	@0x1B69
+0x1B85	C	@0x1B6F
+0x1B86	C	@0x1B78
+0x1B87	C	@0x1B7C
+0x3C35	D	{07:01}ポケモンリスト
+0x43BF	L	おわる
+0x43C2	L	おわる
+0x43FC	L	おわる
+0x43C8	L	やめる
+0x43FB	L	かくにん
+0x43C0	D	えらんだ　ポケモンで{00}バトルを　はじめますか？
+0x43C1	D	えらんだ　ポケモンは{00}ルールに　あっていません！
+0x43C9	D	このルールで　よければ{00}すべてのコントローラの　Ａボタンを{00}おしてください
+0x43CC	D	チームの　ポケモンの{00}ごうけいレベル
+0x43D0	D	おなじ　ポケモンを{00}チームに　いれてもいい？
+0x43D1	D	ポケモンに　もちものを{00}もたせてもいい？
+0x43D2	D	チームの　ポケモンに{00}おなじ　もちものを　もたせてもいい？
+0x441A	D	ポケモン
+0x441B	D	せいげんなし
+0x441D	D	つうしんするには{00}ポケモンセンターで{00}レポートを　かいてください！
+0x442D	D	ＧＢＡの　でんげんを　きり{00}ポートから　ＧＢＡケーブルを{00}ぬいてください。{6E}ポート１に　コントローラを{00}つないでください。{6D}
+0x4431	D	このゲームパックは　ポケモンＸＤと{00}こうかんできません。
+0x4432	D	セーブファイルが　きえてしまいました……
+0x4437	D	ポケモンＸＤの　てもちポケモンを{00}かくにんしています……
+0x444D	L	{07:01}{53:01}おわる
+0x8A	D	メモリーカードの　あきが　たりません。{03}ポケモンコロシアムの　セーブには{00}ファイル１つと　４８ブロックの　あきが{00}ひつようです。{03}ゲームキューブの　メモリーカードがめんで{00}あきを　つくってください。{02}
+0xCC	D	ＧＢＡの　ゲームパックの　げんごが　ちがいます。{00}ポケモンコロシアムで　えらんだ　げんごと{00}ＧＢＡの　げんごを　あわせてください。{03}ポート{2F}に　つないだ　ＧＢＡの{00}でんげんを　きってください。{02}
+0x3B23	K	=
+0x3B2B	K	=
+0x3B35	K	=
+0x3B36	K	=
+0x3B37	K	=
+0x3B9F	K	=

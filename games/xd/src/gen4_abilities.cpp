@@ -105,6 +105,11 @@ void AppendAbilityTexts(std::vector<std::pair<uint32_t, std::string>>& texts) {
   for (size_t i = 0; i < sizeof kMessages / sizeof kMessages[0]; i++) texts.emplace_back((kGroup << 20) | (0x9000 + i), kMessages[i]);
 }
 
+void AppendAbilityNames(std::vector<std::pair<std::string, int64_t>>& out) {
+  if (!AbilityTextsWanted()) return;
+  for (const Ability& a : kAbilities) out.emplace_back(a.name, a.id);
+}
+
 void InstallAbilityRows() {
   if (!AbilityTextsWanted()) return;
   static bool done = false;

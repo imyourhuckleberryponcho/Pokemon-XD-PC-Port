@@ -25,12 +25,14 @@ typedef struct PortXDDiscVerdict {
   char format[16];
   bool remembered;
   bool stopped;
+  bool xg;
 } PortXDDiscVerdict;
 
 void PortXD_DiscVerifySetTranslator(const char* (*translate)(const char* english));
 void PortXD_JudgeDisc(const char* discPath, PortDiscHashProgress progress, void* user, PortXDDiscVerdict* out);
 
 #define XD_DISC_SHA1_GXXE01 "c1b5218f832403d15aa500ac4d6aacc8865c792d"
+#define XD_DISC_SHA1_XG "7af7d11916f69d3af1041c728f9231ba9b38f29e"
 
 bool PortXD_CheckDisc(const char* discPath);
 

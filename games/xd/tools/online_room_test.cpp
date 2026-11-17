@@ -174,6 +174,18 @@ int main() {
     CHECK(!ParseRules("team=draft;draft=size 3", d, &err));
     CHECK(RulesText(d).find("random offers") != std::string::npos);
   }
+  {
+    Fingerprint xd, xg;
+    xg.caps.edition = "xg";
+    ParseRules("rules=classic", xd.rules, &err);
+    xg.rules = xd.rules;
+    Fingerprint back;
+    CHECK(Decode(Encode(xg), back) && back.caps.edition == "xg");
+    CHECK(Decode(Encode(xd), back) && back.caps.edition == "xd");
+    CHECK(Has(Judge(xd.caps, xd.rules, xg.caps, true).refuse, "cannot battle or trade"));
+    CHECK(Has(Judge(xg.caps, xg.rules, xd.caps, false).refuse, "cannot battle or trade"));
+    CHECK(Judge(xg.caps, xg.rules, xg.caps, true).Ok());
+  }
   std::printf("online_room_test: %d checks, %d failed\n", sChecks, sFailed);
   return sFailed ? 1 : 0;
 }

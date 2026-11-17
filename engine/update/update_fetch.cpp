@@ -211,6 +211,10 @@ bool FetchHttp(const std::string& url, Sink& sink, const FetchOptions& options, 
 }
 
 bool Fetch(const std::string& url, Sink& sink, const FetchOptions& options, std::string& error) {
+  if (options.httpsOnly && url.rfind("https://", 0) != 0) {
+    error = Tr("only https:// addresses are used here");
+    return false;
+  }
   fs::path file;
   if (FilePathOf(url, file)) {
     return FetchFile(file, sink, options, error);

@@ -9,6 +9,8 @@
 namespace xd::online {
 
 struct PcInfo {
+  std::string edition = "xd";
+  std::string gen4Off;
   bool gen4PackPresent = false;
   bool gen4Loaded = false;
 };
@@ -34,7 +36,7 @@ bool Cycle(RoomRules& r, const std::string& id, int dir, const PcInfo& pc);
 RoomRules Sanitized(RoomRules r, const PcInfo& pc);
 RoomRules DefaultRoom();
 
-std::vector<std::string> RoomLines(const RoomRules& r);
+std::vector<std::string> RoomLines(const RoomRules& r, const std::string& edition = "xd");
 
 std::string RulesToText(const RoomRules& r);
 

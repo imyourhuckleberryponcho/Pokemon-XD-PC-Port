@@ -23,14 +23,21 @@ void Register(es::Registry& registry) {
   registry.Add(D::Enum("system.language", C::System, "Language",
                        "The language of the game's texts, menus and pictures. English (US) is the USA game as it is. The "
                        "others come from the European (PAL) copy of the game, added on the launcher's Extra assets page "
-                       "(\"Languages (from the European disc)\"); a language the pack doesn't have falls back to English. "
+                       "(\"Languages (from the European disc)\"), and Japanese from the Japanese copy (\"Japanese (from the Japanese disc)\"); a language the pack doesn't have falls back to English. "
                        "Applies the next time the game starts. It changes only text and pictures, not how the game plays.",
-                       {{"us", "English (US)"}, {"ge", "German"}, {"fr", "French"}, {"it", "Italian"}, {"sp", "Spanish"}}, "us", "us")
+                       {{"us", "English (US)"}, {"ge", "German"}, {"fr", "French"}, {"it", "Italian"}, {"sp", "Spanish"}, {"jp", "Japanese"}}, "us", "us")
                    .Preference()
                    .ForGames({kGameId})
                    .Implemented());
   registry.Add(D::Text("system.extra_disc.languages", C::System, "European disc image (for languages)",
                        "The European (PAL) Pokemon XD disc image the launcher's Extra assets page makes the language "
+                       "pack from (empty: none chosen yet).",
+                       "", "")
+                   .Preference()
+                   .ForGames({kGameId})
+                   .Implemented());
+  registry.Add(D::Text("system.extra_disc.languages_jp", C::System, "Japanese disc image (for Japanese)",
+                       "The Japanese Pokemon XD disc image the launcher's Extra assets page makes the Japanese "
                        "pack from (empty: none chosen yet).",
                        "", "")
                    .Preference()
@@ -120,7 +127,9 @@ std::string DocsIntro() {
          "  (bug fixes, battle speed, purification) stay as they were.\n"
          "- **Custom** is whatever the player changed, starting from one of the two.\n"
          "- **Preferences** (\"same\" in the Enhanced column: volumes, window, controls) don't change the game, so\n"
-         "  they are the player's in every preset and never make a run \"not Original\".\n"
+         "  they are the player's in every preset and never make a run \"not Original\". Discord presence is one: on by\n"
+         "  default for everyone (Original too), a preference and not part of the presets; it only shows a line in\n"
+         "  the Discord app on the same PC and never touches the game (docs/PRESENCE.md).\n"
          "- **Works yet**: \"not yet\" means the setting is planned and listed, but changing it does nothing so far.\n"
          "\n"
          "The settings live in `%APPDATA%\\Pokemon XD\\settings.ini` (Notepad works). `xd_settings show` prints what a\n"

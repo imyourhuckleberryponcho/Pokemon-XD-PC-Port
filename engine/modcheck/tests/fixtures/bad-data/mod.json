@@ -1,0 +1,9 @@
+{
+  "id": "bad-data",
+  "name": "Bad data mod",
+  "version": "1.0",
+  "author": "Test Author",
+  "description": "Made up to be wrong in many ways.",
+  "game": "GXXE01",
+  "applies": "any_time"
+}

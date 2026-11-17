@@ -49,15 +49,20 @@ static uint32_t xd_arena_lo(uint32_t imageEnd) {
   return (dbStackAddr + 0x1F) & ~0x1Fu;
 }
 
+static int sIsXG = 0;
+int PortXD_IsXG(void) { return sIsXG; }
+
 bool PortXD_LoadDolTables(const uint8_t* dol, size_t dolSize, char* error, size_t errorSize) {
   char sha1[41];
   PortSha1Hex(dol, dolSize, sha1);
-  if (strcmp(sha1, XD_DOL_SHA1_GXXE01) != 0) {
+  const bool xg = strcmp(sha1, XD_DOL_SHA1_XG) == 0;
+  if (strcmp(sha1, XD_DOL_SHA1_GXXE01) != 0 && !xg) {
     snprintf(error, errorSize,
              "This isn't the USA version of Pokemon XD this port supports (main.dol SHA-1 %s, expected %s)",
              sha1, XD_DOL_SHA1_GXXE01);
     return false;
   }
+  sIsXG = xg ? 1 : 0;
   uint8_t* mem1 = PortMem_MEM1();
   if (mem1 != NULL) {
     uint32_t imageEnd = 0;

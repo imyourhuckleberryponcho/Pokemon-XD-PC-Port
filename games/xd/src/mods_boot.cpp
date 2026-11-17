@@ -2,6 +2,7 @@
 #include "i18n.h"
 #include "xd_battle_models.h"
 #include "xd_user_folder.h"
+#include "xd_xg.h"
 #include "xd_playthrough_files.h"
 #include "xd_randomizer.h"
 #include "xd_starter.h"
@@ -12,6 +13,7 @@
 #include "xd_scripts.h"
 
 #include <mods.h>
+#include <mod_layout.h>
 #include <mods_disc.h>
 #include <port_disc.h>
 #include <port_message.h>
@@ -180,6 +182,10 @@ extern "C" bool PortXD_LoadMods(void) {
     std::fprintf(stderr, "[mods] XD_MODS=0: no mods\n");
     return true;
   }
+  if (const char* why = xd::xg::Off(xd::xg::Feature::Mods)) {
+    std::fprintf(stderr, "[mods] XG mode: no mods (%s)\n", why);
+    return true;
+  }
   const std::filesystem::path user = xd::SettingsFolder();
   em::LoadOptions options;
   options.modsFolder = user / L"mods";
@@ -198,20 +204,34 @@ extern "C" bool PortXD_LoadMods(void) {
   }
   if (std::strcmp(xd::languages::Active()->id, "us") != 0) {
     const std::string name = std::string("Languages (") + xd::languages::Active()->name + ")";
-    options.extraLayers.push_back({"languages", name, xd::languages::LoadedPack().folder});
-    options.extraLayers.push_back({"languages-list", name + ", archive list",
-                                   xd::languages::LoadedPack().folder / (std::string("lang_") + xd::languages::Active()->id)});
+    const std::string id = xd::languages::Active()->id;
+    options.extraLayers.push_back({"languages", name, xd::languages::LoadedPack().FolderOf(id)});
+    if (id != xd::languages::kJpId) {
+      options.extraLayers.push_back({"languages-list", name + ", archive list",
+                                     xd::languages::LoadedPack().folder / (std::string("lang_") + id)});
+    }
     if (!PortXD_LanguageMenuTable()) {
       std::fprintf(stderr, "[languages] problem: the menu picture table of the pack could not be used\n");
     }
   }
-  options.dataCatalog = xd::data::BuildDataCatalog;
+  options.catalogForScripts = true;
+  options.checkEntry = xd::data::CheckModEntry;
+  options.finishRows = xd::data::BuildRooms;
+  options.dataCatalog = [](const em::EntryReader& read, em::DataCatalog& out, std::string& error) {
+    if (!xd::data::BuildDataCatalog(read, out, error)) return false;
+    if (const char* why = xd::xg::Off(xd::xg::Feature::DataAddRows)) {
+      for (em::DataTable& t : out.tables) t.addable = false;
+      std::fprintf(stderr, "[mods] data mods: no added rows in this edition (%s)\n", why);
+    }
+    return true;
+  };
   options.looksOrSound = xd::playthrough::LooksOrSound;
   options.usePlaythroughMods = xd::pt::BootWorldMods(options.playthroughMods);
   const std::string randomizerCode = xd::pt::BootRandomizer();
   xd::starter::SetPlan({});
   std::vector<em::DataModFile> gen4Files;
   xd::gen4::Prepare(xd::pt::BootGen4(), xd::pt::BootGen4Spots(), options, gen4Files);
+  xd::data::SetFlagRowsTaken(xd::gen4::ExtraRowCount("flag_data"));
   xd::modern::Prepare(xd::pt::BootModernTypes(), xd::gen4::Loaded(), gen4Files);
   {
     std::string layers = "base disc";
@@ -234,7 +254,8 @@ extern "C" bool PortXD_LoadMods(void) {
       xr::ApplyStyle(s, xr::Style::Classic);
       bool seedOnly = false;
       if (!engine::randomizer::DecodeCode(xr::GetSchema(), randomizerCode, s, seedOnly, error)) return false;
-      if (xr::CodeIncludesGen4(randomizerCode)) {
+      if (xd::xg::Off(xd::xg::Feature::Gen4) != nullptr) s.Set(xr::GetSchema(), "gen4", 0);
+      if (xr::CodeIncludesGen4(randomizerCode) && xd::xg::Off(xd::xg::Feature::Gen4) == nullptr) {
         if (!xd::gen4::Loaded()) {
           error = "this randomizer code includes the Gen 4 Pokemon, but their files are not available (made from your Pokemon "
                   "Battle Revolution disc on the launcher's Extra assets page)";
@@ -243,7 +264,7 @@ extern "C" bool PortXD_LoadMods(void) {
         if (!xr::LoadGen4Species(xd::gen4::PackFolder() / L"randomizer.txt", error)) return false;
       }
       xr::Result r;
-      if (!xr::Generate(catalog, read, s, r, error)) return false;
+      if (!xr::Generate(catalog, read, s, r, error, xd::xg::On() ? &xr::kXGStarterBase : nullptr)) return false;
       xd::starter::SetPlan(r.starter);
       out.push_back({xr::kModId, "Randomizer", "data/randomizer.json", r.GameJson("randomizer " + r.code), true});
       const std::filesystem::path folder = xd::CardRoot() / L"playthroughs" / L"randomizer" / r.code;
@@ -313,8 +334,10 @@ extern "C" bool PortXD_LoadMods(void) {
         std::error_code tec;
         if (f.texturePack) {
           packs.push_back({f.folder, f.manifest.name, f.looseFiles});
-        } else if (std::filesystem::is_directory(f.folder / "textures", tec)) {
-          packs.push_back({f.folder / "textures", f.manifest.name + " (textures)", false});
+        } else {
+          for (const std::filesystem::path& t : em::LayoutFolders(f.folder, options.disc.gameId, "textures")) {
+            packs.push_back({t, f.manifest.name + " (textures)", false});
+          }
         }
       }
     }

@@ -3,6 +3,7 @@
 #include "dol_tables.h"
 
 #include <data_table.h>
+#include <port_disc.h>
 #include <gs_formats.h>
 
 #include <algorithm>
@@ -46,10 +47,11 @@ struct Alias {
   const char* table;
   const char* alias;
 };
+uint32_t sFlagRowsTaken = 0;
 const Alias kAliases[] = {
     {"pokemon_data", "pokemon"},     {"waza_data", "moves"},    {"item_data_prime", "items"},
     {"zokusei_data", "types"},       {"pokemon_seikaku_data", "natures"},
-    {"story_trainers", "trainers"},  {"story_pokemon", "trainer_pokemon"}, {"darkpokemon_shadow", "shadow_pokemon"},
+    {"flag_data", "flags"},          {"floordata", "floors"},  {"fight_encount_data", "battles"},  {"story_trainers", "trainers"},  {"story_pokemon", "trainer_pokemon"}, {"darkpokemon_shadow", "shadow_pokemon"},
 };
 struct Values {
   const char* table;
@@ -626,6 +628,21 @@ void add_decks(const em::EntryReader& read, em::DataCatalog& out) {
         t.fields = k.fields();
         t.note = entry + " (" + k.chunk + ")";
         for (const std::string& a : places) t.places.push_back({a, entry, c.offset + 0x10});
+        const bool trainerRows = std::strcmp(k.chunk, "DTNR") == 0, pokemonRows = std::strcmp(k.chunk, "DPKM") == 0;
+        if ((trainerRows || pokemonRows) && c.size == 0x10 + static_cast<uint64_t>(c.count) * k.size) {
+          t.addable = true;
+          t.addInChunk = true;
+          t.addMax = trainerRows ? 64 : 256;
+          if (pokemonRows) {
+            t.entryNames = lower + "_pokemon_row";
+            out.lists.push_back(em::NameList{t.entryNames, {}, 0});
+          }
+        }
+        if (trainerRows) {
+          for (em::DataField& f : t.fields) {
+            if (f.name == "pokemonDataID") f.values = lower + "_pokemon_row";
+          }
+        }
         if (std::strcmp(k.chunk, "DTNR") == 0) {
           for (const DeckChunk& s : first) {
             if (s.id != "DSTR") continue;
@@ -761,6 +778,162 @@ void add_menu_module(const em::EntryReader& read, em::DataCatalog& out) {
 
 void AddDeckTables(const em::EntryReader& read, em::DataCatalog& out) { add_decks(read, out); }
 
+bool CheckModEntry(int fsysType, const std::string& mod, std::vector<uint8_t>& data, const std::vector<em::AddedRow>& rows,
+                   std::string& why) {
+  if (fsysType != 7) return true;
+  char text[160] = "";
+  if (!Tiga_Validate(data.data(), data.size(), text, sizeof(text))) {
+    why = std::string("it is not a valid script: ") + text;
+    return false;
+  }
+  std::vector<uint32_t> from, to;
+  for (const em::AddedRow& r : rows) {
+    if (r.table == "flag_data" && r.mod == mod) {
+      from.push_back(Tiga_FlagPlaceholder(r.key.c_str()));
+      to.push_back(r.id);
+    } else if (r.table == "floordata" && r.mod == mod) {
+      from.push_back(Tiga_FloorPlaceholder(r.key.c_str()));
+      to.push_back(r.id);
+    } else if (r.table == "fight_encount_data" && r.mod == mod) {
+      from.push_back(Tiga_BattlePlaceholder(r.key.c_str()));
+      to.push_back(r.id);
+    } else if (r.table == "item_data_prime" && r.mod == mod) {
+      from.push_back(Tiga_ItemPlaceholder(r.key.c_str()));
+      to.push_back(r.id);
+    } else if (r.table == "pokemon_data" && r.mod == mod) {
+      from.push_back(Tiga_SpeciesPlaceholder(r.key.c_str()));
+      to.push_back(r.id);
+    }
+  }
+  if (!from.empty()) {
+    const size_t n = Tiga_ReplaceInts(data.data(), data.size(), from.data(), to.data(), from.size());
+    std::fprintf(stderr, "[mods] story flags: %zu use(s) of %zu flag(s) of the mod %s given their ids\n", n, from.size(), mod.c_str());
+  }
+  return true;
+}
+
+bool CheckMessageText(const std::string& text, std::string& why) {
+  std::vector<uint8_t> out;
+  if (text_encode(text, out)) return true;
+  for (size_t i = 0; i < text.size();) {
+    if (text[i] == '{' && i + 1 < text.size() && text[i + 1] == '{') {
+      i += 2;
+    } else if (text[i] == '{') {
+      const size_t close = text.find('}', i);
+      if (close == std::string::npos) {
+        why = "a { has no closing } (write {{ for a real { character)";
+        return false;
+      }
+      std::vector<uint8_t> bytes;
+      bool hex = true;
+      for (size_t k = i + 1; k < close;) {
+        if (text[k] == ' ') {
+          k++;
+          continue;
+        }
+        if (k + 1 >= close || !std::isxdigit(static_cast<unsigned char>(text[k])) || !std::isxdigit(static_cast<unsigned char>(text[k + 1]))) {
+          hex = false;
+          break;
+        }
+        bytes.push_back(static_cast<uint8_t>(std::stoul(text.substr(k, 2), nullptr, 16)));
+        k += 2;
+      }
+      if (!hex || bytes.empty()) {
+        why = "the control code " + text.substr(i, close - i + 1) + " must be hex bytes like {00} or {07 05}";
+        return false;
+      }
+      if (bytes.size() != 1 + ctrl_arg_bytes(bytes[0])) {
+        why = "the control code " + text.substr(i, close - i + 1) + " needs " + std::to_string(ctrl_arg_bytes(bytes[0])) + " argument byte(s) after its code";
+        return false;
+      }
+      i = close + 1;
+    } else {
+      i++;
+    }
+  }
+  why = "it has a character the game's text can't hold (only characters up to 16 bits are possible)";
+  return false;
+}
+
+void add_ability_names(const em::EntryReader& read, const std::vector<Bank>& banks, em::DataCatalog& out) {
+  std::vector<uint8_t> dol;
+  if (!read(em::kProgramArchive, "main.dol", dol)) return;
+  constexpr uint32_t kTable = 0x803FFC50, kSize = 0x3A8, kCount = 0x804E83B8;
+  uint32_t at = 0, countAt = 0;
+  if (!DolAddressToOffset(dol.data(), dol.size(), kTable, kSize, at) || !DolAddressToOffset(dol.data(), dol.size(), kCount, 4, countAt)) return;
+  const bool xg = PortXD_IsXG() != 0;
+  const uint32_t stride = xg ? 8 : 12, nameAt = xg ? 0 : 4;
+  const uint32_t count = be32(dol.data() + countAt);
+  if (count == 0 || static_cast<uint64_t>(count) * stride > kSize) return;
+  em::NameList names{"ability", {}};
+  for (uint32_t i = 0; i < count; i++) {
+    const std::string n = message(banks, be32(dol.data() + at + i * stride + nameAt));
+    if (!n.empty()) names.names.emplace_back(n, i);
+  }
+  out.lists.push_back(std::move(names));
+}
+
+void add_flag_names(const em::EntryReader& read, const CommonRel& c, const std::vector<Bank>& banks, em::DataCatalog& out) {
+  em::NameList flags{"flag", {}};
+  const auto row = [&](const char* table, uint32_t i, uint32_t need) -> const uint8_t* {
+    const em::DataTable* t = table_named(out, table);
+    if (t == nullptr || t->places.empty() || i >= t->count || t->entrySize < need) return nullptr;
+    const size_t at = t->places[0].offset + static_cast<size_t>(i) * t->entrySize;
+    return at + t->entrySize <= c.file.size() ? c.file.data() + at : nullptr;
+  };
+  const auto count = [&](const char* table) {
+    const em::DataTable* t = table_named(out, table);
+    return t != nullptr ? t->count : 0u;
+  };
+  const auto hex3 = [](uint32_t v) {
+    char b[16];
+    std::snprintf(b, sizeof b, "%03X", v);
+    return std::string(b);
+  };
+  for (uint32_t sp = 0, n = count("pokemon_data"); sp < n; sp++) {
+    const uint8_t* r = row("pokemon_data", sp, 0x2C);
+    if (r == nullptr) break;
+    const std::string name = message(banks, be32(r + 0x18));
+    const std::string key = name.empty() ? "SPECIES_" + std::to_string(sp) : name;
+    if (be32(r + 0x24) != 0) flags.names.emplace_back("SEEN_" + key, be32(r + 0x24));
+    if (be32(r + 0x28) != 0) flags.names.emplace_back("CAUGHT_" + key, be32(r + 0x28));
+  }
+  std::map<uint32_t, uint32_t> chestOfFloor;
+  for (uint32_t i = 0, n = count("floor_tresure_list"); i < n; i++) {
+    const uint8_t* r = row("floor_tresure_list", i, 8);
+    if (r == nullptr) break;
+    const uint32_t floor = be16(r + 4), flag = be16(r + 6);
+    if (flag != 0) flags.names.emplace_back("CHEST_F" + hex3(floor) + "_" + std::to_string(chestOfFloor[floor]++) + "_OPENED", flag);
+  }
+  for (uint32_t i = 0, n = count("floor_door_list"); i < n; i++) {
+    const uint8_t* r = row("floor_door_list", i, 0x12);
+    if (r == nullptr) break;
+    const uint32_t floor = be16(r + 0x0C), open = be16(r + 0x0E), close = be16(r + 0x10);
+    if (open != 0) flags.names.emplace_back("DOOR_F" + hex3(floor) + "_ROW" + std::to_string(i) + "_OPEN", open);
+    if (close != 0) flags.names.emplace_back("DOOR_F" + hex3(floor) + "_ROW" + std::to_string(i) + "_CLOSE", close);
+  }
+  if (!flags.names.empty()) out.lists.push_back(std::move(flags));
+
+  std::vector<uint8_t> dol;
+  uint32_t at = 0;
+  if (!read(em::kProgramArchive, "main.dol", dol) || !DolAddressToOffset(dol.data(), dol.size(), 0x8038FBE0, 0x21EB4, at)) return;
+  const std::vector<Bank> debug = {{dol.data() + at, 0x21EB4}};
+  em::NameList steps{"story_step", {}};
+  for (uint32_t i = 0, n = count("flag_etc"); i < n; i++) {
+    const uint8_t* r = row("flag_etc", i, 0x20);
+    if (r == nullptr) break;
+    std::string text = message(debug, be32(r + 0x1C));
+    size_t digits = 0;
+    while (digits < text.size() && text[digits] >= '0' && text[digits] <= '9') digits++;
+    if (digits == 0) continue;
+    while (digits < text.size() && text[digits] == ' ') digits++;
+    if (digits < text.size()) steps.names.emplace_back(text.substr(digits), be32(r + 8));
+  }
+  if (!steps.names.empty()) out.lists.push_back(std::move(steps));
+}
+
+void SetFlagRowsTaken(uint32_t count) { sFlagRowsTaken = count; }
+
 bool BuildDataCatalog(const em::EntryReader& read, em::DataCatalog& out, std::string& error) {
   out = em::DataCatalog{};
   out.toolHint = "xd_data_mods <disc> --tables / --fields <table> / --names <list> show what there is";
@@ -791,6 +964,9 @@ bool BuildDataCatalog(const em::EntryReader& read, em::DataCatalog& out, std::st
   add_names(out, c, banks, "waza_data", 0x20, "move");
   add_names(out, c, banks, "zokusei_data", 0x08, "type");
   add_names(out, c, banks, "pokemon_seikaku_data", 0x14, "nature");
+  add_names(out, c, banks, "fight_encount_data", 0x0C, "battle");
+  add_ability_names(read, banks, out);
+  add_flag_names(read, c, banks, out);
   const em::DataTable* index = table_named(out, "item_data_index");
   const em::DataTable* items = table_named(out, "item_data_prime");
   if (index != nullptr && items != nullptr) {
@@ -808,23 +984,76 @@ bool BuildDataCatalog(const em::EntryReader& read, em::DataCatalog& out, std::st
     out.lists.push_back(std::move(byEntry));
   }
 
+  if (const em::DataTable* ft = table_named(out, "floordata")) {
+    size_t tocSize = 0;
+    uint8_t* toc = PortDisc_ReadOriginalFile("GSfsys.toc", &tocSize);
+    if (toc != nullptr && tocSize >= 0x20) {
+      std::map<uint32_t, std::string> groups;
+      const uint32_t count = be32(toc + 8), go = be32(toc + 0x10);
+      for (uint32_t i = 0; i < count && static_cast<uint64_t>(go) + 16ull * (i + 1) <= tocSize; i++) {
+        const uint32_t nameAt = be32(toc + go + i * 16 + 4);
+        if (nameAt < tocSize) groups[be32(toc + go + i * 16)] = reinterpret_cast<const char*>(toc + nameAt);
+      }
+      em::NameList floors{"floor", {}};
+      for (uint32_t i = 0; i < ft->count; i++) {
+        const size_t at = ft->places[0].offset + static_cast<size_t>(i) * ft->entrySize + 0x2C;
+        if (at + 4 > c.file.size()) break;
+        const auto g = groups.find(be32(c.file.data() + at));
+        if (g != groups.end() && !g->second.empty()) floors.names.emplace_back(g->second, i);
+      }
+      out.lists.push_back(std::move(floors));
+    }
+    if (toc != nullptr) PortDisc_Free(toc);
+  }
+
   for (em::DataTable& t : out.tables) {
     if (t.name == "pokemon_data") {
       t.addable = true;
-      t.addMax = 256;
+      t.addMax = 1024;
       t.idList = "species";
+      t.assetKeys = {"face"};
       t.textFields = {"name", "typeName", "doc"};
       t.primaryText = "name";
     } else if (t.name == "waza_data") {
       t.addable = true;
       t.addFirstId = 375;
-      t.addMax = 256;
+      t.addMax = 1024;
       t.idList = "move";
       t.textFields = {"name", "doc"};
       t.primaryText = "name";
-    } else if (t.name == "item_data_prime" && table_named(out, "item_data_index") != nullptr) {
+    } else if (t.name == "flag_data") {
       t.addable = true;
       t.addMax = 256;
+      t.addFirstId = t.count + sFlagRowsTaken;
+      t.addStart = {0xC1, 0, 0, 0, 0, 0};
+      t.addKeys = {{"bits", 0, 0x3F, 0, 1, 16}};
+    } else if (t.name == "floordata") {
+      t.addable = true;
+      t.addMax = 32;
+      t.addKeyOffset = 2;
+      t.addKeySize = 2;
+      t.entryNames = "floor";
+    } else if (t.name == "fight_encount_data") {
+      t.addable = true;
+      t.addMax = 256;
+      t.entryNames = "battle";
+      em::DataField deck;
+      deck.name = "deckGroup";
+      deck.size = 2;
+      deck.offset = 0x1C;
+      deck.count = 4;
+      deck.stride = 8;
+      deck.note = "which trainer deck each side's trainer is in (the high half of trainerInfo.ids): 1 = the story deck";
+      t.fields.push_back(deck);
+      em::DataField who = deck;
+      who.name = "trainerId";
+      who.offset = 0x1E;
+      who.values = "story_trainer";
+      who.note = "the trainer's number in that deck's trainers table (the low half of trainerInfo.ids); a mod can add trainers with an \"add\" block";
+      t.fields.push_back(who);
+    } else if (t.name == "item_data_prime" && table_named(out, "item_data_index") != nullptr) {
+      t.addable = true;
+      t.addMax = 1024;
       t.idList = "item";
       t.idTable = "item_data_index";
       t.textFields = {"name", "doc"};
@@ -836,6 +1065,25 @@ bool BuildDataCatalog(const em::EntryReader& read, em::DataCatalog& out, std::st
     if (table != nullptr) {
       if (const em::DataTable* t = table_named(out, table)) l.limit = t->count;
     }
+  }
+  for (em::DataTable& t : out.tables) {
+    if (t.name != "waza_data") continue;
+    em::DataField f;
+    f.name = "category";
+    f.offset = 0x37;
+    f.size = 1;
+    f.count = 1;
+    f.note = "physical or special, used when the physical/special split setting is on (added moves only)";
+    f.values = "category";
+    t.fields.push_back(f);
+    out.lists.push_back(em::NameList{"category", {{"physical", 0x81}, {"special", 0x82}}, 0});
+    em::DataField m;
+    m.name = "metronome";
+    m.offset = 0x0C;
+    m.size = 1;
+    m.count = 1;
+    m.note = "true or false: may Metronome pick this move (added moves only)";
+    t.fields.push_back(m);
   }
   out.addedTextGroup = kAddedTextGroup;
 

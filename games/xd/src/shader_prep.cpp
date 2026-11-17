@@ -118,7 +118,9 @@ extern "C" bool PortXD_ShadersPrepareMode(void) {
   if (stamp == nullptr || stamp[0] == '\0') return false;
   SetDefault("XD_NO_MESSAGE_BOXES", "1");
   SetDefault("XD_WINDOW_OFFSCREEN", "1");
+#ifndef __APPLE__
   SetDefault("XD_WINDOW_HIDDEN", "1");
+#endif
   SetDefault("SDL_WINDOW_ACTIVATE_WHEN_SHOWN", "0");
   SetDefault("XD_RECORD", "0");
   SetDefault("SDL_AUDIO_DRIVER", "dummy");

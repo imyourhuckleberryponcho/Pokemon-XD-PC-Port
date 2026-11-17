@@ -1,0 +1,10 @@
+{
+  "id": "good-data",
+  "name": "Good data mod",
+  "version": "1.2.0",
+  "author": "Test Author",
+  "description": "A made-up mod for the checker tests. No game data.",
+  "game": "GXXE01",
+  "applies": "new_playthrough",
+  "updates": "https://example.com/good-data/update.json"
+}

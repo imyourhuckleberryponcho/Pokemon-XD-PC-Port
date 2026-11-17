@@ -10,6 +10,7 @@ const std::vector<Language>& All() {
   static const std::vector<Language> all = {
       {"us", "English (US)", 2, "US"}, {"ge", "German", 3, "GE"}, {"fr", "French", 4, "FR"},
       {"it", "Italian", 5, "IT"},      {"sp", "Spanish", 6, "SP"},
+      {"jp", "Japanese", 2, "JP"},
   };
   return all;
 }
@@ -65,22 +66,35 @@ std::vector<std::string> ListOf(const std::string& json, const std::string& key)
 Pack ReadPack(const std::filesystem::path& dataFolder) {
   Pack pack;
   pack.folder = PackFolder(dataFolder);
+  pack.jpFolder = dataFolder / "extra_assets" / kJpFolderName;
   std::error_code ec;
-  if (!std::filesystem::is_regular_file(pack.folder / kPackFile, ec)) return pack;
-  std::ifstream in(pack.folder / kPackFile, std::ios::binary);
-  const std::string json((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-  const long long version = NumberOf(json, "version");
-  if (version != kPackVersion) {
-    pack.problem = "the language pack was made by another version (" + std::to_string(version) + ", this game wants " +
-                   std::to_string(kPackVersion) + "): make it again on the Extra assets page";
-    return pack;
+  if (std::filesystem::is_regular_file(pack.folder / kPackFile, ec)) {
+    std::ifstream in(pack.folder / kPackFile, std::ios::binary);
+    const std::string json((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    const long long version = NumberOf(json, "version");
+    if (version != kPackVersion) {
+      pack.problem = "the language pack was made by another version (" + std::to_string(version) + ", this game wants " +
+                     std::to_string(kPackVersion) + "): make it again on the Extra assets page";
+    } else {
+      for (const std::string& id : ListOf(json, "languages")) {
+        const Language* l = Find(id);
+        if (l != nullptr && id != "us" && id != kJpId) pack.languages.push_back(l);
+      }
+      pack.palFound = !pack.languages.empty();
+      if (!pack.palFound) pack.problem = "the language pack holds no language";
+    }
   }
-  for (const std::string& id : ListOf(json, "languages")) {
-    const Language* l = Find(id);
-    if (l != nullptr && id != "us") pack.languages.push_back(l);
+  if (std::filesystem::is_regular_file(pack.jpFolder / kPackFile, ec)) {
+    std::ifstream in(pack.jpFolder / kPackFile, std::ios::binary);
+    const std::string json((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    if (NumberOf(json, "version") == kPackVersion) {
+      pack.jp = true;
+      pack.languages.push_back(Find(kJpId));
+    } else if (pack.problem.empty()) {
+      pack.problem = "the Japanese pack was made by another version: make it again on the Extra assets page";
+    }
   }
-  pack.found = !pack.languages.empty();
-  if (!pack.found) pack.problem = "the language pack holds no language";
+  pack.found = pack.palFound || pack.jp;
   return pack;
 }
 
@@ -97,8 +111,12 @@ std::filesystem::path TableFile(const Pack& pack, const std::string& name) {
   return pack.folder / "tables" / (name + ".bin");
 }
 
+std::filesystem::path JpTableFile(const Pack& pack, const std::string& name) {
+  return pack.jpFolder / "tables" / (name + ".bin");
+}
+
 std::string PackJson(const std::vector<std::string>& languageIds, int archives, const std::string& source) {
-  std::string s = "{\n  \"id\": \"" + std::string(kManifestId) + "\",\n  \"version\": " + std::to_string(kPackVersion) +
+  std::string s = "{\n  \"id\": \"" + std::string(languageIds.size() == 1 && languageIds[0] == kJpId ? kJpManifestId : kManifestId) + "\",\n  \"version\": " + std::to_string(kPackVersion) +
                   ",\n  \"source\": \"" + source + "\",\n  \"archives\": " + std::to_string(archives) + ",\n  \"languages\": [";
   for (size_t i = 0; i < languageIds.size(); i++) s += std::string(i ? ", " : "") + "\"" + languageIds[i] + "\"";
   s += "]\n}\n";

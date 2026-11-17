@@ -74,6 +74,7 @@ const char* CodeOf(std::string_view id) {
   if (id == "fr") return "fr";
   if (id == "it") return "it";
   if (id == "sp" || id == "es") return "es";
+  if (id == "jp" || id == "ja") return "ja";
   return "en";
 }
 
@@ -102,6 +103,13 @@ bool SetLanguage(std::string_view id) {
 
 const char* Language() { return sLanguage; }
 
+std::string_view EmbeddedLocaleText(std::string_view code) {
+  for (const EmbeddedLocale* e = kEmbeddedLocales; e->code != nullptr; e++) {
+    if (code == e->code) return std::string_view(reinterpret_cast<const char*>(e->text), e->size);
+  }
+  return {};
+}
+
 const char* LanguageName(std::string_view id) {
   const std::string_view c = CodeOf(id);
   if (c == "de") return "Deutsch";
@@ -110,6 +118,7 @@ const char* LanguageName(std::string_view id) {
   if (c == "it") return "Italiano";
   if (c == "es") return "Espa\xC3\xB1"
                         "ol";
+  if (c == "ja") return "\xE6\x97\xA5\xE6\x9C\xAC\xE8\xAA\x9E";
   return "English";
 }
 

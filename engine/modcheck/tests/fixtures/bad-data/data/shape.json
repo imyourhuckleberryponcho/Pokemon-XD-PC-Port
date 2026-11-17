@@ -1,0 +1,14 @@
+{
+  "pokemon": {
+    "#1": { "hp": -5, "types": [1, [2]], "x": { "a": 1 }, "y": null },
+    "#2": 7
+  },
+  "moves": [1, 2],
+  "text": {
+    "name": "words",
+    "#5": 12,
+    "#6": "broken {00 code",
+    "#7": "fine"
+  },
+  "add": { "pokemon": { "A": "x", "B": { "copy": true } } }
+}

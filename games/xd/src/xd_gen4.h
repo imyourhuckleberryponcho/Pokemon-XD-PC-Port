@@ -18,6 +18,7 @@ void Prepare(bool wanted, bool spots, engine::mods::LoadOptions& options, std::v
 void AfterLoad(const engine::mods::LoadResult& result);
 
 bool Loaded();
+uint32_t ExtraRowCount(const char* table);
 bool SpotsLoaded();
 
 void ApplyMainTables();

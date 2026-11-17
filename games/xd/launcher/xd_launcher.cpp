@@ -4,9 +4,11 @@
 #include "disc_verify.h"
 #include "dol_tables.h"
 #include "xd_extra_sources.h"
+#include "xd_mod_rules.h"
 #include "xd_colosseum_page.h"
 #include "xd_gba_page.h"
 #include "xd_languages.h"
+#include "xd_presence.h"
 #include "xd_settings.h"
 #include "xd_user_folder.h"
 #include "xd_playthrough_files.h"
@@ -20,7 +22,9 @@
 #include <save_backups.h>
 #include <update.h>
 #include <xd_save.h>
+#include <xd_save_edition.h>
 #include <xd_save_convert.h>
+#include <xd_save_region.h>
 #include <xd_save_names.h>
 #include <playthrough.h>
 #include <randomizer.h>
@@ -54,6 +58,7 @@
 #include <functional>
 #include <iterator>
 #include <mutex>
+#include <set>
 #include <chrono>
 #include <string>
 #include <vector>
@@ -113,6 +118,9 @@ DiscVerdict CheckDisc(const std::string& path, const std::function<bool(uint64_t
   out.text = v.text;
   out.gameId = v.gameId;
   out.title = v.title;
+  if (v.xg) {
+    out.edition = "XG";
+  }
   return out;
 }
 
@@ -212,12 +220,45 @@ bool FindSave(const fs::path& folder, std::vector<uint8_t>& data, fs::path& file
   return !data.empty();
 }
 
+namespace {
+const char* EditionLabel(bool xg) { return xg ? "XG" : "XD"; }
+std::string WrongEditionText(xd::save::Edition found) {
+  const bool discXG = xd::UsingXGSaves();
+  if (found == xd::save::Edition::Unknown || (found == xd::save::Edition::XG) == discXG) return std::string();
+  return found == xd::save::Edition::XG
+             ? Tr("This save is from Pokemon XG, but the disc chosen is Pokemon XD. A save only loads in its own game: choose "
+                  "your Pokemon XG disc to use it.")
+             : Tr("This save is from Pokemon XD, but the disc chosen is Pokemon XG. A save only loads in its own game: choose "
+                  "your Pokemon XD disc to use it.");
+}
+xd::save::Edition EditionOfFile(const fs::path& file) {
+  std::vector<uint8_t> bytes;
+  if (!ReadBytes(file, bytes)) return xd::save::Edition::Unknown;
+  std::vector<engine::memcard::CardFile> cardFiles;
+  engine::memcard::sources::Container kind;
+  std::string why;
+  if (!engine::memcard::sources::ReadAnyCardFile(bytes, cardFiles, kind, why)) return xd::save::Edition::Unknown;
+  for (const auto& f : cardFiles) {
+    if (f.entry.fileName != "PokemonXD" || f.entry.gameCode.compare(0, 3, "GXX") != 0) continue;
+    xd::save::Save save;
+    xd::save::ReadReport report;
+    if (xd::save::ReadSave(f.data, save, report, why)) return xd::save::DetectEdition(save);
+  }
+  return xd::save::Edition::Unknown;
+}
+std::string WrongEditionOf(const fs::path& file) { return WrongEditionText(EditionOfFile(file)); }
+std::string EditionRefusal(int answer) {
+  return WrongEditionText(answer == 1 ? xd::save::Edition::XG : xd::save::Edition::XD);
+}
+}
+
 launcher::GameInfo::SaveRow SaveRowOf(const fs::path& cardRoot) {
   namespace ep = engine::playthrough;
   launcher::GameInfo::SaveRow row;
   const xd::CardRootScope scope(cardRoot);
   std::vector<uint8_t> data;
   fs::path file;
+  row.edition = EditionLabel(xd::UsingXGSaves());
   if (!FindSave(CardFolder(), data, file)) {
     row.who = Tr("empty");
     row.setup = Tr("no save yet: the game offers New Game");
@@ -231,7 +272,7 @@ launcher::GameInfo::SaveRow SaveRowOf(const fs::path& cardRoot) {
     return row;
   }
   row.found = true;
-  row.who = TrainerText(xd::save::ToUtf8(save.trainerName), save.trainerGender);
+  row.who = TrainerText(xd::save::DisplayUtf8(save.trainerName), save.trainerGender);
   row.time = PlayTime(save.playTimeSeconds);
   const xd::playthrough::SaveId id = xd::playthrough::SaveIdOf(data);
   std::error_code ec;
@@ -242,11 +283,18 @@ launcher::GameInfo::SaveRow SaveRowOf(const fs::path& cardRoot) {
     row.setup = Tr("its setup file can't be read");
   } else {
     row.setup = ep::Label(setup);
+    if (setup.edition == "xg") row.edition = "XG";
     const std::string style = RandomizerStyle(setup.seed);
     const size_t at = row.setup.find("Randomizer ");
     if (!style.empty() && at != std::string::npos) {
       row.setup.insert(at + 11, style + " ");
     }
+  }
+  if (row.edition == "XG" && !xd::UsingXGSaves()) {
+    row.warn = WrongEditionText(xd::save::Edition::XG);
+  } else if (const xd::save::Edition seen = xd::save::DetectEdition(save); seen != xd::save::Edition::Unknown) {
+    row.edition = EditionLabel(seen == xd::save::Edition::XG);
+    row.warn = WrongEditionText(seen);
   }
   return row;
 }
@@ -277,30 +325,25 @@ bool CheckImport(const fs::path& file, const std::string& discPath, launcher::Ga
   const mc::CardFile* card = nullptr;
   bool otherRegion = false;
   std::string otherCode;
+  int bestRank = 99;
   for (const mc::CardFile& f : cardFiles) {
     if (f.entry.fileName == "PokemonXD" && f.entry.gameCode.compare(0, 3, "GXX") == 0) {
-      if (f.entry.gameCode == "GXXE") {
+      const int rank = f.entry.gameCode == "GXXE" ? 0 : f.entry.gameCode == "GXXP" ? 1 : f.entry.gameCode == "GXXJ" ? 2 : 99;
+      if (rank < bestRank) {
+        bestRank = rank;
         card = &f;
-        break;
       }
-      otherRegion = true;
-      otherCode = f.entry.gameCode;
+      if (rank == 99) {
+        otherRegion = true;
+        otherCode = f.entry.gameCode;
+      }
     }
   }
   if (card == nullptr) {
     if (otherRegion) {
-      if (otherCode == "GXXP") {
-        error = Tr("This is a European (PAL) Pokemon XD save (game GXXP). The USA game here can't use it. The save's layout is the "
-                   "same as the USA one (the decomp's list of what differs in the European game leaves the save code alone), but "
-                   "a European save asks for the European game's language (English, French, German, Italian or Spanish text) and "
-                   "this USA disc doesn't have those texts, so it is refused rather than risked. A language pack from a "
-                   "European disc could change that later.");
-      } else if (otherCode == "GXXJ") {
-        error = Tr("This is a Japanese Pokemon XD save (game GXXJ). The USA game here can't use it.");
-      } else {
-        error = Fmt(Tr("This Pokemon XD save is from another region's game (%s); the game here is the USA version (GXXE)."),
-                    otherCode.c_str());
-      }
+      error = Fmt(Tr("This Pokemon XD save is from another region's game (%s). The game here can read the USA (GXXE), the "
+                     "European (GXXP) and the Japanese (GXXJ) saves."),
+                  otherCode.c_str());
     } else if (cardFiles.size() == 1) {
       error = Fmt(Tr("This save file is not a Pokemon XD save (it is \"%s\" of game %s)."), cardFiles[0].entry.fileName.c_str(),
                   cardFiles[0].entry.gameCode.c_str());
@@ -309,17 +352,82 @@ bool CheckImport(const fs::path& file, const std::string& discPath, launcher::Ga
     }
     return false;
   }
-  xd::save::Save save;
-  xd::save::ReadReport report;
-  if (!xd::save::ReadSave(card->data, save, report, why)) {
+  const std::string code = card->entry.gameCode;
+  const xd::save::SaveKind layout = xd::save::LayoutOf(card->data, why);
+  std::vector<uint8_t> saveBytes = card->data;
+  std::vector<std::string> regionNotes;
+  bool convertedJapanese = false;
+  if (layout == xd::save::SaveKind::JapaneseLayout) {
+    if (code == "GXXE" || code == "GXXP") {
+      error = Fmt(Tr("This file says it is from the %s game, but the save inside is laid out like the Japanese game's. It is "
+                     "refused rather than guessed at."),
+                  code == "GXXE" ? "USA" : "European");
+      return false;
+    }
+    xd::save::JapaneseReport jp;
+    std::string convError;
+    if (!xd::save::ConvertJapanese(card->data, saveBytes, jp, convError)) {
+      error = Fmt(Tr("This Japanese save can't be turned into a save for the USA game: %s"), convError.c_str());
+      return false;
+    }
+    convertedJapanese = true;
+    regionNotes.push_back(Tr("This is a save of the Japanese game. It was converted to the layout the USA game here reads: the "
+                             "trainer, Pokemon and Pokedex are kept, with their names in Japanese characters (they show as "
+                             "kana in the game whatever language it runs in; this list writes them in Latin letters, its font has no kana)."));
+    regionNotes.push_back(Tr("Where you stood is not kept: the game continues at the entrance of the map you saved in, as after "
+                             "a save at a PC. The saved room's moving parts differ between the Japanese and USA game."));
+    regionNotes.push_back(Tr("The game text is English unless a Japanese language pack is installed."));
+  } else if (layout == xd::save::SaveKind::UsaLayout && code == "GXXJ") {
+    error = Tr("This file says it is from the Japanese game, but the save inside is laid out like the USA / European game's. "
+               "It is refused rather than guessed at.");
+    return false;
+  } else if (layout == xd::save::SaveKind::Unknown && code == "GXXJ") {
     error = Fmt(Tr("The Pokemon XD save in this file can't be read: %s"), why.c_str());
     return false;
   }
-  out.name = xd::save::ToUtf8(save.trainerName);
+  xd::save::Save save;
+  xd::save::ReadReport report;
+  if (!xd::save::ReadSave(saveBytes, save, report, why)) {
+    error = Fmt(Tr("The Pokemon XD save in this file can't be read: %s"), why.c_str());
+    return false;
+  }
+  if (code == "GXXP") {
+    const int number = xd::save::SaveLanguage(save);
+    const std::string id = xd::save::LanguageId(number);
+    const std::string name = xd::save::LanguageName(number);
+    if (id.empty() || id == "us") {
+      regionNotes.push_back(Tr("This is a save of the European game (English). Nothing in it needed changing."));
+    } else if (xd::languages::ReadPack(xd::SettingsFolder()).Has(id)) {
+      regionNotes.push_back(Fmt(Tr("This is a save of the European game, played in %s. The language pack here has %s: choose it "
+                                   "as the Language on the Play bar to read the game as the save was played. With the "
+                                   "setting on English (US) the game shows English text."),
+                                name.c_str(), name.c_str()));
+    } else {
+      regionNotes.push_back(Fmt(Tr("This is a save of the European game, played in %s. The language pack here doesn't have %s "
+                                   "(add the European disc on the Extra assets page to get it), so the game shows English "
+                                   "text. Nothing in the save was changed."),
+                                name.c_str(), name.c_str()));
+    }
+  }
+  {
+    const xd::save::Edition seen = xd::save::DetectEdition(save);
+    const std::string wrong = WrongEditionText(seen);
+    if (!wrong.empty()) {
+      error = wrong;
+      return false;
+    }
+    out.editionUnknown = seen == xd::save::Edition::Unknown;
+    out.preview.facts.emplace_back(Tr("Game"), seen == xd::save::Edition::Unknown ? std::string(Tr("not known: you are asked"))
+                                                                                : std::string("Pokemon ") + xd::save::EditionName(seen));
+  }
+  out.name = xd::save::DisplayUtf8(save.trainerName);
   out.cardFolder = fs::path(L"USA") / L"Card A";
-  out.cardFileName = card->entry.makerCode + "-" + card->entry.gameCode + "-" + card->entry.fileName + ".gci";
+  out.cardFileName = card->entry.makerCode + "-GXXE-" + card->entry.fileName + ".gci";
   mc::CardFile put = *card;
-  bool changed = kind != cs::Container::Gci;
+  put.data = saveBytes;
+  put.entry.gameCode = "GXXE";
+  std::memcpy(put.entry.raw.data(), "GXXE", 4);
+  bool changed = kind != cs::Container::Gci || convertedJapanese || code != "GXXE";
   if (save.order == xd::save::ByteOrder::PC) {
     xd::save::ConvertReport conv;
     std::string convError;
@@ -338,6 +446,9 @@ bool CheckImport(const fs::path& file, const std::string& discPath, launcher::Ga
     const std::lock_guard<std::mutex> oneReader(sOneReader);
     SummaryOf(save, discPath, out.preview);
   }
+  for (const std::string& n : regionNotes) {
+    out.preview.notes.push_back(n);
+  }
   out.preview.where = Utf8(file) + (kind == cs::Container::Gci ? "" : std::string(" (") + cs::ContainerName(kind) + ")");
   return true;
 }
@@ -349,7 +460,16 @@ std::vector<launcher::GameInfo::ImportOffer> FindImportable(const std::string& d
   std::error_code ec;
   const fs::path own = fs::weakly_canonical(xd::CardRoot(), ec);
   int looked = 0;
-  for (const cs::Found& f : cs::FindDolphinCardFiles(cs::DolphinUserFolders(env), "USA")) {
+  std::vector<cs::Found> candidates;
+  std::set<std::string> seenPaths;
+  for (const char* region : {"USA", "EUR", "JAP"}) {
+    for (cs::Found& f : cs::FindDolphinCardFiles(cs::DolphinUserFolders(env), region)) {
+      if (seenPaths.insert(Utf8(f.path)).second) {
+        candidates.push_back(std::move(f));
+      }
+    }
+  }
+  for (const cs::Found& f : candidates) {
     if (++looked > 400) {
       break;
     }
@@ -442,6 +562,13 @@ void ReadSetup(const std::vector<uint8_t>& data, SaveSummary& out) {
   }
 }
 
+void AddGameFact(const xd::save::Save& save, SaveSummary& out) {
+  const xd::save::Edition seen = xd::save::DetectEdition(save);
+  const bool xg = seen == xd::save::Edition::Unknown ? xd::UsingXGSaves() : seen == xd::save::Edition::XG;
+  out.facts.insert(out.facts.begin(), {Tr("Game"), std::string("Pokemon ") + EditionLabel(xg)});
+  if (const std::string wrong = WrongEditionText(seen); !wrong.empty()) out.notes.push_back(wrong);
+}
+
 void SummaryOf(const xd::save::Save& save, const std::string& discPath, SaveSummary& out) {
   namespace xs = xd::save;
   if (!discPath.empty() && discPath != sNamesDisc && discPath != sNamesFailedDisc) {
@@ -479,7 +606,7 @@ void SummaryOf(const xd::save::Save& save, const std::string& discPath, SaveSumm
   char id[16];
   std::snprintf(id, sizeof(id), "%05u", save.TrainerId());
   out.facts = {
-      {Tr("Trainer"), TrainerText(xs::ToUtf8(save.trainerName), save.trainerGender)},
+      {Tr("Trainer"), TrainerText(xs::DisplayUtf8(save.trainerName), save.trainerGender)},
       {Tr("Trainer ID"), id},
       {Tr("Play time"), PlayTime(save.playTimeSeconds)},
       {Tr("Money"), "P" + Number(save.money)},
@@ -503,7 +630,7 @@ void SummaryOf(const xd::save::Save& save, const std::string& discPath, SaveSumm
                (s->Purified() ? std::string(Tr("was a Shadow Pokemon"))
                               : Fmt(Tr("Shadow Pokemon (heart gauge %d)"), static_cast<int>(s->heartGauge)));
     }
-    out.party.push_back({species(p.species), xs::ToUtf8(p.nickname), std::to_string(p.level), item(p.heldItem), notes});
+    out.party.push_back({species(p.species), xs::DisplayUtf8(p.nickname), std::to_string(p.level), item(p.heldItem), notes});
   }
   if (!named && !discPath.empty() && discPath == sNamesFailedDisc) {
     out.notes.push_back("The Pokemon and item names could not be read from the disc, so numbers are shown. The play button is not affected.");
@@ -541,6 +668,7 @@ SaveSummary ReadSave(const std::string& discPath) {
   }
 
   SummaryOf(save, discPath, out);
+  AddGameFact(save, out);
   ReadSetup(data, out);
   return out;
 }
@@ -1061,6 +1189,13 @@ int main(int argc, char** argv) {
   game.modListFile = settings / L"mods.ini";
   game.playerFilesReadOnly = xd::PlayerFilesReadOnly();
   game.readOnlyNote = xd::kPlayerFilesReadOnlyNote;
+  game.presence.clientId = xd::presence_info::kClientId;
+  game.presence.endpoint = xd::presence_info::TestEndpoint();
+  game.presence.allowed = xd::presence_info::Allowed();
+  game.presence.largeImage = xd::presence_info::kLargeImage;
+  game.presence.largeText = "Pokemon XD: Gale of Darkness (PC port)";
+  game.presence.state = "Pokemon XD";
+  game.presence.details = [] { return std::string(engine::i18n::Tr("In the launcher")); };
   const fs::path own = ProgramFolder();
   std::error_code ec;
   const std::string xdName = sys::ProgramName("xd");
@@ -1097,12 +1232,18 @@ int main(int argc, char** argv) {
   game.cardFolder = [](const std::string& card) { return CardFolderOf(fs::path(), card); };
   if (xd::SaveSlotsInUse()) {
     game.saves.dataFolder = xd::UserFolder();
+    game.saves.dataFolderFor = [](const std::string& edition) { return xd::SaveDataFolder(edition == "XG"); };
+    game.saves.setEdition = [](const std::string& edition) { xd::UseXGSaves(edition == "XG"); };
     game.saves.changed = [] { xd::ForgetActiveSave(); };
     game.saves.row = SaveRowOf;
     game.saves.read = ReadSaveOf;
     game.saves.cardFolder = CardFolderOf;
     game.saves.saveFile = SaveFileOf;
     game.saves.checkImport = CheckImport;
+    game.saves.editionQuestion = Tr("Is this save from Pokemon XD or Pokemon XG?");
+    game.saves.editionAnswers = {Tr("Pokemon XD"), Tr("Pokemon XG")};
+    game.saves.editionRefusal = EditionRefusal;
+    game.saves.wrongEdition = WrongEditionOf;
     game.saves.findImportable = FindImportable;
     game.saves.tradeOpen = xd::gbapage::Open;
     game.saves.tradeDo = xd::gbapage::Trade;
@@ -1141,6 +1282,8 @@ int main(int argc, char** argv) {
   game.registerSettings = [](engine::settings::Registry& r) { xd_settings::Register(r); };
   game.checkDisc = CheckDisc;
   game.readSave = ReadSave;
+  static const engine::modcheck::GameRules modRules = xd::modrules::Rules();
+  game.modRules = &modRules;
   game.modLooks = xd::playthrough::LooksOrSound;
   game.extra.sources = xd::ExtraSources();
   game.extra.identifyDisc = IdentifyDisc;

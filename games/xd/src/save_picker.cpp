@@ -3,6 +3,7 @@
 #include "xd_playthrough_files.h"
 #include "xd_randomizer.h"
 #include "xd_user_folder.h"
+#include "xd_xg.h"
 
 #include <gc_memcard.h>
 #include <i18n.h>
@@ -292,13 +293,13 @@ std::vector<Row> Rows() {
   std::vector<Row> rows;
   if (!xd::SaveSlotsInUse()) return rows;
   namespace sl = engine::memcard::slots;
-  const sl::Index index = sl::Load(xd::UserFolder());
+  const sl::Index index = sl::Load(xd::SaveDataFolder(xd::xg::On()));
   const fs::path active = xd::CardRoot();
   for (const sl::Slot& slot : index.slots) {
     Row row;
     row.id = slot.id;
     row.name = slot.name;
-    row.root = sl::RootOf(xd::UserFolder(), slot.id);
+    row.root = sl::RootOf(xd::SaveDataFolder(xd::xg::On()), slot.id);
     std::error_code ec;
     row.active = fs::equivalent(row.root, active, ec);
     if (ReadRow(row.root, row)) rows.push_back(row);
@@ -318,7 +319,7 @@ void DecideStartUp() {
   else if (EnvSet("XD_RENDER_ICON")) why = "icon pictures";
   if (why == nullptr) {
     namespace sl = engine::memcard::slots;
-    why = sl::Load(xd::UserFolder()).slots.size() < 2 ? "only one save" : nullptr;
+    why = sl::Load(xd::SaveDataFolder(xd::xg::On())).slots.size() < 2 ? "only one save" : nullptr;
   }
   if (EnvIs("XD_SAVE_PICKER_LIST", "1")) {
     for (const Row& r : Rows()) {
@@ -338,7 +339,7 @@ void SetAnswered(bool b) { sAnswered = b; }
 bool SwitchTo(const Row& row) {
   namespace sl = engine::memcard::slots;
   std::string error;
-  if (!sl::SetActive(xd::UserFolder(), row.id, error)) {
+  if (!sl::SetActive(xd::SaveDataFolder(xd::xg::On()), row.id, error)) {
     std::fprintf(stderr, "[save picker] could not make %s the active save: %s\n", row.name.c_str(), error.c_str());
     return false;
   }

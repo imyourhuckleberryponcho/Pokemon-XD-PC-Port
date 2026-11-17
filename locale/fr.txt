@@ -252,6 +252,12 @@
 = The mod %s sets %s of %s twice (%s and %s); the second is used.
 > Le mod %s définit deux fois %s de %s (%s et %s); la seconde valeur est utilisée.
 
+= "%s" is made for another game, so it can't be used here.
+> « %s » est conçu pour un autre jeu et ne peut donc pas être utilisé ici.
+
+= "%s" can't be used together with "%s".
+> « %s » ne peut pas être utilisé avec « %s ».
+
 = %s line %d: 
 > %s, ligne %d:
 
@@ -266,6 +272,9 @@
 
 = "%s" outside a [profile ...] list; ignored
 > "%s" en dehors d'une liste [profile ...]; ignoré
+
+= expected "<mod id> = on" or "= off", optionally followed by ", scripts off"; ignored
+> attendu "<id du mod> = on" ou "= off", éventuellement suivi de ", scripts off" ; ignoré
 
 = expected "<mod id> = on" or "= off"; ignored
 > attendu: "<id du mod> = on" ou "= off"; ignoré
@@ -303,6 +312,9 @@
 = The mod "%s" is made for another game or game version (%s); this disc is %s. It is not used.
 > Le mod "%s" est conçu pour un autre jeu ou une autre version du jeu (%s); ce disque est %s. Il n'est pas utilisé.
 
+= The mod "%s" is a compatibility patch for "%s", which is not on. It is not used.
+> Le mod « %s » est un correctif de compatibilité pour « %s », qui n'est pas activé. Il n'est pas utilisé.
+
 = The mod "%s" needs the mod "%s" in version %s %s, but the one in the mods folder is without a version. "%s" is not used.
 > Le mod "%s" a besoin du mod "%s" en version %s %s, mais celui du dossier des mods n'a pas de version. "%s" n'est pas utilisé.
 
@@ -321,11 +333,17 @@
 = The mod "%s" should come after "%s" (it says so): move the line "%s = on" below "%s = on" in %s. Until then the list's order is used.
 > Le mod "%s" doit venir après "%s" (il l'indique): placez la ligne "%s = on" sous "%s = on" dans %s. D'ici là, l'ordre de la liste est utilisé.
 
+= The mod "%s" should come before "%s" (it says so): move the line "%s = on" above "%s = on" in %s. Until then the list's order is used.
+> Le mod « %s » devrait venir avant « %s » (il le demande) : placez la ligne « %s = on » au-dessus de « %s = on » dans %s. D'ici là, l'ordre de la liste est utilisé.
+
 = The mod "%s" has "%s": disc file names only have English letters, digits and signs; ignored.
 > Le mod "%s" contient "%s": les noms de fichiers du disque n'ont que des lettres anglaises, des chiffres et des signes; ignoré.
 
 = The mod "%s" has a "scripts" folder but its mod.json does not say "scripts": true; the scripts are not used.
 > Le mod "%s" a un dossier "scripts" mais son mod.json ne dit pas "scripts": true; les scripts ne sont pas utilisés.
+
+= The mod "%s" has scripts, but running scripts is switched off for it (Mods page); its scripts are skipped and the rest of the mod is used.
+> Le mod "%s" a des scripts, mais leur exécution est désactivée pour lui (page Mods) ; ses scripts sont ignorés et le reste du mod est utilisé.
 
 = The mod "%s" has "scripts/%s": only .lua files are read; ignored.
 > Le mod "%s" contient "scripts/%s": seuls les fichiers .lua sont lus; ignoré.
@@ -417,6 +435,9 @@
 = Could not read %s; the changes inside %s are not used.
 > Impossible de lire %s; les modifications dans %s ne sont pas utilisées.
 
+= The mod "%s": %s in %s is not usable (%s). That file is switched off; the game's own is used.
+> Le mod "%s" : %s dans %s est inutilisable (%s). Ce fichier est désactivé ; celui du jeu est utilisé.
+
 = %s: %s in %s is bigger than the original (%u bytes, was %u). If the game runs out of memory there, this may be why.
 > %s: %s dans %s est plus gros que l'original (%u octets, au lieu de %u). Si le jeu manque de mémoire à cet endroit, c'est peut-être pour cette raison.
 
@@ -449,6 +470,9 @@
 
 = it changes the game's tables (data/%s)
 > il modifie les tables du jeu (data/%s)
+
+= it adds people, zones, chests or music to rooms (objects/)
+> il ajoute des personnages, zones, coffres ou de la musique aux salles (objects/)
 
 = it replaces %s, which isn't only pictures or sound
 > il remplace %s, qui n'est pas seulement des images ou du son
@@ -501,6 +525,18 @@
 = "after" has "%s", which isn't a mod id
 > "after" contient "%s", qui n'est pas un id de mod
 
+= "links" must be a block like {"other-mod": "https://..."}
+> « links » doit être un bloc comme {"autre-mod": "https://..."}
+
+= "links" has "%s": a mod id and an address in quotes are expected
+> « links » contient « %s » : un identifiant de mod et une adresse entre guillemets sont attendus
+
+= "author_key" must be 64 lower case hex digits (the author's public key)
+> « author_key » doit comporter 64 chiffres hexadécimaux en minuscules (la clé publique de l'auteur)
+
+= "%s" has "%s", which isn't a mod id
+> « %s » contient « %s », qui n'est pas un identifiant de mod
+
 = "conflicts" has "%s", which isn't a mod id
 > "conflicts" contient "%s", qui n'est pas un id de mod
 
@@ -512,6 +548,9 @@
 
 = Made for another game or game version (%s); this disc is %s. It isn't used.
 > Conçu pour un autre jeu ou une autre version du jeu (%s); ce disque est %s. Il n'est pas utilisé.
+
+= A compatibility patch: it is only used when "%s" is on too, and that is not the case. Not used.
+> Un correctif de compatibilité : il n'est utilisé que si « %s » est aussi activé, ce qui n'est pas le cas. Non utilisé.
 
 = Needs "%s" in version %s %s, but the one in the mods folder is without a version. Not used.
 > A besoin de "%s" en version %s %s, mais celui du dossier des mods n'a pas de version. Non utilisé.
@@ -528,6 +567,9 @@
 = Can't be used together with "%s" (%s says so); this one, further down the list, isn't used.
 > Ne peut pas être utilisé avec "%s" (%s l'indique); celui-ci, plus bas dans la liste, n'est pas utilisé.
 
+= Wants to come before "%s": move it further up the list.
+> Veut venir avant « %s » : placez-le plus haut dans la liste.
+
 = Wants to come after "%s": move it further down the list.
 > Doit venir après "%s": descendez-le dans la liste.
 
@@ -536,6 +578,27 @@
 
 = Clashes with "%s" over %s: this one, further down the list, wins.
 > En conflit avec "%s" au sujet de %s: celui-ci, plus bas dans la liste, l'emporte.
+
+= the same table value
+> la même valeur de table
+
+= the same story room
+> la même salle d'histoire
+
+= the same script hook
+> le même point d'ancrage de script
+
+= This one and "%s" both change %s (%s). "%s", further down the list, wins.
+> Celui-ci et « %s » modifient tous deux %s (%s). « %s », plus bas dans la liste, l'emporte.
+
+= This one and "%s" both change %s (%s). This one, further down the list, wins.
+> Celui-ci et « %s » modifient tous deux %s (%s). Celui-ci, plus bas dans la liste, l'emporte.
+
+= Works well with "%s" (it is in your mods folder, but not on).
+> Fonctionne bien avec « %s » (il est dans votre dossier de mods, mais pas activé).
+
+= Works well with "%s" (not installed).
+> Fonctionne bien avec « %s » (non installé).
 
 = Enhanced
 > Amélioré
@@ -584,6 +647,9 @@
 
 = item
 > objet
+
+= story flag
+> drapeau d'histoire
 
 = entry
 > entrée
@@ -902,6 +968,12 @@
 
 = When the launcher starts, it asks the publisher's page whether a newer version exists and, if so, asks you whether to install it. Nothing is ever downloaded or installed without your yes. Off: the launcher never goes online by itself ("Check now" in the launcher still works).
 > Au démarrage, le lanceur demande à la page de l'éditeur si une version plus récente existe et, si oui, vous demande si vous voulez l'installer. Rien n'est jamais téléchargé ni installé sans votre accord. Désactivé: le lanceur ne se connecte jamais de lui-même ("Vérifier maintenant" dans le lanceur fonctionne toujours).
+
+= Discord presence
+> Présence Discord
+
+= Show what you're playing in Discord (only on this PC, through the Discord app).
+> Affiche à quoi vous jouez dans Discord (uniquement sur ce PC, via l'application Discord).
 
 = SETTINGS in the game's menu
 > PARAMÈTRES dans le menu du jeu
@@ -1482,6 +1554,9 @@
 = the download is incomplete
 > le téléchargement est incomplet
 
+= only https:// addresses are used here
+> seules les adresses https:// sont utilisées ici
+
 = the download couldn't be saved in %s
 > le téléchargement n'a pas pu être enregistré dans %s
 
@@ -1583,6 +1658,24 @@
 
 = the new version's folder couldn't be put in place: %s
 > le dossier de la nouvelle version n'a pas pu être mis en place: %s
+
+= this copy already is in a player's folder
+> this copy already is in a player's folder
+
+= the folder %s already exists and isn't empty: choose another
+> the folder %s already exists and isn't empty: choose another
+
+= Your saves and settings are kept inside this folder (%s\\portable), so a new folder would start without them: download the new version by hand and move your portable folder over.
+> Your saves and settings are kept inside this folder (%s\\portable), so a new folder would start without them: download the new version by hand and move your portable folder over.
+
+= an earlier unfinished folder couldn't be removed: %s
+> an earlier unfinished folder couldn't be removed: %s
+
+= this download is not a whole player folder (the starter and the game folder): download the new version by hand
+> this download is not a whole player folder (the starter and the game folder): download the new version by hand
+
+= the new folder couldn't be put in place: %s
+> the new folder couldn't be put in place: %s
 
 = there is no previous version to go back to
 > il n'y a pas de version précédente à laquelle revenir
@@ -1821,6 +1914,18 @@
 = The mod list couldn't be saved to %s.
 > La liste des mods n'a pas pu être enregistrée dans %s.
 
+= Mod lists (*.json)
+> Listes de mods (*.json)
+
+= Needs "%s", which isn't installed.
+> Nécessite « %s », qui n'est pas installé.
+
+= Needs "%s" in version %s %s; you have %s.
+> Nécessite « %s » en version %s %s ; vous avez %s.
+
+= Made for another game or game version.
+> Conçu pour un autre jeu ou une autre version du jeu.
+
 = The game couldn't be started (%s, %s). Is it next to the launcher?
 > Le jeu n'a pas pu démarrer (%s, %s). Est-il à côté du lanceur?
 
@@ -1841,6 +1946,9 @@
 
 = Checking and unpacking version %s...
 > Vérification et décompression de la version %s...
+
+= Version %s is set up in the new folder %s. Open the launcher in that folder from now on (the old folder can be deleted when you like: your saves and settings are not in it).
+> Version %s is set up in the new folder %s. Open the launcher in that folder from now on (the old folder can be deleted when you like: your saves and settings are not in it).
 
 = Version %s is ready. It is put in place when you restart %s (the app is replaced after this window closes, then opens again).
 > La version %s est prête. Elle sera mise en place au redémarrage de %s (l'application est remplacée après la fermeture de cette fenêtre, puis se rouvre).
@@ -1938,6 +2046,9 @@
 = Allowed in Original too: button remapping, volumes, full screen and the speedrun timer.
 > Aussi permis en Original: réattribution des touches, volumes, plein écran et chronomètre de speedrun.
 
+= Online battles and online trading work in Original too; trading in a Faithful save only receives Pokemon the GameCube game could have.
+> Les combats en ligne et les échanges en ligne marchent aussi en Original; un échange dans une sauvegarde Fidèle ne reçoit que des Pokémon que le jeu GameCube aurait pu avoir.
+
 = Enhanced (recommended for most players)
 > Amélioré (conseillé à la plupart des joueurs)
 
@@ -1959,8 +2070,14 @@
 = The game's own rules stay as they were until you choose otherwise.
 > Les règles du jeu restent celles d'origine tant que vous n'en choisissez pas d'autres.
 
+= Online battles and online trading are available here too.
+> Les combats en ligne et les échanges en ligne sont aussi disponibles ici.
+
 = You can change this any time on the Preset page. Each save remembers how it was started: when it differs from your choice, the game asks at Continue whether to keep it or switch.
 > Vous pouvez changer cela à tout moment sur la page Préréglage. Chaque sauvegarde se souvient de son mode de départ: s'il diffère de votre choix, le jeu demande à CONTINUER s'il faut le garder ou changer.
+
+= If you close this window without choosing, Enhanced is used and you are asked again next time.
+> Si vous fermez cette fenêtre sans choisir, Amélioré est utilisé et la question vous sera reposée la prochaine fois.
 
 = Play Original
 > Jouer en Original
@@ -2009,6 +2126,18 @@
 
 = Installed next to the version you have, which stays for "Go back". Your saves, settings and mods are not touched.
 > Installée à côté de la version que vous avez, qui reste disponible pour "Revenir en arrière". Vos sauvegardes, paramètres et mods ne sont pas touchés.
+
+= This copy isn't in the player's folder layout, so it can't update itself in place.
+> This copy isn't in the player's folder layout, so it can't update itself in place.
+
+= Update now downloads version %s and sets it up in a NEW folder: %s. Nothing is copied from this folder and nothing in it is changed. Your saves, settings and mods stay where they are (they are not kept in the game folder). Afterwards open the launcher in the new folder; this old folder can be deleted.
+> Update now downloads version %s and sets it up in a NEW folder: %s. Nothing is copied from this folder and nothing in it is changed. Your saves, settings and mods stay where they are (they are not kept in the game folder). Afterwards open the launcher in the new folder; this old folder can be deleted.
+
+= Choose another folder...
+> Choose another folder...
+
+= Tip: this folder is inside %s. Keep the game outside synced folders (for example in C:\\Games): a sync can lock or move files while the game runs.
+> Tip: this folder is inside %s. Keep the game outside synced folders (for example in C:\\Games): a sync can lock or move files while the game runs.
 
 = Update now
 > Mettre à jour
@@ -2193,14 +2322,14 @@
 = Go to the Extra assets page
 > Aller à la page Ressources supplémentaires
 
-= Preparing the game's shaders for this PC...
-> Préparation des shaders du jeu pour ce PC...
+= Getting the game ready for your PC...
+> Préparation du jeu pour votre PC...
+
+= This happens once (and again after a graphics driver or game update) and takes about a minute. It runs quietly in the background: no game window opens, and there is nothing to close. You can look around meanwhile.
+> Cela se fait une seule fois (et de nouveau après une mise à jour du pilote graphique ou du jeu) et dure environ une minute. Tout se passe discrètement en arrière-plan : aucune fenêtre de jeu ne s'ouvre et il n'y a rien à fermer. Vous pouvez regarder autour de vous en attendant.
 
 = The game starts as soon as this is done.
 > Le jeu démarre dès que c'est terminé.
-
-= Done once (again after a graphics driver or game update), so places never wait for their graphics the first time you see them. You can look around meanwhile.
-> Fait une seule fois (et de nouveau après une mise à jour du pilote graphique ou du jeu), pour que les lieux n'attendent jamais leurs graphismes la première fois que vous les voyez. Vous pouvez regarder autour de vous pendant ce temps.
 
 = The game never changes your disc image: mods and settings are kept separately.
 > Le jeu ne modifie jamais votre image disque: les mods et les paramètres sont conservés séparément.
@@ -2295,6 +2424,18 @@
 = Open the mods folder
 > Ouvrir le dossier des mods
 
+= Check for mod updates
+> Rechercher des mises à jour de mods
+
+= Put in working order
+> Mettre en ordre de marche
+
+= Save this list to a file...
+> Enregistrer cette liste dans un fichier...
+
+= Use a list from a file...
+> Utiliser une liste depuis un fichier...
+
 = New mod list
 > Nouvelle liste de mods
 
@@ -2319,6 +2460,18 @@
 = Order
 > Ordre
 
+= Runs scripts (Lua)
+> Exécute des scripts (Lua)
+
+= Allow
+> Autoriser
+
+= Its scripts run in a locked box: they cannot touch your files, but they can change how the game plays. Untick Allow to skip them; the rest of the mod stays.
+> Ses scripts tournent dans une boîte fermée : ils ne peuvent pas toucher à vos fichiers, mais ils peuvent changer le jeu. Décochez Autoriser pour les ignorer ; le reste du mod reste actif.
+
+= Its scripts are skipped. The rest of the mod (files, data) is still used.
+> Ses scripts sont ignorés. Le reste du mod (fichiers, données) est quand même utilisé.
+
 = Applies: %s (it says %s, but %s)
 > S'applique: %s (il dit %s, mais %s)
 
@@ -2330,6 +2483,21 @@
 
 = Made for another game or game version: it won't be used with this disc.
 > Conçu pour un autre jeu ou une autre version du jeu: il ne sera pas utilisé avec ce disque.
+
+= Not used: 
+> Non utilisé : 
+
+= Can't be used yet. 
+> Ne peut pas encore être utilisé. 
+
+= Update %s found
+> Mise à jour %s trouvée
+
+= It can't be installed from here (see "Check for mod updates").
+> Elle ne peut pas être installée d'ici (voir « Rechercher des mises à jour de mods »).
+
+= Roll back to %s
+> Revenir à %s
 
 = The game checks the mods again when it starts (what they need, what they clash with) and tells you about any problem.
 > Le jeu vérifie de nouveau les mods au démarrage (ce dont ils ont besoin, avec quoi ils sont en conflit) et vous signale tout problème.
@@ -2457,6 +2625,12 @@
 = Imported as "%s", the save the game loads now. The file you chose was only copied: your other saves were not touched.
 > Importée sous le nom "%s", la sauvegarde que le jeu charge maintenant. Le fichier que vous avez choisi a seulement été copié: vos autres sauvegardes n'ont pas été touchées.
 
+= Pokemon XD saves that this PC already has: in Dolphin's folders, found by themselves below, or in a file you choose (a .gci, a memory card image, a GameCube card dump). The USA game's saves are added as they are; a Japanese save is converted to the USA game's layout (names stay in Japanese characters), and a European save is added as it is. Look at what is in one, then add it. It is added as a NEW save: your other saves are never replaced, and the file is only copied.
+> Des sauvegardes de Pokemon XD que ce PC possede deja : dans les dossiers de Dolphin, trouvees ci-dessous, ou dans un fichier de votre choix (un .gci, une image de carte memoire, un dump de carte GameCube). Les sauvegardes du jeu americain sont ajoutees telles quelles ; une sauvegarde japonaise est convertie au format du jeu americain (les noms restent en caracteres japonais) et une sauvegarde europeenne est ajoutee telle quelle. Regardez ce qu'elle contient, puis ajoutez-la. Elle est ajoutee comme NOUVELLE sauvegarde : vos autres sauvegardes ne sont jamais remplacees et le fichier est seulement copie.
+
+= Choose a file...
+> Choisir un fichier...
+
 = Saved a copy of "%s" as %s.
 > Copie de "%s" enregistrée sous %s.
 
@@ -2471,6 +2645,9 @@
 
 = Import from Dolphin / GameCube...
 > Importer depuis Dolphin / GameCube...
+
+= Import a Japanese save...
+> Importer une sauvegarde japonaise...
 
 = Trainer
 > Dresseur
@@ -2817,8 +2994,11 @@
 = Game text needs the European disc pack; menus added by this port are translated.
 > Le texte du jeu nécessite le pack du disque européen; les menus ajoutés par ce portage sont traduits.
 
-= Preparing the game's shaders for this PC (once; see the Disc page).
-> Préparation des shaders du jeu pour ce PC (une seule fois; voir la page Disque).
+= Getting the game ready for your PC (once, about a minute): %d%%
+> Préparation du jeu pour votre PC (une seule fois, environ une minute) : %d%%
+
+= Drawing pictures from your disc (once, about a minute). Play stops this and finishes it another time.
+> Dessin des images de votre disque (une seule fois, environ une minute). Jouer arrête ceci et le termine une autre fois.
 
 = The game is running. Settings changed now are used the next time it starts.
 > Le jeu est en cours. Les paramètres modifiés maintenant seront utilisés au prochain démarrage.
@@ -2921,6 +3101,246 @@
 
 = The converter stopped without saying why (exit code %d).
 > Le convertisseur s'est arrêté sans dire pourquoi (code de sortie %d).
+
+= Couldn't install %s: %s. Nothing was changed.
+> Impossible d'installer %s : %s. Rien n'a été modifié.
+
+= %s is now version %s. The old version (%s) is kept: use "Roll back" to go back to it.
+> %s est maintenant en version %s. L'ancienne version (%s) est conservée : utilisez « Revenir » pour y retourner.
+
+= %s %s is installed. It is switched off until you turn it on.
+> %s %s est installé. Il reste désactivé jusqu'à ce que vous l'activiez.
+
+= Turned on %s.
+> %s activé.
+
+= Turned on %s and the %d mod(s) it needs.
+> %s activé, ainsi que les %d mod(s) dont il a besoin.
+
+= The list was put in a working order.
+> La liste a été mise en ordre de marche.
+
+= Some mods each want to come after the other, so their order is yours to decide.
+> Certains mods veulent chacun venir après l'autre : c'est à vous de décider de leur ordre.
+
+= The mod list was put in a working order (requirements first, then "after" / "before", then priority).
+> La liste des mods a été mise en ordre de marche (d'abord les prérequis, puis « after » / « before », puis la priorité).
+
+= The mod list already is in a working order.
+> La liste des mods est déjà en ordre de marche.
+
+= Some mods each want to come after the other; their order is yours to decide.
+> Certains mods veulent chacun venir après l'autre ; c'est à vous de décider de leur ordre.
+
+= The mod list was saved to %s.
+> La liste des mods a été enregistrée dans %s.
+
+= The list couldn't be saved to %s.
+> La liste n'a pas pu être enregistrée dans %s.
+
+= That file can't be used as a mod list: %s.
+> Ce fichier ne peut pas servir de liste de mods : %s.
+
+= The downloads from the list are finished. Look at the list again and apply it when you are ready.
+> Les téléchargements de la liste sont terminés. Regardez la liste à nouveau et appliquez-la quand vous êtes prêt.
+
+= All your mods with an update link are up to date, or nothing could be checked.
+> Tous vos mods ayant un lien de mise à jour sont à jour, ou rien n'a pu être vérifié.
+
+= Check for mod updates?
+> Rechercher des mises à jour de mods ?
+
+= Ask the mods' authors for newer versions?
+> Demander aux auteurs des mods s'il existe des versions plus récentes ?
+
+= This contacts the web addresses that your mods name as their "update link" (only https:// ones), and nothing else. It only asks whether a newer version exists. Nothing is downloaded or installed without another yes from you, and every update is scanned and shown to you first.
+> Ceci contacte les adresses web que vos mods indiquent comme « lien de mise à jour » (uniquement celles en https://), et rien d'autre. Cela demande seulement s'il existe une version plus récente. Rien n'est téléchargé ni installé sans un nouvel accord de votre part, et chaque mise à jour est analysée et vous est montrée d'abord.
+
+= None of your mods has an update link yet.
+> Aucun de vos mods n'a encore de lien de mise à jour.
+
+= Right now: %s.
+> En ce moment : %s.
+
+= Yes, check now
+> Oui, vérifier maintenant
+
+= Yes, and always check when the launcher starts
+> Oui, et toujours vérifier au démarrage du lanceur
+
+= Mod updates
+> Mises à jour des mods
+
+= Downloading and checking...
+> Téléchargement et vérification...
+
+= The download is checked against the signed update file, scanned, and only then shown to you.
+> Le téléchargement est comparé au fichier de mise à jour signé, analysé, et seulement ensuite montré.
+
+= Asking...
+> Demande en cours...
+
+= %s %s: you have the newest version.
+> %s %s : vous avez la dernière version.
+
+= %s %s (not installed yet)
+> %s %s (pas encore installé)
+
+= %s: %s to %s
+> %s : %s vers %s
+
+= From %s. Download: %s.
+> De %s. Téléchargement : %s.
+
+= What this mod may do (permissions):
+> Ce que ce mod peut faire (autorisations) :
+
+=   nothing beyond changing a few files
+>   rien d'autre que modifier quelques fichiers
+
+=   NEW in this update: %s
+>   NOUVEAU dans cette mise à jour : %s
+
+= This update asks for something the version you have did not: %s. Only go on if you are happy with that.
+> Cette mise à jour demande quelque chose que votre version n'exigeait pas : %s. Ne continuez que si cela vous convient.
+
+= Download and check
+> Télécharger et vérifier
+
+= Nothing to install.
+> Rien à installer.
+
+= These checks lower the risk; they cannot prove a mod harmless. Only install mods from people you trust.
+> Ces vérifications réduisent le risque ; elles ne peuvent pas prouver qu'un mod est inoffensif. N'installez que des mods de personnes de confiance.
+
+= Install this update?
+> Installer cette mise à jour ?
+
+= %s %s
+> %s %s
+
+= The download matches the signed update file (size and fingerprint) and passed the safety scan and the checker.
+> Le téléchargement correspond au fichier de mise à jour signé (taille et empreinte) et a réussi l'analyse de sécurité et le vérificateur.
+
+= Virus scan: %s.
+> Analyse antivirus : %s.
+
+= The checker has remarks (none of them stops the install):
+> Le vérificateur a des remarques (aucune n'empêche l'installation) :
+
+= Permissions (as the scan found them in the files):
+> Autorisations (telles que l'analyse les a trouvées dans les fichiers) :
+
+=   NEW: %s
+>   NOUVEAU : %s
+
+= Your saves use this mod
+> Vos sauvegardes utilisent ce mod
+
+= This update changes what a playthrough depends on. Playthroughs that were started with %s:%s
+> Cette mise à jour change ce dont dépend une partie. Parties commencées avec %s :%s
+
+= If you install it, the game will refuse to CONTINUE those saves (it never loads a save whose rows moved), until you roll back to the old version. Your save files are not touched either way.
+> Si vous l'installez, le jeu refusera de CONTINUER ces sauvegardes (il ne charge jamais une sauvegarde dont les lignes ont bougé) jusqu'à ce que vous reveniez à l'ancienne version. Vos fichiers de sauvegarde ne sont pas modifiés dans les deux cas.
+
+= If you install it, CONTINUE on those saves asks you first, because the mod is no longer the version they started with. Your save files are not touched either way.
+> Si vous l'installez, CONTINUER sur ces sauvegardes vous demandera d'abord confirmation, car le mod n'est plus la version avec laquelle elles ont commencé. Vos fichiers de sauvegarde ne sont pas modifiés dans les deux cas.
+
+= It changes game data, but none of your saves was started with this mod.
+> Elle modifie les données du jeu, mais aucune de vos sauvegardes n'a été commencée avec ce mod.
+
+= Keep my current version
+> Garder ma version actuelle
+
+= Kept %s %s: the update was not installed, so your saves can still use it.
+> %s %s conservé : la mise à jour n'a pas été installée, vos sauvegardes peuvent donc encore l'utiliser.
+
+= Install anyway (the old version is kept)
+> Installer quand même (l'ancienne version est conservée)
+
+= Install
+> Installer
+
+= Nothing was changed: the version you have stays as it is.
+> Rien n'a été modifié : la version que vous avez reste telle quelle.
+
+= Go back to the earlier version?
+> Revenir à la version précédente ?
+
+= There is no earlier version of this mod to go back to.
+> Il n'y a pas de version précédente de ce mod à laquelle revenir.
+
+= You have version %s. The launcher kept version %s%s. Going back swaps them: the version you have now is kept, so you can go forward again.
+> Vous avez la version %s. Le lanceur a conservé la version %s%s. Revenir en arrière les échange : la version actuelle est conservée, vous pourrez donc avancer à nouveau.
+
+= Saves started with this mod: %s. The game checks each one against the mod's version when you CONTINUE.
+> Sauvegardes commencées avec ce mod : %s. Le jeu vérifie chacune d'elles par rapport à la version du mod quand vous CONTINUEZ.
+
+= Go back
+> Revenir
+
+= %s is back to version %s.
+> %s est revenu à la version %s.
+
+= This mod needs other mods
+> Ce mod a besoin d'autres mods
+
+= These mods are in your mods folder but switched off. They will be turned on too:
+> Ces mods sont dans votre dossier de mods mais désactivés. Ils seront aussi activés :
+
+= Missing: %s (needed by %s). It isn't in your mods folder.
+> Manquant : %s (requis par %s). Il n'est pas dans votre dossier de mods.
+
+= Too old: you have %s %s, but %s is needed.
+> Trop ancien : vous avez %s %s, mais %s est requis.
+
+= Download from %s...
+> Télécharger depuis %s...
+
+= The mod's link can't be used: %s.
+> Le lien du mod ne peut pas être utilisé : %s.
+
+= The mod names no place to get it. Look for it where you got this mod.
+> Le mod n'indique aucun endroit où l'obtenir. Cherchez-le là où vous avez eu ce mod.
+
+= Turn it on
+> L'activer
+
+= Turn them all on
+> Tous les activer
+
+= Mod list from a file
+> Liste de mods depuis un fichier
+
+= These mods, in this order
+> Ces mods, dans cet ordre
+
+= Nothing has been changed or run yet. Applying only turns on the mods you already have and puts them in this order.
+> Rien n'a encore été modifié ni exécuté. Appliquer ne fait qu'activer les mods que vous avez déjà et les mettre dans cet ordre.
+
+= %d. %s %s: you have it
+> %d. %s %s : vous l'avez
+
+= %d. %s: the list has version %s, you have %s%s
+> %d. %s : la liste a la version %s, vous avez %s%s
+
+= %d. %s %s: missing%s
+> %d. %s %s : manquant%s
+
+=  (can be downloaded from %s, after your yes)
+>  (peut être téléchargé depuis %s, après votre accord)
+
+= Apply the order
+> Appliquer l'ordre
+
+= The list was applied.
+> La liste a été appliquée.
+
+= The list was applied; %d mod(s) from it are missing.
+> La liste a été appliquée ; %d mod(s) de celle-ci manquent.
+
+= Download %d...
+> Télécharger %d...
 
 = When and where it happened, and which version of the game program was running.
 > Quand et où cela s'est produit, et quelle version du programme du jeu tournait.
@@ -3093,6 +3513,15 @@
 = Gen 4 Pokemon
 > Pokémon de 4e génération
 
+= Colosseum characters
+> Personnages de Colosseum
+
+= Make characters
+> Créer les personnages
+
+= The program colo_models, which ships with the game, converts the trainer models on that disc (Wes, Rui and the other Colosseum characters) into XD's model format, in the folder extra_assets\\colosseum in your data folder. Only the Colosseum disc is needed. Nothing in the game uses them on their own yet: they are the characters the online battle's trainer card can pick from.
+> Le programme colo_models, livré avec le jeu, convertit les modèles de Dresseurs de ce disque (Wes, Rui et les autres personnages de Colosseum) au format de modèles de XD, dans le dossier extra_assets\\colosseum de votre dossier de données. Seul le disque de Colosseum est nécessaire. Rien dans le jeu ne les utilise encore seuls: ce sont les personnages que la carte de Dresseur du combat en ligne peut choisir.
+
 = Languages (from the European disc)
 > Langues (à partir du disque européen)
 
@@ -3105,6 +3534,18 @@
 = Choose the language on the Play bar (or in the game's SETTINGS): it applies the next time the game starts.
 > Choisissez la langue dans la barre Jouer (ou dans les PARAMÈTRES du jeu): elle s'applique au prochain démarrage du jeu.
 
+= Japanese (from the Japanese disc)
+> 
+
+= Make the Japanese pack
+> 
+
+= The program xd_languages, which ships with the game, copies the Japanese texts, fonts and pictures with words from that disc into the folder extra_assets\\languages_jp in your data folder; the game itself stays the USA game and only its text and pictures change. Your USA copy (the Disc page) is needed too: the game's code comes from it.
+> 
+
+= Choose Japanese on the Play bar (or in the game's SETTINGS): it applies the next time the game starts.
+> 
+
 = %s (boy)
 > %s (garçon)
 
@@ -3116,6 +3557,12 @@
 
 = %lld hours %02lld minutes
 > %lld heures %02lld minutes
+
+= This save is from Pokemon XG, but the disc chosen is Pokemon XD. A save only loads in its own game: choose your Pokemon XG disc to use it.
+> Cette sauvegarde provient de Pokémon XG, mais le disque choisi est Pokémon XD. Une sauvegarde ne se charge que dans son propre jeu : choisissez votre disque Pokémon XG pour l'utiliser.
+
+= This save is from Pokemon XD, but the disc chosen is Pokemon XG. A save only loads in its own game: choose your Pokemon XD disc to use it.
+> Cette sauvegarde provient de Pokémon XD, mais le disque choisi est Pokémon XG. Une sauvegarde ne se charge que dans son propre jeu : choisissez votre disque Pokémon XD pour l'utiliser.
 
 = no save yet: the game offers New Game
 > pas encore de sauvegarde: le jeu propose Nouvelle partie
@@ -3132,14 +3579,8 @@
 = The file can't be read: %s
 > Le fichier est illisible: %s
 
-= This is a European (PAL) Pokemon XD save (game GXXP). The USA game here can't use it. The save's layout is the same as the USA one (the decomp's list of what differs in the European game leaves the save code alone), but a European save asks for the European game's language (English, French, German, Italian or Spanish text) and this USA disc doesn't have those texts, so it is refused rather than risked. A language pack from a European disc could change that later.
-> C'est une sauvegarde européenne (PAL) de Pokémon XD (jeu GXXP). Le jeu USA présent ici ne peut pas l'utiliser. La structure de la sauvegarde est la même que celle du jeu USA (la liste du décomp des différences du jeu européen laisse le code de sauvegarde intact), mais une sauvegarde européenne demande la langue du jeu européen (textes en anglais, français, allemand, italien ou espagnol) et ce disque USA n'a pas ces textes, elle est donc refusée plutôt que risquée. Un pack de langue issu d'un disque européen pourrait changer cela plus tard.
-
-= This is a Japanese Pokemon XD save (game GXXJ). The USA game here can't use it.
-> C'est une sauvegarde japonaise de Pokémon XD (jeu GXXJ). Le jeu USA présent ici ne peut pas l'utiliser.
-
-= This Pokemon XD save is from another region's game (%s); the game here is the USA version (GXXE).
-> Cette sauvegarde de Pokémon XD vient du jeu d'une autre région (%s); le jeu ici est la version USA (GXXE).
+= This Pokemon XD save is from another region's game (%s). The game here can read the USA (GXXE), the European (GXXP) and the Japanese (GXXJ) saves.
+> Cette sauvegarde de Pokemon XD vient du jeu d'une autre region (%s). Le jeu ici sait lire les sauvegardes americaines (GXXE), europeennes (GXXP) et japonaises (GXXJ).
 
 = This save file is not a Pokemon XD save (it is "%s" of game %s).
 > Ce fichier de sauvegarde n'est pas une sauvegarde de Pokémon XD (c'est "%s" du jeu %s).
@@ -3147,8 +3588,41 @@
 = This memory card holds %d files, none of them a Pokemon XD save.
 > Cette carte mémoire contient %d fichiers, dont aucun n'est une sauvegarde de Pokémon XD.
 
+= This file says it is from the %s game, but the save inside is laid out like the Japanese game's. It is refused rather than guessed at.
+> Ce fichier dit venir du jeu %s, mais la sauvegarde qu'il contient est organisee comme celle du jeu japonais. Elle est refusee plutot que devinee.
+
+= This Japanese save can't be turned into a save for the USA game: %s
+> Cette sauvegarde japonaise ne peut pas etre transformee en sauvegarde pour le jeu americain : %s
+
+= This is a save of the Japanese game. It was converted to the layout the USA game here reads: the trainer, Pokemon and Pokedex are kept, with their names in Japanese characters (they show as kana in the game whatever language it runs in; this list writes them in Latin letters, its font has no kana).
+> C'est une sauvegarde du jeu japonais. Elle a ete convertie au format que lit le jeu americain ici : le dresseur, les Pokemon et le Pokedex sont conserves, avec leurs noms en caracteres japonais (elles s'affichent en kana dans le jeu quelle que soit sa langue ; cette liste les ecrit en lettres latines, sa police n'a pas de kana).
+
+= Where you stood is not kept: the game continues at the entrance of the map you saved in, as after a save at a PC. The saved room's moving parts differ between the Japanese and USA game.
+> L'endroit ou vous vous teniez n'est pas conserve : le jeu reprend a l'entree de la carte ou vous avez sauvegarde, comme apres une sauvegarde sur un PC. Les elements animes de la salle sauvegardee different entre le jeu japonais et le jeu americain.
+
+= The game text is English unless a Japanese language pack is installed.
+> Le texte du jeu est en anglais sauf si un pack de langue japonaise est installe.
+
+= This file says it is from the Japanese game, but the save inside is laid out like the USA / European game's. It is refused rather than guessed at.
+> Ce fichier dit venir du jeu japonais, mais la sauvegarde qu'il contient est organisee comme celle du jeu americain / europeen. Elle est refusee plutot que devinee.
+
 = The Pokemon XD save in this file can't be read: %s
 > La sauvegarde de Pokémon XD contenue dans ce fichier est illisible: %s
+
+= This is a save of the European game (English). Nothing in it needed changing.
+> C'est une sauvegarde du jeu europeen (anglais). Rien n'a eu besoin d'etre change.
+
+= This is a save of the European game, played in %s. The language pack here has %s: choose it as the Language on the Play bar to read the game as the save was played. With the setting on English (US) the game shows English text.
+> C'est une sauvegarde du jeu europeen, jouee en %s. Le pack de langue ici contient %s : choisissez-le comme Langue dans la barre Jouer pour lire le jeu comme la sauvegarde a ete jouee. Avec le reglage sur Anglais (US), le jeu affiche le texte en anglais.
+
+= This is a save of the European game, played in %s. The language pack here doesn't have %s (add the European disc on the Extra assets page to get it), so the game shows English text. Nothing in the save was changed.
+> C'est une sauvegarde du jeu europeen, jouee en %s. Le pack de langue ici ne contient pas %s (ajoutez le disque europeen sur la page Extra assets pour l'obtenir), donc le jeu affiche le texte en anglais. Rien n'a ete change dans la sauvegarde.
+
+= Game
+> Jeu
+
+= not known: you are asked
+> inconnu : on vous le demande
 
 = Setup
 > Configuration
@@ -3303,11 +3777,26 @@
 = the game's shader preparation ended with code %d (see its log in %s)
 > la préparation des shaders du jeu s'est terminée avec le code %d (voir son journal dans %s)
 
-= the game program isn't there: %s
-> le programme du jeu n'est pas là: %s
+= the trainer pictures took too long or were stopped
+> les images des Dresseurs ont pris trop de temps ou ont été interrompues
+
+= the trainer pictures were interrupted
+> Les images des dresseurs ont été interrompues
+
+= could not start the game program for the Eevee offer pictures
+> impossible de lancer le programme du jeu pour les images de l'offre Évoli
 
 = stopped (the launcher closed, or Play was pressed)
 > arrêté (le lanceur s'est fermé, ou Jouer a été pressé)
+
+= the game took too long for the Eevee offer pictures
+> le jeu a pris trop de temps pour les images de l'offre Évoli
+
+= the game's render mode for the Eevee offer ended with code %d
+> le mode de rendu du jeu pour l'offre Évoli s'est terminé avec le code %d
+
+= the game program isn't there: %s
+> le programme du jeu n'est pas là: %s
 
 = the game took too long
 > le jeu a pris trop de temps
@@ -3317,6 +3806,18 @@
 
 = The game needs your own copy of Pokemon XD: Gale of Darkness (USA version, game ID GXXE01), saved as a disc image file (.iso, .rvz, .gcm, ...). Nothing from the game comes with this program.
 > Le jeu nécessite votre propre copie de Pokémon XD: Gale of Darkness (version USA, ID de jeu GXXE01), enregistrée sous forme de fichier d'image disque (.iso, .rvz, .gcm, ...). Rien du jeu n'est fourni avec ce programme.
+
+= In the launcher
+> Dans le lanceur
+
+= Is this save from Pokemon XD or Pokemon XG?
+> Cette sauvegarde vient-elle de Pokémon XD ou de Pokémon XG ?
+
+= Pokemon XD
+> Pokémon XD
+
+= Pokemon XG
+> Pokémon XG
 
 = XD (the program's own)
 > XD (propre au programme)
@@ -3534,6 +4035,24 @@
 = The game couldn't start with this disc image after all.\n\nMost likely the game's main program on it isn't the one from the original USA disc, which this version of the game needs. That happens with ROM hacks and fan translations that change the program: please use an unchanged copy of your Pokemon XD disc.\n\n(Details: %s)
 > Le jeu n'a finalement pas pu démarrer avec cette image disque.\n\nIl est probable que le programme principal du jeu qu'elle contient ne soit pas celui du disque USA d'origine, dont cette version du jeu a besoin. Cela arrive avec les ROM hacks et les traductions de fans qui modifient le programme: utilisez une copie non modifiée de votre disque Pokémon XD.\n\n(Détails: %s)
 
+= Online trade
+> Échange en ligne
+
+= Online battle
+> Combat en ligne
+
+= In a battle
+> En combat
+
+= Story mode
+> Mode histoire
+
+= On the title screen
+> Sur l'écran titre
+
+= Nuzlocke
+> Nuzlocke
+
 = the Gen 4 files are not made yet (no %s)
 > les fichiers de 4e génération ne sont pas encore créés (pas de %s)
 
@@ -3546,6 +4065,39 @@
 = The Gen 4 Pokemon can't be used: %s.\n\nThey are made from your own Pokemon Battle Revolution disc on the launcher's "Extra assets" page.\nThe game starts without them.
 > Les Pokémon de 4e génération ne peuvent pas être utilisés: %s.\n\nIls sont créés à partir de votre propre disque Pokémon Battle Revolution sur la page "Ressources supplémentaires" du lanceur.\nLe jeu démarre sans eux.
 
+= Starting a new journey
+> Une nouvelle aventure commence
+
+= Getting Orre ready with your chosen rules
+> Orre se prépare avec les règles choisies
+
+= Loading %s
+> Chargement de %s
+
+= your save
+> votre sauvegarde
+
+= Play time %s
+> Temps de jeu %s
+
+= no picture yet
+> pas encore d'image
+
+= Starting the battle
+> Le combat commence
+
+= Both sides are ready, the battle begins in a moment
+> Les deux sont prêts, le combat va commencer
+
+= Getting back into the room
+> Retour dans le salon
+
+= The game restarts with the room's rules
+> Le jeu redémarre avec les règles du salon
+
+= The game did not start by itself: the title menu is yours.
+> Le jeu ne s'est pas lancé tout seul : le menu titre est à vous.
+
 = Pokemon XD - mods
 > Pokémon XD - mods
 
@@ -3557,683 +4109,6 @@
 
 = The mods' files could not be prepared (was a mod changed while the game started?). The game starts without mods.
 > Les fichiers des mods n'ont pas pu être préparés (un mod a-t-il été modifié pendant le démarrage du jeu?). Le jeu démarre sans mods.
-
-= %s could not be used (see the mods message)
-> %s n'a pas pu être utilisé (voir le message sur les mods)
-
-= Switched to %s. Loading speed and Memory card speed change the next time you start the game.
-> Passé à %s. La vitesse de chargement et la vitesse de la carte mémoire changeront au prochain démarrage du jeu.
-
-= New Game: %s (as chosen before)
-> Nouvelle partie: %s (comme choisi auparavant)
-
-= This save's setup had: %s. The game carries on without it.
-> La configuration de cette sauvegarde comprenait: %s. Le jeu continue sans elle.
-
-= The save on the memory card holds Pokemon, moves or items that mods added, and their numbers would mean other things without the same mods: %s. Nothing on the card is read or changed.
-> La sauvegarde de la carte mémoire contient des Pokémon, capacités ou objets ajoutés par des mods, et leurs numéros signifieraient autre chose sans les mêmes mods: %s. Rien sur la carte n'est lu ni modifié.
-
-= This save holds Pokemon, moves or items that this game does not have (the game has %d Pokemon, %d moves, %d items):\n\n%s\nIt was probably saved with a mod that adds Pokemon, moves or items. Start the game with that mod switched on (same mods, same order). Nothing was read into the game and nothing on the card was changed. The game stops here.
-> Cette sauvegarde contient des Pokémon, capacités ou objets que ce jeu n'a pas (le jeu a %d Pokémon, %d capacités, %d objets):\n\n%s\nElle a probablement été enregistrée avec un mod qui ajoute des Pokémon, capacités ou objets. Démarrez le jeu avec ce mod activé (mêmes mods, même ordre). Rien n'a été lu dans le jeu et rien n'a été modifié sur la carte. Le jeu s'arrête ici.
-
-= Pokemon XD - this save needs its mods
-> Pokémon XD - cette sauvegarde a besoin de ses mods
-
-= Script mod %s switched off: %s
-> Mod de script %s désactivé: %s
-
-= Picture, sound and controls (PC version).
-> Image, son et commandes (version PC).
-
-= Switch the installed mods on or off (PC version).
-> Activer ou désactiver les mods installés (version PC).
-
-= SETTINGS
-> PARAMÈTRES
-
-= Speedrun timer
-> Chrono speedrun
-
-= Timer category
-> Catégorie du chrono
-
-= Timer start (Custom)
-> Début du chrono (Personnalisé)
-
-= Timer end (Custom)
-> Fin du chrono (Personnalisé)
-
-= Timer position
-> Position du chrono
-
-= Timer size
-> Taille du chrono
-
-= Timer split list
-> Temps intermédiaires
-
-= Play statistics
-> Statistiques de jeu
-
-= Music
-> Musique
-
-= Sound effects
-> Effets sonores
-
-= Cries
-> Cris
-
-= Language
-> Langue
-
-= Fast animations
-> Animations rapides
-
-= See below
-> Voir ci-dessous
-
-= Press A again
-> Appuyez encore sur A
-
-= Window
-> Fenêtre
-
-= Save any changes and leave the settings.
-> Enregistrer les modifications et quitter les paramètres.
-
-= Starts the game again now in the new language. Progress you have not saved is lost.
-> Redémarre le jeu maintenant dans la nouvelle langue. La progression non sauvegardée est perdue.
-
-= Keeps the new language for the next time the game starts. Nothing happens now.
-> Garde la nouvelle langue pour le prochain démarrage du jeu. Rien ne se passe maintenant.
-
-= The new language is used the next time the game starts.
-> La nouvelle langue sera utilisée au prochain démarrage du jeu.
-
-= EXIT
-> QUITTER
-
-= Light
-> Léger
-
-= Classic
-> Classique
-
-= Chaos
-> Chaos
-
-= Poke Spot Pokemon
-> Pokémon des Poké Spots
-
-= Other wild Pokemon at the three Poke Spots. The visitors (Munchlax, Bonsly) stay.
-> D'autres Pokémon sauvages aux trois Poké Spots. Les visiteurs (Goinfrex, Manzaï) restent.
-
-= Similar strength
-> Force similaire
-
-= Poke Spots: each Pokemon is replaced by one about as strong.
-> Poké Spots: chaque Pokémon est remplacé par un autre à peu près aussi fort.
-
-= Trainers' Pokemon
-> Pokémon des Dresseurs
-
-= Other Pokemon in the story trainers' teams. Team sizes stay; levels, held items and natures have their own rows.
-> D'autres Pokémon dans les équipes des Dresseurs de l'histoire. La taille des équipes reste; les niveaux, objets tenus et natures ont leurs propres lignes.
-
-= Trainers: each Pokemon is replaced by one about as strong.
-> Dresseurs: chaque Pokémon est remplacé par un autre à peu près aussi fort.
-
-= Moves
-> Capacités
-
-= Trainers' new Pokemon. Kept: the moves the disc gave that slot. By level: the last four moves the new Pokemon learns up to its level.
-> Nouveaux Pokémon des Dresseurs. Conservées: les capacités que le disque donnait à cet emplacement. Par niveau: les quatre dernières capacités que le nouveau Pokémon apprend jusqu'à son niveau.
-
-= No repeats
-> Sans répétition
-
-= Trainers: a team never gets the same Pokemon twice.
-> Dresseurs: une équipe n'a jamais deux fois le même Pokémon.
-
-= Shadow Pokemon
-> Pokémon Obscurs
-
-= Other species are the Shadow Pokemon (all 83 different; the P*DA's list follows). Shadow moves, catch rates and heart gauges stay.
-> Les autres espèces sont les Pokémon Obscurs (83 tous différents; la liste du P*DA suit). Les capacités Obscures, les taux de capture et les jauges de cœur restent.
-
-= Shadows: each one is replaced by a Pokemon about as strong.
-> Obscurs: chacun est remplacé par un Pokémon à peu près aussi fort.
-
-= Keep Shadow Lugia
-> Garder Lugia Obscur
-
-= Shadow Lugia stays Lugia (the story and its scenes show Lugia).
-> Lugia Obscur reste Lugia (l'histoire et ses scènes montrent Lugia).
-
-= Items on the ground
-> Objets au sol
-
-= The item boxes on the maps. Random: any item. Shuffle: the same items in other places. Important items never move.
-> Les coffres d'objets sur les cartes. Aléatoire: n'importe quel objet. Mélangé: les mêmes objets à d'autres endroits. Les objets importants ne bougent jamais.
-
-= Abilities
-> Talents
-
-= Pokemon get other abilities. Wonder Guard and Forecast are never handed out.
-> Les Pokémon reçoivent d'autres talents. Garde Mystik et Météo ne sont jamais distribués.
-
-= Same in a family
-> Identiques dans une famille
-
-= Abilities: a Pokemon keeps its ability when it evolves.
-> Talents: un Pokémon garde son talent quand il évolue.
-
-= TM learners
-> Apprentissage des CT
-
-= Which Pokemon can learn each TM; each TM stays about as common as on the disc.
-> Quels Pokémon peuvent apprendre chaque CT; chaque CT reste à peu près aussi courante que sur le disque.
-
-= Legendaries
-> Légendaires
-
-= Whether legendary Pokemon can be picked: never, only where the disc had one, or anywhere.
-> Si les Pokémon légendaires peuvent être choisis: jamais, seulement là où le disque en avait un, ou partout.
-
-= TM moves
-> Capacités des CT
-
-= Each TM teaches another move, all different (never a Shadow move). The bag and the shops show the new move and its description. One-hit-KO moves can be ruled out.
-> Chaque CT enseigne une autre capacité, toutes différentes (jamais une capacité Obscure). Le sac et les boutiques affichent la nouvelle capacité et sa description. Les capacités K.O. en un coup peuvent être exclues.
-
-= Trainers' levels
-> Niveaux des Dresseurs
-
-= The story trainers' Pokemon are stronger by that much (never above level 100), or "To strength": a stronger new Pokemon gets a lower level, a weaker one a higher level. Shadow Pokemon keep their levels.
-> Les Pokémon des Dresseurs de l'histoire sont plus forts de cette valeur (jamais au-dessus du niveau 100), ou "À la force": un nouveau Pokémon plus fort reçoit un niveau plus bas, un plus faible un niveau plus haut. Les Pokémon Obscurs gardent leurs niveaux.
-
-= Trainers' held items
-> Objets tenus des Dresseurs
-
-= What the story trainers' Pokemon hold. Random: each holds one of the items trainers' Pokemon hold in the game. None: nothing. Shadow Pokemon keep theirs.
-> Ce que tiennent les Pokémon des Dresseurs de l'histoire. Aléatoire: chacun tient l'un des objets que les Pokémon de Dresseurs tiennent dans le jeu. Aucun: rien. Les Pokémon Obscurs gardent les leurs.
-
-= Trainers' natures
-> Natures des Dresseurs
-
-= Random: each of the story trainers' Pokemon gets any of the 25 natures. Shadow Pokemon get theirs from the game, as always.
-> Aléatoire: chaque Pokémon des Dresseurs de l'histoire reçoit l'une des 25 natures. Les Pokémon Obscurs reçoivent la leur du jeu, comme toujours.
-
-= Poke Mart stock
-> Stock des Boutiques Pokémon
-
-= What the Poke Marts sell. Shuffled: the Marts' own goods in other Marts. Everyday goods: medicine, status cures, repels, battle items, berries. Anything: also held items, TMs, vitamins, stones, valuables. Poke Balls and Poke Snacks stay where they are.
-> Ce que vendent les Boutiques Pokémon. Mélangé: les articles de chaque boutique dans d'autres boutiques. Articles courants: médicaments, soins de statut, repousses, objets de combat, baies. N'importe quoi: aussi objets tenus, CT, vitamines, pierres, objets de valeur. Les Poké Balls et les Poké-friandises restent où elles sont.
-
-= Tutor moves
-> Capacités des maîtres
-
-= The move tutor teaches other moves, all different and none a TM teaches. Each is learned by the Pokemon that could learn the move it replaces. One-hit-KO moves can be ruled out.
-> Le maître des capacités enseigne d'autres capacités, toutes différentes et aucune enseignée par une CT. Chacune est apprise par les Pokémon qui pouvaient apprendre la capacité qu'elle remplace. Les capacités K.O. en un coup peuvent être exclues.
-
-= Scope
-> Portée
-
-= Poke Spots, "Same swap everywhere": a Pokemon is replaced by the same new one in every spot, and no two by the same one.
-> Poké Spots, "Même échange partout": un Pokémon est remplacé par le même nouveau Pokémon dans chaque Poké Spot, et jamais deux par le même.
-
-= Type theme
-> Thème de type
-
-= Poke Spots, "Similar types": the new Pokemon shares a type with the one it replaces.
-> Poké Spots, "Types similaires": le nouveau Pokémon partage un type avec celui qu'il remplace.
-
-= Poke Spot levels
-> Niveaux des Poké Spots
-
-= Poke Spot Pokemon are that much higher in level (never above level 100).
-> Les Pokémon des Poké Spots ont ce niveau en plus (jamais au-dessus du niveau 100).
-
-= By level
-> Par niveau
-
-= As on the disc
-> Comme sur le disque
-
-= To strength
-> À la force
-
-= Kept
-> Conservé
-
-= Random
-> Aléatoire
-
-= Shuffle
-> Mélanger
-
-= Shuffled
-> Mélangé
-
-= Everyday goods
-> Articles courants
-
-= Anything
-> N'importe quoi
-
-= Never
-> Jamais
-
-= Any
-> N'importe lequel
-
-= Similar types
-> Types similaires
-
-= Each spot its own
-> Chaque Poké Spot le sien
-
-= Same swap everywhere
-> Même échange partout
-
-= Random, no one-hit-KO moves
-> Aléatoire, sans capacités K.O. en un coup
-
-= Nothing to paste: copy a code first (Ctrl+C in a message or a web page).
-> Rien à coller: copiez d'abord un code (Ctrl+C dans un message ou une page web).
-
-= That is not a randomizer code (%s).
-> Ce n'est pas un code de randomizer (%s).
-
-= too long
-> trop long
-
-= Code taken: %s.
-> Code pris: %s.
-
-= Play the original game
-> Jouer au jeu original
-
-= Engine
-> Moteur
-
-= Use a friend's code
-> Utiliser le code d'un ami
-
-= Shiny odds
-> Chances de chromatique
-
-= Shiny Shadow Pokemon
-> Pokémon Obscurs chromatiques
-
-= Shiny gift Pokemon
-> Pokémon cadeaux chromatiques
-
-= Shiny Bonsly / Munchlax
-> Manzaï / Goinfrex chromatiques
-
-= %s (not available)
-> %s (indisponible)
-
-= START
-> DÉMARRER
-
-= Faithful, no mods: exactly the GameCube game. Starts at once (the game first starts again without the mods it has loaded).
-> Fidèle, sans mods: exactement le jeu GameCube. Démarre aussitôt (le jeu redémarre d'abord sans les mods qu'il a chargés).
-
-= Faithful, no mods: exactly the GameCube game. Starts at once.
-> Fidèle, sans mods: exactement le jeu GameCube. Démarre aussitôt.
-
-= Faithful: the game decides everything exactly as on the GameCube. Enhanced: speed-ups (text, fast-forward, battle animations) can be used.
-> Fidèle: le jeu décide de tout exactement comme sur la GameCube. Amélioré: les accélérations (texte, avance rapide, animations de combat) peuvent être utilisées.
-
-= A timer over the picture for this playthrough, kept with the save: Real time counts from NEW GAME (what speedruns use); Without loads takes the game's loading time out. Only drawn: the game plays exactly the same with it on or off, also Faithful. Change it later on the SETTINGS page.
-> Un chrono par-dessus l'image pour cette partie, conservé avec la sauvegarde: Temps réel compte à partir de NOUVELLE PARTIE (ce qu'utilisent les speedruns); Sans chargements retire le temps de chargement du jeu. Seulement affiché: le jeu se déroule exactement de la même façon, chrono activé ou non, y compris en Fidèle. Changez-le plus tard sur la page PARAMÈTRES.
-
-= %s mod, version %s.
-> Mod %s, version %s.
-
-= Counted as new playthrough only: %s.
-> Compté seulement comme nouvelle partie: %s.
-
-= Makes a new game from your disc: other Pokemon in the Poke Spots, other Shadow Pokemon, items in other places. Light: those only. Classic: also trainers, abilities, TM learners, similar strength. Chaos: all, no fairness. Custom: each switch yourself.
-> Crée un nouveau jeu à partir de votre disque: d'autres Pokémon aux Poké Spots, d'autres Pokémon Obscurs, des objets à d'autres endroits. Léger: seulement cela. Classique: aussi les Dresseurs, talents, apprentissage des CT, force similaire. Chaos: tout, sans équité. Personnalisé: chaque interrupteur à votre façon.
-
-= Code: %s. It holds the seed and every switch: a friend who uses it gets the same game. Left / right or A: a new random seed.
-> Code: %s. Il contient la graine et chaque interrupteur: un ami qui l'utilise obtient le même jeu. Gauche / droite ou A: une nouvelle graine aléatoire.
-
-= How often a Pokemon is shiny: Original 1 in 8192 (the GameCube game), Modern 1 in 4096 (Gen 6 and later), or 1 in 1024, 512, 128. Applies where the game allows shiny Pokemon (Poke Spot Pokemon, your Eevee, trades). Kept with this playthrough. A shiny is just a shiny in online battles and trades.
-> À quelle fréquence un Pokémon est chromatique: Original 1 sur 8192 (le jeu GameCube), Moderne 1 sur 4096 (6e génération et après), ou 1 sur 1024, 512, 128. S'applique là où le jeu permet les Pokémon chromatiques (Pokémon des Poké Spots, votre Évoli, échanges). Conservé avec cette partie. En combat en ligne et en échange, un chromatique n'est qu'un chromatique.
-
-= On: Shadow Pokemon can be shiny, with the odds above (in the GameCube game they never are). Each Shadow Pokemon gets its looks when you first meet it and keeps them, also after purifying. Off: as the game.
-> Activé: les Pokémon Obscurs peuvent être chromatiques, avec les chances ci-dessus (dans le jeu GameCube, ils ne le sont jamais). Chaque Pokémon Obscur reçoit son apparence à la première rencontre et la garde, même après la purification. Désactivé: comme le jeu.
-
-= On: the gift Pokemon the game never makes shiny (Jolteon, Vaporeon, Plusle, Ho-Oh, Pikachu, Celebi) can be shiny, with the odds above. Your starter Eevee, trades and the Mt. Battle starters already follow the odds. Off: as the game.
-> Activé: les Pokémon cadeaux que le jeu ne rend jamais chromatiques (Voltali, Aquali, Posipi, Ho-Oh, Pikachu, Celebi) peuvent l'être, avec les chances ci-dessus. Votre Évoli de départ, les échanges et les Pokémon de départ du Mont Battle suivent déjà les chances. Désactivé: comme le jeu.
-
-= On: the Poke Spot visitors Bonsly and Munchlax, which are never shiny in the game, can be shiny, with the odds above. Other Poke Spot Pokemon already follow the odds. Off: as the game.
-> Activé: les visiteurs des Poké Spots, Manzaï et Goinfrex, qui ne sont jamais chromatiques dans le jeu, peuvent l'être, avec les chances ci-dessus. Les autres Pokémon des Poké Spots suivent déjà les chances. Désactivé: comme le jeu.
-
-= Copy a code (or a seed number) on the PC, then press A here to use it.
-> Copiez un code (ou un numéro de graine) sur le PC, puis appuyez sur A ici pour l'utiliser.
-
-= Not available: %s. The Gen 4 Pokemon, moves, cries and models are made from your own Pokemon Battle Revolution disc (launcher, Extra assets page).
-> Indisponible: %s. Les Pokémon, capacités, cris et modèles de 4e génération sont créés à partir de votre propre disque Pokémon Battle Revolution (lanceur, page Ressources supplémentaires).
-
-= Challenge rule, for this playthrough from start to end. %s
-> Règle de défi, pour cette partie du début à la fin. %s
-
-= Start the new game with this setup. The game starts again with these mods first; then choose NEW GAME again.
-> Démarrer la nouvelle partie avec cette configuration. Le jeu redémarre d'abord avec ces mods; choisissez ensuite NOUVELLE PARTIE à nouveau.
-
-= The game started again with your setup: start the new game with it.
-> Le jeu a redémarré avec votre configuration: démarrez la nouvelle partie avec elle.
-
-= Start the new game with this setup.
-> Démarrer la nouvelle partie avec cette configuration.
-
-= NEW GAME
-> NOUVELLE PARTIE
-
-= Paste (A)
-> Coller (A)
-
-= and %d more
-> et %d de plus
-
-= %d more
-> %d de plus
-
-= This save was started with mods that are missing or changed: %s. Carry on without them? (It can change the game.)
-> Cette sauvegarde a été commencée avec des mods manquants ou modifiés: %s. Continuer sans eux? (Cela peut changer le jeu.)
-
-= YES
-> OUI
-
-= NO
-> NON
-
-= %s and %s
-> %s et %s
-
-= Keep Faithful
-> Garder Fidèle
-
-= Switch to Enhanced
-> Passer à Amélioré
-
-= This playthrough is marked Faithful: it plays exactly like the GameCube game.
-> Cette partie est marquée Fidèle: elle se joue exactement comme le jeu GameCube.
-
-= For a Faithful playthrough some settings stay as on the GameCube, whatever you have set.
-> Dans une partie Fidèle, certains paramètres restent comme sur la GameCube, quoi que vous ayez réglé.
-
-= They are: %s.
-> Ce sont: %s.
-
-= Your settings are Enhanced now. You can keep this playthrough Faithful, or switch it to Enhanced so that those settings work in it.
-> Vos paramètres sont maintenant Amélioré. Vous pouvez garder cette partie Fidèle, ou la passer en Amélioré pour que ces paramètres y fonctionnent.
-
-= Warning: you can switch back later, but a playthrough that was Enhanced for a while no longer counts as Faithful from the start.
-> Attention: vous pourrez revenir en arrière plus tard, mais une partie qui a été Améliorée un moment ne compte plus comme Fidèle depuis le début.
-
-= Its label will always show that it was switched. Picture, sound and controls settings are yours either way.
-> Son libellé indiquera toujours qu'elle a été changée. Les paramètres d'image, de son et de commandes sont à vous dans les deux cas.
-
-= Keep this playthrough Faithful, or switch it to Enhanced?
-> Garder cette partie Fidèle, ou la passer en Amélioré?
-
-= Keep Enhanced
-> Garder Amélioré
-
-= Switch to Faithful
-> Passer à Fidèle
-
-= This playthrough is marked Enhanced: it plays with your own gameplay settings.
-> Cette partie est marquée Amélioré: elle se joue avec vos propres paramètres de jeu.
-
-= Your settings are the Original ones now, so it plays like the GameCube game anyway. But it stays marked Enhanced.
-> Vos paramètres sont maintenant ceux d'Original, donc elle se joue de toute façon comme le jeu GameCube. Mais elle reste marquée Amélioré.
-
-= You can keep it Enhanced, or switch it to Faithful. Faithful holds those settings as on the GameCube, whatever you set later.
-> Vous pouvez la garder Améliorée, ou la passer en Fidèle. Fidèle maintient ces paramètres comme sur la GameCube, quoi que vous régliez plus tard.
-
-= Its label will always show that it was Enhanced for a while: it does not count as Faithful from the start. You can switch again later.
-> Son libellé indiquera toujours qu'elle a été Améliorée un moment: elle ne compte pas comme Fidèle depuis le début. Vous pourrez changer à nouveau plus tard.
-
-= Keep this playthrough Enhanced, or switch it to Faithful?
-> Garder cette partie Améliorée, ou la passer en Fidèle?
-
-= by %s
-> par %s
-
-= Changes: %s.
-> Modifie: %s.
-
-= Looks and sound only.
-> Image et son seulement.
-
-= Read when the game starts.
-> Lu au démarrage du jeu.
-
-= New playthrough only: your save is set up with it, so it stays on for that save whatever is chosen here.
-> Nouvelle partie seulement: votre sauvegarde est configurée avec lui, donc il reste activé pour cette sauvegarde quel que soit le choix ici.
-
-= New playthrough only: it is chosen when you start a new game. Your save keeps the mods it was started with.
-> Nouvelle partie seulement: il se choisit au début d'une nouvelle partie. Votre sauvegarde garde les mods avec lesquels elle a été commencée.
-
-= New playthrough only: it is chosen when you start a new game.
-> Nouvelle partie seulement: il se choisit au début d'une nouvelle partie.
-
-= (It says %s, but %s.)
-> (Il dit %s, mais %s.)
-
-= In use now.
-> Utilisé actuellement.
-
-= Can't be used: %s. Fix or remove it in the mods folder, then open this page again.
-> Ne peut pas être utilisé: %s. Corrigez-le ou supprimez-le dans le dossier des mods, puis rouvrez cette page.
-
-= List "%s": 1 mod on
-> Liste "%s": 1 mod activé
-
-= List "%s": %d mods on
-> Liste "%s": %d mods activés
-
-= Save this mod list and start the game again with it. Until you do, nothing changes: EXIT or B leaves the list as it was.
-> Enregistrer cette liste de mods et relancer le jeu avec elle. Tant que vous ne le faites pas, rien ne change: QUITTER ou B laisse la liste telle qu'elle était.
-
-= Nothing has changed yet. Switch mods on or off above (L / R, or X / Y, move one up or down the order: further down wins when two mods change the same file).
-> Rien n'a encore changé. Activez ou désactivez des mods ci-dessus (L / R, ou X / Y, montent ou descendent un mod dans l'ordre: plus bas l'emporte quand deux mods modifient le même fichier).
-
-= List "%s"
-> Liste "%s"
-
-= Leave without applying: the mod list stays as it was.
-> Quitter sans appliquer: la liste des mods reste telle qu'elle était.
-
-= Nothing has changed, so there is nothing to apply.
-> Rien n'a changé, donc il n'y a rien à appliquer.
-
-= This test run can't save the mod list: %s
-> Cet essai ne peut pas enregistrer la liste des mods: %s
-
-= The mod list couldn't be saved to mods.ini, so nothing was changed.
-> La liste des mods n'a pas pu être enregistrée dans mods.ini, donc rien n'a été modifié.
-
-= L / R: move up / down the order
-> L / R: monter / descendre dans l'ordre
-
-= Apply and restart
-> Appliquer et redémarrer
-
-= Missing
-> Manquant
-
-= Can't load
-> Impossible à charger
-
-= (can't load) %s
-> (impossible à charger) %s
-
-= Purification speed
-> Vitesse de purification
-
-= How many times faster a Shadow Pokemon's heart opens (walking, battling, the Purify Chamber). 1 is the original.
-> Combien de fois plus vite le cœur d'un Pokémon Obscur s'ouvre (en marchant, en combattant, dans la Salle de Purification). 1 correspond à l'original.
-
-= The language of the game's texts, menus and pictures. English (US) is the USA game as it is. The others come from the European (PAL) copy of the game, added on the launcher's Extra assets page ("Languages (from the European disc)"); a language the pack doesn't have falls back to English. Applies the next time the game starts. It changes only text and pictures, not how the game plays.
-> La langue des textes, menus et images du jeu. Anglais (US) est le jeu USA tel quel. Les autres viennent de la copie européenne (PAL) du jeu, ajoutée sur la page Ressources supplémentaires du lanceur ("Langues (à partir du disque européen)"); une langue que le pack n'a pas retombe sur l'anglais. S'applique au prochain démarrage du jeu. Cela ne change que les textes et les images, pas la façon de jouer.
-
-= English (US)
-> Anglais (US)
-
-= German
-> Allemand
-
-= French
-> Français
-
-= Italian
-> Italien
-
-= Spanish
-> Espagnol
-
-= European disc image (for languages)
-> Image disque européenne (pour les langues)
-
-= The European (PAL) Pokemon XD disc image the launcher's Extra assets page makes the language pack from (empty: none chosen yet).
-> L'image disque européenne (PAL) de Pokémon XD à partir de laquelle la page Ressources supplémentaires du lanceur crée le pack de langues (vide: aucune choisie pour l'instant).
-
-= Developer menu (cheats)
-> Menu développeur (triche)
-
-= F9 opens a menu of the developers' own debug tools left in the game: go to any place, any point of the story, set story flags, start battles, get items and Pokemon. For testing; runs that used it are marked in their recording and bug reports.
-> F9 ouvre un menu des outils de débogage des développeurs restés dans le jeu: aller n'importe où, à n'importe quel point de l'histoire, définir des indicateurs d'histoire, lancer des combats, obtenir des objets et des Pokémon. Pour les tests; les parties qui l'ont utilisé sont marquées dans leur enregistrement et leurs rapports de bogue.
-
-= Fast-forward switched itself off: this PC can't keep up with it.
-> L'avance rapide s'est désactivée d'elle-même: ce PC ne peut pas suivre.
-
-= Fast battle animations switched themselves off: this PC can't keep up with them.
-> Les animations de combat rapides se sont désactivées d'elles-mêmes: ce PC ne peut pas suivre.
-
-= The picture never came back from the graphics card.
-> L'image n'est jamais revenue de la carte graphique.
-
-= Saved %s (%dx%d)
-> %s enregistré (%dx%d)
-
-= Could not save %s
-> Impossible d'enregistrer %s
-
-= The picture could not be taken (no readback on this graphics card?).
-> L'image n'a pas pu être prise (pas de relecture sur cette carte graphique?).
-
-= Photo mode (%s: back to the game)
-> Mode photo (%s: retour au jeu)
-
-= The game is paused.
-> Le jeu est en pause.
-
-= Move: W A S D, up/down: E Q (Shift faster, Ctrl slower)
-> Déplacement: W A S D, haut/bas: E Q (Shift plus vite, Ctrl plus lent)
-
-= Look: hold the right mouse button; wheel: speed; tilt: Z C
-> Regard: maintenez le clic droit; molette: vitesse; inclinaison: Z C
-
-= Controller: sticks, triggers up/down, shoulders tilt
-> Manette: sticks, gâchettes haut/bas, boutons d'épaule inclinent
-
-= P: photo   R: reset   H: hide this window
-> P: photo   R: réinitialiser   H: masquer cette fenêtre
-
-= Speed
-> Vitesse
-
-= Field of view
-> Champ de vision
-
-= %.0f degrees
-> %.0f degrés
-
-= Tilt
-> Inclinaison
-
-= Hide menus and text (2D)
-> Masquer les menus et le texte (2D)
-
-= As the game draws
-> Comme le jeu l'affiche
-
-= Photo size
-> Taille de la photo
-
-= Take photo
-> Prendre une photo
-
-= Reset camera
-> Réinitialiser la caméra
-
-= Back to the game
-> Retour au jeu
-
-= Photos: %s
-> Photos: %s
-
-= Any time
-> À tout moment
-
-= On restart
-> Au redémarrage
-
-= New playthrough only
-> Nouvelle partie seulement
-
-= Video
-> Vidéo
-
-= Audio
-> Audio
-
-= Gameplay
-> Gameplay
-
-= Accessibility
-> Accessibilité
-
-= System
-> Système
-= Online battles and online trading work in Original too; trading in a Faithful save only receives Pokemon the GameCube game could have.
-> Les combats en ligne et les échanges en ligne marchent aussi en Original; un échange dans une sauvegarde Fidèle ne reçoit que des Pokémon que le jeu GameCube aurait pu avoir.
-
-= Online battles and online trading are available here too.
-> Les combats en ligne et les échanges en ligne sont aussi disponibles ici.
-
-= If you close this window without choosing, Enhanced is used and you are asked again next time.
-> Si vous fermez cette fenêtre sans choisir, Amélioré est utilisé et la question vous sera reposée la prochaine fois.
-
-= Colosseum characters
-> Personnages de Colosseum
-
-= Make characters
-> Créer les personnages
-
-= The program colo_models, which ships with the game, converts the trainer models on that disc (Wes, Rui and the other Colosseum characters) into XD's model format, in the folder extra_assets\\colosseum in your data folder. Only the Colosseum disc is needed. Nothing in the game uses them on their own yet: they are the characters the online battle's trainer card can pick from.
-> Le programme colo_models, livré avec le jeu, convertit les modèles de Dresseurs de ce disque (Wes, Rui et les autres personnages de Colosseum) au format de modèles de XD, dans le dossier extra_assets\\colosseum de votre dossier de données. Seul le disque de Colosseum est nécessaire. Rien dans le jeu ne les utilise encore seuls: ce sont les personnages que la carte de Dresseur du combat en ligne peut choisir.
-
-= the trainer pictures took too long or were stopped
-> les images des Dresseurs ont pris trop de temps ou ont été interrompues
-
-= could not start the game program for the Eevee offer pictures
-> impossible de lancer le programme du jeu pour les images de l'offre Évoli
-
-= the game took too long for the Eevee offer pictures
-> le jeu a pris trop de temps pour les images de l'offre Évoli
-
-= the game's render mode for the Eevee offer ended with code %d
-> le mode de rendu du jeu pour l'offre Évoli s'est terminé avec le code %d
 
 = The two games disagreed (turn %d). This battle doesn't count.
 > Les deux jeux ne sont plus d'accord (tour %d). Ce combat ne compte pas.
@@ -4261,6 +4136,9 @@
 
 = Your friend's team is not allowed in this room: %s
 > L'équipe de votre ami n'est pas autorisée dans ce salon: %s
+
+= The two games do not hold the same Pokemon for this battle (a team was changed on the way). The battle was not started.
+> Les deux jeux n'ont pas les mêmes Pokémon pour ce combat (une équipe a été modifiée en route). Le combat n'a pas été lancé.
 
 = The room's rules are not valid: %s
 > Les règles du salon ne sont pas valides: %s
@@ -4427,6 +4305,9 @@
 = An unknown draft message.
 > Un message de draft inconnu.
 
+= DRAFT
+> DRAFT
+
 = Waiting for the host's pool...
 > En attente du pool de l'hôte...
 
@@ -4514,6 +4395,9 @@
 = Your friend left the room.
 > Votre ami a quitté le salon.
 
+= Room %s
+> Salon %s
+
 = BATTLE A FRIEND
 > COMBATTRE UN AMI
 
@@ -4526,6 +4410,9 @@
 = Your friend needs the same game and this screen too.
 > Votre ami a besoin du même jeu et de cet écran aussi.
 
+= A: choose   B: back
+> A: choisir   B: retour
+
 = ROOM SETTINGS
 > PARAMÈTRES DU SALON
 
@@ -4537,12 +4424,6 @@
 
 = Type your friend's room code
 > Saisissez le code de salon de votre ami
-
-= DEL
-> SUPPR
-
-= JOIN
-> REJOINDRE
 
 = D-pad: choose  A: type  X: delete  START: join  B: back
 > D-pad: choisir  A: saisir  X: supprimer  START: rejoindre  B: retour
@@ -4730,9 +4611,6 @@
 = WHICH SAVE IS YOUR TEAM FROM?
 > DE QUELLE SAUVEGARDE VIENT VOTRE ÉQUIPE?
 
-= A: choose   B: back
-> A: choisir   B: retour
-
 = CHOOSE YOUR TEAM FROM YOUR SAVE
 > CHOISISSEZ VOTRE ÉQUIPE DANS VOTRE SAUVEGARDE
 
@@ -4838,6 +4716,21 @@
 = Rematch: the same room and settings again.
 > Revanche: même salon et mêmes paramètres.
 
+= Gen 4 rules
+> Règles Gen 4
+
+= Gen 4 with modern types
+> Gen 4 avec types modernes
+
+= Double battle
+> Combat double
+
+= Single battle
+> Combat simple
+
+= Split on
+> Séparation activée
+
 = There is no Pokemon there.
 > Il n'y a pas de Pokémon ici.
 
@@ -4910,6 +4803,12 @@
 = PC box %d, place %d
 > Boîte PC %d, place %d
 
+= JOIN
+> REJOINDRE
+
+= DEL
+> SUPPR
+
 = Lv
 > N.
 
@@ -4964,9 +4863,6 @@
 = Press B to go back.
 > Appuyez sur B pour revenir.
 
-= Room %s
-> Salon %s
-
 = Your Pokemon
 > Vos Pokémon
 
@@ -5009,6 +4905,12 @@
 = Trade %s for %s?
 > Échanger %s contre %s?
 
+= YES
+> OUI
+
+= NO
+> NON
+
 = TRADE DONE
 > ÉCHANGE TERMINÉ
 
@@ -5045,14 +4947,41 @@
 = The trade is done in your game, but the save FAILED. Your game was not saved: save it yourself before you turn the game off. The copy of your save from before the trade is kept.
 > L'échange est fait dans votre jeu, mais la sauvegarde a ÉCHOUÉ. Votre jeu n'a pas été sauvegardé: sauvegardez-le vous-même avant d'éteindre le jeu. La copie de votre sauvegarde d'avant l'échange est conservée.
 
+= %s could not be used (see the mods message)
+> %s n'a pas pu être utilisé (voir le message sur les mods)
+
+= Switched to %s. Loading speed and Memory card speed change the next time you start the game.
+> Passé à %s. La vitesse de chargement et la vitesse de la carte mémoire changeront au prochain démarrage du jeu.
+
+= New Game: %s (as chosen before)
+> Nouvelle partie: %s (comme choisi auparavant)
+
+= This save's setup had: %s. The game carries on without it.
+> La configuration de cette sauvegarde comprenait: %s. Le jeu continue sans elle.
+
+= The save on the memory card holds Pokemon, moves or items that mods added, and their numbers would mean other things without the same mods: %s. Nothing on the card is read or changed.
+> La sauvegarde de la carte mémoire contient des Pokémon, capacités ou objets ajoutés par des mods, et leurs numéros signifieraient autre chose sans les mêmes mods: %s. Rien sur la carte n'est lu ni modifié.
+
+= This save holds Pokemon, moves or items that this game does not have (the game has %d Pokemon, %d moves, %d items):\n\n%s\nIt was probably saved with a mod that adds Pokemon, moves or items. Start the game with that mod switched on (same mods, same order). Nothing was read into the game and nothing on the card was changed. The game stops here.
+> Cette sauvegarde contient des Pokémon, capacités ou objets que ce jeu n'a pas (le jeu a %d Pokémon, %d capacités, %d objets):\n\n%s\nElle a probablement été enregistrée avec un mod qui ajoute des Pokémon, capacités ou objets. Démarrez le jeu avec ce mod activé (mêmes mods, même ordre). Rien n'a été lu dans le jeu et rien n'a été modifié sur la carte. Le jeu s'arrête ici.
+
+= Pokemon XD - this save needs its mods
+> Pokémon XD - cette sauvegarde a besoin de ses mods
+
+= Light
+> Léger
+
+= Classic
+> Classique
+
+= Chaos
+> Chaos
+
 = Faithful · Vanilla · no setup file (a save from Dolphin, a GameCube or an older port)
 > Fidèle · Vanilla · pas de fichier de configuration (une sauvegarde de Dolphin, d'une GameCube ou d'un ancien portage)
 
 = CONTINUE: choose a save
 > CONTINUER: choisissez une sauvegarde
-
-= no picture yet
-> pas encore d'image
 
 = %s played
 > %s de jeu
@@ -5066,11 +4995,20 @@
 = A: load this save   B: back to the title menu
 > A: charger cette sauvegarde   B: retour au menu titre
 
+= Script mod %s switched off: %s
+> Mod de script %s désactivé: %s
+
 = Online, mods and settings (PC version).
 > En ligne, mods et paramètres (version PC).
 
 = EXTRAS
 > EXTRAS
+
+= Switch the installed mods on or off (PC version).
+> Activer ou désactiver les mods installés (version PC).
+
+= SETTINGS
+> PARAMÈTRES
 
 = ONLINE
 > EN LIGNE
@@ -5078,11 +5016,542 @@
 = Trade Pokemon with a friend online (PC version).
 > Échangez des Pokémon avec un ami en ligne (version PC).
 
+= Speedrun timer
+> Chrono speedrun
+
+= Timer category
+> Catégorie du chrono
+
+= Timer start (Custom)
+> Début du chrono (Personnalisé)
+
+= Timer end (Custom)
+> Fin du chrono (Personnalisé)
+
+= Timer position
+> Position du chrono
+
+= Timer size
+> Taille du chrono
+
+= Timer split list
+> Temps intermédiaires
+
+= Play statistics
+> Statistiques de jeu
+
+= Music
+> Musique
+
+= Sound effects
+> Effets sonores
+
+= Cries
+> Cris
+
+= Language
+> Langue
+
+= Fast animations
+> Animations rapides
+
+= See below
+> Voir ci-dessous
+
+= Press A again
+> Appuyez encore sur A
+
+= Window
+> Fenêtre
+
+= Save any changes and leave the settings.
+> Enregistrer les modifications et quitter les paramètres.
+
+= Starts the game again now in the new language. Progress you have not saved is lost.
+> Redémarre le jeu maintenant dans la nouvelle langue. La progression non sauvegardée est perdue.
+
+= Keeps the new language for the next time the game starts. Nothing happens now.
+> Garde la nouvelle langue pour le prochain démarrage du jeu. Rien ne se passe maintenant.
+
+= Game text stays as it is on XG: %s Menus added by this port are translated.
+> Le texte du jeu reste tel quel sur XG : %s Les menus ajoutés par ce portage sont traduits.
+
+= The new language is used the next time the game starts.
+> La nouvelle langue sera utilisée au prochain démarrage du jeu.
+
+= EXIT
+> QUITTER
+
+= Poke Spot Pokemon
+> Pokémon des Poké Spots
+
+= Other wild Pokemon at the three Poke Spots. The visitors (Munchlax, Bonsly) stay.
+> D'autres Pokémon sauvages aux trois Poké Spots. Les visiteurs (Goinfrex, Manzaï) restent.
+
+= Similar strength
+> Force similaire
+
+= Poke Spots: each Pokemon is replaced by one about as strong.
+> Poké Spots: chaque Pokémon est remplacé par un autre à peu près aussi fort.
+
+= Trainers' Pokemon
+> Pokémon des Dresseurs
+
+= Other Pokemon in the story trainers' teams. Team sizes stay; levels, held items and natures have their own rows.
+> D'autres Pokémon dans les équipes des Dresseurs de l'histoire. La taille des équipes reste; les niveaux, objets tenus et natures ont leurs propres lignes.
+
+= Trainers: each Pokemon is replaced by one about as strong.
+> Dresseurs: chaque Pokémon est remplacé par un autre à peu près aussi fort.
+
+= Moves
+> Capacités
+
+= Trainers' new Pokemon. Kept: the moves the disc gave that slot. By level: the last four moves the new Pokemon learns up to its level.
+> Nouveaux Pokémon des Dresseurs. Conservées: les capacités que le disque donnait à cet emplacement. Par niveau: les quatre dernières capacités que le nouveau Pokémon apprend jusqu'à son niveau.
+
+= No repeats
+> Sans répétition
+
+= Trainers: a team never gets the same Pokemon twice.
+> Dresseurs: une équipe n'a jamais deux fois le même Pokémon.
+
+= Shadow Pokemon
+> Pokémon Obscurs
+
+= Other species are the Shadow Pokemon (all 83 different; the P*DA's list follows). Shadow moves, catch rates and heart gauges stay.
+> Les autres espèces sont les Pokémon Obscurs (83 tous différents; la liste du P*DA suit). Les capacités Obscures, les taux de capture et les jauges de cœur restent.
+
+= Shadows: each one is replaced by a Pokemon about as strong.
+> Obscurs: chacun est remplacé par un Pokémon à peu près aussi fort.
+
+= Keep Shadow Lugia
+> Garder Lugia Obscur
+
+= Shadow Lugia stays Lugia (the story and its scenes show Lugia).
+> Lugia Obscur reste Lugia (l'histoire et ses scènes montrent Lugia).
+
+= Items on the ground
+> Objets au sol
+
+= The item boxes on the maps. Random: any item. Shuffle: the same items in other places. Important items never move.
+> Les coffres d'objets sur les cartes. Aléatoire: n'importe quel objet. Mélangé: les mêmes objets à d'autres endroits. Les objets importants ne bougent jamais.
+
+= Abilities
+> Talents
+
+= Pokemon get other abilities. Wonder Guard and Forecast are never handed out.
+> Les Pokémon reçoivent d'autres talents. Garde Mystik et Météo ne sont jamais distribués.
+
+= Same in a family
+> Identiques dans une famille
+
+= Abilities: a Pokemon keeps its ability when it evolves.
+> Talents: un Pokémon garde son talent quand il évolue.
+
+= TM learners
+> Apprentissage des CT
+
+= Which Pokemon can learn each TM; each TM stays about as common as on the disc.
+> Quels Pokémon peuvent apprendre chaque CT; chaque CT reste à peu près aussi courante que sur le disque.
+
+= Legendaries
+> Légendaires
+
+= Whether legendary Pokemon can be picked: never, only where the disc had one, or anywhere.
+> Si les Pokémon légendaires peuvent être choisis: jamais, seulement là où le disque en avait un, ou partout.
+
+= TM moves
+> Capacités des CT
+
+= Each TM teaches another move, all different (never a Shadow move). The bag and the shops show the new move and its description. One-hit-KO moves can be ruled out.
+> Chaque CT enseigne une autre capacité, toutes différentes (jamais une capacité Obscure). Le sac et les boutiques affichent la nouvelle capacité et sa description. Les capacités K.O. en un coup peuvent être exclues.
+
+= Trainers' levels
+> Niveaux des Dresseurs
+
+= The story trainers' Pokemon are stronger by that much (never above level 100), or "To strength": a stronger new Pokemon gets a lower level, a weaker one a higher level. Shadow Pokemon keep their levels.
+> Les Pokémon des Dresseurs de l'histoire sont plus forts de cette valeur (jamais au-dessus du niveau 100), ou "À la force": un nouveau Pokémon plus fort reçoit un niveau plus bas, un plus faible un niveau plus haut. Les Pokémon Obscurs gardent leurs niveaux.
+
+= Trainers' held items
+> Objets tenus des Dresseurs
+
+= What the story trainers' Pokemon hold. Random: each holds one of the items trainers' Pokemon hold in the game. None: nothing. Shadow Pokemon keep theirs.
+> Ce que tiennent les Pokémon des Dresseurs de l'histoire. Aléatoire: chacun tient l'un des objets que les Pokémon de Dresseurs tiennent dans le jeu. Aucun: rien. Les Pokémon Obscurs gardent les leurs.
+
+= Trainers' natures
+> Natures des Dresseurs
+
+= Random: each of the story trainers' Pokemon gets any of the 25 natures. Shadow Pokemon get theirs from the game, as always.
+> Aléatoire: chaque Pokémon des Dresseurs de l'histoire reçoit l'une des 25 natures. Les Pokémon Obscurs reçoivent la leur du jeu, comme toujours.
+
+= Poke Mart stock
+> Stock des Boutiques Pokémon
+
+= What the Poke Marts sell. Shuffled: the Marts' own goods in other Marts. Everyday goods: medicine, status cures, repels, battle items, berries. Anything: also held items, TMs, vitamins, stones, valuables. Poke Balls and Poke Snacks stay where they are.
+> Ce que vendent les Boutiques Pokémon. Mélangé: les articles de chaque boutique dans d'autres boutiques. Articles courants: médicaments, soins de statut, repousses, objets de combat, baies. N'importe quoi: aussi objets tenus, CT, vitamines, pierres, objets de valeur. Les Poké Balls et les Poké-friandises restent où elles sont.
+
+= Tutor moves
+> Capacités des maîtres
+
+= The move tutor teaches other moves, all different and none a TM teaches. Each is learned by the Pokemon that could learn the move it replaces. One-hit-KO moves can be ruled out.
+> Le maître des capacités enseigne d'autres capacités, toutes différentes et aucune enseignée par une CT. Chacune est apprise par les Pokémon qui pouvaient apprendre la capacité qu'elle remplace. Les capacités K.O. en un coup peuvent être exclues.
+
+= Scope
+> Portée
+
+= Poke Spots, "Same swap everywhere": a Pokemon is replaced by the same new one in every spot, and no two by the same one.
+> Poké Spots, "Même échange partout": un Pokémon est remplacé par le même nouveau Pokémon dans chaque Poké Spot, et jamais deux par le même.
+
+= Type theme
+> Thème de type
+
+= Poke Spots, "Similar types": the new Pokemon shares a type with the one it replaces.
+> Poké Spots, "Types similaires": le nouveau Pokémon partage un type avec celui qu'il remplace.
+
+= Poke Spot levels
+> Niveaux des Poké Spots
+
+= Poke Spot Pokemon are that much higher in level (never above level 100).
+> Les Pokémon des Poké Spots ont ce niveau en plus (jamais au-dessus du niveau 100).
+
+= Starter Pokemon
+> Pokémon de départ
+
+= You start with another Pokemon instead of Eevee, at level 10. The film scenes and the Eevee evolution offer still say Eevee.
+> Vous commencez avec un autre Pokémon au lieu d'Évoli, au niveau 10. Les scènes filmées et l'offre d'évolution d'Évoli parlent toujours d'Évoli.
+
+= Starter choice
+> Choix du départ
+
+= Random: one Pokemon, chosen for you. Pick 1 of 3: you choose from three when the game would give you Eevee. Eevee family: Eevee or one of its evolutions.
+> Aléatoire : un Pokémon choisi pour vous. 1 sur 3 : vous choisissez parmi trois quand le jeu vous donnerait Évoli. Famille d'Évoli : Évoli ou une de ses évolutions.
+
+= Similar to Eevee
+> Proche d'Évoli
+
+= On: the starter's base stats add up to about Eevee's (never a legendary). Off: any Pokemon the Legendaries row allows. Does not apply to Eevee family.
+> Oui : les stats de base du départ font à peu près celles d'Évoli (jamais un légendaire). Non : tout Pokémon permis par la ligne Légendaires. Sans effet pour la famille d'Évoli.
+
+= Starter's moves
+> Attaques du départ
+
+= By level: the last four moves the starter learns up to level 10. Kept: Eevee's four (Tackle, Tail Whip, Bite, Sand-Attack).
+> Par niveau : les quatre dernières attaques apprises jusqu'au niveau 10. Conservé : les quatre d'Évoli (Charge, Mimi-Queue, Morsure, Jet de Sable).
+
+= By level
+> Par niveau
+
+= As on the disc
+> Comme sur le disque
+
+= To strength
+> À la force
+
+= Kept
+> Conservé
+
+= Random
+> Aléatoire
+
+= Shuffle
+> Mélanger
+
+= Shuffled
+> Mélangé
+
+= Everyday goods
+> Articles courants
+
+= Anything
+> N'importe quoi
+
+= Never
+> Jamais
+
+= Any
+> N'importe lequel
+
+= Similar types
+> Types similaires
+
+= Each spot its own
+> Chaque Poké Spot le sien
+
+= Same swap everywhere
+> Même échange partout
+
+= Random, no one-hit-KO moves
+> Aléatoire, sans capacités K.O. en un coup
+
+= Pick 1 of 3
+> 1 sur 3
+
+= Eevee family
+> Famille d'Évoli
+
+= Nothing to paste: copy a code first (Ctrl+C in a message or a web page).
+> Rien à coller: copiez d'abord un code (Ctrl+C dans un message ou une page web).
+
+= That is not a randomizer code (%s).
+> Ce n'est pas un code de randomizer (%s).
+
+= too long
+> trop long
+
+= Code taken: %s.
+> Code pris: %s.
+
+= Play the original game
+> Jouer au jeu original
+
+= Engine
+> Moteur
+
+= %s (not available)
+> %s (indisponible)
+
+= Randomizer (not available)
+> 
+
+= Use a friend's code
+> Utiliser le code d'un ami
+
+= Shiny odds
+> Chances de chromatique
+
+= Shiny Shadow Pokemon
+> Pokémon Obscurs chromatiques
+
+= Shiny gift Pokemon
+> Pokémon cadeaux chromatiques
+
+= Shiny Bonsly / Munchlax
+> Manzaï / Goinfrex chromatiques
+
+= START
+> DÉMARRER
+
+= Faithful, no mods: exactly the GameCube game. Starts at once (the game first starts again without the mods it has loaded).
+> Fidèle, sans mods: exactement le jeu GameCube. Démarre aussitôt (le jeu redémarre d'abord sans les mods qu'il a chargés).
+
+= Faithful, no mods: exactly the GameCube game. Starts at once.
+> Fidèle, sans mods: exactement le jeu GameCube. Démarre aussitôt.
+
+= Faithful: the game decides everything exactly as on the GameCube. Enhanced: speed-ups (text, fast-forward, battle animations) can be used.
+> Fidèle: le jeu décide de tout exactement comme sur la GameCube. Amélioré: les accélérations (texte, avance rapide, animations de combat) peuvent être utilisées.
+
+= A timer over the picture for this playthrough, kept with the save: Real time counts from NEW GAME (what speedruns use); Without loads takes the game's loading time out. Only drawn: the game plays exactly the same with it on or off, also Faithful. Change it later on the SETTINGS page.
+> Un chrono par-dessus l'image pour cette partie, conservé avec la sauvegarde: Temps réel compte à partir de NOUVELLE PARTIE (ce qu'utilisent les speedruns); Sans chargements retire le temps de chargement du jeu. Seulement affiché: le jeu se déroule exactement de la même façon, chrono activé ou non, y compris en Fidèle. Changez-le plus tard sur la page PARAMÈTRES.
+
+= %s mod, version %s.
+> Mod %s, version %s.
+
+= Counted as new playthrough only: %s.
+> Compté seulement comme nouvelle partie: %s.
+
+= Makes a new game from your disc: other Pokemon in the Poke Spots, other Shadow Pokemon, items in other places. Light: those only. Classic: also trainers, abilities, TM learners, similar strength. Chaos: all, no fairness. Custom: each switch yourself.
+> Crée un nouveau jeu à partir de votre disque: d'autres Pokémon aux Poké Spots, d'autres Pokémon Obscurs, des objets à d'autres endroits. Léger: seulement cela. Classique: aussi les Dresseurs, talents, apprentissage des CT, force similaire. Chaos: tout, sans équité. Personnalisé: chaque interrupteur à votre façon.
+
+= Code: %s. It holds the seed and every switch: a friend who uses it gets the same game. Left / right or A: a new random seed.
+> Code: %s. Il contient la graine et chaque interrupteur: un ami qui l'utilise obtient le même jeu. Gauche / droite ou A: une nouvelle graine aléatoire.
+
+= How often a Pokemon is shiny: Original 1 in 8192 (the GameCube game), Modern 1 in 4096 (Gen 6 and later), or 1 in 1024, 512, 128. Applies where the game allows shiny Pokemon (Poke Spot Pokemon, your Eevee, trades). Kept with this playthrough. A shiny is just a shiny in online battles and trades.
+> À quelle fréquence un Pokémon est chromatique: Original 1 sur 8192 (le jeu GameCube), Moderne 1 sur 4096 (6e génération et après), ou 1 sur 1024, 512, 128. S'applique là où le jeu permet les Pokémon chromatiques (Pokémon des Poké Spots, votre Évoli, échanges). Conservé avec cette partie. En combat en ligne et en échange, un chromatique n'est qu'un chromatique.
+
+= On: Shadow Pokemon can be shiny, with the odds above (in the GameCube game they never are). Each Shadow Pokemon gets its looks when you first meet it and keeps them, also after purifying. Off: as the game.
+> Activé: les Pokémon Obscurs peuvent être chromatiques, avec les chances ci-dessus (dans le jeu GameCube, ils ne le sont jamais). Chaque Pokémon Obscur reçoit son apparence à la première rencontre et la garde, même après la purification. Désactivé: comme le jeu.
+
+= On: the gift Pokemon the game never makes shiny (Jolteon, Vaporeon, Plusle, Ho-Oh, Pikachu, Celebi) can be shiny, with the odds above. Your starter Eevee, trades and the Mt. Battle starters already follow the odds. Off: as the game.
+> Activé: les Pokémon cadeaux que le jeu ne rend jamais chromatiques (Voltali, Aquali, Posipi, Ho-Oh, Pikachu, Celebi) peuvent l'être, avec les chances ci-dessus. Votre Évoli de départ, les échanges et les Pokémon de départ du Mont Battle suivent déjà les chances. Désactivé: comme le jeu.
+
+= On: the Poke Spot visitors Bonsly and Munchlax, which are never shiny in the game, can be shiny, with the odds above. Other Poke Spot Pokemon already follow the odds. Off: as the game.
+> Activé: les visiteurs des Poké Spots, Manzaï et Goinfrex, qui ne sont jamais chromatiques dans le jeu, peuvent l'être, avec les chances ci-dessus. Les autres Pokémon des Poké Spots suivent déjà les chances. Désactivé: comme le jeu.
+
+= Copy a code (or a seed number) on the PC, then press A here to use it.
+> Copiez un code (ou un numéro de graine) sur le PC, puis appuyez sur A ici pour l'utiliser.
+
+= Not available: %s. The Gen 4 Pokemon, moves, cries and models are made from your own Pokemon Battle Revolution disc (launcher, Extra assets page).
+> Indisponible: %s. Les Pokémon, capacités, cris et modèles de 4e génération sont créés à partir de votre propre disque Pokémon Battle Revolution (lanceur, page Ressources supplémentaires).
+
+= Challenge rule, for this playthrough from start to end. %s
+> Règle de défi, pour cette partie du début à la fin. %s
+
+= Start the new game with this setup. The game starts again with these mods first; then choose NEW GAME again.
+> Démarrer la nouvelle partie avec cette configuration. Le jeu redémarre d'abord avec ces mods; choisissez ensuite NOUVELLE PARTIE à nouveau.
+
+= The game started again with your setup: start the new game with it.
+> Le jeu a redémarré avec votre configuration: démarrez la nouvelle partie avec elle.
+
+= Start the new game with this setup.
+> Démarrer la nouvelle partie avec cette configuration.
+
+= NEW GAME
+> NOUVELLE PARTIE
+
+= Paste (A)
+> Coller (A)
+
+= and %d more
+> et %d de plus
+
+= %d more
+> %d de plus
+
+= This save was started with mods that are missing or changed: %s. Carry on without them? (It can change the game.)
+> Cette sauvegarde a été commencée avec des mods manquants ou modifiés: %s. Continuer sans eux? (Cela peut changer le jeu.)
+
+= %s and %s
+> %s et %s
+
+= Keep Faithful
+> Garder Fidèle
+
+= Switch to Enhanced
+> Passer à Amélioré
+
+= This playthrough is marked Faithful: it plays exactly like the GameCube game.
+> Cette partie est marquée Fidèle: elle se joue exactement comme le jeu GameCube.
+
+= For a Faithful playthrough some settings stay as on the GameCube, whatever you have set.
+> Dans une partie Fidèle, certains paramètres restent comme sur la GameCube, quoi que vous ayez réglé.
+
+= They are: %s.
+> Ce sont: %s.
+
+= Your settings are Enhanced now. You can keep this playthrough Faithful, or switch it to Enhanced so that those settings work in it.
+> Vos paramètres sont maintenant Amélioré. Vous pouvez garder cette partie Fidèle, ou la passer en Amélioré pour que ces paramètres y fonctionnent.
+
+= Warning: you can switch back later, but a playthrough that was Enhanced for a while no longer counts as Faithful from the start.
+> Attention: vous pourrez revenir en arrière plus tard, mais une partie qui a été Améliorée un moment ne compte plus comme Fidèle depuis le début.
+
+= Its label will always show that it was switched. Picture, sound and controls settings are yours either way.
+> Son libellé indiquera toujours qu'elle a été changée. Les paramètres d'image, de son et de commandes sont à vous dans les deux cas.
+
+= Keep this playthrough Faithful, or switch it to Enhanced?
+> Garder cette partie Fidèle, ou la passer en Amélioré?
+
+= Keep Enhanced
+> Garder Amélioré
+
+= Switch to Faithful
+> Passer à Fidèle
+
+= This playthrough is marked Enhanced: it plays with your own gameplay settings.
+> Cette partie est marquée Amélioré: elle se joue avec vos propres paramètres de jeu.
+
+= Your settings are the Original ones now, so it plays like the GameCube game anyway. But it stays marked Enhanced.
+> Vos paramètres sont maintenant ceux d'Original, donc elle se joue de toute façon comme le jeu GameCube. Mais elle reste marquée Amélioré.
+
+= You can keep it Enhanced, or switch it to Faithful. Faithful holds those settings as on the GameCube, whatever you set later.
+> Vous pouvez la garder Améliorée, ou la passer en Fidèle. Fidèle maintient ces paramètres comme sur la GameCube, quoi que vous régliez plus tard.
+
+= Its label will always show that it was Enhanced for a while: it does not count as Faithful from the start. You can switch again later.
+> Son libellé indiquera toujours qu'elle a été Améliorée un moment: elle ne compte pas comme Fidèle depuis le début. Vous pourrez changer à nouveau plus tard.
+
+= Keep this playthrough Enhanced, or switch it to Faithful?
+> Garder cette partie Améliorée, ou la passer en Fidèle?
+
+= Your partner Pokemon is not Eevee this time. Choose one of these three to start with.
+> Votre Pokémon partenaire n'est pas Évoli cette fois. Choisissez-en un parmi ces trois pour commencer.
+
+= by %s
+> par %s
+
+= Changes: %s.
+> Modifie: %s.
+
+= Looks and sound only.
+> Image et son seulement.
+
+= Read when the game starts.
+> Lu au démarrage du jeu.
+
+= New playthrough only: your save is set up with it, so it stays on for that save whatever is chosen here.
+> Nouvelle partie seulement: votre sauvegarde est configurée avec lui, donc il reste activé pour cette sauvegarde quel que soit le choix ici.
+
+= New playthrough only: it is chosen when you start a new game. Your save keeps the mods it was started with.
+> Nouvelle partie seulement: il se choisit au début d'une nouvelle partie. Votre sauvegarde garde les mods avec lesquels elle a été commencée.
+
+= New playthrough only: it is chosen when you start a new game.
+> Nouvelle partie seulement: il se choisit au début d'une nouvelle partie.
+
+= (It says %s, but %s.)
+> (Il dit %s, mais %s.)
+
+= Runs scripts (Lua): allowed. They run in a locked box and cannot touch your files, but they can change how the game plays. Press Z to skip them (the rest of the mod stays).
+> Exécute des scripts (Lua) : autorisé. Ils tournent dans une boîte verrouillée et ne peuvent pas toucher à vos fichiers, mais ils peuvent changer la façon dont le jeu se déroule. Appuyez sur Z pour les ignorer (le reste du mod reste).
+
+= Runs scripts (Lua): skipped. The rest of the mod is still used. Press Z to allow them.
+> Exécute des scripts (Lua) : ignoré. Le reste du mod est toujours utilisé. Appuyez sur Z pour les autoriser.
+
+= In use now.
+> Utilisé actuellement.
+
+= Can't be used: %s. Fix or remove it in the mods folder, then open this page again.
+> Ne peut pas être utilisé: %s. Corrigez-le ou supprimez-le dans le dossier des mods, puis rouvrez cette page.
+
+= List "%s": 1 mod on
+> Liste "%s": 1 mod activé
+
+= List "%s": %d mods on
+> Liste "%s": %d mods activés
+
+= Save this mod list and start the game again with it. Until you do, nothing changes: EXIT or B leaves the list as it was.
+> Enregistrer cette liste de mods et relancer le jeu avec elle. Tant que vous ne le faites pas, rien ne change: QUITTER ou B laisse la liste telle qu'elle était.
+
+= Nothing has changed yet. Switch mods on or off above (L / R, or X / Y, move one up or down the order: further down wins when two mods change the same file).
+> Rien n'a encore changé. Activez ou désactivez des mods ci-dessus (L / R, ou X / Y, montent ou descendent un mod dans l'ordre: plus bas l'emporte quand deux mods modifient le même fichier).
+
+= List "%s"
+> Liste "%s"
+
+= Leave without applying: the mod list stays as it was.
+> Quitter sans appliquer: la liste des mods reste telle qu'elle était.
+
+= Nothing has changed, so there is nothing to apply.
+> Rien n'a changé, donc il n'y a rien à appliquer.
+
+= This test run can't save the mod list: %s
+> Cet essai ne peut pas enregistrer la liste des mods: %s
+
+= The mod list couldn't be saved to mods.ini, so nothing was changed.
+> La liste des mods n'a pas pu être enregistrée dans mods.ini, donc rien n'a été modifié.
+
+= L / R: move up / down the order
+> L / R: monter / descendre dans l'ordre
+
+= Apply and restart
+> Appliquer et redémarrer
+
+= Missing
+> Manquant
+
+= Can't load
+> Impossible à charger
+
+= (can't load) %s
+> (impossible à charger) %s
+
 = Trade with a friend
 > Échanger avec un ami
 
 = Battle a friend
 > Combattre un ami
+
+= Trade or battle with a friend over the internet.
+> Échangez ou combattez avec un ami par Internet.
+
+= The PC version's settings: picture, sound, controls and more.
+> Les réglages de la version PC : image, son, commandes et plus.
+
+= Back to the title menu.
+> Retour au menu titre.
+
+= Your title, name and character for online battles.
+> Votre titre, nom et personnage pour les combats en ligne.
+
+= Back to EXTRAS.
+> Retour à EXTRAS.
 
 = Online battles are not in this build yet.
 > Les combats en ligne ne sont pas encore dans cette version.
@@ -5162,6 +5631,141 @@
 = A: type   B: delete   choose OK when done
 > A: saisir   B: effacer   choisissez OK une fois terminé
 
+= Purification speed
+> Vitesse de purification
+
+= How many times faster a Shadow Pokemon's heart opens (walking, battling, the Purify Chamber). 1 is the original.
+> Combien de fois plus vite le cœur d'un Pokémon Obscur s'ouvre (en marchant, en combattant, dans la Salle de Purification). 1 correspond à l'original.
+
+= The language of the game's texts, menus and pictures. English (US) is the USA game as it is. The others come from the European (PAL) copy of the game, added on the launcher's Extra assets page ("Languages (from the European disc)"), and Japanese from the Japanese copy ("Japanese (from the Japanese disc)"); a language the pack doesn't have falls back to English. Applies the next time the game starts. It changes only text and pictures, not how the game plays.
+> 
+
+= English (US)
+> Anglais (US)
+
+= German
+> Allemand
+
+= French
+> Français
+
+= Italian
+> Italien
+
+= Spanish
+> Espagnol
+
+= European disc image (for languages)
+> Image disque européenne (pour les langues)
+
+= The European (PAL) Pokemon XD disc image the launcher's Extra assets page makes the language pack from (empty: none chosen yet).
+> L'image disque européenne (PAL) de Pokémon XD à partir de laquelle la page Ressources supplémentaires du lanceur crée le pack de langues (vide: aucune choisie pour l'instant).
+
+= Japanese disc image (for Japanese)
+> 
+
+= The Japanese Pokemon XD disc image the launcher's Extra assets page makes the Japanese pack from (empty: none chosen yet).
+> 
+
+= Developer menu (cheats)
+> Menu développeur (triche)
+
+= F9 opens a menu of the developers' own debug tools left in the game: go to any place, any point of the story, set story flags, start battles, get items and Pokemon. For testing; runs that used it are marked in their recording and bug reports.
+> F9 ouvre un menu des outils de débogage des développeurs restés dans le jeu: aller n'importe où, à n'importe quel point de l'histoire, définir des indicateurs d'histoire, lancer des combats, obtenir des objets et des Pokémon. Pour les tests; les parties qui l'ont utilisé sont marquées dans leur enregistrement et leurs rapports de bogue.
+
+= Fast-forward switched itself off: this PC can't keep up with it.
+> L'avance rapide s'est désactivée d'elle-même: ce PC ne peut pas suivre.
+
+= Fast battle animations switched themselves off: this PC can't keep up with them.
+> Les animations de combat rapides se sont désactivées d'elles-mêmes: ce PC ne peut pas suivre.
+
+= The picture never came back from the graphics card.
+> L'image n'est jamais revenue de la carte graphique.
+
+= Saved %s (%dx%d)
+> %s enregistré (%dx%d)
+
+= Could not save %s
+> Impossible d'enregistrer %s
+
+= The picture could not be taken (no readback on this graphics card?).
+> L'image n'a pas pu être prise (pas de relecture sur cette carte graphique?).
+
+= Photo mode (%s: back to the game)
+> Mode photo (%s: retour au jeu)
+
+= The game is paused.
+> Le jeu est en pause.
+
+= Move: W A S D, up/down: E Q (Shift faster, Ctrl slower)
+> Déplacement: W A S D, haut/bas: E Q (Shift plus vite, Ctrl plus lent)
+
+= Look: hold the right mouse button; wheel: speed; tilt: Z C
+> Regard: maintenez le clic droit; molette: vitesse; inclinaison: Z C
+
+= Controller: sticks, triggers up/down, shoulders tilt
+> Manette: sticks, gâchettes haut/bas, boutons d'épaule inclinent
+
+= P: photo   R: reset   H: hide this window
+> P: photo   R: réinitialiser   H: masquer cette fenêtre
+
+= Speed
+> Vitesse
+
+= Field of view
+> Champ de vision
+
+= %.0f degrees
+> %.0f degrés
+
+= Tilt
+> Inclinaison
+
+= Hide menus and text (2D)
+> Masquer les menus et le texte (2D)
+
+= As the game draws
+> Comme le jeu l'affiche
+
+= Photo size
+> Taille de la photo
+
+= Take photo
+> Prendre une photo
+
+= Reset camera
+> Réinitialiser la caméra
+
+= Back to the game
+> Retour au jeu
+
+= Photos: %s
+> Photos: %s
+
+= Any time
+> À tout moment
+
+= On restart
+> Au redémarrage
+
+= New playthrough only
+> Nouvelle partie seulement
+
+= Video
+> Vidéo
+
+= Audio
+> Audio
+
+= Gameplay
+> Gameplay
+
+= Accessibility
+> Accessibilité
+
+= System
+> Système
+
 = Rules
 > Règles
 
@@ -5210,6 +5814,9 @@
 = Shadow Pokemon obey
 > Obéissance des Pokémon Obscurs
 
+= Classic XG
+> XG classique
+
 = Gen 4
 > 4e génération
 
@@ -5219,14 +5826,11 @@
 = Off (as in XD)
 > Désactivée (comme dans XD)
 
+= Off (as in XG)
+> Désactivé (comme dans XG)
+
 = On (as in Gen 4)
 > Activée (comme en 4e génération)
-
-= Single battle
-> Combat simple
-
-= Double battle
-> Combat double
 
 = Preset teams
 > Équipes prédéfinies
@@ -5312,147 +5916,28 @@
 = This PC has no Gen 4 pack yet (make it from your Pokemon Battle Revolution disc in the launcher).
 > Ce PC n'a pas encore de pack 4e génération (créez-le depuis votre disque Pokémon Battle Revolution dans le lanceur).
 
-= Starting a new journey
-> Une nouvelle aventure commence
+= Works with: %s.
+> Fonctionne avec : %s.
 
-= Getting Orre ready with your chosen rules
-> Orre se prépare avec les règles choisies
+= Works with: %s
+> Fonctionne avec : %s
 
-= Loading %s
-> Chargement de %s
+= shared parts only
+> parties communes seulement
 
-= your save
-> votre sauvegarde
+= nothing for it in this mod
+> rien pour lui dans ce mod
 
-= Play time %s
-> Temps de jeu %s
+= This mod has no part made for this game: only its shared parts (pictures, shared scripts) apply.
+> Ce mod n'a pas de partie faite pour ce jeu : seules ses parties communes (images, scripts communs) s'appliquent.
 
-= DRAFT
-> DRAFT
+= This mod has nothing for this game, so it changes nothing.
+> Ce mod n'a rien pour ce jeu, il ne change donc rien.
+= The new rows of %s can't be put into %s: its layout is not the one this knows. They are left out.
+> Les nouvelles lignes de %s ne peuvent pas être mises dans %s : sa disposition n'est pas celle que ce programme connaît. Elles sont laissées de côté.
 
-= Trade or battle with a friend over the internet.
-> Échangez ou combattez avec un ami par Internet.
-
-= The PC version's settings: picture, sound, controls and more.
-> Les réglages de la version PC : image, son, commandes et plus.
-
-= Back to the title menu.
-> Retour au menu titre.
-
-= Your title, name and character for online battles.
-> Votre titre, nom et personnage pour les combats en ligne.
-
-= Back to EXTRAS.
-> Retour à EXTRAS.
-
-= Starter Pokemon
-> Pokémon de départ
-
-= You start with another Pokemon instead of Eevee, at level 10. The film scenes and the Eevee evolution offer still say Eevee.
-> Vous commencez avec un autre Pokémon au lieu d'Évoli, au niveau 10. Les scènes filmées et l'offre d'évolution d'Évoli parlent toujours d'Évoli.
-
-= Starter choice
-> Choix du départ
-
-= Random: one Pokemon, chosen for you. Pick 1 of 3: you choose from three when the game would give you Eevee. Eevee family: Eevee or one of its evolutions.
-> Aléatoire : un Pokémon choisi pour vous. 1 sur 3 : vous choisissez parmi trois quand le jeu vous donnerait Évoli. Famille d'Évoli : Évoli ou une de ses évolutions.
-
-= Similar to Eevee
-> Proche d'Évoli
-
-= On: the starter's base stats add up to about Eevee's (never a legendary). Off: any Pokemon the Legendaries row allows. Does not apply to Eevee family.
-> Oui : les stats de base du départ font à peu près celles d'Évoli (jamais un légendaire). Non : tout Pokémon permis par la ligne Légendaires. Sans effet pour la famille d'Évoli.
-
-= Starter's moves
-> Attaques du départ
-
-= By level: the last four moves the starter learns up to level 10. Kept: Eevee's four (Tackle, Tail Whip, Bite, Sand-Attack).
-> Par niveau : les quatre dernières attaques apprises jusqu'au niveau 10. Conservé : les quatre d'Évoli (Charge, Mimi-Queue, Morsure, Jet de Sable).
-
-= Pick 1 of 3
-> 1 sur 3
-
-= Eevee family
-> Famille d'Évoli
-
-= Your partner Pokemon is not Eevee this time. Choose one of these three to start with.
-> Votre Pokémon partenaire n'est pas Évoli cette fois. Choisissez-en un parmi ces trois pour commencer.
-
-= The two games do not hold the same Pokemon for this battle (a team was changed on the way). The battle was not started.
-> Les deux jeux n'ont pas les mêmes Pokémon pour ce combat (une équipe a été modifiée en route). Le combat n'a pas été lancé.
-
-= this copy already is in a player's folder
-> this copy already is in a player's folder
-
-= the folder %s already exists and isn't empty: choose another
-> the folder %s already exists and isn't empty: choose another
-
-= Your saves and settings are kept inside this folder (%s\\portable), so a new folder would start without them: download the new version by hand and move your portable folder over.
-> Your saves and settings are kept inside this folder (%s\\portable), so a new folder would start without them: download the new version by hand and move your portable folder over.
-
-= an earlier unfinished folder couldn't be removed: %s
-> an earlier unfinished folder couldn't be removed: %s
-
-= this download is not a whole player folder (the starter and the game folder): download the new version by hand
-> this download is not a whole player folder (the starter and the game folder): download the new version by hand
-
-= the new folder couldn't be put in place: %s
-> the new folder couldn't be put in place: %s
-
-= Version %s is set up in the new folder %s. Open the launcher in that folder from now on (the old folder can be deleted when you like: your saves and settings are not in it).
-> Version %s is set up in the new folder %s. Open the launcher in that folder from now on (the old folder can be deleted when you like: your saves and settings are not in it).
-
-= This copy isn't in the player's folder layout, so it can't update itself in place.
-> This copy isn't in the player's folder layout, so it can't update itself in place.
-
-= Update now downloads version %s and sets it up in a NEW folder: %s. Nothing is copied from this folder and nothing in it is changed. Your saves, settings and mods stay where they are (they are not kept in the game folder). Afterwards open the launcher in the new folder; this old folder can be deleted.
-> Update now downloads version %s and sets it up in a NEW folder: %s. Nothing is copied from this folder and nothing in it is changed. Your saves, settings and mods stay where they are (they are not kept in the game folder). Afterwards open the launcher in the new folder; this old folder can be deleted.
-
-= Choose another folder...
-> Choose another folder...
-
-= Tip: this folder is inside %s. Keep the game outside synced folders (for example in C:\\Games): a sync can lock or move files while the game runs.
-> Tip: this folder is inside %s. Keep the game outside synced folders (for example in C:\\Games): a sync can lock or move files while the game runs.
-
-= Starting the battle
-> Le combat commence
-
-= Both sides are ready, the battle begins in a moment
-> Les deux sont prêts, le combat va commencer
-
-= Gen 4 rules
-> Règles Gen 4
-
-= Gen 4 with modern types
-> Gen 4 avec types modernes
-
-= Split on
-> Séparation activée
-
-= Getting back into the room
-> Retour dans le salon
-
-= The game restarts with the room's rules
-> Le jeu redémarre avec les règles du salon
-
-= Getting the game ready for your PC...
-> Préparation du jeu pour votre PC...
-
-= This happens once (and again after a graphics driver or game update) and takes about a minute. It runs quietly in the background: no game window opens, and there is nothing to close. You can look around meanwhile.
-> Cela se fait une seule fois (et de nouveau après une mise à jour du pilote graphique ou du jeu) et dure environ une minute. Tout se passe discrètement en arrière-plan : aucune fenêtre de jeu ne s'ouvre et il n'y a rien à fermer. Vous pouvez regarder autour de vous en attendant.
-
-= Getting the game ready for your PC (once, about a minute): %d%%
-> Préparation du jeu pour votre PC (une seule fois, environ une minute) : %d%%
-
-= Drawing pictures from your disc (once, about a minute). Play stops this and finishes it another time.
-> Dessin des images de votre disque (une seule fois, environ une minute). Jouer arrête ceci et le termine une autre fois.
-
-= the trainer pictures were interrupted
-> Les images des dresseurs ont été interrompues
-
-
-= The game did not start by itself: the title menu is yours.
-> Le jeu ne s'est pas lancé tout seul : le menu titre est à vous.
+= it adds text to rooms (texts/)
+> il ajoute du texte aux salles (texts/)
 
 
 = The game's title screen did not come up. Close the game and start it again; if it happens again, send a report (F10).

@@ -1,0 +1,5421 @@
+# Japanese translation of the port's own texts (launcher, settings, in-game pages).
+# MACHINE-MADE (by an AI): needs a native speaker's check. Official Pokemon terms: see GLOSSARY.txt.
+# Format: "= English text" (the key, do not change) then "> translation". Keep %d / %s / 
+
+= D-pad Up
+> 十字キー 上
+
+= D-pad Down
+> 十字キー 下
+
+= D-pad Left
+> 十字キー 左
+
+= D-pad Right
+> 十字キー 右
+
+= View
+> ビュー
+
+= Xbox
+> Xbox
+
+= Menu
+> メニュー
+
+= LS
+> LS
+
+= RS
+> RS
+
+= LB
+> LB
+
+= RB
+> RB
+
+= Share
+> シェア
+
+= Touchpad
+> タッチパッド
+
+= Misc 2
+> その他 2
+
+= Misc 3
+> その他 3
+
+= Misc 4
+> その他 4
+
+= Misc 5
+> その他 5
+
+= Misc 6
+> その他 6
+
+= Left stick
+> 左スティック
+
+= Right stick
+> 右スティック
+
+= LT
+> LT
+
+= RT
+> RT
+
+= Cross
+> ×
+
+= Circle
+> ○
+
+= Square
+> □
+
+= Triangle
+> △
+
+= PS
+> PS
+
+= Options
+> オプション
+
+= Mic
+> マイク
+
+= Right paddle
+> 右パドル
+
+= Left paddle
+> 左パドル
+
+= Right Fn
+> 右Fn
+
+= Left Fn
+> 左Fn
+
+= Minus
+> マイナス
+
+= Home
+> ホーム
+
+= Plus
+> プラス
+
+= Capture
+> キャプチャー
+
+= Right SR
+> 右SR
+
+= Left SL
+> 左SL
+
+= Right SL
+> 右SL
+
+= Left SR
+> 左SR
+
+= ZL
+> ZL
+
+= ZR
+> ZR
+
+= Back
+> 戻る
+
+= Guide
+> ガイド
+
+= Start
+> スタート
+
+= Misc 1
+> その他 1
+
+= Control stick
+> コントロールスティック
+
+= C-stick
+> Cスティック
+
+= Key 
+> キー
+
+= Walk key
+> あるきキー
+
+= While this key is held, the keys for the main stick tilt it only part way (walk_tilt), as a gentle push on a real stick does (none: no walk key).
+> このキーを押しているあいだ、メインスティックのキーはスティックを少しだけ倒します(walk_tilt)。本物のスティックをそっと倒すのと同じです(none: あるきキーなし)。
+
+= Walk tilt
+> あるきの倒し量
+
+= How far the main stick tilts while the walk key is held, in percent.
+> あるきキーを押しているあいだ、メインスティックをどれだけ倒すか(パーセント)。
+
+= Controller
+> コントローラー
+
+= Controller type
+> コントローラーの種類
+
+= What kind of controller it is, for its standard buttons and the names shown. auto: as the controller reports itself. The presets on the Controls page set it.
+> コントローラーの種類です。標準ボタンと表示される名前が決まります。auto: コントローラーが名乗る種類のまま。操作ページのプリセットで設定されます。
+
+= Auto
+> 自動
+
+= GameCube controller
+> ゲームキューブコントローラー
+
+= PlayStation
+> PlayStation
+
+= Switch
+> Switch
+
+= Rumble
+> 振動
+
+= The game's rumble reaches the controller (on, as on the GameCube; the game's own Rumble option still decides when it rumbles).
+> ゲームの振動をコントローラーに伝えます(オン: ゲームキューブと同じ。いつ振動するかはゲーム内の「振動」設定で決まります)。
+
+= Button layout
+> ボタン配置
+
+= Where the GameCube's A, B, X and Y buttons go on a PC controller by default. auto: by the letter printed on Nintendo controllers (Switch Pro, Joy-Cons), by place on the others; position: by place (A is the bottom button, as on the GameCube); label: by the letter printed on the button.
+> ゲームキューブのA・B・X・Yボタンを、PCのコントローラーのどのボタンに割り当てるか(初期設定)。auto: 任天堂のコントローラー(Switch Pro、Joy-Con)は表記の文字どおり、それ以外は位置どおり。position: 位置どおり(Aは下のボタン。ゲームキューブと同じ)。label: ボタンに書かれた文字どおり。
+
+= By position
+> 位置で
+
+= By label
+> 表記で
+
+= Left stick deadzone
+> 左スティックのあそび
+
+= How far the controller's left stick can move before it counts (0 to 0.9 of the way), so a worn stick doesn't drift.
+> コントローラーの左スティックが反応するまでの倒し量(0〜0.9)。すり減ったスティックの勝手な動きを防ぎます。
+
+= Right stick deadzone
+> 右スティックのあそび
+
+= The same for the controller's right stick.
+> コントローラーの右スティックについても同じです。
+
+= L click point
+> Lのクリック位置
+
+= How far a trigger must be pulled to click the GameCube L button, for controllers whose triggers don't click by themselves.
+> トリガー自体がクリックしないコントローラーで、ゲームキューブのLボタンを押したことにするトリガーの引き量。
+
+= R click point
+> Rのクリック位置
+
+= The same for the GameCube R button.
+> ゲームキューブのRボタンについても同じです。
+
+= Conflict: the mods %s and %s both change message #%d. %s (further down the list) is used.
+> 競合: MOD %s と %s が、どちらもメッセージ #%d を変更しています。%s(リストの下のほう)が使われます。
+
+= The mod %s: its message texts can't be used (%s).
+> MOD %s: メッセージのテキストを使えません(%s)。
+
+= The mod %s, %s: the game has no message #%d that can be changed.
+> MOD %s、%s: ゲームには変更できるメッセージ #%d がありません。
+
+= The mod %s: texts for new rows can't be added on this disc; they keep the text of the row they copy.
+> MOD %s: このディスクでは新しい行のテキストを追加できません。コピー元の行のテキストのままになります。
+
+= %s line %d
+> %s %d行目
+
+= The mod %s, %s: %s.
+> MOD %s、%s: %s。
+
+= Conflict: the mods %s and %s both change %s of %s. %s (further down the list) is used.
+> 競合: MOD %s と %s が、どちらも %s の %s を変更しています。%s(リストの下のほう)が使われます。
+
+= The mod %s sets %s of %s twice (%s and %s); the second is used.
+> MOD %s が %s の %s を2回設定しています(%s と %s)。2つ目が使われます。
+
+= %s line %d: 
+> %s %d行目:
+
+= a section name needs a closing ']'
+> セクション名には閉じの ']' が必要です
+
+= a profile needs a name, like [profile default]
+> プロファイルには [profile default] のように名前が必要です
+
+= expected "<mod id> = on" or "= off"
+> "<mod id> = on" または "= off" の形で書いてください
+
+= "%s" outside a [profile ...] list; ignored
+> "%s" は [profile ...] リストの外にあります。無視されます
+
+= expected "<mod id> = on" or "= off"; ignored
+> "<mod id> = on" または "= off" の形で書いてください。無視されます
+
+= "%s" is listed twice; the first line counts
+> "%s" が2回書かれています。最初の行が使われます
+
+= %s has entries #0 to #%u, no %s
+> %s には #0 から #%u までの項目があり、%s はありません
+
+= %s has no entry called %s
+> %s には %s という項目がありません
+
+= several entries of %s are called %s; name the one meant by its full name or number (%s)
+> %s の複数の項目が %s という名前です。正式な名前か番号で指定してください(%s)
+
+= Mods on: %s (%d disc file(s) replaced or added)
+> MOD オン: %s (ディスクファイル %d 個を置き換え・追加)
+
+= New texture pack found: "%s" (%s). It is on (it only changes pictures); to stop using it, set "%s = off" in %s.
+> 新しいテクスチャパックが見つかりました: "%s" (%s)。オンになっています(絵だけを変えます)。使わないときは %s の "%s = off" にしてください。
+
+= New mod found: "%s" (%s). It is off; to use it, set "%s = on" in %s.
+> 新しいMODが見つかりました: "%s" (%s)。オフです。使うときは %s の "%s = on" にしてください。
+
+= Could not write the mod list %s.
+> MODリスト %s を書きこめませんでした。
+
+= This playthrough was set up with the mod "%s", which is not in the mods folder any more.
+> このプレイは MOD "%s" で始めましたが、MODフォルダにもうありません。
+
+= %s turns on "%s", but there is no such mod in the mods folder.
+> %s は "%s" をオンにしますが、MODフォルダにそのMODがありません。
+
+= The mod "%s" is made for another game or game version (%s); this disc is %s. It is not used.
+> MOD "%s" は別のゲームまたはバージョン(%s)用です。このディスクは %s です。使われません。
+
+= The mod "%s" needs the mod "%s" in version %s %s, but the one in the mods folder is without a version. "%s" is not used.
+> MOD "%s" には MOD "%s" のバージョン %s %s が必要ですが、MODフォルダのものはバージョンがありません。"%s" は使われません。
+
+= The mod "%s" needs the mod "%s" in version %s %s, but the one in the mods folder is version %s. "%s" is not used.
+> MOD "%s" には MOD "%s" のバージョン %s %s が必要ですが、MODフォルダのものはバージョン %s です。"%s" は使われません。
+
+= The mod "%s" needs the mod "%s", which is not on (or can't be used). "%s" is not used.
+> MOD "%s" には MOD "%s" が必要ですが、それがオンではありません(または使えません)。"%s" は使われません。
+
+= The mod "%s" needs the mod "%s", which is not in the mods folder. "%s" is not used.
+> MOD "%s" には MOD "%s" が必要ですが、MODフォルダにありません。"%s" は使われません。
+
+= The mods "%s" and "%s" can't be used together (%s says so). "%s", further down the list, is not used.
+> MOD "%s" と "%s" はいっしょに使えません(%s がそう指定しています)。リストの下のほうの "%s" は使われません。
+
+= The mod "%s" should come after "%s" (it says so): move the line "%s = on" below "%s = on" in %s. Until then the list's order is used.
+> MOD "%s" は "%s" のあとに置く必要があります(MOD側の指定)。%s の "%s = on" の行を "%s = on" の下へ移してください。それまではリストの順番が使われます。
+
+= The mod "%s" has "%s": disc file names only have English letters, digits and signs; ignored.
+> MOD "%s" に "%s" があります。ディスクのファイル名には英字・数字・記号しか使えません。無視されます。
+
+= The mod "%s" has a "scripts" folder but its mod.json does not say "scripts": true; the scripts are not used.
+> MOD "%s" に "scripts" フォルダがありますが、mod.json に "scripts": true がありません。スクリプトは使われません。
+
+= The mod "%s" has "scripts/%s": only .lua files are read; ignored.
+> MOD "%s" に "scripts/%s" があります。読みこむのは .lua ファイルだけです。無視されます。
+
+= The mod "%s" says "scripts": true but has no scripts/*.lua.
+> MOD "%s" は "scripts": true ですが、scripts/*.lua がありません。
+
+= The mod "%s" has more than %d script files; its scripts are not used.
+> MOD "%s" のスクリプトファイルが %d 個を超えています。スクリプトは使われません。
+
+= The mod "%s": scripts/%s could not be read or is bigger than %d KB; the mod's scripts are not used.
+> MOD "%s": scripts/%s を読めないか、%d KB より大きいです。このMODのスクリプトは使われません。
+
+= The mod "%s" is on but has no files in "files", "fsys" or "data".
+> MOD "%s" はオンですが、"files"、"fsys"、"data" にファイルがありません。
+
+= The mod "%s" has "files/%s": the game's program and disc header can't be replaced by mods; ignored.
+> MOD "%s" に "files/%s" があります。ゲームのプログラムとディスクヘッダーはMODで置き換えられません。無視されます。
+
+= Conflict: the mods "%s" and "%s" both replace %s. "%s" (further down the list) is used.
+> 競合: MOD "%s" と "%s" が、どちらも %s を置き換えています。"%s"(リストの下のほう)が使われます。
+
+= Conflict: "%s" replaces all of %s, so the changes inside it from %s are not used.
+> 競合: "%s" が %s 全体を置き換えるため、%s によるその中の変更は使われません。
+
+= The mod "%s" adds %s, which the disc doesn't have.
+> MOD "%s" が %s を追加していますが、ディスクにはありません。
+
+= The mod "%s" has "fsys/%s": files there go in a folder named after the archive, like fsys/common.fsys/<entry>; ignored.
+> MOD "%s" に "fsys/%s" があります。ここのファイルは fsys/common.fsys/<entry> のように、アーカイブ名のフォルダに入れます。無視されます。
+
+= The mod "%s" changes %s inside %s, but the disc has no %s; ignored.
+> MOD "%s" は %s 内の %s を変更しますが、ディスクに %s がありません。無視されます。
+
+= The mod "%s": %s; ignored.
+> MOD "%s": %s。無視されます。
+
+= Conflict: the mods "%s" and "%s" both replace %s inside %s. "%s" (further down the list) is used.
+> 競合: MOD "%s" と "%s" が、どちらも %s 内の %s を置き換えています。"%s"(リストの下のほう)が使われます。
+
+= The mod "%s" has "%s": only .json files in "data" are read; ignored.
+> MOD "%s" に "%s" があります。"data" で読みこむのは .json ファイルだけです。無視されます。
+
+= Could not read %s; its changes are not used.
+> %s を読めませんでした。その変更は使われません。
+
+= Data mods ("data" folders) are not supported for this game yet; their changes are not used.
+> データMOD("data" フォルダ)は、このゲームではまだ使えません。その変更は使われません。
+
+= The game's tables could not be found on this disc (%s), so the data mods' changes are not used.
+> このディスクでゲームのテーブルが見つかりませんでした(%s)。データMODの変更は使われません。
+
+= The generated data (randomizer) could not be made: %s. The game starts without it.
+> 生成データ(ランダマイザー)を作れませんでした: %s。ゲームはそれなしで始まります。
+
+= Data mods: %s; those changes are not used.
+> データMOD: %s。それらの変更は使われません。
+
+= Data mods: %d number(s) set in %d table(s)
+> データMOD: %d 個の数値を %d 個のテーブルに設定
+
+=  (%d of them to the value the disc has)
+>  (うち %d 個はディスクと同じ値)
+
+= %d archive entry changed
+> アーカイブ項目 %d 個を変更
+
+= %d archive entries changed
+> アーカイブ項目 %d 個を変更
+
+= tables in the program changed
+> プログラム内のテーブルを変更
+
+= %d message text(s) rewritten
+> メッセージテキスト %d 個を書きかえ
+
+= Data mods add %d row(s): %s
+> データMODが %d 行を追加: %s
+
+= %s can't be read, so %s can't be replaced inside it
+> %s を読めないため、その中の %s を置き換えられません
+
+= %s is not an FSYS archive, so %s can't be replaced inside it
+> %s は FSYS アーカイブではないため、その中の %s を置き換えられません
+
+= %s can't be read, so the changes inside it from %s are not used.
+> %s を読めないため、%s によるその中の変更は使われません。
+
+= Could not read %s; the changes inside %s are not used.
+> %s を読めませんでした。%s 内の変更は使われません。
+
+= %s: %s in %s is bigger than the original (%u bytes, was %u). If the game runs out of memory there, this may be why.
+> %s: %s の %s が元より大きくなっています(%u バイト、元は %u)。ゲームがそこでメモリ不足になる場合は、これが原因かもしれません。
+
+= %s could not be rebuilt with the changes from %s; they are not used.
+> %s を %s の変更で作り直せませんでした。それらは使われません。
+
+= "%s" in the mods folder is a packed file: unpack it into its own folder there (the folder with mod.json in it).
+> MODフォルダの "%s" は圧縮ファイルです。そこに専用フォルダを作って展開してください(mod.json が入っているフォルダ)。
+
+= a packed file: unpack it into its own folder in the mods folder
+> 圧縮ファイルです。MODフォルダの中に専用フォルダを作って展開してください
+
+= The folder "%s" in the mods folder has no %s, so it isn't a mod; ignored. (If the mod is one folder further in, move that folder up.)
+> MODフォルダの "%s" フォルダに %s がないため、MODではありません。無視されます。(MODがもう1つ奥のフォルダにある場合は、そのフォルダを上へ移してください。)
+
+= The mod in "%s" can't be used: its %s %s.
+> "%s" のMODは使えません: その %s %s。
+
+= can't be read
+> 読みこめません
+
+= The folders "%s" and "%s" both hold a mod with the id "%s"; only "%s" is used. Remove one of them.
+> フォルダ "%s" と "%s" に、同じID "%s" のMODがあります。"%s" だけが使われます。どちらかを削除してください。
+
+= the same id "%s" as the mod in "%s", which is used instead
+> "%s" のMODと同じID "%s" です。そちらが使われます
+
+= it runs scripts (scripts/)
+> スクリプトを実行します(scripts/)
+
+= it changes the game's tables (data/%s)
+> ゲームのテーブルを変更します(data/%s)
+
+= it replaces %s, which isn't only pictures or sound
+> %s を置き換えますが、これは絵や音だけではありません
+
+= it replaces %s inside an archive, which isn't only pictures or sound (or can't be checked without the disc)
+> アーカイブ内の %s を置き換えますが、これは絵や音だけではありません(またはディスクなしでは確認できません)
+
+= it replaces %s inside an archive, which isn't only pictures or sound
+> アーカイブ内の %s を置き換えますが、これは絵や音だけではありません
+
+= "%s" must be a text in quotes
+> "%s" は引用符で囲んだ文字列にしてください
+
+= "%s" must be a text or a list of texts, like ["a", "b"]
+> "%s" は文字列か、["a", "b"] のような文字列のリストにしてください
+
+= "%s" must be a whole number
+> "%s" は整数にしてください
+
+= not valid JSON (%s)
+> 正しいJSONではありません(%s)
+
+= must be one { ... } block
+> { ... } のブロック1つにしてください
+
+= "scripts" must be true or false
+> "scripts" は true か false にしてください
+
+= made for a newer script interface than this port has (script_api %d)
+> このポートより新しいスクリプトインターフェース用です(script_api %d)
+
+= "applies" must be "any_time", "restart" or "new_playthrough" (it is "%s")
+> "applies" は "any_time"、"restart"、"new_playthrough" のどれかにしてください(今は "%s")
+
+= made for a newer version of the port (mod.json format %d)
+> より新しいバージョンのポート用です(mod.json format %d)
+
+= has no "id"
+> "id" がありません
+
+= "id" may only have letters, digits, '-', '_' and '.' ("%s")
+> "id" に使えるのは英字、数字、'-'、'_'、'.' だけです("%s")
+
+= "requires" has "%s": write a version condition like "other-mod >= 1.2"
+> "requires" に "%s" があります。"other-mod >= 1.2" のようにバージョン条件を書いてください
+
+= "requires" has "%s", which isn't a mod id
+> "requires" に "%s" がありますが、MOD idではありません
+
+= "after" has "%s", which isn't a mod id
+> "after" に "%s" がありますが、MOD idではありません
+
+= "conflicts" has "%s", which isn't a mod id
+> "conflicts" に "%s" がありますが、MOD idではありません
+
+= has no "game" (the game ID it is made for, e.g. "GXXE01")
+> "game" がありません(対象のゲームID。例: "GXXE01")
+
+= Not in the mods folder any more (left in the list; it isn't used).
+> MODフォルダにもうありません(リストには残っていますが、使われません)。
+
+= Made for another game or game version (%s); this disc is %s. It isn't used.
+> 別のゲームまたはバージョン(%s)用です。このディスクは %s です。使われません。
+
+= Needs "%s" in version %s %s, but the one in the mods folder is without a version. Not used.
+> "%s" のバージョン %s %s が必要ですが、MODフォルダのものはバージョンがありません。使われません。
+
+= Needs "%s" in version %s %s, but the one in the mods folder is version %s. Not used.
+> "%s" のバージョン %s %s が必要ですが、MODフォルダのものはバージョン %s です。使われません。
+
+= Needs the mod "%s", which is not on (or can't be used). Not used.
+> MOD "%s" が必要ですが、それがオンではありません(または使えません)。使われません。
+
+= Needs the mod "%s", which is not in the mods folder. Not used.
+> MOD "%s" が必要ですが、MODフォルダにありません。使われません。
+
+= Can't be used together with "%s" (%s says so); this one, further down the list, isn't used.
+> "%s" といっしょに使えません(%s がそう指定しています)。リストの下のほうのこちらは使われません。
+
+= Wants to come after "%s": move it further down the list.
+> "%s" のあとに置く必要があります。リストのもっと下へ移してください。
+
+= Clashes with "%s" over %s: "%s", further down the list, wins.
+> %s について "%s" とぶつかっています。リストの下のほうの "%s" が優先されます。
+
+= Clashes with "%s" over %s: this one, further down the list, wins.
+> %s について "%s" とぶつかっています。リストの下のほうのこちらが優先されます。
+
+= Enhanced
+> 強化
+
+= Faithful
+> 忠実
+
+= Randomizer %s
+> ランダマイザー %s
+
+= Challenge: %s
+> チャレンジ: %s
+
+= Mods: %s
+> MOD: %s
+
+= Vanilla
+> バニラ
+
+= was %s
+> %s だった
+
+= setup changed
+> 設定が変更された
+
+= run failed
+> 実行に失敗
+
+= %s is not in the mods folder any more
+> %s はMODフォルダにもうありません
+
+= %s is now version %s
+> %s はバージョン %s になりました
+
+= (none)
+> (なし)
+
+= %s (%s) is not in the mods folder any more
+> %s(%s)はMODフォルダにもうありません
+
+= Pokemon
+> ポケモン
+
+= move
+> わざ
+
+= item
+> どうぐ
+
+= entry
+> 項目
+
+= the mod "%s" now gives the %s "%s" the number %d, the save has it as %d (another mod before it, or another order of the mods)
+> MOD "%s" は %s "%s" に番号 %d をつけましたが、セーブでは %d になっています(前に別のMODがあるか、MODの順番が違います)
+
+= the mod "%s" no longer adds the %s "%s" (it was changed)
+> MOD "%s" は %s "%s" をもう追加しません(変更されました)
+
+= the mod "%s" is not on: this save has its %s "%s" (number %d)
+> MOD "%s" がオンではありません。このセーブには、そのMODの %s "%s"(番号 %d)があります
+
+= Resolution
+> 解像度
+
+= How sharp the picture is drawn: at the GameCube's own 640x480 (Native), at a multiple of it, or at the window's size. Sharper edges and text, the same picture otherwise. Native is scaled up to fill the window and looks softer, as on the console.
+> 絵をどれだけくっきり描くか。ゲームキューブそのままの640x480(ネイティブ)、その整数倍、またはウィンドウの大きさ。ふちや文字がくっきりします。絵そのものは同じです。ネイティブはウィンドウいっぱいに拡大されるため、本体と同じようにやわらかく見えます。
+
+= Anti-aliasing
+> アンチエイリアス
+
+= Smooths the jagged edges of 3D models.
+> 3Dモデルのギザギザをなめらかにします。
+
+= Off
+> オフ
+
+= Texture filtering
+> テクスチャフィルタリング
+
+= Keeps textures sharp when seen at an angle (anisotropic filtering).
+> 斜めから見たテクスチャをくっきりさせます(異方性フィルタリング)。
+
+= Original
+> オリジナル
+
+= Battle Revolution models
+> バトルレボリューションのモデル
+
+= Shows Pokemon Battle Revolution's models for the Pokemon in battle instead of XD's, where there is one (from the models you made on the launcher's Extra assets page, with your own Battle Revolution disc; built in, not a mod). Only how they look changes. Takes effect the next time the game starts (also after a soft reset). Off: XD's own models.
+> 戦闘中のポケモンを、XDのモデルのかわりにポケモンバトルレボリューションのモデルで表示します(モデルがあるもののみ。ランチャーの「追加アセット」ページで、お持ちのバトルレボリューションのディスクから作ったモデルを使います。MODではなく内蔵機能です)。見た目だけが変わります。次にゲームを始めたとき(ソフトリセットも含む)から有効になります。オフ: XD本来のモデル。
+
+= Widescreen
+> ワイドスクリーン
+
+= Shows a wider picture (Widescreen shape): 3D scenes show more at the sides, while menus, text and the on-screen displays keep their shape (menus at the screen's sides move out to the wide edges: Menus at the screen edges). Off: the original 4:3.
+> より横長の絵を表示します(ワイド画面の形)。3Dの場面は左右が広く映り、メニューや文字や画面表示は形が変わりません(画面の端にあるメニューは、ワイド画面の端まで移動します: 画面の端のメニュー)。オフ: 元の4:3。
+
+= Widescreen shape
+> ワイド画面の形
+
+= The shape of the picture when Widescreen is on: 16:9 (most monitors and TVs), 16:10, 21:9 (ultrawide) or the window's own shape (resize the window freely).
+> ワイドスクリーンがオンのときの絵の形: 16:9(ほとんどのモニターとテレビ)、16:10、21:9(ウルトラワイド)、またはウィンドウそのものの形(ウィンドウを自由に変えられます)。
+
+= The window's shape
+> ウィンドウの形
+
+= Menus at the screen edges
+> 画面の端のメニュー
+
+= When Widescreen is on: menus and battle displays that sit at the left or right edge of the 4:3 picture move out to the edges of the wide picture. Off: every menu stays in the 4:3 middle. Centred menus and text boxes always stay in the middle. Does nothing while Widescreen is off.
+> ワイドスクリーンがオンのとき: 4:3の絵の左右の端にあるメニューや戦闘表示を、ワイドな絵の端まで移動します。オフ: すべてのメニューが4:3の中央に残ります。中央のメニューや文字ボックスは常に中央のままです。ワイドスクリーンがオフのときは何も起こりません。
+
+= Frame pacing
+> フレームペーシング
+
+= How pictures are handed to the monitor. The game always runs at the GameCube's own speed (59.94 pictures a second); this only decides how they reach the monitor. Original: every picture waits for the monitor's next refresh (vsync). Matched to the monitor: pictures are handed over on an exactly even 59.94 Hz rhythm, so on a 120/144/180 Hz monitor each stays on screen as evenly as the monitor allows; on monitors slower than 59.94 Hz (50 Hz TVs) a picture that can't be shown in time is skipped instead of holding the game up. Lowest delay: never waits for the monitor (the newest picture is shown at each refresh). With Frame rate at 60, Original behaves as Matched to the monitor (the in-between pictures need the even rhythm).
+> 絵をモニターへ渡す方法です。ゲームは常にゲームキューブと同じ速さ(毎秒59.94枚)で動きます。ここで決まるのは、モニターへの届け方だけです。オリジナル: 1枚ごとにモニターの次の更新(垂直同期)を待ちます。モニターに合わせる: ぴったり等間隔の59.94 Hzで絵を渡すので、120/144/180 Hzのモニターでは、各画面がモニターで可能なかぎり均等に表示されます。59.94 Hzより遅いモニター(50 Hzのテレビ)では、間に合わない絵はゲームを止めずに飛ばします。最短遅延: モニターを待たず、更新のたびに最新の絵を表示します。フレームレートが60のときは、オリジナルでも「モニターに合わせる」と同じに動きます(間の絵には等間隔のリズムが必要なため)。
+
+= Matched to the monitor
+> モニターに合わせる
+
+= Lowest delay
+> 最短遅延
+
+= Frame rate
+> フレームレート
+
+= 30: the game's own pictures, as on the GameCube (most of the game draws 30 a second). 60: between two of the game's pictures the port shows an in-between picture, with the camera and every 3D object half way, so movement looks smoother. The game itself still runs exactly as before (same speed, same timing, same random numbers: it can be used in a Faithful playthrough); menus, text and effects that can't be matched stay at the game's own rate. While it is on the game's picture is shown 1/60 s later, frame pacing is matched to the monitor, and each picture is drawn three times: on a PC that can't afford that the in-between pictures are left out by themselves. Applies at once.
+> 30: ゲームキューブと同じ、ゲーム本来の絵(ゲームのほとんどは毎秒30枚を描きます)。60: ゲームの絵と絵のあいだに、カメラと3Dオブジェクトを中間の位置にした絵をポートが追加し、動きがなめらかに見えます。ゲーム自体はこれまでと完全に同じに動きます(速さも、タイミングも、乱数も同じ。忠実モードのプレイでも使えます)。メニュー、文字、合わせられない効果はゲーム本来のレートのままです。オンのあいだはゲームの絵が1/60秒遅れて表示され、フレームペーシングはモニターに合わせる設定になり、1枚の絵を3回描きます。それが重いPCでは、間の絵は自動的に省かれます。すぐに反映されます。
+
+= 30 (original)
+> 30(オリジナル)
+
+= Original fog and glow
+> オリジナルのきりとかがやき
+
+= Keeps the game's fog and bloom (glow) effects as on the GameCube.
+> ゲームのきり(フォグ)とブルーム(かがやき)の効果を、ゲームキューブと同じに保ちます。
+
+= Photo mode
+> フォトモード
+
+= A key (Photo mode key, F8 at first) pauses the game and lets you move the camera freely, hide the menus and text, and save pictures (PNG, in the photos folder) at full or higher resolution. The game carries on as if no time had passed.
+> キー(フォトモードキー、最初はF8)でゲームを止め、カメラを自由に動かし、メニューや文字を隠し、等倍またはそれ以上の解像度で写真(PNG、photosフォルダ)を保存できます。ゲームは時間がたっていないかのように続きます。
+
+= Save the game's textures (for pack makers)
+> ゲームのテクスチャを保存(パック制作者向け)
+
+= Writes every texture the game uses once as a PNG with Dolphin's file name into the texture_dump folder of the data folder, so a pack can be made from it (and works in Dolphin too). It slows the game down while it saves. Leave off when you only play.
+> ゲームが使うテクスチャを、Dolphinのファイル名のPNGとして1つずつ、データフォルダのtexture_dumpフォルダに書き出します。これでパックを作れます(Dolphinでも使えます)。保存中はゲームが遅くなります。遊ぶだけのときはオフにしてください。
+
+= Photo mode key
+> フォトモードキー
+
+= The key that opens and closes the photo mode, by its name (F8, F7, Home, P...).
+> フォトモードを開閉するキーの名前(F8、F7、Home、P...)。
+
+= Full screen
+> フルスクリーン
+
+= Shows the game on the whole screen instead of in a window (the monitor keeps its own resolution and refresh rate, so switching is quick and the game's speed doesn't change). Alt+Enter switches it while playing. The picture keeps its shape, with black bars at the sides or top as needed.
+> ウィンドウではなく画面全体でゲームを表示します(モニターの解像度とリフレッシュレートはそのままなので、切りかえは速く、ゲームの速さも変わりません)。プレイ中はAlt+Enterで切りかえられます。絵の形は保たれ、必要に応じて左右または上に黒い帯が出ます。
+
+= Borderless window
+> 枠なしウィンドウ
+
+= Shows the game in a window without a frame or title bar that covers its whole monitor (when Full screen is off). Off: a normal window you can move and resize.
+> フルスクリーンがオフのとき、ゲームを枠やタイトルバーのないウィンドウで、モニター全体に表示します。オフ: 移動やサイズ変更ができる通常のウィンドウ。
+
+= Frame rate counter
+> フレームレート表示
+
+= Shows a small line in the top left corner: how many pictures a second the game is making (the game itself makes 30 in most places) and its speed against a GameCube (100% = full speed). Only something drawn over the picture: the game is not changed.
+> 左上すみに小さな1行を表示します: ゲームが毎秒何枚の絵を作っているか(ゲーム自体はほとんどの場面で30枚)と、ゲームキューブに対する速さ(100% = 等速)。絵の上に重ねて描くだけで、ゲームは変わりません。
+
+= Speedrun timer position
+> スピードランタイマーの位置
+
+= Which corner of the window the speedrun timer and its split list are drawn in (the frame rate counter keeps the top left).
+> スピードランタイマーと区間リストを、ウィンドウのどのすみに表示するか(フレームレート表示は左上のままです)。
+
+= Top right
+> 右上
+
+= Top left
+> 左上
+
+= Bottom right
+> 右下
+
+= Bottom left
+> 左下
+
+= Speedrun timer size
+> スピードランタイマーの大きさ
+
+= How big the speedrun timer is drawn, in percent of its normal size.
+> スピードランタイマーを、通常の大きさに対するパーセントで指定します。
+
+= Speedrun split list
+> スピードラン区間リスト
+
+= Under the timer, list the splits (the story's bosses) with the time of each one and, once you have a best run, how far ahead or behind it you are. Off: only the timer.
+> タイマーの下に、区間(ストーリーのボス)ごとのタイムと、自己ベストがあればそれより何秒速い・遅いかを表示します。オフ: タイマーだけ。
+
+= Speedrun 100% checklist
+> スピードラン100%チェックリスト
+
+= In the 100% category, a list of the run's requirements under the timer (Shadow Pokemon snagged and purified, Battle CD Sim Battles, Bingo cards, ...) with what the game's own state says is done. Draw only.
+> 100%カテゴリーで、走りの条件(ダークポケモンのスナッチときよめ、バトルCDシミュレーターの対戦、ビンゴカードなど)の一覧を、ゲーム自身の状態でできたかどうかとともにタイマーの下に表示します。表示のみ。
+
+= Speedrun timer for new games
+> 新規ゲームのスピードランタイマー
+
+= The timer a NEW playthrough starts with (a save keeps its own: change it later on the SETTINGS page). Real time counts everything from NEW GAME on (what speedruns use); Without loads takes the time the game spends loading out of it. The timer is only drawn over the picture: it works in the Original preset and the game plays exactly the same with it on or off.
+> 新しいプレイを始めるときのタイマー(セーブには自分の設定が残ります。あとで「せってい」ページで変えられます)。リアルタイム: 「はじめから」以降のすべてを数えます(スピードランで使われる方式)。ロードなし: ゲームが読みこみに使った時間を除きます。タイマーは絵の上に描かれるだけです。オリジナルのプリセットでも使え、オンでもオフでもゲームはまったく同じに動きます。
+
+= Real time
+> リアルタイム
+
+= Without loads
+> ロードなし
+
+= Speedrun timer starts (Custom)
+> スピードランタイマー開始(カスタム)
+
+= Custom category only: where a new playthrough's clock starts (a save keeps its own choice). A on NEW GAME: choosing NEW GAME on the title menu. First control: the first moment you can move after the opening. Confirm New Game: the YES to "start a new story?". The speedrun.com categories always start at Confirm New Game.
+> カスタムカテゴリーのみ: 新しいプレイの時計がどこから始まるか(セーブには自分の設定が残ります)。「はじめから」でAボタン: タイトルメニューで「はじめから」を選んだとき。最初の操作: オープニングのあと、最初に動けるようになったとき。ニューゲーム確認: 「あたらしいものがたりを はじめますか?」の「はい」。speedrun.comのカテゴリーは常にニューゲーム確認から始まります。
+
+= A on NEW GAME
+> 「はじめから」でAボタン
+
+= First control
+> 最初の操作
+
+= Confirm New Game
+> ニューゲーム確認
+
+= Speedrun category
+> スピードランカテゴリー
+
+= How a new playthrough's speedrun is timed (a save keeps its own). Any%, Any% ENG and 100% follow the speedrun.com rules: the clock starts at Confirm New Game and is real time (the port's own menus do not stop it; only breaks do), the end is a fully black picture (Any%: before the ending cinematic; ENG: after the last textbox), breaks only in the bag or party screen (Any%: 3 breaks, 15 minutes in all; 100%: 7 breaks, 12 hours in all, +9 hours past 20 hours). Custom: your own start and end, the port's menus stop the clock, no breaks.
+> 新しいプレイのスピードランの計りかたです(セーブには自分の設定が残ります)。Any%、Any% ENG、100%はspeedrun.comのルールに従います: 時計はニューゲーム確認から始まり、リアルタイムで進みます(ポートのメニューでは止まらず、休憩のときだけ止まります)。終わりは完全に黒い画面です(Any%: エンディングムービーの前、ENG: 最後のテキストボックスのあと)。休憩はバッグかパーティー画面でのみ(Any%: 3回、合計15分。100%: 7回、合計12時間、20時間を超えたら+9時間)。カスタム: 自分で決める開始と終了、ポートのメニューで時計が止まり、休憩なし。
+
+= Custom
+> カスタム
+
+= Any%
+> Any%
+
+= Any% ENG
+> Any% ENG
+
+= Speedrun timer ends (Custom)
+> スピードランタイマー終了(カスタム)
+
+= Custom category only: where a new playthrough's run ends (a save keeps its own choice). Greevil defeated: the final boss's battle is won. Credits start. Black before cinematic / black after last textbox: the speedrun.com endings (Any% / Any% ENG), which the other categories use.
+> カスタムカテゴリーのみ: 新しいプレイの走りがどこで終わるか(セーブには自分の設定が残ります)。グリーヴィルを倒した: 最後のボスの戦闘に勝ったとき。クレジット開始。ムービー前の暗転 / 最後のテキストボックス後の暗転: speedrun.comの終わりかた(Any% / Any% ENG)で、ほかのカテゴリーが使います。
+
+= Greevil defeated
+> グリーヴィルを倒した
+
+= Credits start
+> クレジット開始
+
+= Black before cinematic
+> ムービー前の暗転
+
+= Black after last textbox
+> 最後のテキストボックス後の暗転
+
+= Pause in the background
+> バックグラウンドで一時停止
+
+= Pauses the game (and its sound) while its window isn't in front, for example when you switch to another program; it carries on when you come back as if no time had passed. Off: it keeps running, as a console does.
+> ウィンドウが前面にないとき(たとえば別のプログラムに切りかえたとき)、ゲームと音を止めます。戻ってくると、時間がたっていないかのように続きます。オフ: 本体と同じように動き続けます。
+
+= Loading speed
+> 読みこみ速度
+
+= How long the game waits for the disc. GameCube: as long as the GameCube's disc drive takes, so every load lasts as long as on the console. Fast: loads finish at the next frame. GameCube drive (testing): the drive as Dolphin emulates it - seeks, the disc's speed by position, its read-ahead buffer, each read finishing at its exact time (TIMING_STEP2D.md). Buffered drive (testing): Dolphin's fast disc speed (every read as if from the drive's buffer).
+> ゲームがディスクを待つ時間です。ゲームキューブ: ゲームキューブのディスクドライブと同じ長さで、読みこみは本体と同じ時間かかります。高速: 読みこみは次のフレームで終わります。ゲームキューブドライブ(テスト): Dolphinがエミュレートするドライブ。シーク、位置による回転速度、先読みバッファ、各読みこみがちょうどの時間で終わります(TIMING_STEP2D.md)。バッファドライブ(テスト): Dolphinの高速ディスク速度(すべての読みこみがドライブのバッファからのように)。
+
+= GameCube
+> ゲームキューブ
+
+= Fast
+> 高速
+
+= GameCube drive (testing)
+> ゲームキューブドライブ(テスト)
+
+= Buffered drive (testing)
+> バッファドライブ(テスト)
+
+= Memory card speed
+> メモリーカードの速度
+
+= How long saving and loading take. GameCube: as long as a GameCube memory card takes, so a save takes about two seconds as on the console. Instant: saves and loads finish at once.
+> セーブとロードにかかる時間です。ゲームキューブ: ゲームキューブのメモリーカードと同じ長さで、セーブは本体と同じく約2秒かかります。即時: セーブとロードがすぐに終わります。
+
+= Instant
+> 即時
+
+= Game clock (testing)
+> ゲーム時計(テスト)
+
+= Which clock the game measures its frame times with. GameCube: the time of the last vertical blank, so every frame measures whole fields as on the console (battle and script waits keep the console's pace; a PC stall pauses the game instead of making it jump). PC: this PC's own clock at the moment the game reads it, as the port did before 2026-11-08 (waits that drop the fraction then run up to 45 % long).
+> ゲームがフレーム時間を測る時計です。ゲームキューブ: 最後の垂直ブランクの時刻で、すべてのフレームが本体と同じく整数フィールドで測られます(戦闘とスクリプトの待ちは本体のペースを保ち、PCの停止ではゲームが飛ばず止まります)。PC: ゲームが読んだ瞬間のこのPC自身の時計で、2026-11-08より前のポートの方式です(端数を切り捨てる待ちは最大45%長くなります)。
+
+= PC
+> PC
+
+= CPU time per frame (testing)
+> フレームごとのCPU時間(テスト)
+
+= How long the game's work takes each frame. GameCube: as long as the GameCube's processor takes (a model of it, measured against Dolphin), so heavy frames - a scene being set up, a big load - take several fields as on the console and the game measures them. Instant: the PC's speed, every frame's work done at once, as the port did before (timing step 2b, not yet complete).
+> ゲームの処理がフレームごとにかかる時間です。ゲームキューブ: ゲームキューブのプロセッサーと同じ長さ(Dolphinと比べて測ったモデル)で、重いフレーム(場面の準備や大きな読みこみ)は本体と同じく数フィールドかかり、ゲームはそれを測ります。即時: PCの速さで、すべてのフレームの処理がすぐに終わります。以前のポートの方式です(タイミングステップ2b、まだ未完成)。
+
+= Game clock speed (testing)
+> ゲーム時計の速さ(テスト)
+
+= Runs the game's clock this many times faster than real time, for test runs. The game does exactly the same, only the waiting is shorter.
+> ゲームの時計を実時間のこの倍数の速さで動かします(テスト実行用)。ゲームはまったく同じに動き、待ち時間だけが短くなります。
+
+= Disc image
+> ディスクイメージ
+
+= The disc image file the game starts with, as chosen in the launcher (empty: none chosen yet).
+> ランチャーで選んだ、ゲームが起動するディスクイメージファイルです(空: まだ選んでいません)。
+
+= Pokemon Battle Revolution disc image
+> ポケモンバトルレボリューションのディスクイメージ
+
+= The Pokemon Battle Revolution disc image the launcher's Extra assets page makes the Battle Revolution models from (empty: none chosen yet).
+> ランチャーの「追加アセット」ページでバトルレボリューションのモデルを作るための、ポケモンバトルレボリューションのディスクイメージです(空: まだ選んでいません)。
+
+= Pokemon Colosseum disc image
+> ポケモンコロシアムのディスクイメージ
+
+= The Pokemon Colosseum disc image the launcher's Extra assets page makes the Colosseum characters from (empty: none chosen yet).
+> ランチャーの「追加アセット」ページでコロシアムのキャラクターを作るための、ポケモンコロシアムのディスクイメージです(空: まだ選んでいません)。
+
+= Keep the launcher open
+> ランチャーを開いたままにする
+
+= Keeps the launcher's window open while the game runs. Off: it closes when the game starts.
+> ゲームの実行中もランチャーのウィンドウを開いたままにします。オフ: ゲームが始まると閉じます。
+
+= Icon
+> アイコン
+
+= The icon of the windows, the taskbar and the shortcuts, as chosen in the launcher: one of the program's own ("original"...) or of the icons made from your disc, by name. Empty: the first one made from your disc, or the program's own before a disc has been checked.
+> ランチャーで選んだ、ウィンドウ、タスクバー、ショートカットのアイコンです。プログラム本来のもの("original"など)か、ディスクから作ったアイコンを名前で指定します。空: ディスクから作った最初のもの、ディスクを確認する前はプログラム本来のもの。
+
+= Launcher background
+> ランチャーの背景
+
+= The picture behind the launcher's pages, from your disc, as chosen in the launcher: "none" (plain), a picture's name, or empty (the first picture from your disc).
+> ランチャーのページの後ろにある、ディスクからの絵です(ランチャーで選びます): "none"(無地)、絵の名前、または空(ディスクからの最初の絵)。
+
+= Check for updates
+> アップデートの確認
+
+= When the launcher starts, it asks the publisher's page whether a newer version exists and, if so, asks you whether to install it. Nothing is ever downloaded or installed without your yes. Off: the launcher never goes online by itself ("Check now" in the launcher still works).
+> ランチャーが起動すると、配布元のページに新しいバージョンがないか問い合わせ、あれば、インストールするかたずねます。あなたが「はい」と言うまで、何もダウンロードもインストールもされません。オフ: ランチャーが自分でオンラインに接続することはありません(ランチャーの「今すぐ確認」は使えます)。
+
+= Discord presence
+> Discordプレゼンス
+
+= Show what you're playing in Discord (only on this PC, through the Discord app).
+> プレイ中のゲームをDiscordに表示します（このPC上のDiscordアプリを通してのみ）。
+
+= SETTINGS in the game's menu
+> ゲームのメニューに「せってい」
+
+= Adds SETTINGS after EXIT in the menu the game opens with START, and left of OPTIONS on the title screen: picture, sound and the other settings you may change while playing. The game is paused while it is open and never notices it.
+> STARTで開くゲームのメニューの「とじる」のあとと、タイトル画面の「オプション」の左に「せってい」を追加します。プレイ中に変えられる絵、音、その他の設定です。開いているあいだゲームは止まり、ゲームはそれに気づきません。
+
+= New Game setup screen
+> ニューゲーム設定画面
+
+= After NEW GAME on the title screen, a screen to choose how the new playthrough plays: Faithful (exactly the GameCube game) or Enhanced (speed-ups allowed), and which mods it uses. The choice is kept with the save and checked when you CONTINUE. The game is paused while it is open. Off: NEW GAME starts at once.
+> タイトル画面で「はじめから」を選んだあとに、新しいプレイの遊びかたを選ぶ画面を出します: 忠実(ゲームキューブのゲームそのまま)か強化(高速化あり)、そして使うMOD。選んだ内容はセーブとともに保存され、「つづきから」のときに確認されます。開いているあいだゲームは止まります。オフ: 「はじめから」ですぐに始まります。
+
+= Text speed
+> テキストの速さ
+
+= How fast message boxes write out their text, in the field and in battle: 2x and 3x write that many letters per frame (pauses inside the text get as much shorter), Instant shows the whole box at once. What the text says and the button press to go on stay as they are.
+> フィールドと戦闘で、メッセージボックスが文字を表示する速さ: 2倍と3倍は1フレームにその数の文字を書きます(文中のポーズもその分短くなります)。即時はボックス全体をいちどに表示します。文の内容と、進めるためのボタン操作は変わりません。
+
+= Normal
+> ふつう
+
+= Battle speed
+> 戦闘の速さ
+
+= Speeds up battles.
+> 戦闘を速くします。
+
+= Fast battle animations
+> 戦闘アニメの高速化
+
+= While a move's (or an ability's) animation plays in battle, the game runs at the Fast-forward speed by itself, then carries on at normal speed. The animations are all still there, only shorter; the battle plays out the same.
+> 戦闘中にわざ(や特性)のアニメが再生されるあいだ、ゲームが自動的に早送りの速さで動き、そのあと通常の速さに戻ります。アニメはすべてそのまま、短くなるだけで、戦闘の結果は同じです。
+
+= Physical/special split
+> 物理/特殊の分類
+
+= Whether a move hits with Attack or Sp. Atk follows the move itself, as from Pokemon Diamond and Pearl on, instead of its type: Fire Punch, Crunch and Dragon Claw become physical; Shadow Ball, Hyper Beam, Sludge Bomb and Hidden Power special (54 moves change). Shadow moves stay as they are. Changes how battles play, so it is off unless you turn it on.
+> わざがこうげきとトクこうのどちらで当たるかを、タイプではなくわざごとに決めます(ダイヤモンド・パール以降と同じ): ほのおのパンチ、かみくだく、ドラゴンクローは物理に、シャドーボール、はかいこうせん、ヘドロばくだん、めざめるパワーは特殊になります(54のわざが変わります)。ダークわざはそのままです。戦闘の遊びかたが変わるので、オンにしないかぎりオフです。
+
+= TMs show their move
+> わざマシンにわざ名を表示
+
+= TMs and HMs are listed with their move, as in the later games: "TM01 Focus Punch" instead of "TM01" in shops, item messages and the PC. With the randomizer or Gen 4 rules it shows the move the machine really teaches. Text only: nothing in the game changes.
+> わざマシンとひでんマシンを、のちのゲームと同じように、わざの名前つきで表示します: ショップ、どうぐのメッセージ、PCで「TM01」のかわりに「TM01 きあいパンチ」。ランダマイザーやGen 4ルールのときは、そのマシンが実際に教えるわざを表示します。文字だけで、ゲームの中身は変わりません。
+
+= Fast-forward key
+> 早送りキー
+
+= While the fast-forward key is held (Tab at first, or the right stick pressed in; Controls page), the whole game runs faster (Fast-forward speed) and its sound plays sped up. Only the waiting gets shorter: the game itself plays out the same. It waits at normal speed while the memory card saves.
+> 早送りキーを押しているあいだ(最初はTab、または右スティックの押しこみ。操作ページ)、ゲーム全体が速く動き(早送りの速さ)、音も早回しになります。待ち時間が短くなるだけで、ゲームの中身は同じです。メモリーカードにセーブしているあいだは通常の速さで待ちます。
+
+= Fast-forward key works
+> 早送りキーの動作
+
+= Hold: fast while the key is held. Toggle: one press turns fast-forward on, the next off.
+> ホールド: キーを押しているあいだ速くなります。トグル: 1回押すと早送りがオン、次でオフ。
+
+= Hold
+> ホールド
+
+= Toggle
+> トグル
+
+= Fast-forward speed
+> 早送りの速さ
+
+= How many times faster the game runs while fast-forwarding (the key, and Fast battle animations).
+> 早送りのあいだ(キー、および戦闘アニメの高速化)、ゲームが何倍の速さで動くか。
+
+= Skip the logo movies
+> ロゴムービーをとばす
+
+= The two studio logo movies at the start (before the title screen) are skipped. Everything else at the start plays as before; the game's own random numbers start from the clock, so a run that skips them is not the same run as one that does not.
+> 最初にある2つのスタジオロゴのムービー(タイトル画面の前)をとばします。最初のほかの部分はこれまでどおり再生されます。ゲーム自身の乱数は時計から始まるので、とばした走りはとばさない走りと同じ走りにはなりません。
+
+= Run button
+> ダッシュボタン
+
+= A button switches between walking and running faster. Off: as the original.
+> ボタンで、あるくのと速く走るのを切りかえます。オフ: オリジナルのとおり。
+
+= Fix original bugs
+> 元のバグを修正
+
+= Fixes known bugs of the original game. This can change how some things play out.
+> 元のゲームの既知のバグを直します。一部の展開が変わることがあります。
+
+= Button pictures
+> ボタンの絵
+
+= Which buttons the game's menus show next to their help texts (A, B, X, R...): the GameCube's, or the buttons and keys that press them on your own device, as your controls are set. The controller in use: whatever you pressed last, the keyboard or controller 1's controller; it changes as soon as you switch. Only the pictures change.
+> ゲームのメニューのヘルプテキストの横に表示するボタン(A、B、X、Rなど): ゲームキューブのボタン、または操作の設定に応じて、あなたのデバイスでそれを押すボタンやキー。使用中のコントローラー: 最後に押したもの、キーボードかコントローラー1のコントローラーで、切りかえるとすぐに変わります。変わるのは絵だけです。
+
+= The controller in use
+> 使用中のコントローラー
+
+= Nintendo Switch
+> Nintendo Switch
+
+= Keyboard
+> キーボード
+
+= Volume
+> 音量
+
+= Volume of all the game's sound, in percent.
+> ゲームのすべての音の音量(パーセント)。
+
+= Music volume
+> 音楽の音量
+
+= Volume of the music, in percent.
+> 音楽の音量(パーセント)。
+
+= Sound effects volume
+> こうかおんの音量
+
+= Volume of the sound effects, in percent.
+> こうかおんの音量(パーセント)。
+
+= Pokemon cry volume
+> ポケモンのなきごえの音量
+
+= Volume of the Pokemon cries, in percent.
+> ポケモンのなきごえの音量(パーセント)。
+
+= Music in menus
+> メニュー中の音楽
+
+= What the music does while the SETTINGS page is open (the game itself is paused). Fades out: fades out and back in. Plays on: the music carries on as far as the game had already loaded it (for music read from the disc, a few seconds), then fades out; sound effects fade out at once. Stops: stops at once. Either way the game carries on exactly as if it had never been paused.
+> せっていページを開いているあいだ(ゲームは止まっています)の音楽の動作です。フェードアウト: 音が小さくなり、また戻ります。流れつづける: ゲームがすでに読みこんだところまで音楽が続き(ディスクから読む音楽は数秒)、そのあとフェードアウトします。こうかおんはすぐにフェードアウトします。止める: すぐに止まります。どれでも、ゲームは一時停止されなかったかのように続きます。
+
+= Fades out
+> フェードアウト
+
+= Plays on
+> 流れつづける
+
+= Stops
+> 止める
+
+= Native (640x480)
+> ネイティブ(640x480)
+
+= Match the window
+> ウィンドウに合わせる
+
+= Enter
+> Enter
+
+= Esc
+> Esc
+
+= Backspace
+> Backspace
+
+= Tab
+> Tab
+
+= Space
+> Space
+
+= Caps Lock
+> Caps Lock
+
+= Insert
+> Insert
+
+= Page Up
+> Page Up
+
+= Delete
+> Delete
+
+= End
+> End
+
+= Page Down
+> Page Down
+
+= Right Arrow
+> 右矢印
+
+= Left Arrow
+> 左矢印
+
+= Down Arrow
+> 下矢印
+
+= Up Arrow
+> 上矢印
+
+= Num Enter
+> テンキーEnter
+
+= Left Ctrl
+> 左Ctrl
+
+= Left Shift
+> 左Shift
+
+= Left Alt
+> 左Alt
+
+= Right Ctrl
+> 右Ctrl
+
+= Right Shift
+> 右Shift
+
+= Right Alt
+> 右Alt
+
+= A
+> A
+
+= B
+> B
+
+= X
+> X
+
+= Y
+> Y
+
+= Z
+> Z
+
+= L
+> L
+
+= R
+> R
+
+= D-pad up
+> 十字キー上
+
+= D-pad down
+> 十字キー下
+
+= D-pad left
+> 十字キー左
+
+= D-pad right
+> 十字キー右
+
+= Main stick up
+> メインスティック上
+
+= Main stick down
+> メインスティック下
+
+= Main stick left
+> メインスティック左
+
+= Main stick right
+> メインスティック右
+
+= C-stick up
+> Cスティック上
+
+= C-stick down
+> Cスティック下
+
+= C-stick left
+> Cスティック左
+
+= C-stick right
+> Cスティック右
+
+= none
+> なし
+
+= Exactly the GameCube game: same speed, same loading times, same picture, same bugs. Nothing extra appears in the game.
+> ゲームキューブのゲームそのまま: 同じ速さ、同じ読みこみ時間、同じ絵、同じバグ。ゲームの中に余計なものは出ません。
+
+= The recommended improvements: a sharper, wider picture, smoother movement and shorter waits. The game's own rules (battles, bugs, purification) stay as they were. Some of these don't work yet.
+> おすすめの改善: よりくっきりしたワイドな絵、なめらかな動き、短い待ち時間。ゲーム本来のルール(戦闘、バグ、きよめ)は変わりません。一部はまだ動きません。
+
+= Your own choice: starts from Original or Enhanced, and you change single settings on the Settings page.
+> 自分で選びます: オリジナルか強化から始め、せっていページで個々の設定を変えます。
+
+= On
+> オン
+
+= (empty)
+> (空)
+
+= Original  (the GameCube game)
+> オリジナル  (ゲームキューブのゲーム)
+
+= Enhanced  (recommended improvements)
+> 強化  (おすすめの改善)
+
+= Custom  (started from %s)
+> カスタム  (%s から開始)
+
+= Switch preset
+> プリセットを切りかえる
+
+= Switch to %s?
+> %s に切りかえますか?
+
+= Your own changes to the game settings are replaced by its settings.
+> ゲーム設定へのあなたの変更は、そのプリセットの設定で置きかえられます。
+
+= (Volumes, window and controls stay as you set them.)
+> (音量、ウィンドウ、操作はそのままです。)
+
+= Keep my settings
+> 設定を保つ
+
+= Nothing is changed
+> 何も変わりません
+
+= This is the game exactly as on the GameCube.
+> ゲームキューブとまったく同じゲームです。
+
+= What is different from the GameCube game
+> ゲームキューブのゲームとのちがい
+
+= %s: %s (GameCube: %s)
+> %s: %s (ゲームキューブ: %s)
+
+= %s: %s (GameCube: %s)  - doesn't work yet
+> %s: %s (ゲームキューブ: %s)  - まだ動きません
+
+= (doesn't work yet)
+> (まだ動きません)
+
+= Changed: on the GameCube this is %s
+> 変更: ゲームキューブでは %s です
+
+= Not accepted
+> 受け付けられません
+
+= There are no settings here yet.
+> ここにはまだ設定がありません。
+
+= the keyboard
+> キーボード
+
+= an Xbox controller
+> Xboxコントローラー
+
+= a PlayStation controller
+> PlayStationコントローラー
+
+= a Switch controller
+> Switchコントローラー
+
+= a GameCube controller
+> ゲームキューブコントローラー
+
+= a Switch Online GameCube controller
+> Switch Online ゲームキューブコントローラー
+
+= a controller of no known make (buttons named as on Xbox)
+> メーカー不明のコントローラー(ボタン名はXboxと同じ)
+
+= Auto: the standard buttons for whatever controller this is, by place (the GameCube's A is the bottom face button). Changed buttons are marked in the table.
+> 自動: そのコントローラーの標準ボタンを、位置どおりに割り当てます(ゲームキューブのAは下のボタン)。変更したボタンは表に印がつきます。
+
+= Your own buttons (changed in the table).
+> あなた自身のボタン(表で変更)。
+
+= A GameCube controller through Nintendo's adapter (WUP-028) or a Mayflash adapter in Wii U mode: every button where it is on the controller, L and R with their click. (A Mayflash in PC mode reports itself as an ordinary controller and already maps A, B, X, Y right with Auto.)
+> 任天堂のアダプター(WUP-028)、またはWii Uモードのメイフラッシュのアダプター経由のゲームキューブコントローラー: すべてのボタンがコントローラー上の位置どおりで、LとRはクリックつき。(PCモードのメイフラッシュは普通のコントローラーとして認識され、自動ですでにA、B、X、Yが正しく割り当てられます。)
+
+= Xbox: GameCube buttons by place: A is A, B is X (left), X is B (right), Y is Y; Z is RB; L and R are the triggers.
+> Xbox: ゲームキューブのボタンを位置で割り当て: AはA、BはX(左)、XはB(右)、YはY。ZはRB。LとRはトリガー。
+
+= PlayStation: A is Cross, B is Circle, X is Square, Y is Triangle; Z is R1; L and R are L2 and R2.
+> PlayStation: Aは×、Bは○、Xは□、Yは△。ZはR1。LとRはL2とR2。
+
+= Switch Pro: by the letters printed on it, as Nintendo's GameCube games on Switch do: A is A, B is B, X is X, Y is Y; Z is R; L and R are ZL and ZR.
+> Switch Pro: 任天堂のSwitch版ゲームキューブのゲームと同じく、表記の文字どおり: AはA、BはB、XはX、YはY。ZはR。LとRはZLとZR。
+
+= GameCube controller (adapter)
+> ゲームキューブコントローラー(アダプター)
+
+= Switch Pro
+> Switch Pro
+
+= Fast-forward
+> 早送り
+
+= Controller %d
+> コントローラー %d
+
+= Automatic: the first free controller
+> 自動: 最初の空いているコントローラー
+
+= None: keyboard only
+> なし: キーボードのみ
+
+= %s (not plugged in)
+> %s(接続されていません)
+
+= A controller
+> コントローラー
+
+= PC controller
+> PCコントローラー
+
+= Plays now: %s (it says it is %s).
+> 今の操作: %s(%s と名乗っています)。
+
+= No PC controller: controller %d is played with the keyboard only.
+> PCコントローラーがありません: コントローラー %d はキーボードだけで操作します。
+
+= No PC controller: controller %d is played with the keyboard only (if you give it keys below).
+> PCコントローラーがありません: コントローラー %d はキーボードだけで操作します(下でキーを割り当てた場合)。
+
+= No PC controller is plugged in. Plug one in: it shows up here at once.
+> PCコントローラーが接続されていません。接続すると、ここにすぐ表示されます。
+
+= No free PC controller for it right now.
+> 今、割り当てられる空きのPCコントローラーがありません。
+
+= Plugged in: %s
+> 接続中: %s
+
+= Controller preset
+> コントローラーのプリセット
+
+= Keyboard default
+> キーボード初期設定
+
+= No keys (default)
+> キーなし(初期設定)
+
+= Copy controller 1's keys
+> コントローラー1のキーをコピー
+
+= Keyboard default: Dolphin's keys. X = A, Z = B, C = X, S = Y, D = Z, Q = L, W = R, Enter = Start, arrow keys = main stick, I J K L = C-stick, T F G H = D-pad.
+> キーボード初期設定: Dolphinのキー。X = A、Z = B、C = X、S = Y、D = Z、Q = L、W = R、Enter = スタート、矢印キー = メインスティック、I J K L = Cスティック、T F G H = 十字キー。
+
+= Controllers 2-4 have no keys unless you give them some (all keyboards are one keyboard: a key used twice presses both).
+> コントローラー2〜4は、キーを割り当てないかぎりキーがありません(キーボードはすべて1つのキーボードです。2回使ったキーは両方を押します)。
+
+= Test rumble
+> 振動テスト
+
+= When the game rumbles the controller (the game's own Rumble option in its menu still decides when). Off: the controller never rumbles.
+> ゲームがコントローラーを振動させるか(いつ振動するかはゲームのメニューの「振動」設定で決まります)。オフ: コントローラーは振動しません。
+
+= Click a key or button to change it, then press the new one (Esc: cancel). "...": add a second one, none, or the standard one. Violet: changed from the standard.
+> キーやボタンをクリックして変更し、新しいものを押してください(Esc: キャンセル)。「...」: 2つ目の追加、なし、標準に戻す。むらさき: 標準から変更したもの。
+
+= Add another key
+> キーをもう1つ追加
+
+= Add another button
+> ボタンをもう1つ追加
+
+= No key
+> キーなし
+
+= No button
+> ボタンなし
+
+= Standard key
+> 標準のキー
+
+= Standard button
+> 標準のボタン
+
+= Walk (hold)
+> あるく(押しつづける)
+
+= Press a key...
+> キーを押してください...
+
+= Press a button...
+> ボタンを押してください...
+
+= (keyboard only: arrow keys tilt part way)
+> (キーボードのみ: 矢印キーでスティックを少し倒します)
+
+= Fast-forward is the PC version's own key, not a GameCube button: it works only while the Fast-forward setting is on (Settings, Gameplay; never in Original).
+> 早送りはPC版独自のキーで、ゲームキューブのボタンではありません。「早送りキー」設定がオンのときだけ働きます(せってい、ゲームプレイ。オリジナルでは使えません)。
+
+= Reset this controller to the defaults
+> このコントローラーを初期設定に戻す
+
+= Keys, buttons, preset, deadzones, click points and rumble as they come.
+> キー、ボタン、プリセット、あそび、クリック位置、振動を初期状態にします。
+
+= Stop the keyboard test (Esc)
+> キーボードテストを止める(Esc)
+
+= Try the keyboard
+> キーボードを試す
+
+= The keyboard plays controller %d here now (keys don't work on this page meanwhile; Esc ends it).
+> ここでは今、キーボードがコントローラー%dとして動いています(そのあいだこのページではキーが使えません。Escで終了)。
+
+= Move the sticks and press buttons: this is what the game reads. Click "Try the keyboard" to try the keys.
+> スティックを動かしボタンを押してください: これがゲームが読む内容です。「キーボードを試す」でキーを試せます。
+
+= No PC controller plays as this one. Click "Try the keyboard" to try the keys.
+> このコントローラーとして動くPCコントローラーはありません。「キーボードを試す」でキーを試せます。
+
+=   click
+>   クリック
+
+= Main stick
+> メインスティック
+
+= D-pad
+> 十字キー
+
+= Game reads: main stick %d, %d   C-stick %d, %d   L %d   R %d   buttons: %s
+> ゲームが読む値: メインスティック %d, %d   Cスティック %d, %d   L %d   R %d   ボタン: %s
+
+= Sticks and triggers
+> スティックとトリガー
+
+= Try it
+> 試す
+
+= the download is larger than expected
+> ダウンロードが想定より大きいです
+
+= the download couldn't be written to disk (is it full?)
+> ダウンロードをディスクに書きこめませんでした(いっぱいですか?)
+
+= the file isn't there: %s
+> ファイルがありません: %s
+
+= no answer in time
+> 時間内に応答がありませんでした
+
+= the server's name wasn't found (offline?)
+> サーバー名が見つかりません(オフラインですか?)
+
+= couldn't connect
+> 接続できませんでした
+
+= the connection broke off
+> 接続が途切れました
+
+= the server's certificate wasn't accepted
+> サーバーの証明書が受け入れられませんでした
+
+= Windows error %d
+> Windowsエラー %d
+
+= %s: %s
+> %s: %s
+
+= the address isn't usable: %s
+> このアドレスは使えません: %s
+
+= no connection possible
+> 接続できません
+
+= couldn't reach the server
+> サーバーに届きませんでした
+
+= couldn't ask the server
+> サーバーに問い合わせできませんでした
+
+= the server didn't answer
+> サーバーが応答しませんでした
+
+= the server has no such file (404)
+> サーバーにそのファイルがありません(404)
+
+= the server answered %d
+> サーバーの応答: %d
+
+= the download broke off
+> ダウンロードが途切れました
+
+= the download is incomplete
+> ダウンロードが不完全です
+
+= the download couldn't be saved in %s
+> ダウンロードを %s に保存できませんでした
+
+= the download couldn't be saved: %s
+> ダウンロードを保存できませんでした: %s
+
+= a file couldn't be written: %s
+> ファイルを書きこめませんでした: %s
+
+= downloading isn't possible (no pipe)
+> ダウンロードできません(パイプなし)
+
+= downloading isn't possible (couldn't start curl)
+> ダウンロードできません(curlを起動できませんでした)
+
+= downloading needs the program "curl" (it comes with macOS; on Linux install it with your package manager)
+> ダウンロードにはプログラム "curl" が必要です(macOSには入っています。Linuxではパッケージ管理ツールで入れてください)
+
+= the download failed
+> ダウンロードに失敗しました
+
+= the address isn't one this program downloads from
+> このアドレスは、このプログラムがダウンロードする先ではありません
+
+= the package can't be read
+> パッケージを読めません
+
+= the package isn't a zip file
+> パッケージはzipファイルではありません
+
+= the package is a kind of zip this version can't unpack (ZIP64 or split)
+> パッケージは、このバージョンが展開できない種類のzipです(ZIP64または分割)
+
+= the package is damaged (its file list is outside it)
+> パッケージが壊れています(ファイル一覧が範囲外)
+
+= the package is damaged (its file list)
+> パッケージが壊れています(ファイル一覧)
+
+= the package holds a file name that isn't allowed: %s
+> パッケージに許可されないファイル名があります: %s
+
+= the package holds a file this version can't unpack: %s
+> パッケージに、このバージョンが展開できないファイルがあります: %s
+
+= the package is far too large when unpacked
+> パッケージは展開すると大きすぎます
+
+= the package writes through a link: %s
+> パッケージがリンクを通して書きこもうとしています: %s
+
+= the package is damaged (%s)
+> パッケージが壊れています(%s)
+
+= the package is damaged: %s doesn't unpack correctly
+> パッケージが壊れています: %s を正しく展開できません
+
+= the package holds an empty link: %s
+> パッケージに空のリンクがあります: %s
+
+= a file's permissions couldn't be set: %s
+> ファイルのアクセス権を設定できませんでした: %s
+
+= not a game folder name
+> ゲームフォルダ名ではありません
+
+= the choice of version couldn't be saved in %s
+> バージョンの選択を %s に保存できませんでした
+
+= Updates can only be installed in the player's folder ("%s" with a "%s" folder next to it); this copy runs from %s.
+> アップデートをインストールできるのは、プレイヤーのフォルダ("%s" と、その隣の "%s" フォルダ)だけです。このコピーは %s から動いています。
+
+= Your saves and settings are kept inside the game folder (%s\\portable). An update would start a new game folder without them, so it can't be installed this way: download the new version by hand and move your portable folder over.
+> セーブと設定はゲームフォルダ(%s\\portable)の中にあります。アップデートすると、それらのない新しいゲームフォルダになるため、この方法ではインストールできません。新しいバージョンを手動でダウンロードし、portableフォルダを移してください。
+
+= the downloaded package has the wrong size (%llu bytes, the update information says %llu)
+> ダウンロードしたパッケージのサイズが違います(%llu バイト、アップデート情報では %llu)
+
+= the downloaded package is not the one the publisher signed (its SHA-256 differs)
+> ダウンロードしたパッケージは、配布元が署名したものではありません(SHA-256が違います)
+
+= the version isn't usable as a folder name: %s
+> このバージョンはフォルダ名に使えません: %s
+
+= this version is the one running now
+> このバージョンは今動いているものです
+
+= an earlier unfinished update couldn't be removed: %s
+> 以前の未完了のアップデートを削除できませんでした: %s
+
+= the package is incomplete (it should hold the launcher, the game and %s)
+> パッケージが不完全です(ランチャー、ゲーム、%s が入っているはずです)
+
+= the package holds version %s, not %s
+> パッケージはバージョン %s で、%s ではありません
+
+= the folder %s is in use and couldn't be replaced; close the programs using it
+> フォルダ %s が使用中で、置き換えられません。使っているプログラムを閉じてください
+
+= the new version's folder couldn't be put in place: %s
+> 新しいバージョンのフォルダを配置できませんでした: %s
+
+= there is no previous version to go back to
+> 戻れる前のバージョンがありません
+
+= This copy runs from a disk image or from a temporary place the Mac made for it (%s). Drag Pokemon XD to your Applications folder (or any folder of yours), open it from there, and updates can be installed.
+> このコピーは、ディスクイメージ、またはMacが作った一時的な場所(%s)から動いています。Pokemon XDをアプリケーションフォルダ(またはご自分のフォルダ)にドラッグし、そこから開くと、アップデートをインストールできます。
+
+= Pokemon XD is in a folder this account can't write to (%s), so an update can't be put in place. Move the app into a folder of yours (or install the new version by hand).
+> Pokemon XDは、このアカウントが書きこめないフォルダ(%s)にあるため、アップデートを配置できません。アプリをご自分のフォルダに移してください(または新しいバージョンを手動でインストールしてください)。
+
+= the package holds something besides the app: %s
+> パッケージにアプリ以外のものが入っています: %s
+
+= the new app couldn't be put in its waiting place: %s
+> 新しいアプリを待機場所に置けませんでした: %s
+
+= the waiting update couldn't be removed
+> 待機中のアップデートを削除できませんでした
+
+= the previous version couldn't be made ready: %s
+> 前のバージョンを準備できませんでした: %s
+
+= the update helper couldn't be written
+> アップデート用ヘルパーを書きこめませんでした
+
+= the update helper couldn't be started
+> アップデート用ヘルパーを起動できませんでした
+
+= text after the end of the JSON
+> JSONの終わりのあとにテキストがあります
+
+= the update information is too large
+> アップデート情報が大きすぎます
+
+= the update information starts with a byte order mark (sign_update.py never writes one)
+> アップデート情報の先頭にバイトオーダーマークがあります(sign_update.pyは書きません)
+
+= this version has no valid key to check updates with
+> このバージョンには、アップデートを確認するための有効なキーがありません
+
+= the update information can't be read (%s)
+> アップデート情報を読めません(%s)
+
+= the update information has no signed manifest
+> アップデート情報に署名つきマニフェストがありません
+
+= the update information's signature isn't readable
+> アップデート情報の署名を読めません
+
+= the update information's signature is wrong: it was not made by this program's publisher, or it was changed after signing
+> アップデート情報の署名が正しくありません: このプログラムの配布元が作ったものではないか、署名後に変更されています
+
+= the update information is in a newer format: this version can't read it (download the new version by hand)
+> アップデート情報が新しい形式です: このバージョンでは読めません(新しいバージョンを手動でダウンロードしてください)
+
+= the update information is missing something (product, version)
+> アップデート情報に足りないものがあります(product、version)
+
+= the update information is for another program (%s)
+> アップデート情報は別のプログラム用です(%s)
+
+= the update information's version isn't readable: %s
+> アップデート情報のバージョンを読めません: %s
+
+= the update information's list of systems isn't readable
+> アップデート情報のシステム一覧を読めません
+
+= the update information's entry for %s isn't readable
+> アップデート情報の %s の項目を読めません
+
+= the update information is missing something (url, sha256)
+> アップデート情報に足りないものがあります(url、sha256)
+
+= the update information's SHA-256 isn't readable
+> アップデート情報のSHA-256を読めません
+
+= the update information's package size isn't usable
+> アップデート情報のパッケージサイズが使えません
+
+= the update information's download address isn't usable
+> アップデート情報のダウンロード先アドレスが使えません
+
+= the downloaded package isn't there
+> ダウンロードしたパッケージがありません
+
+= the downloaded package couldn't be read
+> ダウンロードしたパッケージを読めませんでした
+
+= the package is damaged (it ends inside the file list)
+> パッケージが壊れています(ファイル一覧の途中で終わっています)
+
+= the package is damaged (a file header doesn't add up)
+> パッケージが壊れています(ファイルヘッダーが合いません)
+
+= the package holds an oversized header
+> パッケージに大きすぎるヘッダーがあります
+
+= the package is damaged
+> パッケージが壊れています
+
+= the package holds something that isn't a file, folder or link: %s
+> パッケージに、ファイル、フォルダ、リンクのどれでもないものがあります: %s
+
+= the package is damaged (its checksum doesn't fit)
+> パッケージが壊れています(チェックサムが合いません)
+
+= the package holds a link, which this system doesn't take: %s
+> パッケージにリンクがありますが、このシステムでは扱えません: %s
+
+= the package holds a link that isn't allowed: %s
+> パッケージに許可されないリンクがあります: %s
+
+= the package holds a link that leaves its folder: %s
+> パッケージに、フォルダの外へ出るリンクがあります: %s
+
+= a link couldn't be made: %s (%s)
+> リンクを作れませんでした: %s(%s)
+
+= Start menu
+> スタートメニュー
+
+= applications menu
+> アプリケーションメニュー
+
+= the recycle bin
+> ごみ箱
+
+= the trash
+> ゴミ箱
+
+= Windows user name
+> Windowsのユーザー名
+
+= user name
+> ユーザー名
+
+= Crash
+> クラッシュ
+
+= Stopped
+> 停止
+
+= Stuck
+> フリーズ
+
+= F10 report
+> F10レポート
+
+= The game crashed, and made this report by itself.
+> ゲームがクラッシュし、このレポートを自動で作りました。
+
+= The game stopped itself because something went wrong, and made this report.
+> 何か問題が起きたためゲームが自分で止まり、このレポートを作りました。
+
+= The game stopped moving (it hung), and made this report by itself.
+> ゲームが動かなくなり(ハングアップ)、このレポートを自動で作りました。
+
+= You pressed F10 in the game.
+> ゲーム中にF10を押しました。
+
+= Disc
+> ディスク
+
+= Extra assets
+> 追加アセット
+
+= Preset
+> プリセット
+
+= Settings
+> せってい
+
+= Controls
+> 操作
+
+= Mods
+> MOD
+
+= Save
+> セーブ
+
+= Reports
+> レポート
+
+= settings.ini has "%s", which this version doesn't know (kept as it is)
+> settings.ini に、このバージョンが知らない "%s" があります(そのまま残します)
+
+= Your settings couldn't be saved to %s.
+> 設定を %s に保存できませんでした。
+
+= This file name can't be used: %s
+> このファイル名は使えません: %s
+
+= Drawing more icons and backgrounds from the game's own 3D models (about a minute; once for this disc)...
+> ゲームの3Dモデルから、さらにアイコンと背景を描いています(約1分。このディスクで1回だけ)...
+
+= No icon could be made from this disc.
+> このディスクからアイコンを作れませんでした。
+
+= No icon could be made from this disc: %s
+> このディスクからアイコンを作れませんでした: %s
+
+= The icons couldn't be saved in %s.
+> アイコンを %s に保存できませんでした。
+
+= %s (rendered)
+> %s(描画)
+
+= %s (3D render)
+> %s(3D描画)
+
+= Made from your disc, only on this PC: %s
+> あなたのディスクから、このPC上だけで作成: %s
+
+= The system didn't say where your %s is.
+> システムから %s の場所を教えてもらえませんでした。
+
+= desktop
+> デスクトップ
+
+= Choose your disc image first (Disc page).
+> 先にディスクイメージを選んでください(ディスクページ)。
+
+= The disc is being checked...
+> ディスクを確認しています...
+
+= This disc image can't be used (see the Disc page).
+> このディスクイメージは使えません(ディスクページを見てください)。
+
+= New texture pack found: %s (added, switched on: it only changes pictures)
+> 新しいテクスチャパックが見つかりました: %s(追加し、オンにしました。絵だけを変えます)
+
+= New mod found: %s (added, switched off)
+> 新しいMODが見つかりました: %s(追加し、オフにしました)
+
+= The mod list couldn't be saved to %s.
+> MODリストを %s に保存できませんでした。
+
+= The game couldn't be started (%s, %s). Is it next to the launcher?
+> ゲームを起動できませんでした(%s、%s)。ランチャーの隣にありますか?
+
+= Couldn't check for updates: %s.
+> アップデートを確認できませんでした: %s。
+
+= The update information was refused: %s.
+> アップデート情報が拒否されました: %s。
+
+= You have the newest version (%s).
+> 最新のバージョン(%s)です。
+
+= Version %s is available (you have %s).
+> バージョン %s があります(現在 %s)。
+
+= Downloading version %s...
+> バージョン %s をダウンロードしています...
+
+= Checking and unpacking version %s...
+> バージョン %s を確認して展開しています...
+
+= Version %s is ready. It is put in place when you restart %s (the app is replaced after this window closes, then opens again).
+> バージョン %s の準備ができました。%s を再起動すると配置されます(このウィンドウを閉じたあとにアプリが置き換えられ、また開きます)。
+
+= Version %s is installed. It starts the next time you open %s.
+> バージョン %s をインストールしました。次に %s を開いたときに始まります。
+
+= The update was cancelled. Nothing was changed: your version (%s) stays as it is.
+> アップデートはキャンセルされました。何も変わっていません: お使いのバージョン(%s)のままです。
+
+= The update couldn't be installed: %s. Nothing was changed: your version (%s) stays as it is.
+> アップデートをインストールできませんでした: %s。何も変わっていません: お使いのバージョン(%s)のままです。
+
+= The waiting update (version %s) was set aside: version %s stays.
+> 待機中のアップデート(バージョン %s)を取りやめました: バージョン %s のままです。
+
+= Version %s is put in place when you restart %s (version %s is kept).
+> バージョン %s は %s を再起動すると配置されます(バージョン %s は残ります)。
+
+= Version %s starts the next time you open %s (version %s stays installed).
+> バージョン %s は次に %s を開いたときに始まります(バージョン %s もインストールされたままです)。
+
+= The restart didn't work: %s. Close this window and open %s again.
+> 再起動できませんでした: %s。このウィンドウを閉じて、%s をもう一度開いてください。
+
+= Nothing is waiting to be put in place.
+> 配置待ちのものはありません。
+
+= Please close this window and open %s again (the restart didn't work: %s).
+> このウィンドウを閉じて、%s をもう一度開いてください(再起動できませんでした: %s)。
+
+= Version and updates
+> バージョンとアップデート
+
+= Version %s
+> バージョン %s
+
+= (in the folder %s)
+> (フォルダ %s の中)
+
+= Check for updates when the launcher starts
+> ランチャーの起動時にアップデートを確認する
+
+= It only looks. If there is a newer version, the launcher shows what's new and asks you first: nothing is ever downloaded or installed without your yes. Your saves, settings and mods are never touched by an update.
+> 確認するだけです。新しいバージョンがあれば、新しい内容を表示して先にたずねます。あなたが「はい」と言うまで、何もダウンロードもインストールもされません。セーブ、設定、MODはアップデートで変更されません。
+
+= Checking...
+> 確認中...
+
+= Check now
+> 今すぐ確認
+
+= See version %s...
+> バージョン %s を見る...
+
+= Version %s starts the next time you open %s.
+> バージョン %s は次に %s を開いたときに始まります。
+
+= Restart now
+> 今すぐ再起動
+
+= Use version %s again...
+> バージョン %s をもう一度使う...
+
+= Go back to the previous version (%s)...
+> 前のバージョン(%s)に戻す...
+
+= How do you want to play?
+> どのように遊びますか?
+
+= Exactly the GameCube game: same speed, same rules, same random numbers.
+> ゲームキューブのゲームそのまま: 同じ速さ、同じルール、同じ乱数。
+
+= Not available in Original:
+> オリジナルでは使えないもの:
+
+= The New Game setup screen
+> ニューゲーム設定画面
+
+= Randomizer
+> ランダマイザー
+
+= Challenge runs: Nuzlocke, level caps, no items in battle
+> チャレンジプレイ: ナズルロック、レベル上限、戦闘中どうぐ禁止
+
+= Gen 4 Pokemon and rules, Fairy type, shiny odds
+> 第4世代のポケモンとルール、フェアリータイプ、色違いの確率
+
+= Speed-ups: fast-forward, faster text, faster loading and saving
+> 高速化: 早送り、速いテキスト、速い読みこみとセーブ
+
+= Widescreen, a sharper picture, photo mode, HD texture packs
+> ワイドスクリーン、くっきりした絵、フォトモード、HDテクスチャパック
+
+= Allowed in Original too: button remapping, volumes, full screen and the speedrun timer.
+> オリジナルでも使えるもの: ボタン割り当て、音量、フルスクリーン、スピードランタイマー。
+
+= Online battles and online trading work in Original too; trading in a Faithful save only receives Pokemon the GameCube game could have.
+> オンライン対戦とオンライン交換はオリジナルでも使えます。忠実なセーブでの交換では、ゲームキューブのゲームで持てたポケモンだけを受け取ります。
+
+= Enhanced (recommended for most players)
+> 強化(ほとんどの方におすすめ)
+
+= The GameCube game plus the PC port's improvements:
+> ゲームキューブのゲームに、PC版の改善を加えたもの:
+
+= A sharper picture that fills your window, widescreen, even frame pacing
+> ウィンドウいっぱいのくっきりした絵、ワイドスクリーン、均等なフレームペーシング
+
+= Shorter waits: faster text, loading and saving, and a fast-forward key
+> 短い待ち時間: 速いテキスト、読みこみ、セーブ、そして早送りキー
+
+= TMs listed with their move, your controller's own button pictures, photo mode, a pause when the window is in the background
+> わざ名つきのわざマシン、お使いのコントローラーのボタンの絵、フォトモード、ウィンドウが背面のときの一時停止
+
+= The New Game setup lets you choose randomizer, challenge runs, Gen 4 Pokemon and rules, Fairy type, shiny odds and more for each new save.
+> ニューゲーム設定で、新しいセーブごとに、ランダマイザー、チャレンジプレイ、第4世代のポケモンとルール、フェアリータイプ、色違いの確率などを選べます。
+
+= The game's own rules stay as they were until you choose otherwise.
+> 選ばないかぎり、ゲーム本来のルールはそのままです。
+
+= Online battles and online trading are available here too.
+> オンライン対戦とオンライン交換もここで使えます。
+
+= You can change this any time on the Preset page. Each save remembers how it was started: when it differs from your choice, the game asks at Continue whether to keep it or switch.
+> これはプリセットページでいつでも変えられます。各セーブは始めたときの設定を覚えていて、選んだ設定と違うときは、「つづきから」で、そのままにするか切りかえるかをたずねます。
+
+= If you close this window without choosing, Enhanced is used and you are asked again next time.
+> 選ばずにこのウィンドウを閉じると、強化が使われ、次回もまたたずねます。
+
+= Play Original
+> オリジナルで遊ぶ
+
+= Play Enhanced
+> 強化で遊ぶ
+
+= Updates
+> アップデート
+
+= Check for updates when the launcher starts?
+> ランチャーの起動時にアップデートを確認しますか?
+
+= If you say yes, the launcher looks for a newer version of %s each time it starts. It only looks: when there is one, it shows what's new and asks you before downloading anything. If you say no, it never goes online by itself.
+> 「はい」を選ぶと、ランチャーは起動するたびに %s の新しいバージョンを探します。探すだけです。あれば新しい内容を表示し、ダウンロードの前にたずねます。「いいえ」を選ぶと、自分でオンラインに接続することはありません。
+
+= You can change this any time on the Disc page ("Version and updates"), where "Check now" also works.
+> これはディスクページ(「バージョンとアップデート」)でいつでも変えられ、そこでは「今すぐ確認」も使えます。
+
+= Yes, check at start
+> はい、起動時に確認する
+
+= No
+> いいえ
+
+= Update
+> アップデート
+
+= Version %s is available
+> バージョン %s があります
+
+= You have version %s. Download: %s.
+> 現在のバージョンは %s です。ダウンロード: %s。
+
+= You have version %s. Published %s. Download: %s.
+> 現在のバージョンは %s です。公開日 %s。ダウンロード: %s。
+
+= What's new:
+> 新しい内容:
+
+= You chose to skip this version earlier.
+> 以前、このバージョンをスキップしました。
+
+= The new app waits beside the one you have and is put in place when you restart; the version you have is kept for "Go back". Your saves, settings and mods are not touched.
+> 新しいアプリは今のアプリの隣で待機し、再起動すると配置されます。今のバージョンは「戻る」用に残ります。セーブ、設定、MODは変更されません。
+
+= Installed next to the version you have, which stays for "Go back". Your saves, settings and mods are not touched.
+> 今のバージョンの隣にインストールされ、今のバージョンは「戻る」用に残ります。セーブ、設定、MODは変更されません。
+
+= Update now
+> 今すぐアップデート
+
+= Not now
+> あとで
+
+= Skip this version
+> このバージョンをスキップ
+
+= Updating to version %s
+> バージョン %s にアップデート中
+
+= %s of %s
+> %s / %s
+
+= Cancel
+> キャンセル
+
+= Update installed
+> アップデートをインストールしました
+
+= The update was not installed
+> アップデートはインストールされませんでした
+
+= Later
+> あとで
+
+= OK
+> OK
+
+= Version
+> バージョン
+
+= Start version %s next time?
+> 次回はバージョン %s で始めますか?
+
+= Version %s starts the next time you open %s. Version %s stays installed, so you can switch back the same way. Your saves, settings and mods stay as they are.
+> バージョン %s は次に %s を開いたときに始まります。バージョン %s もインストールされたままなので、同じ方法で切りかえて戻せます。セーブ、設定、MODはそのままです。
+
+= Use version %s
+> バージョン %s を使う
+
+= That didn't work: %s.
+> うまくいきませんでした: %s。
+
+= %s preset
+> %s プリセット
+
+= still looking at what is installed
+> インストールされているものをまだ調べています
+
+= the converter isn't next to the game
+> コンバーターがゲームの隣にありません
+
+= choose your own game disc on the Disc page first
+> 先にディスクページで、ご自分のゲームディスクを選んでください
+
+= choose the %s disc first
+> 先に %s のディスクを選んでください
+
+= that disc isn't the right game (or is still being looked at)
+> そのディスクは正しいゲームではありません(またはまだ調べています)
+
+= this is a test run on the player's own files, which it never changes
+> これはプレイヤー自身のファイルでのテスト実行で、ファイルは変更されません
+
+= Can't start: %s.
+> 開始できません: %s。
+
+= Discs of other games that this port can borrow assets from. Your discs are only read; what is made from them is made on this PC, kept in your own data folder (extra_assets) and never sent anywhere.
+> このポートがアセットを借りられる、ほかのゲームのディスクです。ディスクは読むだけで、そこから作られたものは、このPC上で、あなたのデータフォルダ(extra_assets)に作られ、どこにも送られません。
+
+= Looking...
+> 調べています...
+
+= From a %s disc. %s
+> %s のディスクから。%s
+
+= %s disc image
+> %s のディスクイメージ
+
+= Choose disc...
+> ディスクを選ぶ...
+
+= Disc images (ISO, RVZ, WBFS, CISO, GCZ...)
+> ディスクイメージ(ISO、RVZ、WBFS、CISO、GCZ...)
+
+= All files
+> すべてのファイル
+
+= Looking at the disc image...
+> ディスクイメージを調べています...
+
+= No disc chosen yet.
+> まだディスクが選ばれていません。
+
+= Needs your own game disc (Disc page) and this disc.
+> あなた自身のゲームディスク(ディスクページ)と、このディスクが必要です。
+
+= starting...
+> 開始しています...
+
+= This can take a while. The window stays usable; Cancel stops it and leaves nothing half-made.
+> 時間がかかることがあります。ウィンドウは使えます。キャンセルすると止まり、作りかけのものは残りません。
+
+= Done (%s). %s
+> 完了(%s)。%s
+
+= Done: %llu made (%s).
+> 完了: %llu 個作成(%s)。
+
+= %d could not be converted (see conversion_log.txt in the folder).
+> %d 個を変換できませんでした(フォルダの conversion_log.txt を見てください)。
+
+= Done: %llu made, %llu kept as the game's own (%s). Turn it on with the setting below.
+> 完了: %llu 個作成、%llu 個はゲーム本来のものを維持(%s)。下の設定でオンにしてください。
+
+= Use them in the game (setting: %s)
+> ゲームで使う(設定: %s)
+
+= The same switch is in Settings and in the game's SETTINGS page. It is an improvement, so it is not part of Original: turning it on here makes the preset Custom. The game reads it when it starts.
+> 同じスイッチが、せっていと、ゲームのせっていページにもあります。これは改善なのでオリジナルには含まれず、ここでオンにするとプリセットがカスタムになります。ゲームは起動時にこれを読みます。
+
+= Look again
+> もう一度調べる
+
+= HD texture packs
+> HDテクスチャパック
+
+= Texture packs made for Dolphin work here with the same file names. Each pack in %s is listed on the Mods page like a mod: on from the start (it only changes pictures), and the order there says which pack wins when two replace the same picture. A pack that lies in a folder of its own inside that folder is one entry; a mod can also carry a "textures" folder. The plain GameCube game (the Original preset) never uses a pack. No pictures from the game are shipped with the port.
+> Dolphin用のテクスチャパックが、同じファイル名でここでも使えます。%s の中の各パックは、MODページにMODのように一覧表示されます: 最初からオンで(絵だけを変えます)、2つのパックが同じ絵を置き換えるときは、そこでの順番で勝つ方が決まります。そのフォルダの中の専用フォルダにあるパックは1つの項目です。MODに "textures" フォルダを入れることもできます。普通のゲームキューブのゲーム(オリジナルのプリセット)は、パックを使いません。ゲームの絵はポートに同梱されていません。
+
+= Open the textures folder
+> テクスチャフォルダを開く
+
+= Go to the Mods page
+> MODページへ
+
+= More discs can be added to this page later.
+> このページには、あとでほかのディスクを追加できます。
+
+= Your disc
+> あなたのディスク
+
+= Disc image file
+> ディスクイメージファイル
+
+= Check again
+> もう一度確認
+
+= Choose...
+> 選ぶ...
+
+= Disc images (ISO, RVZ, GCM, WIA, GCZ, CISO, WBFS)
+> ディスクイメージ(ISO、RVZ、GCM、WIA、GCZ、CISO、WBFS)
+
+= No disc chosen yet
+> まだディスクが選ばれていません
+
+= Click "Choose..." and pick your disc image file. The launcher remembers it for next time.
+> 「選ぶ...」をクリックして、ディスクイメージファイルを選んでください。ランチャーは次回のために覚えておきます。
+
+= Checking your disc image...
+> ディスクイメージを確認しています...
+
+= The first time a disc image is used, all of it is read to make sure it is complete and unchanged. This takes a few seconds; after that it is remembered.
+> ディスクイメージを初めて使うとき、完全で変更されていないことを確かめるため、全体を読みます。数秒かかります。そのあとは記憶されます。
+
+= Ready to play
+> プレイできます
+
+= Ready to play (content not compared)
+> プレイできます(内容は比較していません)
+
+= Can be played, but read this first
+> プレイできますが、先にこれをお読みください
+
+= This disc image can't be used
+> このディスクイメージは使えません
+
+= Go to the Extra assets page
+> 追加アセットページへ
+
+= The game starts as soon as this is done.
+> これが終わるとすぐにゲームが始まります。
+
+= The game never changes your disc image: mods and settings are kept separately.
+> ゲームがあなたのディスクイメージを変更することはありません。MODと設定は別に保存されます。
+
+= Icon, background and shortcuts
+> アイコン、背景、ショートカット
+
+= the program's own icon
+> プログラム本来のアイコン
+
+= Icon of the windows, the taskbar and the shortcuts:
+> ウィンドウ、タスクバー、ショートカットのアイコン:
+
+= Choosing another icon for the windows and shortcuts isn't there on this system yet: they show the program's own.
+> ウィンドウとショートカットのアイコン選択は、このシステムではまだ使えません。プログラム本来のものが表示されます。
+
+= In use: %s
+> 使用中: %s
+
+= Launcher background:
+> ランチャーの背景:
+
+= None (plain)
+> なし(無地)
+
+= None
+> なし
+
+= Once your disc has been checked, more icons are made from its pictures (only on this PC, in your data folder).
+> ディスクの確認が終わると、その絵からさらにアイコンが作られます(このPC上だけ、あなたのデータフォルダに)。
+
+= Once your disc has been checked, launcher backgrounds are made from its pictures (only on this PC, in your data folder).
+> ディスクの確認が終わると、その絵からランチャーの背景が作られます(このPC上だけ、あなたのデータフォルダに)。
+
+= There is no shortcut to make on this system: drag the Pokemon XD app to the Dock, or keep it in Applications.
+> このシステムでは作れるショートカットがありません: Pokemon XDアプリをDockにドラッグするか、アプリケーションに置いたままにしてください。
+
+= Create %s shortcut
+> %s のショートカットを作る
+
+= Create desktop shortcut
+> デスクトップのショートカットを作る
+
+= Couldn't open it
+> 開けませんでした
+
+= Your system didn't open this by itself. It is here:
+> システムが自動で開きませんでした。ここにあります:
+
+= Copy the path
+> パスをコピー
+
+= Pick a preset. You can change single settings later on the Settings page.
+> プリセットを選んでください。個々の設定はあとでせっていページで変えられます。
+
+= What's the difference?
+> ちがいは?
+
+= Preset: %s. Changing a game setting switches to Custom; volumes, window and controls never do.
+> プリセット: %s。ゲーム設定を変えるとカスタムに切りかわります。音量、ウィンドウ、操作では切りかわりません。
+
+= Preset: %s. Settings marked "Changed" are not as on the GameCube.
+> プリセット: %s。「変更」と書かれた設定は、ゲームキューブとは違います。
+
+= Back to %s on this page
+> このページの %s に戻る
+
+= Notes about your settings file
+> 設定ファイルについてのメモ
+
+= Which PC controller and which keys play each of the four GameCube controllers. Controls are yours in every preset, Original too: they change how you press the buttons, never what the game does with them.
+> ゲームキューブの4つのコントローラーを、どのPCコントローラーとどのキーで操作するか。操作はどのプリセット(オリジナルも)でもあなたのものです: ボタンの押しかたが変わるだけで、ゲームがそれをどう扱うかは変わりません。
+
+= Controller %s
+> コントローラー %s
+
+= Buttons
+> ボタン
+
+= For every controller
+> すべてのコントローラー共通
+
+= Mods change the game's files (on top of your disc; the disc itself is never changed). A mod is only used when it is switched on here. Further down the list wins when two mods change the same thing.
+> MODはゲームのファイルを変更します(ディスクの上に重ねます。ディスク自体は変更されません)。MODはここでオンにしたときだけ使われます。2つのMODが同じものを変更するときは、リストの下のほうが優先されます。
+
+= Mod list:
+> MODリスト:
+
+= New list...
+> 新しいリスト...
+
+= Open the mods folder
+> MODフォルダを開く
+
+= New mod list
+> 新しいMODリスト
+
+= A name for the new list (for example "randomizer run"):
+> 新しいリストの名前(例: "ランダマイザー走")
+
+= Make it
+> 作る
+
+= No mods yet.
+> MODはまだありません。
+
+= To add a mod, unpack it into its own folder inside the mods folder ("Open the mods folder"), then click "Look again". Mods: %s
+> MODを追加するには、MODフォルダ(「MODフォルダを開く」)の中に専用フォルダを作って展開し、「もう一度調べる」をクリックしてください。MOD: %s
+
+= Mod
+> MOD
+
+= Version, made by
+> バージョン、作者
+
+= Order
+> 順番
+
+= Applies: %s (it says %s, but %s)
+> 適用: %s(%s とありますが、%s)
+
+= Applies: %s (chosen at New Game)
+> 適用: %s(ニューゲームで選択)
+
+= Applies: %s
+> 適用: %s
+
+= Made for another game or game version: it won't be used with this disc.
+> 別のゲームまたはバージョン用です: このディスクでは使われません。
+
+= The game checks the mods again when it starts (what they need, what they clash with) and tells you about any problem.
+> ゲームは起動時にMODをもう一度確認し(必要なもの、ぶつかるもの)、問題があれば知らせます。
+
+= Your saves
+> あなたのセーブ
+
+= Your save
+> あなたのセーブ
+
+= Your saves: which one the game loads, what is in each, and the backups the game keeps of it.
+> あなたのセーブ: ゲームがどれを読みこむか、それぞれの中身、ゲームが作るバックアップ。
+
+= What is saved on the game's memory card. Only shown here, never changed.
+> ゲームのメモリーカードに保存されている内容です。ここでは表示だけで、変更はできません。
+
+= What is saved on the game's memory card, and the backups the game keeps of it.
+> ゲームのメモリーカードに保存されている内容と、ゲームが作るバックアップです。
+
+= Close the game first: it has the memory card open.
+> 先にゲームを閉じてください: メモリーカードが開かれています。
+
+= Restored the backup of %s. The save you had before is in the list too.
+> %s のバックアップを復元しました。それまでのセーブも一覧にあります。
+
+= This card's folder isn't known.
+> このカードのフォルダがわかりません。
+
+= Choose a backup first.
+> 先にバックアップを選んでください。
+
+= Backups
+> バックアップ
+
+= None yet: the first one is made the next time the game saves over this save.
+> まだありません: このセーブに上書きするとき、次回に最初のものが作られます。
+
+= %d kept, newest %s
+> %d 件保持、最新 %s
+
+= Hide backups
+> バックアップを隠す
+
+= Show backups
+> バックアップを表示
+
+= Each time the game saves, it first keeps a copy of the save as it was (only when it changed). The newest %d are kept. Restore puts one back on the memory card.
+> ゲームはセーブするたびに、先に元のセーブのコピーを残します(変更があったときだけ)。最新の %d 件が保持されます。復元すると、1つがメモリーカードに戻ります。
+
+= Open folder
+> フォルダを開く
+
+= No backups yet: the first one is made the next time the game saves over an existing save.
+> まだバックアップがありません: 既存のセーブに上書きするとき、次回に最初のものが作られます。
+
+= Backed up
+> バックアップ日時
+
+= Card
+> カード
+
+= Size
+> サイズ
+
+= (saved %s)
+> (セーブ %s)
+
+= Restore...
+> 復元...
+
+= Restore this backup?
+> このバックアップを復元しますか?
+
+= Restore the backup of %s?
+> %s のバックアップを復元しますか?
+
+= This replaces your current save; the current one is backed up first.
+> 今のセーブが置きかえられます。今のセーブは先にバックアップされます。
+
+= Restore it
+> 復元する
+
+= Close the game to restore a backup (it has the memory card open).
+> バックアップを復元するにはゲームを閉じてください(メモリーカードが開かれています)。
+
+= Backups folder: %s
+> バックアップフォルダ: %s
+
+= Test run on the player's own files: the saves are not changed.
+> プレイヤー自身のファイルでのテスト実行: セーブは変更されません。
+
+= There is no such save.
+> そのセーブはありません。
+
+= "%s" is the save the game loads now.
+> "%s" は、今ゲームが読みこむセーブです。
+
+= Made "%s": an empty save. The game offers New Game when it starts.
+> "%s" を作りました: 空のセーブです。ゲームは起動時に「はじめから」を出します。
+
+= Open a save first (click its row).
+> 先にセーブを開いてください(その行をクリック)。
+
+= "%s" is called "%s" now.
+> "%s" は今 "%s" という名前です。
+
+= Made "%s": a copy of "%s" (without its backups). "%s" is still the one the game loads.
+> "%s" を作りました: "%s" のコピーです(バックアップなし)。ゲームが読みこむのは今も "%s" です。
+
+= Can't move %s away (%s).
+> %s をどかせません(%s)。
+
+= "%s" is empty now: its save, setup and backups went to %s.
+> "%s" は空になりました: そのセーブ、設定、バックアップは %s に移りました。
+
+= Deleted "%s" (it is in %s). "%s" is the save the game loads now.
+> "%s" を削除しました(%s にあります)。ゲームが読みこむのは今 "%s" です。
+
+= Deleted "%s" (it is in %s). "%s" is the save the game loads, as before.
+> "%s" を削除しました(%s にあります)。ゲームが読みこむのは、これまでどおり "%s" です。
+
+= This file can't be imported.
+> このファイルは取りこめません。
+
+= Imported as "%s", the save the game loads now. The file you chose was only copied: your other saves were not touched.
+> "%s" として取りこみ、今ゲームが読みこむセーブになりました。選んだファイルはコピーされただけで、ほかのセーブは変更されていません。
+
+= Saved a copy of "%s" as %s.
+> "%s" のコピーを %s に保存しました。
+
+= Saves
+> セーブ
+
+= Keep several saves side by side. The circle marks the one the game loads (CONTINUE, or New Game when it is empty). Click a save to see what is in it.
+> 複数のセーブを並べて保持できます。丸印がゲームが読みこむものです(「つづきから」、空なら「はじめから」)。セーブをクリックすると中身が見られます。
+
+= New...
+> 新規...
+
+= Import from Dolphin / GameCube...
+> Dolphin / ゲームキューブから取りこむ...
+
+= Trainer
+> トレーナー
+
+= Play time
+> プレイ時間
+
+= Playthrough
+> プレイ
+
+= The game loads this save.
+> ゲームはこのセーブを読みこみます。
+
+= Have the game load this save.
+> ゲームにこのセーブを読みこませる
+
+= empty
+> 空
+
+= New save
+> 新しいセーブ
+
+= Rename this save
+> このセーブの名前を変える
+
+= A new, empty save. What should it be called?
+> 新しい空のセーブです。名前は何にしますか?
+
+= The save's new name:
+> セーブの新しい名前:
+
+= The game then starts with New Game. Your other saves stay as they are.
+> ゲームは「はじめから」で始まります。ほかのセーブはそのままです。
+
+= Rename
+> 名前を変える
+
+= Delete this save?
+> このセーブを削除しますか?
+
+= Delete "%s"?
+> "%s" を削除しますか?
+
+= Its save, its playthrough setup and its backups go to %s (you can take them back out of it).
+> そのセーブ、プレイの設定、バックアップは %s に移ります(そこから取り出せます)。
+
+= This is the first save: its place in the list stays, empty.
+> これは最初のセーブです: 一覧での位置は残り、空になります。
+
+= It is the save the game loads: after this the game loads the first save.
+> ゲームが読みこむセーブです: 削除後は最初のセーブを読みこみます。
+
+= Delete it
+> 削除する
+
+= Keep it
+> 残す
+
+= The game does not load this save (its circle is not ticked).
+> ゲームはこのセーブを読みこみません(丸印がついていません)。
+
+= Reading the memory card...
+> メモリーカードを読んでいます...
+
+= No save yet: the game offers New Game.
+> まだセーブがありません: ゲームは「はじめから」を出します。
+
+= Folder: %s
+> フォルダ: %s
+
+= Memory card: %s
+> メモリーカード: %s
+
+= Rename...
+> 名前を変える...
+
+= Duplicate
+> 複製
+
+= Export...
+> 書き出し...
+
+= GameCube save files
+> ゲームキューブのセーブファイル
+
+= Delete...
+> 削除...
+
+= Party
+> てもち
+
+= No Pokemon in the party yet.
+> てもちにポケモンがまだいません。
+
+= Copy code
+> コードをコピー
+
+= Show spoilers...
+> ネタバレを見る...
+
+= Give the code to a friend: on the New Game setup screen they choose "Use a friend's code" and get the same changes.
+> コードを友だちに渡してください: ニューゲーム設定画面で「友だちのコードを使う」を選ぶと、同じ変更が得られます。
+
+= Show spoilers?
+> ネタバレを見ますか?
+
+= This shows everything the randomizer changed in this playthrough.
+> このプレイでランダマイザーが変えたものがすべて表示されます。
+
+= Which Pokemon, trainers and items are where: it spoils the surprises.
+> どのポケモン、トレーナー、どうぐがどこにあるか: 楽しみがなくなります。
+
+= Show them
+> 見る
+
+= Copied %s: paste it to your friend.
+> %s をコピーしました: 友だちに貼りつけて送ってください。
+
+= The code could not be copied: %s
+> コードをコピーできませんでした: %s
+
+= Choose a report first.
+> 先にレポートを選んでください。
+
+= Exported to %s. You can send that file to whoever asked for it.
+> %s に書き出しました。そのファイルを、求めた人に送れます。
+
+= Deleted the report of %s.
+> %s のレポートを削除しました。
+
+= There is no play session to save.
+> 保存するプレイセッションがありません。
+
+= Saved %s. You can send that file to whoever asked for it.
+> %s を保存しました。そのファイルを、求めた人に送れます。
+
+= Save a play session
+> プレイセッションを保存
+
+= For when the game stopped, froze or was closed and no report was made. This makes one .zip file of a play session: what the game program wrote about itself (its log), your button presses, your memory card at the start and after each save, and your settings and mod list. Nothing is sent: you save the file and give it to the developer yourself.
+> ゲームが止まったり、フリーズしたり、閉じられたのにレポートが作られなかったとき用です。プレイセッション1回分を、1つの.zipファイルにします: ゲームプログラムが自分について書いたもの(ログ)、ボタン操作、開始時と各セーブ後のメモリーカード、設定とMODリスト。何も送信されません: ファイルを保存して、開発者に自分で渡してください。
+
+= No play sessions yet.
+> まだプレイセッションがありません。
+
+= A session is kept each time you play the game (the newest few are kept), so the time you play next can be saved here.
+> ゲームを遊ぶたびにセッションが残ります(新しい数件が保持されます)。次に遊んだ時間をここに保存できます。
+
+= Started
+> 開始
+
+= Played
+> プレイ時間
+
+= How it ended
+> 終わりかた
+
+= the game didn't start playing
+> ゲームのプレイが始まりませんでした
+
+= closed normally
+> 正常に終了
+
+= not closed normally (stopped, crashed or killed; or still running)
+> 正常に終了せず(停止、クラッシュ、強制終了。または実行中)
+
+= very short; %s
+> とても短い; %s
+
+= %s, %d report
+> %s、レポート %d 件
+
+= %s, %d reports
+> %s、レポート %d 件
+
+= Hide my %s
+> %s を隠す
+
+= Your %s appears in folder names in the log, the recording and the settings (%s). With this on, the saved copy says %%USERNAME%% instead.
+> あなたの %s が、ログ、記録、設定内のフォルダ名に出てきます(%s)。オンにすると、保存したコピーでは %%USERNAME%% になります。
+
+= A report was made during this session: it is included (without a crash dump; to add that, use Export on the report in the list).
+> このセッション中にレポートが作られました: 含まれています(クラッシュダンプなし。追加するには、一覧のレポートで「書き出し」を使ってください)。
+
+= Save...
+> 保存...
+
+= Zip files
+> Zipファイル
+
+= Close
+> 閉じる
+
+= What's inside (%s)
+> 中身(%s)
+
+= File
+> ファイル
+
+= What it is
+> 内容
+
+= small
+> 小
+
+= Reports help find problems in the game. They stay on this PC, in their folder: nothing is ever sent anywhere. To share one, export it and send the file yourself.
+> レポートは、ゲームの問題を見つける助けになります。レポートはこのPCのフォルダにあり、どこにも送信されません。共有するには、書き出して、ファイルを自分で送ってください。
+
+= Save my last play session...
+> 最後のプレイセッションを保存...
+
+= The game stopped or froze and made no report? This saves the last time you played as one file to give to the developer.
+> ゲームが止まったりフリーズしたのにレポートが作られませんでしたか? 最後に遊んだときを、開発者に渡す1つのファイルとして保存します。
+
+= No reports yet
+> まだレポートがありません
+
+= If something looks wrong while you play, press F10 in the game window. The game then saves a report: a picture of the game, your recent button presses and what the game program wrote about itself, so a developer can see and replay that moment.
+> プレイ中におかしいと思ったら、ゲームウィンドウでF10を押してください。ゲームがレポートを保存します: ゲームの画面、直前のボタン操作、ゲームプログラムが自分について書いたもの。開発者がその瞬間を見て再現できます。
+
+= If the game crashes or stops responding, it makes a report by itself. Reports appear here.
+> ゲームがクラッシュしたり応答しなくなると、自動でレポートが作られます。レポートはここに表示されます。
+
+= moment unknown
+> 時刻不明
+
+= Choose a report on the left.
+> 左のレポートを選んでください。
+
+= What happened: %s
+> 何が起きたか: %s
+
+= Where in the game: %s
+> ゲーム内の場所: %s
+
+= Export
+> 書き出し
+
+= Makes one .zip file of this report, with a name and in a place you choose, to send to a developer yourself. The report here stays as it is.
+> このレポートを1つの.zipファイルにします(名前と場所は自分で選べます)。開発者に自分で送ってください。ここのレポートはそのまま残ります。
+
+= Your %s appears in folder names in the log, the settings and the report's info (%s). With this on, the exported copy says %%USERNAME%% instead.
+> あなたの %s が、ログ、設定、レポート情報内のフォルダ名に出てきます(%s)。オンにすると、書き出したコピーでは %%USERNAME%% になります。
+
+= Include the crash dump
+> クラッシュダンプを含める
+
+= A crash dump is a snapshot of the game program's memory when it crashed. It helps a lot in finding the cause, but it may contain bits of whatever was in memory (your user name too), so it is left out unless you tick this.
+> クラッシュダンプは、クラッシュしたときのゲームプログラムのメモリの記録です。原因を見つけるのにとても役立ちますが、メモリにあったもの(ユーザー名も)の一部が入っていることがあるため、チェックしないかぎり含まれません。
+
+= This report has no crash dump (only crashes, stops and hangs make one).
+> このレポートにはクラッシュダンプがありません(クラッシュ、停止、ハングのときだけ作られます)。
+
+= Always included: the picture of the game (the screenshot shows only the game window), the recording of your button presses, the log, your settings and mod list.
+> 常に含まれるもの: ゲームの画面(ゲームウィンドウだけが写ります)、ボタン操作の記録、ログ、設定、MODリスト。
+
+= Delete this report?
+> このレポートを削除しますか?
+
+= Delete the report of %s (%s)?
+> %s(%s)のレポートを削除しますか?
+
+= Its folder and the zip file next to it are deleted for good. Copies you exported stay.
+> そのフォルダと隣のzipファイルは完全に削除されます。書き出したコピーは残ります。
+
+= What's inside
+> 中身
+
+= The report's info.txt
+> レポートの info.txt
+
+= Play
+> プレイ
+
+= Running...
+> 実行中...
+
+= Starting...
+> 開始中...
+
+= Preparing...
+> 準備中...
+
+= DISC
+> ディスク
+
+= PRESET
+> プリセット
+
+= MODS
+> MOD
+
+= LANGUAGE
+> 言語
+
+= SAVE
+> セーブ
+
+= Keep this window open
+> このウィンドウを開いたままにする
+
+= none chosen
+> 未選択
+
+= checking...
+> 確認中...
+
+= can't be used
+> 使えません
+
+= changed or damaged
+> 変更または破損
+
+= Original: the game exactly as on the GameCube
+> オリジナル: ゲームキューブそのままのゲーム
+
+= %s: %zu setting different from the GameCube game
+> %s: ゲームキューブのゲームと違う設定 %zu 個
+
+= %s: %zu settings different from the GameCube game
+> %s: ゲームキューブのゲームと違う設定 %zu 個
+
+= none on
+> オンのものなし
+
+= %d on (list "%s")
+> %d 個オン(リスト "%s")
+
+= Use it:
+> 使う:
+
+= Start the game now
+> 今すぐゲームを始める
+
+= The game is running: close it (or use Restart now in its SETTINGS) and start it again.
+> ゲームが実行中です: 閉じて(またはそのせっていの「今すぐ再起動」を使って)、もう一度始めてください。
+
+= Next start
+> 次回の起動
+
+= Takes effect the next time the game starts.
+> 次にゲームを始めたときに有効になります。
+
+= Game text needs the European disc pack; menus added by this port are translated.
+> ゲームの文章にはヨーロッパ版ディスクのパックが必要です。このポートが追加したメニューは翻訳されています。
+
+= The game is running. Settings changed now are used the next time it starts.
+> ゲームが実行中です。今変えた設定は、次にゲームを始めたときに使われます。
+
+= Start anyway?
+> それでも始めますか?
+
+= Start anyway
+> それでも始める
+
+= Don't start
+> 始めない
+
+= The folder %s is there but its mod.json can't be read (%s).
+> フォルダ %s はありますが、その mod.json を読めません(%s)。
+
+= The folder %s holds another mod (%s).
+> フォルダ %s には別のMOD(%s)があります。
+
+= Not set up
+> 未設定
+
+= Converter missing
+> コンバーターがありません
+
+= Choose the disc below and press Make.
+> 下でディスクを選んで「作る」を押してください。
+
+= The program that makes the models isn't next to the game, so they can't be made. Reinstall the game, or get the newest version.
+> モデルを作るプログラムがゲームの隣にないため、作れません。ゲームを入れ直すか、最新バージョンを入手してください。
+
+= Out of date: make again
+> 古い: 作り直してください
+
+= The models were made by an older version of the converter (%s; now %s). They still work; make them again to get the improvements.
+> モデルは古いバージョンのコンバーター(%s、現在 %s)で作られています。まだ使えますが、作り直すと改善が得られます。
+
+= Ready: %d %s
+> 完了: %d %s
+
+= Ready: %d model
+> 完了: モデル %d 個
+
+= Ready: %d models
+> 完了: モデル %d 個
+
+= The converter isn't next to the game any more, so they can't be made again.
+> コンバーターがゲームの隣にもうないため、作り直せません。
+
+= %s: not made yet
+> %s: まだ作られていません
+
+= It is made together with the models: choose the disc below and press Make.
+> モデルといっしょに作られます: 下でディスクを選んで「作る」を押してください。
+
+= %s: out of date, make again
+> %s: 古いので作り直してください
+
+= It was made for another version of the game (pack %lld; now %d), so the game won't use it until it is made again.
+> ゲームの別のバージョン用に作られているため(パック %lld、現在 %d)、作り直すまでゲームは使いません。
+
+= It was made by an older version of the converter. It still works; make it again to get the improvements.
+> 古いバージョンのコンバーターで作られています。まだ使えますが、作り直すと改善が得られます。
+
+= %s: ready (%d species)
+> %s: 完了(%d 種)
+
+= %s: ready
+> %s: 完了
+
+= That file can't be read as a disc image.
+> そのファイルはディスクイメージとして読めません。
+
+= That file can't be read as a disc image (%s).
+> そのファイルはディスクイメージとして読めません(%s)。
+
+= This is %s (%s): the right disc.
+> これは %s(%s)です: 正しいディスクです。
+
+= This is another game (%s), not %s (%s). Choose the %s disc image.
+> これは別のゲーム(%s)で、%s(%s)ではありません。%s のディスクイメージを選んでください。
+
+= This is %s (%s), not %s (%s). Choose the %s disc image.
+> これは %s(%s)で、%s(%s)ではありません。%s のディスクイメージを選んでください。
+
+= It is already running.
+> すでに実行中です。
+
+= The converter couldn't be started (%s, %s).
+> コンバーターを起動できませんでした(%s、%s)。
+
+= Stopped. Nothing was changed.
+> 停止しました。何も変わっていません。
+
+= One of the discs is not the one the converter needs.
+> ディスクの1つが、コンバーターが必要とするものではありません。
+
+= The converter stopped without saying it was done.
+> コンバーターは、完了を伝えずに停止しました。
+
+= The converter stopped without saying why (exit code %d).
+> コンバーターは、理由を伝えずに停止しました(終了コード %d)。
+
+= When and where it happened, and which version of the game program was running.
+> いつ、どこで起きたか、そしてどのバージョンのゲームプログラムが動いていたか。
+
+= A picture of the game window at that moment (only the game, not the rest of your screen).
+> そのときのゲームウィンドウの画面(ゲームだけで、画面のほかの部分は写りません)。
+
+= Your button presses up to that moment, so a developer can play the same moment again.
+> そのときまでのボタン操作。開発者が同じ場面をもう一度プレイできます。
+
+= What the game program wrote about itself while it ran (its log).
+> ゲームプログラムが動いているあいだに自分について書いたもの(ログ)。
+
+= Your settings.
+> あなたの設定。
+
+= Your mod list: which mods were switched on (not the mods themselves).
+> あなたのMODリスト: どのMODがオンだったか(MOD自体は含みません)。
+
+= Crash dump: a snapshot of the game program's memory at that moment. It helps a developer find the cause of a crash, but may contain bits of whatever was in memory.
+> クラッシュダンプ: そのときのゲームプログラムのメモリの記録。開発者がクラッシュの原因を見つけるのに役立ちますが、メモリにあったものの一部が入っていることがあります。
+
+= Another file the report holds.
+> レポートにあるもう1つのファイル。
+
+= %.1f MB
+> %.1f MB
+
+= %llu KB
+> %llu KB
+
+= %llu bytes
+> %llu バイト
+
+= map %s
+> マップ %s
+
+= game frame %s
+> ゲームフレーム %s
+
+= Could not read %s in the report.
+> レポート内の %s を読めませんでした。
+
+= Please save the export somewhere outside the report's own folder.
+> 書き出しは、レポート自身のフォルダの外に保存してください。
+
+= Could not write %s (is the place writable, and is there room?).
+> %s を書きこめませんでした(場所は書きこめますか? 空き容量はありますか?)。
+
+= What the game program wrote about itself while %s ran (its log): its last 16 MB of %s.
+> %s の実行中にゲームプログラムが自分について書いたもの(ログ): %s の最後の16 MB。
+
+= What the game program wrote about itself while %s ran (its log).
+> %s の実行中にゲームプログラムが自分について書いたもの(ログ)。
+
+= Your button presses in %s, so a developer can play it again exactly as it happened.
+> %s でのボタン操作。開発者が起きたとおりにもう一度プレイできます。
+
+= Your memory card when it started (so the recording can be played from the same save).
+> 開始時のメモリーカード(同じセーブから記録を再生できるように)。
+
+= Your memory card after a save in it.
+> セーブしたあとのメモリーカード。
+
+= The report %s (%s): %s
+> レポート %s(%s): %s
+
+= %lld s
+> %lld 秒
+
+= %lld min
+> %lld 分
+
+= %lld h %02lld min
+> %lld 時間 %02lld 分
+
+= When the session was, which version of the game program ran, and what each file here is.
+> セッションの日時、動いていたゲームプログラムのバージョン、ここにある各ファイルの内容。
+
+= the game
+> ゲーム
+
+= Your mod list as it is now: which mods are switched on (not the mods themselves).
+> 今のMODリスト: どのMODがオンか(MOD自体は含みません)。
+
+= Your settings as they are now.
+> 今の設定。
+
+= This session is very short (the game never got to play), so the session before it (%s) is put in too, in "previous session": the problem was most likely in that one.
+> このセッションはとても短い(ゲームがプレイされなかった)ため、その前のセッション(%s)も「前のセッション」に入れてあります。問題はおそらくそちらで起きています。
+
+= This session is very short (under 10 seconds of game), so the session before it (%s) is put in too, in "previous session": the problem was most likely in that one.
+> このセッションはとても短い(ゲーム時間が10秒未満)ため、その前のセッション(%s)も「前のセッション」に入れてあります。問題はおそらくそちらで起きています。
+
+= the session before
+> 前のセッション
+
+= This session has no recording of button presses.
+> このセッションにはボタン操作の記録がありません。
+
+= Choose a session first.
+> 先にセッションを選んでください。
+
+= Could not read %s (was it deleted meanwhile?).
+> %s を読めませんでした(そのあいだに削除されましたか?)。
+
+= Please save it somewhere else than the game's own logs or recordings folder (Documents, for example).
+> ゲーム自身のログや記録のフォルダ以外(たとえばドキュメント)に保存してください。
+
+= Could not delete the report (%s). Is one of its files open in another program?
+> レポートを削除できませんでした(%s)。ファイルの1つがほかのプログラムで開かれていませんか?
+
+= its output file: %s
+> その出力ファイル: %s
+
+= no pipe: %s
+> パイプなし: %s
+
+= the system didn't start a new process: %s
+> システムが新しいプロセスを起動しませんでした: %s
+
+= It couldn't be moved to the trash (the Finder did not do it, and the Trash folder can't be written unless this app may control the Finder: System Settings > Privacy & Security > Automation): %s
+> ごみ箱に移せませんでした(Finderが行わず、このアプリがFinderを操作できないとゴミ箱フォルダに書きこめません: システム設定 > プライバシーとセキュリティ > オートメーション): %s
+
+= The system didn't say where your home folder is, so there is no trash to move it to: %s
+> システムがホームフォルダの場所を教えなかったため、移すごみ箱がありません: %s
+
+= The trash folder can't be written (%s): %s
+> ごみ箱フォルダに書きこめません(%s): %s
+
+= The trash is on another drive than your saves, so it wasn't moved: %s
+> ごみ箱がセーブとは別のドライブにあるため、移しませんでした: %s
+
+= It couldn't be moved to the trash (%s): %s
+> ごみ箱に移せませんでした(%s): %s
+
+= The trash already holds too many things of that name: %s
+> ごみ箱に、その名前のものがすでに多すぎます: %s
+
+= On the Mac the app is its own shortcut: drag Pokemon XD to the Dock or into Applications.
+> Macではアプリ自体がショートカットです: Pokemon XDをDockかアプリケーションにドラッグしてください。
+
+= The shortcut couldn't be written to %s (%s).
+> ショートカットを %s に書きこめませんでした(%s)。
+
+= Shortcut made: %s. If your desktop shows it with a warning sign, right-click it and choose "Allow launching".
+> ショートカットを作りました: %s。デスクトップに警告マークつきで表示されたら、右クリックして「起動を許可」を選んでください。
+
+= Windows error %d (its output file)
+> Windowsエラー %d(その出力ファイル)
+
+= Windows couldn't move it to the recycle bin (%d): %s
+> Windowsがごみ箱に移せませんでした(%d): %s
+
+= Windows didn't let the launcher put a shortcut in %s (error %s). If that folder is kept in OneDrive or protected by Windows Security, make the shortcut by hand: right-click %s, "Show more options", "Create shortcut".
+> Windowsがランチャーに %s へのショートカットを置かせませんでした(エラー %s)。そのフォルダがOneDriveにあるかWindowsセキュリティで保護されている場合は、手動でショートカットを作ってください: %s を右クリックして「その他のオプションを確認」、「ショートカットの作成」。
+
+= Shortcut made: %s
+> ショートカットを作りました: %s
+
+= Battle Revolution battle models and Gen 4 Pokemon
+> バトルレボリューションの戦闘モデルと第4世代のポケモン
+
+= Make models and Gen 4 pack
+> モデルと第4世代パックを作る
+
+= The program pbr_models, which ships with the game, converts the Pokemon models on that disc into extra assets (the folder extra_assets\\pbr in your data folder) made here on your PC; XD keeps its own model for any Pokemon without one. The same Make also builds the Gen 4 pack (the folder extra_assets\\pbr_gen4: the Diamond/Pearl Pokemon with their models, cries, faces, moves and stats) that the New Game rule "Gen 4 Pokemon and rules" uses. They are built in, not a mod.
+> ゲームに同梱のプログラムpbr_modelsが、そのディスクのポケモンのモデルを、あなたのPC上で追加アセット(データフォルダの extra_assets\\pbr)に変換します。モデルのないポケモンには、XD自身のモデルが使われます。同じ「作る」で、第4世代パック(extra_assets\\pbr_gen4 フォルダ: ダイヤモンド・パールのポケモンと、そのモデル、なきごえ、顔、わざ、ステータス)も作られ、ニューゲームのルール「第4世代のポケモンとルール」が使います。MODではなく内蔵機能です。
+
+= Gen 4 Pokemon
+> 第4世代のポケモン
+
+= Colosseum characters
+> コロシアムのキャラクター
+
+= Make characters
+> キャラクターを作る
+
+= The program colo_models, which ships with the game, converts the trainer models on that disc (Wes, Rui and the other Colosseum characters) into XD's model format, in the folder extra_assets\\colosseum in your data folder. Only the Colosseum disc is needed. Nothing in the game uses them on their own yet: they are the characters the online battle's trainer card can pick from.
+> ゲームに同梱のプログラムcolo_modelsが、そのディスクのトレーナーのモデル(ミナト、ルイ、ほかのコロシアムのキャラクター)を、データフォルダの extra_assets\\colosseum フォルダに、XDのモデル形式で変換します。必要なのはコロシアムのディスクだけです。今のところ、ゲーム内でそれ単独で使われるものはありません: オンライン対戦のトレーナーカードで選べるキャラクターです。
+
+= Languages (from the European disc)
+> 言語(ヨーロッパ版ディスクから)
+
+= Make the language pack
+> 言語パックを作る
+
+= The program xd_languages, which ships with the game, copies the German, French, Italian and Spanish texts, menus and pictures from that disc into the folder extra_assets\\languages in your data folder; the game itself stays the USA game and only its text and pictures change. Your USA copy (the Disc page) is needed too: the game's code comes from it.
+> ゲームに同梱のプログラムxd_languagesが、そのディスクのドイツ語、フランス語、イタリア語、スペイン語の文章、メニュー、絵を、データフォルダの extra_assets\\languages フォルダにコピーします。ゲーム自体はUSA版のままで、文章と絵だけが変わります。USA版のコピー(ディスクページ)も必要です: ゲームのコードはそこから来ます。
+
+= Choose the language on the Play bar (or in the game's SETTINGS): it applies the next time the game starts.
+> 言語は、プレイバー(またはゲームのせってい)で選びます: 次にゲームを始めたときに有効になります。
+
+= Japanese (from the Japanese disc)
+> 
+
+= Make the Japanese pack
+> 
+
+= The program xd_languages, which ships with the game, copies the Japanese texts, fonts and pictures with words from that disc into the folder extra_assets\\languages_jp in your data folder; the game itself stays the USA game and only its text and pictures change. Your USA copy (the Disc page) is needed too: the game's code comes from it.
+> 
+
+= Choose Japanese on the Play bar (or in the game's SETTINGS): it applies the next time the game starts.
+> 
+
+= %s (boy)
+> %s(男の子)
+
+= %s (girl)
+> %s(女の子)
+
+= it has no GameCube or Wii disc mark
+> ゲームキューブやWiiのディスクの印がありません
+
+= %lld hours %02lld minutes
+> %lld 時間 %02lld 分
+
+= no save yet: the game offers New Game
+> まだセーブがありません: ゲームは「はじめから」を出します
+
+= a save that can't be read
+> 読めないセーブ
+
+= Faithful · Vanilla (no setup file)
+> 忠実 - バニラ(設定ファイルなし)
+
+= its setup file can't be read
+> その設定ファイルを読めません
+
+= The file can't be read: %s
+> ファイルを読めません: %s
+
+= This save file is not a Pokemon XD save (it is "%s" of game %s).
+> このセーブファイルはPokemon XDのセーブではありません(ゲーム %s の "%s" です)。
+
+= This memory card holds %d files, none of them a Pokemon XD save.
+> このメモリーカードには %d 個のファイルがありますが、Pokemon XDのセーブはありません。
+
+= The Pokemon XD save in this file can't be read: %s
+> このファイルのPokemon XDのセーブを読めません: %s
+
+= Setup
+> 設定
+
+= Faithful, no mods (no setup file)
+> 忠実、MODなし(設定ファイルなし)
+
+= This save was started before the port kept setups (or was copied in from Dolphin or a GameCube), so there is no record of how it began. It plays as Faithful with no mods.
+> このセーブは、ポートが設定を記録するようになる前に始められたか(Dolphinやゲームキューブからコピーされた)、始めかたの記録がありません。MODなしの忠実として遊びます。
+
+= The setup file next to this save can't be read (%s): %s
+> このセーブの隣の設定ファイルを読めません(%s): %s
+
+= Game engine
+> ゲームエンジン
+
+= %s (started as %s)
+> %s(%s として開始)
+
+= Looks and sound
+> 見た目と音
+
+= unknown style
+> 不明なスタイル
+
+= Randomizer code
+> ランダマイザーコード
+
+= (none kept)
+> (保持なし)
+
+= off
+> オフ
+
+= %s (port %s)
+> %s(ポート %s)
+
+= Nobody chose this setup on the New Game screen: the game was started without it (the Original preset, or a test), so it quietly kept the setup it was running with.
+> ニューゲーム画面でこの設定を選んだ人はいません: ゲームは設定なし(オリジナルのプリセット、またはテスト)で始まったため、動いていた設定をそのまま引き継ぎました。
+
+= Game engine: %s.
+> ゲームエンジン: %s。
+
+= Because the engine was switched, this playthrough is not Faithful from start to end.
+> エンジンが切りかえられたため、このプレイは最初から最後まで忠実ではありません。
+
+= Carried on without its full setup: %s
+> 完全な設定なしで続けました: %s
+
+= Pokemon #%d
+> ポケモン #%d
+
+= item #%d
+> どうぐ #%d
+
+= Trainer ID
+> トレーナーID
+
+= Money
+> おこづかい
+
+= Poke Coupons
+> ポケクーポン
+
+= Saved
+> セーブ日時
+
+= %s time
+> %s 回
+
+= %s times
+> %s 回
+
+= Nickname
+> ニックネーム
+
+= Level
+> レベル
+
+= Held item
+> もちもの
+
+= Egg
+> タマゴ
+
+= Shiny
+> 色違い
+
+= was a Shadow Pokemon
+> ダークポケモンだった
+
+= Shadow Pokemon (heart gauge %d)
+> ダークポケモン(ハートゲージ %d)
+
+= Pokemon and item names come from your disc: they appear once the disc is chosen and checked.
+> ポケモンとどうぐの名前はディスクから来ます: ディスクを選んで確認すると表示されます。
+
+= Shadow Lugia (face)
+> ダークルギア(顔)
+
+= Shadow Lugia (party icon)
+> ダークルギア(パーティーアイコン)
+
+= Lugia
+> ルギア
+
+= Eevee (face)
+> イーブイ(顔)
+
+= Eevee (party icon)
+> イーブイ(パーティーアイコン)
+
+= Espeon (face)
+> エーフィ(顔)
+
+= Umbreon (face)
+> ブラッキー(顔)
+
+= The hero (face)
+> 主人公(顔)
+
+= Save-file icon (Eevee)
+> セーブファイルのアイコン(イーブイ)
+
+= Disc banner
+> ディスクのバナー
+
+= Full logo
+> フルロゴ
+
+= XD logo
+> XDロゴ
+
+= The map of Orre
+> オーレ地方のマップ
+
+= The menus' Poke Ball pattern
+> メニューのモンスターボール模様
+
+= no folder for the shader caches
+> シェーダーキャッシュのフォルダがありません
+
+= could not start the game program
+> ゲームプログラムを起動できませんでした
+
+= stopped (the launcher closed)
+> 停止しました(ランチャーが閉じられました)
+
+= took too long
+> 時間がかかりすぎました
+
+= the game's shader preparation ended with code %d (see its log in %s)
+> ゲームのシェーダー準備がコード %d で終わりました(ログは %s を見てください)
+
+= the trainer pictures took too long or were stopped
+> トレーナーの絵に時間がかかりすぎたか、停止されました
+
+= could not start the game program for the Eevee offer pictures
+> イーブイ提示用の絵のために、ゲームプログラムを起動できませんでした
+
+= stopped (the launcher closed, or Play was pressed)
+> 停止しました(ランチャーが閉じられたか、プレイが押されました)
+
+= the game took too long for the Eevee offer pictures
+> ゲームがイーブイ提示用の絵に時間をかけすぎました
+
+= the game's render mode for the Eevee offer ended with code %d
+> イーブイ提示用のゲームの描画モードが、コード %d で終わりました
+
+= the game program isn't there: %s
+> ゲームプログラムがありません: %s
+
+= the game took too long
+> ゲームに時間がかかりすぎました
+
+= the game's render mode ended with code %lu (render_icon.txt in %s)
+> ゲームの描画モードがコード %lu で終わりました(%s の render_icon.txt)
+
+= The game needs your own copy of Pokemon XD: Gale of Darkness (USA version, game ID GXXE01), saved as a disc image file (.iso, .rvz, .gcm, ...). Nothing from the game comes with this program.
+> ゲームには、ご自分のポケモンXD ダークルギア(USA版、ゲームID GXXE01)のコピーが、ディスクイメージファイル(.iso、.rvz、.gcm など)として必要です。このプログラムにはゲームの内容は何も入っていません。
+
+= In the launcher
+> ランチャー
+
+= XD (the program's own)
+> XD(プログラム本来のもの)
+
+= XD, shadow aura
+> XD、ダークオーラ
+
+= XD, minimal
+> XD、ミニマル
+
+= XD, shadow swirl
+> XD、ダークの渦
+
+= XD, light
+> XD、ライト
+
+= The graphics card stopped working for the game (its driver was reset or updated, the computer switched graphics cards, or it woke from sleep), so the game has to close.\n\nStart it again to carry on from your last save. A report of this was saved in the game's reports folder.
+> グラフィックスカードがゲームのために動かなくなった(ドライバーがリセットか更新された、コンピューターがグラフィックスカードを切りかえた、またはスリープから復帰した)ため、ゲームを閉じる必要があります。\n\nもう一度始めると、最後のセーブから続けられます。これのレポートは、ゲームのレポートフォルダに保存されました。
+
+= Could not place the program's main stack below 4 GB (the game keeps addresses in 4 bytes). On a Mac this means the system did not give the program its low memory: please send the report made by first_run_report.sh.
+> プログラムのメインスタックを4 GB未満に置けませんでした(ゲームはアドレスを4バイトで持ちます)。Macでは、システムがプログラムに低いメモリを与えなかったという意味です: first_run_report.sh が作ったレポートを送ってください。
+
+= Could not place the game's memory at its GameCube addresses (0x80000000, 0xE0000000)
+> ゲームのメモリをゲームキューブのアドレス(0x80000000、0xE0000000)に置けませんでした
+
+= MusyX's DSP program isn't in main.dol
+> MusyXのDSPプログラムが main.dol にありません
+
+= Another copy of the game is already running with the same memory card.\n\nTwo copies would overwrite each other's saves. You can quit, or play this copy without the memory card (it can't load or save).
+> 同じメモリーカードで、ゲームの別のコピーがすでに実行中です。\n\n2つのコピーは互いのセーブを上書きします。終了するか、このコピーをメモリーカードなし(ロードもセーブもできません)で遊べます。
+
+= Quit
+> 終了
+
+= Play without the card
+> カードなしで遊ぶ
+
+= You can quit and switch the mods on again (same mods, same order), or play without the memory card (no save can be loaded or written this time).
+> 終了して、MODをもう一度オンにする(同じMOD、同じ順番)か、メモリーカードなしで遊べます(今回はセーブの読みこみも書きこみもできません)。
+
+= No usable graphics device was found, so the game could not draw anything. Please update the graphics driver. (Windows: Direct3D 12, Direct3D 11 or Vulkan is needed; Linux: Vulkan; Mac: Metal.)
+> 使えるグラフィックスデバイスが見つからず、ゲームは何も描画できませんでした。グラフィックドライバーを更新してください。(Windows: Direct3D 12、Direct3D 11、またはVulkanが必要。Linux: Vulkan。Mac: Metal。)
+
+= Aurora could not open the disc for reading game files
+> Auroraが、ゲームファイルを読むためにディスクを開けませんでした
+
+= Bug report saved: %s (in %s)
+> バグレポートを保存しました: %s(%s の中)
+
+= Saving bug report...
+> バグレポートを保存中...
+
+= Level cap: none from here on.
+> レベル上限: ここから先はなし。
+
+= Level cap: %d. Pokemon at this level gain no more experience.
+> レベル上限: %d。このレベルのポケモンは、もう経験値を得られません。
+
+= map %u
+> マップ %u
+
+= Nuzlocke: this Pokemon is lost. It can't rejoin your party.
+> ナズルロック: このポケモンはロストしました。てもちに戻せません。
+
+= Nuzlocke: this Pokemon is lost. It can only be put down in the last PC box.
+> ナズルロック: このポケモンはロストしました。最後のPCボックスにしか置けません。
+
+= Nuzlocke: this Pokemon is lost, and the last PC box has no room for it. It stays here.
+> ナズルロック: このポケモンはロストしましたが、最後のPCボックスに空きがありません。ここに残ります。
+
+= Nuzlocke: a lost Pokemon can't rejoin your party. It was moved back to the PC.
+> ナズルロック: ロストしたポケモンはてもちに戻せません。PCに戻しました。
+
+= Nuzlocke: lost Pokemon can't rejoin your party. They were moved back to the PC.
+> ナズルロック: ロストしたポケモンはてもちに戻せません。PCに戻しました。
+
+= Nuzlocke: the PC boxes are full, so a lost Pokemon stays with you. Please make room.
+> ナズルロック: PCボックスがいっぱいなので、ロストしたポケモンが手元に残ります。空きを作ってください。
+
+= Nuzlocke: your party holds only lost Pokemon. Please withdraw another Pokemon.
+> ナズルロック: てもちがロストしたポケモンだけです。ほかのポケモンをひきだしてください。
+
+= Nuzlocke: that was your one catch in this area (%s).
+> ナズルロック: これがこのエリア(%s)での1回のつかまえでした。
+
+= Nuzlocke: that was your one try in this area (%s).
+> ナズルロック: これがこのエリア(%s)での1回のチャンスでした。
+
+= Nuzlocke: all your Pokemon fainted. This run has failed.
+> ナズルロック: すべてのポケモンがひんしになりました。この挑戦は失敗です。
+
+= Nuzlocke: 1 Pokemon fainted and was moved to the last PC box.
+> ナズルロック: ポケモン1ひきがひんしになり、最後のPCボックスに移されました。
+
+= Nuzlocke: %d Pokemon fainted and were moved to the last PC box.
+> ナズルロック: ポケモン%dひきがひんしになり、最後のPCボックスに移されました。
+
+= Nuzlocke: the PC boxes are full, so a fainted Pokemon stays with you. This run has failed.
+> ナズルロック: PCボックスがいっぱいなので、ひんしのポケモンが手元に残ります。この挑戦は失敗です。
+
+= No items in battle
+> 戦闘中どうぐ禁止
+
+= In battles the bag only gives Poke Balls: no potions, no status healers, no X items. Snagging stays possible.
+> 戦闘中、バッグからはモンスターボールしか出せません: キズぐすりも、状態異常なおしも、Xアイテムもなし。スナッチはできます。
+
+= Nuzlocke: fainted is lost
+> ナズルロック: ひんしはロスト
+
+= A Pokemon of yours that faints is moved to the last PC box when the battle is over, even if it was revived, and can't join your party again. If all of them faint, the run has failed.
+> ひんしになったポケモンは、たとえ復活しても、戦闘が終わると最後のPCボックスに移され、二度とてもちに入れられません。全員がひんしになると、挑戦は失敗です。
+
+= Nuzlocke: one catch per area
+> ナズルロック: 1エリア1回つかまえ
+
+= In each area you may catch one Pokemon of your choice, snagged or wild. After that, Poke Balls can't be used in that area's battles.
+> 各エリアで、スナッチでも野生でも、好きなポケモン1ひきをつかまえられます。そのあとは、そのエリアの戦闘でモンスターボールを使えません。
+
+= Gen 4 Pokemon and rules
+> 第4世代のポケモンとルール
+
+= The 107 Diamond/Pearl Pokemon (their models, cries and names) and 113 moves, made from your own Pokemon Battle Revolution disc, and the rules they need: abilities (Technician, Adaptability, Iron Fist, Scrappy...) and the new effects of moves such as U-turn and Trick Room.
+> 107種のダイヤモンド・パールのポケモン(モデル、なきごえ、名前)と113のわざを、あなたのポケモンバトルレボリューションのディスクから作り、必要なルールも加えます: 特性(テクニシャン、てきおうりょく、てつのこぶし、きもったま...)と、とんぼがえりやトリックルームなどのわざの新しい効果。
+
+= Modern types (Fairy)
+> 新しいタイプ(フェアリー)
+
+= The Fairy type from the later games: its place in the type chart (strong against Fighting, Dragon and Dark; weak to Poison and Steel; Dragon moves do nothing to it), its name and picture, the Pokemon that became Fairy (Clefairy, Jigglypuff, Togepi, Snubbull, Marill, Mr. Mime, Ralts and Mawile lines) and the moves Charm, Sweet Kiss and Moonlight. Steel no longer resists Ghost and Dark moves. Online battles need the same choice on both sides.
+> のちのゲームのフェアリータイプ: タイプ相性(かくとう、ドラゴン、あくに強く、どくとはがねに弱い。ドラゴンわざは効かない)、名前と絵、フェアリーになったポケモン(ピッピ、プリン、トゲピー、ブルー、マリル、バリヤード、ラルトス、クチートの系統)と、わざ「あまえる」「てんしのキッス」「つきのひかり」。はがねはゴーストとあくのわざを半減しなくなります。オンライン対戦では両者が同じ選択をする必要があります。
+
+= Gen 4 Pokemon at the Poke Spots
+> ポケスポットの第4世代ポケモン
+
+= With the Gen 4 Pokemon: the three Poke Spots (Rock, Oasis, Cave) offer nine of them instead of their usual Pokemon: Hippopotas, Skorupi and Gible; Shellos, Cherubi and Buizel; Bronzor, Stunky and Riolu. Levels and chances stay the same.
+> 第4世代のポケモンといっしょに: 3つのポケスポット(いわ、オアシス、ほらあな)が、いつものポケモンのかわりに9ひきを出します: ヒポポタス、スコルピ、フカマル。カラナクシ、チェリンボ、ブイゼル。ドーミラー、スカンプー、リオル。レベルと出る確率は同じです。
+
+= Level caps
+> レベル上限
+
+= Your Pokemon can't grow past the level of the next story boss's strongest Pokemon: at the cap they gain no experience, and Rare Candy has no effect. The cap rises when the boss is beaten.
+> あなたのポケモンは、次のストーリーのボスの最強のポケモンのレベルより上には育ちません: 上限では経験値を得られず、ふしぎなアメも効きません。ボスを倒すと上限が上がります。
+
+= No items in battle: only Poke Balls can be used.
+> 戦闘中どうぐ禁止: モンスターボールしか使えません。
+
+= Nuzlocke: you already had your catch in this battle. One catch per area.
+> ナズルロック: この戦闘で、すでにつかまえました。1エリア1回です。
+
+= Nuzlocke: you already caught a Pokemon in this area (%s).
+> ナズルロック: このエリア(%s)で、すでにポケモンをつかまえました。
+
+= USA
+> USA
+
+= European
+> ヨーロッパ
+
+= Japanese
+> 日本
+
+= This is the %s version of Pokemon XD: Gale of Darkness (game ID %s).\n\nThe port needs the USA copy (game ID GXXE01) as the main disc: please choose that one here. %s
+> これはPokemon XD ダークルギアの%s版(ゲームID %s)です。\n\nポートにはメインディスクとしてUSA版のコピー(ゲームID GXXE01)が必要です: ここでそれを選んでください。%s
+
+= another
+> 別のもの
+
+= Your European copy is still useful: add it on the Extra assets page ("Languages (from the European disc)") to play the game in German, French, Italian and Spanish.
+> ヨーロッパ版のコピーも役に立ちます: 追加アセットページ(「言語(ヨーロッパ版ディスクから)」)で追加すると、ドイツ語、フランス語、イタリア語、スペイン語で遊べます。
+
+= For other languages see the Extra assets page (for now only the European copy is used for them).
+> ほかの言語は追加アセットページを見てください(今のところ、ヨーロッパ版のコピーだけが使われます)。
+
+= This is Pokemon Colosseum (game ID %s), not Pokemon XD: Gale of Darkness.\n\nColosseum isn't supported yet (it is planned for after XD). Please choose your Pokemon XD disc image (USA version).
+> これはポケモンコロシアム(ゲームID %s)で、Pokemon XD ダークルギアではありません。\n\nコロシアムはまだ対応していません(XDのあとに予定しています)。Pokemon XDのディスクイメージ(USA版)を選んでください。
+
+= This disc isn't Pokemon XD: Gale of Darkness.\n\nIt is "%s" (game ID %s).\n\nPlease choose your Pokemon XD disc image (USA version, game ID GXXE01).
+> このディスクはPokemon XD ダークルギアではありません。\n\n"%s"(ゲームID %s)です。\n\nPokemon XDのディスクイメージ(USA版、ゲームID GXXE01)を選んでください。
+
+= a game without a name
+> 名前のないゲーム
+
+= Your disc image is Pokemon XD (USA), but its content is different from a known-good copy of the disc.\n\nThis usually means the file was changed on purpose (for example a ROM hack or a fan translation), or that it is damaged (a bad or incomplete copy, or a disk problem).\n\nYou can start anyway. A changed disc may play differently from the original, and a damaged one may crash or freeze later. If you didn't change it on purpose, try making a new copy from your own GameCube disc.\n\n(Disc data SHA-1: %s\n expected: %s)
+> ディスクイメージはPokemon XD(USA版)ですが、内容が、正しいコピーのディスクと違います。\n\nふつうは、ファイルがわざと変更された(たとえばROMハックやファンによる翻訳)か、破損している(悪い、または不完全なコピー、あるいはディスクの問題)という意味です。\n\nそれでも始められます。変更されたディスクは元と違う動きをするかもしれず、破損したものは、あとでクラッシュやフリーズをするかもしれません。わざと変更したのでなければ、ご自分のゲームキューブのディスクから新しくコピーを作ってみてください。\n\n(ディスクデータのSHA-1: %s\n 期待値: %s)
+
+= The check of the disc's content was stopped before it finished, so the game starts without it. It will be tried again next time.
+> ディスクの内容の確認が終わる前に止められたため、ゲームはそれなしで始まります。次回、また試します。
+
+= Part of your disc image couldn't be read:\n%s\n\nThe file may be damaged or incomplete (for example an unfinished download or copy), or the drive it is on may have a problem or have been disconnected.\n\nYou can start anyway, but the game may crash or freeze when it needs the part that can't be read. Making a new copy from your own GameCube disc should fix it.
+> ディスクイメージの一部を読めませんでした:\n%s\n\nファイルが破損または不完全(たとえば未完了のダウンロードやコピー)か、置いてあるドライブに問題があるか、接続が外れたのかもしれません。\n\nそれでも始められますが、読めない部分が必要になったとき、ゲームがクラッシュやフリーズするかもしれません。ご自分のゲームキューブのディスクから新しくコピーを作れば直るはずです。
+
+= No disc image has been chosen yet.
+> まだディスクイメージが選ばれていません。
+
+= The disc image file couldn't be found:\n%s\n\nCheck that the file is still there and that the name and folder are spelled correctly.
+> ディスクイメージファイルが見つかりませんでした:\n%s\n\nファイルがまだあること、名前とフォルダが正しく書かれていることを確認してください。
+
+= This is a Wii disc ("%s", game ID %s), not a GameCube disc.\n\nPokemon XD: Gale of Darkness is a GameCube game: please choose your Pokemon XD disc image (USA version).
+> これはWiiのディスク("%s"、ゲームID %s)で、ゲームキューブのディスクではありません。\n\nPokemon XD ダークルギアはゲームキューブのゲームです: Pokemon XDのディスクイメージ(USA版)を選んでください。
+
+= This file couldn't be read as a GameCube disc image:\n%s\n\nIt may not be a disc image at all, it may be damaged or incomplete (for example an unfinished download), or it may be in a format the game can't read. Disc images in ISO, GCM, RVZ, WIA, GCZ, CISO and WBFS format can be used.\n\n(Details: %s)
+> このファイルをゲームキューブのディスクイメージとして読めませんでした:\n%s\n\nディスクイメージではないか、破損または不完全(たとえば未完了のダウンロード)か、ゲームが読めない形式かもしれません。使えるディスクイメージは、ISO、GCM、RVZ、WIA、GCZ、CISO、WBFS形式です。\n\n(詳細: %s)
+
+= no GameCube disc header
+> ゲームキューブのディスクヘッダーがありません
+
+= To play, the game needs your own copy of the Pokemon XD: Gale of Darkness disc (USA version), saved as a disc image file (for example .iso or .rvz).\n\nHow to start it:\n  - Start "Pokemon XD Launcher.sh" and choose the file in the window that opens (that window needs your desktop's file chooser, or the program "zenity"), or\n  - From a terminal, in the game's folder:  ./"Pokemon XD Launcher.sh" "/home/you/Games/Pokemon XD.iso"\n\nThe game remembers a disc image that worked, so this is needed once.
+> 遊ぶには、ご自分のPokemon XD ダークルギアのディスク(USA版)のコピーが、ディスクイメージファイル(たとえば.isoや.rvz)として必要です。\n\n始めかた:\n  - "Pokemon XD Launcher.sh" を起動して、開いたウィンドウでファイルを選ぶ(そのウィンドウにはデスクトップのファイル選択機能か、プログラム "zenity" が必要です)、または\n  - ターミナルから、ゲームのフォルダで:  ./"Pokemon XD Launcher.sh" "/home/you/Games/Pokemon XD.iso"\n\nゲームは動いたディスクイメージを覚えているので、これが必要なのは1回だけです。
+
+= To play, the game needs your own copy of the Pokemon XD: Gale of Darkness disc (USA version), saved as a disc image file (for example .iso or .rvz).\n\nHow to start it:\n  - Open the app "Pokemon XD" and choose the file in the window that opens, or\n  - From Terminal:  "/path/to/Pokemon XD.app/Contents/MacOS/xd" "/Users/you/Games/Pokemon XD.iso"\n\nThe game remembers a disc image that worked, so this is needed once.
+> 遊ぶには、ご自分のPokemon XD ダークルギアのディスク(USA版)のコピーが、ディスクイメージファイル(たとえば.isoや.rvz)として必要です。\n\n始めかた:\n  - アプリ「Pokemon XD」を開いて、開いたウィンドウでファイルを選ぶ、または\n  - ターミナルから:  "/path/to/Pokemon XD.app/Contents/MacOS/xd" "/Users/you/Games/Pokemon XD.iso"\n\nゲームは動いたディスクイメージを覚えているので、これが必要なのは1回だけです。
+
+= To play, the game needs your own copy of the Pokemon XD: Gale of Darkness disc (USA version), saved as a disc image file (for example .iso or .rvz).\n\nHow to start it:\n  - Start xd.exe and choose the file in the window that opens, or\n  - Start xd_launcher.exe (next to xd.exe) and choose your disc image there, or\n  - Drag your disc image file onto xd.exe, or\n  - From a command prompt:  xd.exe "C:\\Games\\Pokemon XD.iso"
+> 遊ぶには、ご自分のPokemon XD ダークルギアのディスク(USA版)のコピーが、ディスクイメージファイル(たとえば.isoや.rvz)として必要です。\n\n始めかた:\n  - xd.exe を起動して、開いたウィンドウでファイルを選ぶ、または\n  - xd_launcher.exe(xd.exe の隣)を起動して、そこでディスクイメージを選ぶ、または\n  - ディスクイメージファイルを xd.exe にドラッグする、または\n  - コマンドプロンプトから:  xd.exe "C:\\Games\\Pokemon XD.iso"
+
+= The game couldn't start with this disc image after all.\n\nMost likely the game's main program on it isn't the one from the original USA disc, which this version of the game needs. That happens with ROM hacks and fan translations that change the program: please use an unchanged copy of your Pokemon XD disc.\n\n(Details: %s)
+> 結局、このディスクイメージではゲームを始められませんでした。\n\nおそらく、その中のゲームのメインプログラムが、このバージョンのゲームが必要とする、元のUSA版ディスクのものではありません。プログラムを変えるROMハックやファンによる翻訳で起こります: 変更していないPokemon XDのディスクを使ってください。\n\n(詳細: %s)
+
+= Online trade
+> オンライン交換
+
+= Online battle
+> オンラインバトル
+
+= In a battle
+> バトル中
+
+= Story mode
+> ストーリーモード
+
+= On the title screen
+> タイトル画面
+
+= Nuzlocke
+> ナズロック
+
+= the Gen 4 files are not made yet (no %s)
+> 第4世代のファイルがまだ作られていません(%s がありません)
+
+= the Gen 4 files were made by another version (%d, this game needs %d): make them again
+> 第4世代のファイルは別のバージョン(%d、このゲームには %d が必要)で作られています: 作り直してください
+
+= Pokemon XD - Gen 4
+> Pokemon XD - 第4世代
+
+= The Gen 4 Pokemon can't be used: %s.\n\nThey are made from your own Pokemon Battle Revolution disc on the launcher's "Extra assets" page.\nThe game starts without them.
+> 第4世代のポケモンを使えません: %s。\n\nランチャーの「追加アセット」ページで、ご自分のポケモンバトルレボリューションのディスクから作ります。\nゲームはそれなしで始まります。
+
+= Starting a new journey
+> 新しい旅を始めます
+
+= Getting Orre ready with your chosen rules
+> 選んだルールでオーレ地方を準備しています
+
+= Loading %s
+> %s を読みこみ中
+
+= your save
+> あなたのセーブ
+
+= Play time %s
+> プレイ時間 %s
+
+= no picture yet
+> まだ絵がありません
+
+= Pokemon XD - mods
+> Pokemon XD - MOD
+
+= Please check your mods:\n\n%s\n\nThe game starts with the mods that can be used. Mods are in %s, the list of mods that are on in mods.ini next to it.
+> MODを確認してください:\n\n%s\n\nゲームは、使えるMODで始まります。MODは %s にあり、オンのMODのリストはその隣の mods.ini にあります。
+
+= The mods' changes to the game program's tables could not be used. The game starts without mods.
+> MODによるゲームプログラムのテーブルへの変更を使えませんでした。ゲームはMODなしで始まります。
+
+= The mods' files could not be prepared (was a mod changed while the game started?). The game starts without mods.
+> MODのファイルを準備できませんでした(ゲームの起動中にMODが変更されましたか?)。ゲームはMODなしで始まります。
+
+= The two games disagreed (turn %d). This battle doesn't count.
+> 2つのゲームの結果が食い違いました(ターン %d)。この戦闘はなかったことになります。
+
+= The connection to your friend was lost. The battle ends without a winner.
+> 友だちとの接続が切れました。勝者なしで戦闘が終わります。
+
+= Your team could not be read: %s
+> あなたのチームを読めませんでした: %s
+
+= The rules for the safety check could not be made: %s
+> 安全確認のルールを作れませんでした: %s
+
+= Your team is not allowed in this room: %s
+> あなたのチームはこの部屋では使えません: %s
+
+= Your friend's team message is damaged: %s
+> 友だちのチームのメッセージが壊れています: %s
+
+= Your friend's team is not the team he drafted.
+> 友だちのチームは、ドラフトで選んだチームではありません。
+
+= The rules for the safety check could not be made.
+> 安全確認のルールを作れませんでした。
+
+= Your friend's team is not allowed in this room: %s
+> 友だちのチームはこの部屋では使えません: %s
+
+= The room's rules are not valid: %s
+> 部屋のルールが正しくありません: %s
+
+= The room's rules say "%s" but this game is set up for "%s": start the game with the room's rules first.
+> 部屋のルールは "%s" ですが、このゲームは "%s" に設定されています: 先に部屋のルールでゲームを始めてください。
+
+= The room code is not valid. Check it and try again.
+> 部屋コードが正しくありません。確認して、もう一度試してください。
+
+= Your friend's game does not speak the same online battle version. Update both games.
+> 友だちのゲームは、同じオンライン対戦のバージョンではありません。両方のゲームを更新してください。
+
+= %s (not built yet)
+> %s(まだ作られていません)
+
+= Your friend's choice does not match what he committed to. The battle stops (a changed or cheating game).
+> 友だちの選択が、約束した内容と合いません。戦闘を止めます(変更されたか、ズルをしたゲーム)。
+
+= Time left: %d s
+> のこり %d 秒
+
+= Are you sure you want to quit this online battle?
+> このオンライン対戦をやめますか?
+
+= The battle ended without a winner.
+> 勝者なしで戦闘が終わりました。
+
+= the team source is not a draft
+> チームの元がドラフトではありません
+
+= '%s' is not key:value
+> '%s' は key:value ではありません
+
+= size must be 1 to 6
+> サイズは1から6にしてください
+
+= pool must be 4 to 120
+> プールは4から120にしてください
+
+= bans must be 0 to 5
+> バンは0から5にしてください
+
+= offer must be 2 to 5
+> 提示は2から5にしてください
+
+= first must be host or coin
+> 先行は host か coin にしてください
+
+= gen must be 3 (Gen 1-3) or 4 (Gen 1-4)
+> gen は 3(第1〜3世代)か 4(第1〜4世代)にしてください
+
+= evo must be any, full or final
+> evo は any、full、final のどれかにしてください
+
+= legend must be yes or no
+> legend は yes か no にしてください
+
+= unknown draft option '%s'
+> 不明なドラフトオプション '%s'
+
+= the pool is too small for that team size and number of bans
+> そのチームの人数とバンの数に対して、プールが小さすぎます
+
+= bans are only for the snake draft
+> バンはスネークドラフトだけです
+
+= Random offers: %d to choose from for each of %d places
+> ランダム提示: %d か所それぞれで %d ひきから選ぶ
+
+= Snake draft: %d Pokemon in the pool, %d each
+> スネークドラフト: プールに %d ひき、各自 %d ひき
+
+= %d bans each first
+> 最初に各自 %d ひきバン
+
+= %d ban each first
+> 最初に各自 %d ひきバン
+
+= Gen 1-4
+> 第1〜4世代
+
+= Gen 1-3
+> 第1〜3世代
+
+= final stages only
+> 最終進化のみ
+
+= fully evolved only
+> 最終進化のみ
+
+= no legendaries
+> 伝説のポケモンなし
+
+= first pick by coin flip
+> 最初の選択はコイントスで決める
+
+= the host picks first
+> ホストが先に選ぶ
+
+= a Gen 1-4 draft needs the Gen 4 rules
+> 第1〜4世代のドラフトには第4世代ルールが必要です
+
+= only %d Pokemon pass the filters; the pool wants %d
+> フィルターを通るポケモンは %d ひきだけで、プールには %d ひき必要です
+
+= too few Pokemon pass the filters for the offers
+> 提示に必要な数のポケモンがフィルターを通りません
+
+= The connection to your friend is gone.
+> 友だちとの接続がなくなりました。
+
+= Not enough Pokemon pass the pool filters.
+> プールのフィルターを通るポケモンが足りません。
+
+= The ban commitment could not be made.
+> バンの確定を作れませんでした。
+
+= Your friend's bans do not match what they locked in (%s). The draft is stopped.
+> 友だちのバンが、確定したものと合いません(%s)。ドラフトを中止します。
+
+= bad reveal
+> 公開が正しくありません
+
+= The two games ended with different teams. The draft is stopped.
+> 2つのゲームが違うチームで終わりました。ドラフトを中止します。
+
+= An unexpected message came during the draft.
+> ドラフト中に予期しないメッセージが来ました。
+
+= Your friend stopped the draft: %s
+> 友だちがドラフトを中止しました: %s
+
+= A damaged draft message.
+> 壊れたドラフトメッセージ。
+
+= The pool message is damaged.
+> プールのメッセージが壊れています。
+
+= The pool does not match this game's data (the two games differ). The draft is stopped.
+> プールがこのゲームのデータと合いません(2つのゲームが違います)。ドラフトを中止します。
+
+= A draft message came before the pool.
+> プールより先にドラフトメッセージが来ました。
+
+= A damaged ban message.
+> 壊れたバンのメッセージ。
+
+= A ban reveal came out of order.
+> バンの公開が順番どおりに来ませんでした。
+
+= A damaged pick message.
+> 壊れた選択のメッセージ。
+
+= Your friend's picks were not allowed (%s). The draft is stopped.
+> 友だちの選択は認められませんでした(%s)。ドラフトを中止します。
+
+= Your friend refused your pick again. The draft is stopped.
+> 友だちがあなたの選択をまた拒否しました。ドラフトを中止します。
+
+= Your friend's game refused that pick (%s). Choose again.
+> 友だちのゲームがその選択を拒否しました(%s)。選びなおしてください。
+
+= An unknown draft message.
+> 不明なドラフトメッセージ。
+
+= DRAFT
+> ドラフト
+
+= Waiting for the host's pool...
+> ホストのプールを待っています...
+
+= The draft is complete!
+> ドラフトが完了しました!
+
+= Ban %d Pokemon (%d marked). A marks, START locks in.
+> ポケモン %d ひきをバン(%d ひきにしるし)。Aでしるし、STARTで確定。
+
+= Waiting for your friend's bans...
+> 友だちのバンを待っています...
+
+= YOUR PICK  (A twice to take it)
+> あなたの選択  (Aを2回でけってい)
+
+= Choose one of the three  (A twice)
+> 3つから1つを選ぶ  (Aを2回)
+
+= Waiting for your friend to pick...
+> 友だちが選ぶのを待っています...
+
+= Waiting for your friend...
+> 友だちを待っています...
+
+= Checking the teams...
+> チームを確認しています...
+
+= YOU
+> あなた
+
+= FRIEND
+> 友だち
+
+= Your team
+> あなたのチーム
+
+= Your friend's team
+> 友だちのチーム
+
+= banned
+> バン済み
+
+= available
+> 選べる
+
+= picked by you
+> あなたが選択
+
+= picked by your friend
+> 友だちが選択
+
+= D-pad: move    A: choose    B: cancel
+> 十字キー: 動かす    A: 選ぶ    B: キャンセル
+
+= The game's Pokemon tables are not available for the draft.
+> ゲームのポケモンのテーブルが、ドラフトに使えません。
+
+= The room's draft options are not valid: %s
+> 部屋のドラフトオプションが正しくありません: %s
+
+= The room's draft cannot be made: %s
+> 部屋のドラフトを作れません: %s
+
+= Your friend's pool never came.
+> 友だちのプールが来ませんでした。
+
+= The draft did not finish.
+> ドラフトが終わりませんでした。
+
+= A drafted Pokemon (%s) could not be made.
+> ドラフトで選ばれたポケモン(%s)を作れませんでした。
+
+= A Pokemon you picked (%s) could not be made.
+> あなたが選んだポケモン(%s)を作れませんでした。
+
+= That is not a room code. Check it and try again.
+> それは部屋コードではありません。確認して、もう一度試してください。
+
+= Your friend can't play in this room: %s
+> 友だちはこの部屋で遊べません: %s
+
+= The connection to your friend ended.
+> 友だちとの接続が終わりました。
+
+= Your friend left the room.
+> 友だちが部屋を出ました。
+
+= Room %s
+> 部屋 %s
+
+= BATTLE A FRIEND
+> 友だちと対戦
+
+= Make a room and tell your friend its code,
+> 部屋を作って、友だちにそのコードを伝えるか、
+
+= or join the room your friend made.
+> 友だちが作った部屋に入ってください。
+
+= Your friend needs the same game and this screen too.
+> 友だちにも同じゲームとこの画面が必要です。
+
+= A: choose   B: back
+> A: 選ぶ   B: もどる
+
+= ROOM SETTINGS
+> 部屋のせってい
+
+= Make the room
+> 部屋を作る
+
+= Up / down: choose   Left / right: change   A: choose   B: back
+> 上/下: 選ぶ   左/右: 変える   A: けってい   B: もどる
+
+= Type your friend's room code
+> 友だちの部屋コードを入力
+
+= D-pad: choose  A: type  X: delete  START: join  B: back
+> 十字キー: 選ぶ  A: 入力  X: 消す  START: 入る  B: もどる
+
+= YOUR ROOM
+> あなたの部屋
+
+= JOINING A ROOM
+> 部屋に入っています
+
+= Room code (tell your friend):
+> 部屋コード(友だちに伝える):
+
+= Room code: %s
+> 部屋コード: %s
+
+= B: cancel
+> B: キャンセル
+
+= Rules: %s
+> ルール: %s
+
+= Gen 4 Pokemon and moves
+> 第4世代のポケモンとわざ
+
+= Gen 4 Pokemon and moves with the modern types
+> 第4世代のポケモンとわざ、新しいタイプつき
+
+= Classic XD
+> クラシックXD
+
+= Battle: %s, physical/special split %s
+> 戦闘: %s、物理/特殊の分類 %s
+
+= double
+> ダブル
+
+= single
+> シングル
+
+= on
+> オン
+
+= Teams: %s
+> チーム: %s
+
+= preset teams
+> 用意されたチーム
+
+= you bring a team from one of your saves
+> あなたのセーブからチームを持ちこむ
+
+= free pick from Gen 1-3 Pokemon
+> 第1〜3世代のポケモンから自由に選ぶ
+
+= free pick from Gen 1-4 Pokemon
+> 第1〜4世代のポケモンから自由に選ぶ
+
+= snake draft
+> スネークドラフト
+
+= random offers
+> ランダム提示
+
+= Draft: %s
+> ドラフト: %s
+
+= Levels: %s
+> レベル: %s
+
+= as they are
+> そのまま
+
+= all set to level %s
+> すべてレベル %s にそろえる
+
+= capped at level %s
+> レベル %s で上限
+
+= Items: %s
+> どうぐ: %s
+
+= your own bag items (not used up in your save)
+> 自分のバッグのどうぐ(セーブでは減らない)
+
+= standard kit (Max Potion, Full Heal, Revive)
+> 標準セット(まんたんのくすり、なんでもなおし、げんきのかたまり)
+
+= Time per choice: %s
+> 1回の選択の時間: %s
+
+= no limit
+> 制限なし
+
+= %d seconds
+> %d 秒
+
+= Shadow Pokemon: %s
+> ダークポケモン: %s
+
+= not allowed
+> 使えない
+
+= allowed, they may refuse orders as in the story
+> 使える、ストーリーのように命令を聞かないことがある
+
+= allowed, they obey like purified ones
+> 使える、きよめたポケモンのように従う
+
+= This room plays with Gen 4 Pokemon. You need the Gen 4 pack from your Pokemon Battle Revolution disc (the launcher makes it).
+> この部屋は第4世代のポケモンで遊びます。ポケモンバトルレボリューションのディスクから作る第4世代パックが必要です(ランチャーが作ります)。
+
+= Your friend does not have the Gen 4 pack from the Pokemon Battle Revolution disc, which this room needs.
+> 友だちは、この部屋が必要とする、ポケモンバトルレボリューションのディスクの第4世代パックを持っていません。
+
+= Your friend's Gen 4 pack is a different version from yours. Ask them to make it again in the launcher.
+> 友だちの第4世代パックは、あなたのとバージョンが違います。ランチャーでもう一度作るように伝えてください。
+
+= The game data of the two games differs in a way the list above does not explain. Both players should use the same game version.
+> 2つのゲームのゲームデータが、上のリストで説明できない形で違っています。両方のプレイヤーが同じゲームバージョンを使ってください。
+
+= You won the battle!
+> たたかいに かった!
+
+= You lost the battle.
+> たたかいに まけた。
+
+= You gave in. Your friend wins.
+> こうさんした。友だちの勝ちです。
+
+= Your friend gave in. You win!
+> 友だちがこうさんしました。あなたの勝ち!
+
+= The connection to your friend was lost. The battle ended without a winner.
+> 友だちとの接続が切れました。勝者なしで戦闘が終わりました。
+
+= The two games stopped agreeing about the battle, so it was ended. Nobody won.
+> 2つのゲームが戦闘について食い違ったため、終了しました。勝者はいません。
+
+= YOUR FRIEND HAS JOINED
+> 友だちが入りました
+
+= Your friend is reading the settings. Waiting for them to accept...
+> 友だちが設定を読んでいます。受け入れるのを待っています...
+
+= B: close the room
+> B: 部屋を閉じる
+
+= THE ROOM'S SETTINGS
+> 部屋のせってい
+
+= The game could not be started again. Close it and start it again yourself.
+> ゲームをもう一度始められませんでした。閉じて、ご自分でもう一度始めてください。
+
+= A RESTART IS NEEDED
+> 再起動が必要です
+
+= The game starts again with the room's data and comes back to this room by itself (you wait through the opening again). Your saves stay as they are.
+> ゲームは部屋のデータでもう一度始まり、自動でこの部屋に戻ります(オープニングをまた待ちます)。セーブはそのままです。
+
+= A or B: back
+> AかB: もどる
+
+= The disc could not be read: %s
+> ディスクを読めませんでした: %s
+
+= The game's Pokemon tables could not be read: %s
+> ゲームのポケモンのテーブルを読めませんでした: %s
+
+= No Pokemon XD save in it yet.
+> まだPokemon XDのセーブがありません。
+
+= Can't be read: %s
+> 読めません: %s
+
+= There is no save to bring a team from. Play and save once first, or ask your friend for another team source.
+> チームを持ちこむセーブがありません。先に1回遊んでセーブするか、友だちに別のチームの元を頼んでください。
+
+= This save can't be read: %s
+> このセーブを読めません: %s
+
+= WHICH SAVE IS YOUR TEAM FROM?
+> チームはどのセーブからにしますか?
+
+= CHOOSE YOUR TEAM FROM YOUR SAVE
+> セーブからチームを選ぶ
+
+= PICK YOUR TEAM
+> チームを選ぶ
+
+= Done
+> おわり
+
+= Done (pick at least one)
+> おわり(最低1ひき選んでください)
+
+= Box %d
+> ボックス %d
+
+= Lv %d
+> Lv %d
+
+= Your team (%d/%d)
+> あなたのチーム(%d/%d)
+
+= Nature: %s
+> せいかく: %s
+
+= Item: %s
+> もちもの: %s
+
+= The room sets the level (%s).
+> 部屋がレベルを決めます(%s)。
+
+= The room sets its level and moves; the game gives it the moves a wild one of that level knows.
+> 部屋がレベルとわざを決めます: ゲームが、そのレベルの野生のポケモンが覚えているわざを与えます。
+
+= A: pick / un-pick   Left / right: page   B: back
+> A: 選ぶ / 選びなおす   左/右: ページ   B: もどる
+
+= TEAMS
+> チーム
+
+= The game gives you both a preset team.
+> ゲームが2人に用意されたチームを渡します。
+
+= You and your friend take turns picking Pokemon from a shared pool. The draft starts when the battle starts.
+> あなたと友だちが、共有のプールから交代でポケモンを選びます。ドラフトは戦闘が始まると始まります。
+
+= You are offered random Pokemon to pick from. The offers come when the battle starts.
+> ランダムなポケモンが提示されるので、その中から選びます。提示は戦闘が始まると来ます。
+
+= A: continue   B: leave the room
+> A: つづける   B: 部屋を出る
+
+= READY TO BATTLE?
+> たたかう じゅんびは いい?
+
+= Your team: %d Pokemon.
+> あなたのチーム: %d ひき。
+
+= Your team: %s.
+> あなたのチーム: %s。
+
+= Your friend is choosing a team...
+> 友だちがチームを選んでいます...
+
+= Your friend's team is chosen (%d Pokemon).
+> 友だちのチームが決まりました(%d ひき)。
+
+= Your friend's team is chosen.
+> 友だちのチームが決まりました。
+
+= Your friend is ready.
+> 友だちの準備ができました。
+
+= Your friend is not ready yet.
+> 友だちはまだ準備ができていません。
+
+= Ready
+> 準備OK
+
+= Trainer card
+> トレーナーカード
+
+= B: not ready
+> B: 準備をやめる
+
+= A: choose   B: leave the room
+> A: 選ぶ   B: 部屋を出る
+
+= The room is closed.
+> 部屋は閉じられました。
+
+= BATTLE OVER
+> たたかい しゅうりょう
+
+= Starting the rematch...
+> 再戦を始めています...
+
+= Waiting for your friend to answer...
+> 友だちの返事を待っています...
+
+= Your friend would like a rematch.
+> 友だちが再戦をのぞんでいます。
+
+= Rematch: the same room and settings again.
+> 再戦: 同じ部屋、同じせってい。
+
+= Double battle
+> ダブルバトル
+
+= Single battle
+> シングルバトル
+
+= There is no Pokemon there.
+> そこにポケモンはいません。
+
+= A Shadow Pokemon can't be traded until it is purified.
+> ダークポケモンは、きよめるまで交換できません。
+
+= Eggs can't be traded.
+> タマゴは交換できません。
+
+= Your friend's Pokemon could not be read.
+> 友だちのポケモンを読めませんでした。
+
+= No save is loaded.
+> セーブが読みこまれていません。
+
+= The Pokemon you offered is no longer in your save.
+> あなたが出したポケモンは、もうセーブにいません。
+
+= The Pokemon you offered is no longer in your game.
+> あなたが出したポケモンは、もうゲームにいません。
+
+= The save is missing a section the trade needs.
+> セーブに、交換に必要な部分がありません。
+
+= After this trade you would have no Pokemon in your party that can battle.
+> この交換のあと、てもちに戦えるポケモンがいなくなります。
+
+= The new save could not be built.
+> 新しいセーブを作れませんでした。
+
+= The new save did not hold the Pokemon it should.
+> 新しいセーブに、あるはずのポケモンがいませんでした。
+
+= Nothing is prepared.
+> 何も準備されていません。
+
+= The save could not be written.
+> セーブを書きこめませんでした。
+
+= The game's tables are not ready.
+> ゲームのテーブルの準備ができていません。
+
+= The save could not be read in the GameCube order.
+> セーブをゲームキューブの順番で読めませんでした。
+
+= There is no Pokemon XD save here yet. Play and save once first.
+> まだPokemon XDのセーブがありません。先に1回遊んでセーブしてください。
+
+= The new save has the wrong size.
+> 新しいセーブのサイズが違います。
+
+= The backup copy of your save could not be made, so nothing was changed.
+> セーブのバックアップを作れなかったため、何も変更していません。
+
+= The new save could not be written.
+> 新しいセーブを書きこめませんでした。
+
+= The save could not be replaced.
+> セーブを置きかえられませんでした。
+
+= The new save did not pass its checks: %s
+> 新しいセーブが確認に通りませんでした: %s
+
+= The old save file can't be read again: %s
+> 古いセーブファイルをもう読めません: %s
+
+= party slot %d
+> てもち %d ばん
+
+= PC box %d, place %d
+> PCボックス %d、%d ばん
+
+= JOIN
+> さんか
+
+= DEL
+> DEL
+
+= Lv
+> Lv
+
+= SHINY
+> 色違い
+
+= Nature: %s     Ability: %s
+> せいかく: %s     とくせい: %s
+
+= Held item: %s
+> もちもの: %s
+
+= HP %d/%d     OT: %s (%d)
+> HP %d/%d     おやのなまえ: %s (%d)
+
+= There is no save.
+> セーブがありません。
+
+= Play and save once first.
+> 先に1回遊んでセーブしてください。
+
+= This save can't be traded from: %s
+> このセーブからは交換できません: %s
+
+= Warning: playing online exposes your internet address (IP) to the other player.
+> 注意: オンラインで遊ぶと、あなたのインターネットアドレス(IP)が相手のプレイヤーに知られます。
+
+= ONLINE TRADE
+> オンライン交換
+
+= Which save do you want to trade from?
+> どのセーブから交換しますか?
+
+= Make a room
+> 部屋を作る
+
+= Join a room
+> 部屋に入る
+
+= Trade Pokemon with a friend over the internet.
+> インターネットで友だちとポケモンを交換します。
+
+= Trading from: your game
+> 交換元: あなたのゲーム
+
+= Trading from: %s (%s)
+> 交換元: %s (%s)
+
+= Trading from: %s's save
+> 交換元: %s のセーブ
+
+= Press B to go back.
+> Bでもどります。
+
+= Your Pokemon
+> あなたのポケモン
+
+= Your friend offers
+> 友だちが出したもの
+
+= Nothing yet.
+> まだありません。
+
+= Your offer: %s Lv%d%s
+> あなたが出す: %s Lv%d%s
+
+= Selected: %s Lv%d%s
+> 選んだもの: %s Lv%d%s
+
+= no item
+> もちものなし
+
+= OT %s (%d)
+> おや %s (%d)
+
+= Can't be traded: %s
+> 交換できません: %s
+
+= You can't take your friend's Pokemon: %s
+> 友だちのポケモンを受け取れません: %s
+
+= Your friend's game can't take your Pokemon: %s
+> 友だちのゲームがあなたのポケモンを受け取れません: %s
+
+= A: offer / take back   X: %s   Y: take back   B: leave   (you are %s, friend %s)
+> A: 出す / ひっこめる   X: %s   Y: ひっこめる   B: 出る   (あなたは%s、友だちは%s)
+
+= not ready
+> 準備まだ
+
+= READY
+> 準備OK
+
+= Trade %s for %s?
+> %s と %s を交換しますか?
+
+= YES
+> はい
+
+= NO
+> いいえ
+
+= TRADE DONE
+> 交換かんりょう
+
+= Press A to go back.
+> Aでもどります。
+
+= You received %s (%s).
+> %s(%s)を受け取りました。
+
+= Your game makes the swap now, shows the evolution, and saves.
+> あなたのゲームがこれから交換を行い、進化を見せて、セーブします。
+
+= Your game makes the swap now and saves.
+> あなたのゲームがこれから交換を行い、セーブします。
+
+= It evolved: %s became %s!
+> 進化しました: %s は %s に進化した!
+
+= Your Pokedex has a new entry.
+> ポケモンずかんに新しいページができました。
+
+= ONLINE BATTLE
+> オンライン対戦
+
+= Battle a friend over the internet.
+> インターネットで友だちと対戦します。
+
+= The Pokemon you gave is no longer where it was, so nothing was changed.
+> あなたが渡したポケモンが元の場所にいないため、何も変更されませんでした。
+
+= The PC box would not take the Pokemon.
+> PCボックスがそのポケモンを受け入れませんでした。
+
+= The trade is done in your game, but the save FAILED. Your game was not saved: save it yourself before you turn the game off. The copy of your save from before the trade is kept.
+> 交換はあなたのゲームで行われましたが、セーブに失敗しました。ゲームはセーブされていません: ゲームを終了する前にご自分でセーブしてください。交換前のセーブのコピーは残されています。
+
+= %s could not be used (see the mods message)
+> %s を使えませんでした(MODのメッセージを見てください)
+
+= Switched to %s. Loading speed and Memory card speed change the next time you start the game.
+> %s に切りかえました。読みこみ速度とメモリーカードの速度は、次にゲームを始めたときに変わります。
+
+= New Game: %s (as chosen before)
+> ニューゲーム: %s(前に選んだとおり)
+
+= This save's setup had: %s. The game carries on without it.
+> このセーブの設定には %s がありました。ゲームはそれなしで続けます。
+
+= The save on the memory card holds Pokemon, moves or items that mods added, and their numbers would mean other things without the same mods: %s. Nothing on the card is read or changed.
+> メモリーカードのセーブには、MODが追加したポケモン、わざ、どうぐが入っており、同じMODがないと、その番号は別のものを意味します: %s。カードのものは何も読まれず、変更もされません。
+
+= This save holds Pokemon, moves or items that this game does not have (the game has %d Pokemon, %d moves, %d items):\n\n%s\nIt was probably saved with a mod that adds Pokemon, moves or items. Start the game with that mod switched on (same mods, same order). Nothing was read into the game and nothing on the card was changed. The game stops here.
+> このセーブには、このゲームにないポケモン、わざ、どうぐが入っています(このゲームにはポケモン %d、わざ %d、どうぐ %d があります):\n\n%s\nおそらく、ポケモン、わざ、どうぐを追加するMODでセーブされました。そのMODをオンにして(同じMOD、同じ順番)ゲームを始めてください。ゲームには何も読みこまれず、カードのものも変更されていません。ゲームはここで止まります。
+
+= Pokemon XD - this save needs its mods
+> Pokemon XD - このセーブにはMODが必要です
+
+= Light
+> ライト
+
+= Classic
+> クラシック
+
+= Chaos
+> カオス
+
+= Faithful · Vanilla · no setup file (a save from Dolphin, a GameCube or an older port)
+> 忠実 - バニラ - 設定ファイルなし(Dolphin、ゲームキューブ、または古いポートのセーブ)
+
+= CONTINUE: choose a save
+> つづきから: セーブを選ぶ
+
+= %s played
+> プレイ時間 %s
+
+= (loaded now)
+> (今読みこみ中)
+
+= Rules of this save
+> このセーブのルール
+
+= A: load this save   B: back to the title menu
+> A: このセーブを読みこむ   B: タイトルメニューにもどる
+
+= Script mod %s switched off: %s
+> スクリプトMOD %s をオフにしました: %s
+
+= Online, mods and settings (PC version).
+> オンライン、MOD、せってい(PC版)。
+
+= EXTRAS
+> おまけ
+
+= Switch the installed mods on or off (PC version).
+> インストールしたMODをオン/オフにします(PC版)。
+
+= SETTINGS
+> せってい
+
+= ONLINE
+> オンライン
+
+= Trade Pokemon with a friend online (PC version).
+> オンラインで友だちとポケモンを交換します(PC版)。
+
+= Speedrun timer
+> スピードランタイマー
+
+= Timer category
+> タイマーのカテゴリー
+
+= Timer start (Custom)
+> タイマー開始(カスタム)
+
+= Timer end (Custom)
+> タイマー終了(カスタム)
+
+= Timer position
+> タイマーの位置
+
+= Timer size
+> タイマーの大きさ
+
+= Timer split list
+> タイマーの区間リスト
+
+= Play statistics
+> プレイ統計
+
+= Music
+> おんがく
+
+= Sound effects
+> こうかおん
+
+= Cries
+> なきごえ
+
+= Language
+> 言語
+
+= Fast animations
+> アニメ高速化
+
+= See below
+> 下を見てください
+
+= Press A again
+> もう一度Aを押してください
+
+= Window
+> ウィンドウ
+
+= Save any changes and leave the settings.
+> 変更をセーブして、せっていを閉じます。
+
+= Starts the game again now in the new language. Progress you have not saved is lost.
+> 今すぐ新しい言語でゲームを始めなおします。セーブしていない進行は失われます。
+
+= Keeps the new language for the next time the game starts. Nothing happens now.
+> 新しい言語を、次にゲームを始めたときのために保持します。今は何も起きません。
+
+= The new language is used the next time the game starts.
+> 新しい言語は、次にゲームを始めたときに使われます。
+
+= EXIT
+> とじる
+
+= Poke Spot Pokemon
+> ポケスポットのポケモン
+
+= Other wild Pokemon at the three Poke Spots. The visitors (Munchlax, Bonsly) stay.
+> 3つのポケスポットのほかの野生ポケモン。訪問者(ゴンベ、ウソハチ)は変わりません。
+
+= Similar strength
+> 近い強さ
+
+= Poke Spots: each Pokemon is replaced by one about as strong.
+> ポケスポット: 各ポケモンが、同じくらいの強さのものに置きかわります。
+
+= Trainers' Pokemon
+> トレーナーのポケモン
+
+= Other Pokemon in the story trainers' teams. Team sizes stay; levels, held items and natures have their own rows.
+> ストーリーのトレーナーのチームにいるほかのポケモン。チームの人数はそのままで、レベル、もちもの、せいかくは別の行にあります。
+
+= Trainers: each Pokemon is replaced by one about as strong.
+> トレーナー: 各ポケモンが、同じくらいの強さのものに置きかわります。
+
+= Moves
+> わざ
+
+= Trainers' new Pokemon. Kept: the moves the disc gave that slot. By level: the last four moves the new Pokemon learns up to its level.
+> トレーナーの新しいポケモン。そのまま: そのスロットにディスクが与えたわざ。レベルしだい: 新しいポケモンがそのレベルまでに覚える最後の4つのわざ。
+
+= No repeats
+> 重複なし
+
+= Trainers: a team never gets the same Pokemon twice.
+> トレーナー: チームに同じポケモンが2ひきいることはありません。
+
+= Shadow Pokemon
+> ダークポケモン
+
+= Other species are the Shadow Pokemon (all 83 different; the P*DA's list follows). Shadow moves, catch rates and heart gauges stay.
+> ほかの種類がダークポケモンになります(83ひきすべて別。P*DAの一覧も変わります)。ダークわざ、つかまえやすさ、ハートゲージはそのままです。
+
+= Shadows: each one is replaced by a Pokemon about as strong.
+> ダーク: それぞれが、同じくらいの強さのポケモンに置きかわります。
+
+= Keep Shadow Lugia
+> ダークルギアはそのまま
+
+= Shadow Lugia stays Lugia (the story and its scenes show Lugia).
+> ダークルギアはルギアのままです(ストーリーとそのシーンではルギアが出ます)。
+
+= Items on the ground
+> 落ちているどうぐ
+
+= The item boxes on the maps. Random: any item. Shuffle: the same items in other places. Important items never move.
+> マップのどうぐボックス。ランダム: どんなどうぐでも。シャッフル: 同じどうぐが別の場所に。たいせつなものは動きません。
+
+= Abilities
+> とくせい
+
+= Pokemon get other abilities. Wonder Guard and Forecast are never handed out.
+> ポケモンが別のとくせいを持ちます。ふしぎなまもりとてんきやは配られません。
+
+= Same in a family
+> 同じ系統は同じ
+
+= Abilities: a Pokemon keeps its ability when it evolves.
+> とくせい: ポケモンは進化してもとくせいを保ちます。
+
+= TM learners
+> わざマシンを覚えるポケモン
+
+= Which Pokemon can learn each TM; each TM stays about as common as on the disc.
+> 各わざマシンをどのポケモンが覚えられるか。各わざマシンの出まわりやすさは、ディスクとほぼ同じです。
+
+= Legendaries
+> 伝説のポケモン
+
+= Whether legendary Pokemon can be picked: never, only where the disc had one, or anywhere.
+> 伝説のポケモンが選ばれうるか: なし、ディスクに出た場所だけ、またはどこでも。
+
+= TM moves
+> わざマシンのわざ
+
+= Each TM teaches another move, all different (never a Shadow move). The bag and the shops show the new move and its description. One-hit-KO moves can be ruled out.
+> 各わざマシンが別のわざを教えます(すべて別、ダークわざは出ません)。バッグとショップに新しいわざとその説明が出ます。一撃必殺わざは除けます。
+
+= Trainers' levels
+> トレーナーのレベル
+
+= The story trainers' Pokemon are stronger by that much (never above level 100), or "To strength": a stronger new Pokemon gets a lower level, a weaker one a higher level. Shadow Pokemon keep their levels.
+> ストーリーのトレーナーのポケモンが、その分だけ強くなります(レベル100までで、それ以上にはなりません)。または「強さに合わせる」: 強い新しいポケモンはレベルが低く、弱いものは高くなります。ダークポケモンのレベルは変わりません。
+
+= Trainers' held items
+> トレーナーのもちもの
+
+= What the story trainers' Pokemon hold. Random: each holds one of the items trainers' Pokemon hold in the game. None: nothing. Shadow Pokemon keep theirs.
+> ストーリーのトレーナーのポケモンが持つもの。ランダム: ゲームでトレーナーのポケモンが持つどうぐのどれかを持ちます。なし: 何も持ちません。ダークポケモンは元のままです。
+
+= Trainers' natures
+> トレーナーのせいかく
+
+= Random: each of the story trainers' Pokemon gets any of the 25 natures. Shadow Pokemon get theirs from the game, as always.
+> ランダム: ストーリーのトレーナーの各ポケモンが、25のせいかくのどれかになります。ダークポケモンは、いつもどおりゲームのせいかくです。
+
+= Poke Mart stock
+> フレンドリィショップの品ぞろえ
+
+= What the Poke Marts sell. Shuffled: the Marts' own goods in other Marts. Everyday goods: medicine, status cures, repels, battle items, berries. Anything: also held items, TMs, vitamins, stones, valuables. Poke Balls and Poke Snacks stay where they are.
+> ショップが売るもの。シャッフル: ショップ自身の商品が別のショップに。ふだんの品: くすり、状態異常なおし、むしよけ、戦闘用どうぐ、きのみ。なんでも: もたせるどうぐ、わざマシン、ドーピングのくすり、進化の石、たからものも。モンスターボールとポケモンのえさは、そのままです。
+
+= Tutor moves
+> わざおしえ
+
+= The move tutor teaches other moves, all different and none a TM teaches. Each is learned by the Pokemon that could learn the move it replaces. One-hit-KO moves can be ruled out.
+> わざおしえが別のわざを教えます(すべて別で、わざマシンが教えるものは出ません)。それぞれ、置きかわるわざを覚えられたポケモンが覚えられます。一撃必殺わざは除けます。
+
+= Scope
+> 範囲
+
+= Poke Spots, "Same swap everywhere": a Pokemon is replaced by the same new one in every spot, and no two by the same one.
+> ポケスポット、「どこも同じ入れかえ」: ポケモンはどのスポットでも同じ新しいものに置きかわり、2ひきが同じものになることはありません。
+
+= Type theme
+> タイプのテーマ
+
+= Poke Spots, "Similar types": the new Pokemon shares a type with the one it replaces.
+> ポケスポット、「近いタイプ」: 新しいポケモンは、置きかわる元のポケモンとタイプを共有します。
+
+= Poke Spot levels
+> ポケスポットのレベル
+
+= Poke Spot Pokemon are that much higher in level (never above level 100).
+> ポケスポットのポケモンが、その分だけレベルが高くなります(レベル100までで、それ以上にはなりません)。
+
+= Starter Pokemon
+> 最初のポケモン
+
+= You start with another Pokemon instead of Eevee, at level 10. The film scenes and the Eevee evolution offer still say Eevee.
+> イーブイのかわりに、別のポケモンをレベル10で始めます。ムービーのシーンとイーブイの進化の提案では、イーブイのままです。
+
+= Starter choice
+> 最初のポケモンの選びかた
+
+= Random: one Pokemon, chosen for you. Pick 1 of 3: you choose from three when the game would give you Eevee. Eevee family: Eevee or one of its evolutions.
+> ランダム: あなたのために1ぴき選ばれます。3ひきから1ぴき: ゲームがイーブイをくれる場面で、3ひきから選びます。イーブイ系統: イーブイか、その進化形。
+
+= Similar to Eevee
+> イーブイに近い
+
+= On: the starter's base stats add up to about Eevee's (never a legendary). Off: any Pokemon the Legendaries row allows. Does not apply to Eevee family.
+> オン: 最初のポケモンの種族値の合計が、イーブイとほぼ同じ(伝説のポケモンは出ません)。オフ: 「伝説のポケモン」の行が許すどのポケモンでも。イーブイ系統には当てはまりません。
+
+= Starter's moves
+> 最初のポケモンのわざ
+
+= By level: the last four moves the starter learns up to level 10. Kept: Eevee's four (Tackle, Tail Whip, Bite, Sand-Attack).
+> レベルしだい: 最初のポケモンがレベル10までに覚える最後の4つのわざ。そのまま: イーブイの4つ(たいあたり、しっぽをふる、かみつく、すなかけ)。
+
+= By level
+> レベルしだい
+
+= As on the disc
+> ディスクどおり
+
+= To strength
+> 強さに合わせる
+
+= Kept
+> そのまま
+
+= Random
+> ランダム
+
+= Shuffle
+> シャッフル
+
+= Shuffled
+> シャッフル済み
+
+= Everyday goods
+> ふだんの品
+
+= Anything
+> なんでも
+
+= Never
+> なし
+
+= Any
+> どれでも
+
+= Similar types
+> 近いタイプ
+
+= Each spot its own
+> スポットごとに別
+
+= Same swap everywhere
+> どこも同じ入れかえ
+
+= Random, no one-hit-KO moves
+> ランダム、一撃必殺わざなし
+
+= Pick 1 of 3
+> 3ひきから1ぴき
+
+= Eevee family
+> イーブイ系統
+
+= Nothing to paste: copy a code first (Ctrl+C in a message or a web page).
+> 貼りつけるものがありません: 先にコードをコピーしてください(メッセージやWebページでCtrl+C)。
+
+= That is not a randomizer code (%s).
+> それはランダマイザーコードではありません(%s)。
+
+= too long
+> 長すぎます
+
+= Code taken: %s.
+> コードを受け取りました: %s。
+
+= Play the original game
+> 元のゲームで遊ぶ
+
+= Engine
+> エンジン
+
+= %s (not available)
+> %s(使えません)
+
+= Randomizer (not available)
+> ランダマイザー(使えません)
+
+= Use a friend's code
+> 友だちのコードを使う
+
+= Shiny odds
+> 色違いの確率
+
+= Shiny Shadow Pokemon
+> 色違いのダークポケモン
+
+= Shiny gift Pokemon
+> 色違いのもらえるポケモン
+
+= Shiny Bonsly / Munchlax
+> 色違いのウソハチ / ゴンベ
+
+= START
+> START
+
+= Faithful, no mods: exactly the GameCube game. Starts at once (the game first starts again without the mods it has loaded).
+> 忠実、MODなし: ゲームキューブのゲームそのまま。すぐに始まります(ゲームは、読みこんだMODなしで、まず始めなおします)。
+
+= Faithful, no mods: exactly the GameCube game. Starts at once.
+> 忠実、MODなし: ゲームキューブのゲームそのまま。すぐに始まります。
+
+= Faithful: the game decides everything exactly as on the GameCube. Enhanced: speed-ups (text, fast-forward, battle animations) can be used.
+> 忠実: ゲームがすべてをゲームキューブとまったく同じに決めます。強化: 高速化(テキスト、早送り、戦闘アニメ)が使えます。
+
+= A timer over the picture for this playthrough, kept with the save: Real time counts from NEW GAME (what speedruns use); Without loads takes the game's loading time out. Only drawn: the game plays exactly the same with it on or off, also Faithful. Change it later on the SETTINGS page.
+> このプレイのための絵の上のタイマーで、セーブとともに保存されます。リアルタイム: 「はじめから」から数えます(スピードランで使われる方式)。ロードなし: ゲームの読みこみ時間を除きます。表示だけです: オンでもオフでも、忠実でも、ゲームはまったく同じに動きます。あとでせっていページで変えられます。
+
+= %s mod, version %s.
+> %s MOD、バージョン %s。
+
+= Counted as new playthrough only: %s.
+> 新しいプレイのみで数えます: %s。
+
+= Makes a new game from your disc: other Pokemon in the Poke Spots, other Shadow Pokemon, items in other places. Light: those only. Classic: also trainers, abilities, TM learners, similar strength. Chaos: all, no fairness. Custom: each switch yourself.
+> あなたのディスクから新しいゲームを作ります: ポケスポットに別のポケモン、別のダークポケモン、別の場所のどうぐ。ライト: それだけ。クラシック: トレーナー、とくせい、わざマシンを覚えるポケモン、近い強さも。カオス: すべて、公平さなし。カスタム: 各スイッチを自分で。
+
+= Code: %s. It holds the seed and every switch: a friend who uses it gets the same game. Left / right or A: a new random seed.
+> コード: %s。シード(種)とすべてのスイッチが入っています: 使った友だちは同じゲームになります。左/右かA: 新しいランダムなシード。
+
+= How often a Pokemon is shiny: Original 1 in 8192 (the GameCube game), Modern 1 in 4096 (Gen 6 and later), or 1 in 1024, 512, 128. Applies where the game allows shiny Pokemon (Poke Spot Pokemon, your Eevee, trades). Kept with this playthrough. A shiny is just a shiny in online battles and trades.
+> ポケモンが色違いになる頻度: オリジナル 8192分の1(ゲームキューブのゲーム)、モダン 4096分の1(第6世代以降)、または1024、512、128分の1。ゲームが色違いのポケモンを許す場面(ポケスポットのポケモン、あなたのイーブイ、交換)に適用されます。このプレイとともに保持されます。オンライン対戦と交換では、色違いはただの色違いです。
+
+= On: Shadow Pokemon can be shiny, with the odds above (in the GameCube game they never are). Each Shadow Pokemon gets its looks when you first meet it and keeps them, also after purifying. Off: as the game.
+> オン: ダークポケモンが、上の確率で色違いになれます(ゲームキューブのゲームでは決してなりません)。各ダークポケモンは、初めて出会ったときに見た目が決まり、きよめたあとも保たれます。オフ: ゲームのとおり。
+
+= On: the gift Pokemon the game never makes shiny (Jolteon, Vaporeon, Plusle, Ho-Oh, Pikachu, Celebi) can be shiny, with the odds above. Your starter Eevee, trades and the Mt. Battle starters already follow the odds. Off: as the game.
+> オン: ゲームが決して色違いにしないもらえるポケモン(サンダース、シャワーズ、プラスル、ホウオウ、ピカチュウ、セレビィ)が、上の確率で色違いになれます。最初のイーブイ、交換、バトルマウンテンの最初のポケモンは、すでに確率に従います。オフ: ゲームのとおり。
+
+= On: the Poke Spot visitors Bonsly and Munchlax, which are never shiny in the game, can be shiny, with the odds above. Other Poke Spot Pokemon already follow the odds. Off: as the game.
+> オン: ゲームでは決して色違いにならないポケスポットの訪問者ウソハチとゴンベが、上の確率で色違いになれます。ほかのポケスポットのポケモンは、すでに確率に従います。オフ: ゲームのとおり。
+
+= Copy a code (or a seed number) on the PC, then press A here to use it.
+> PCでコード(またはシード番号)をコピーして、ここでAを押すと使えます。
+
+= Not available: %s. The Gen 4 Pokemon, moves, cries and models are made from your own Pokemon Battle Revolution disc (launcher, Extra assets page).
+> 使えません: %s。第4世代のポケモン、わざ、なきごえ、モデルは、あなたのポケモンバトルレボリューションのディスクから作ります(ランチャー、追加アセットページ)。
+
+= Challenge rule, for this playthrough from start to end. %s
+> チャレンジルール。このプレイの最初から最後まで有効です。%s
+
+= Start the new game with this setup. The game starts again with these mods first; then choose NEW GAME again.
+> この設定でニューゲームを始めます。ゲームはまずこれらのMODで始めなおし、そのあと、もう一度「はじめから」を選んでください。
+
+= The game started again with your setup: start the new game with it.
+> ゲームはあなたの設定で始めなおしました: これでニューゲームを始めてください。
+
+= Start the new game with this setup.
+> この設定でニューゲームを始めます。
+
+= NEW GAME
+> はじめから
+
+= Paste (A)
+> 貼りつけ(A)
+
+= and %d more
+> ほか %d 件
+
+= %d more
+> ほか %d
+
+= This save was started with mods that are missing or changed: %s. Carry on without them? (It can change the game.)
+> このセーブは、ないか変更されたMODで始められました: %s。それなしで続けますか?(ゲームが変わることがあります。)
+
+= %s and %s
+> %s と %s
+
+= Keep Faithful
+> 忠実のまま
+
+= Switch to Enhanced
+> 強化に切りかえる
+
+= This playthrough is marked Faithful: it plays exactly like the GameCube game.
+> このプレイは忠実とされています: ゲームキューブのゲームとまったく同じに遊べます。
+
+= For a Faithful playthrough some settings stay as on the GameCube, whatever you have set.
+> 忠実なプレイでは、何を設定していても、一部の設定はゲームキューブと同じままです。
+
+= They are: %s.
+> それは: %s。
+
+= Your settings are Enhanced now. You can keep this playthrough Faithful, or switch it to Enhanced so that those settings work in it.
+> 今のせっていは強化です。このプレイを忠実のままにするか、それらのせっていが働くよう強化に切りかえられます。
+
+= Warning: you can switch back later, but a playthrough that was Enhanced for a while no longer counts as Faithful from the start.
+> 注意: あとで戻せますが、しばらく強化だったプレイは、もう最初から忠実とは数えられません。
+
+= Its label will always show that it was switched. Picture, sound and controls settings are yours either way.
+> ラベルには、切りかえたことが常に表示されます。絵、音、操作のせっていは、どちらでもあなたのものです。
+
+= Keep this playthrough Faithful, or switch it to Enhanced?
+> このプレイを忠実のままにしますか? 強化に切りかえますか?
+
+= Keep Enhanced
+> 強化のまま
+
+= Switch to Faithful
+> 忠実に切りかえる
+
+= This playthrough is marked Enhanced: it plays with your own gameplay settings.
+> このプレイは強化とされています: あなた自身のゲームプレイのせっていで遊びます。
+
+= Your settings are the Original ones now, so it plays like the GameCube game anyway. But it stays marked Enhanced.
+> 今のせっていはオリジナルなので、どちらにしてもゲームキューブのゲームと同じに遊べます。でも強化とされたままです。
+
+= You can keep it Enhanced, or switch it to Faithful. Faithful holds those settings as on the GameCube, whatever you set later.
+> 強化のままにするか、忠実に切りかえられます。忠実は、あとで何を設定しても、それらのせっていをゲームキューブと同じに保ちます。
+
+= Its label will always show that it was Enhanced for a while: it does not count as Faithful from the start. You can switch again later.
+> ラベルには、しばらく強化だったことが常に表示されます: 最初から忠実とは数えられません。あとでまた切りかえられます。
+
+= Keep this playthrough Enhanced, or switch it to Faithful?
+> このプレイを強化のままにしますか? 忠実に切りかえますか?
+
+= Your partner Pokemon is not Eevee this time. Choose one of these three to start with.
+> 今回のパートナーポケモンはイーブイではありません。この3びきから1ぴき選んで始めてください。
+
+= by %s
+> 作者: %s
+
+= Changes: %s.
+> 変更: %s。
+
+= Looks and sound only.
+> 見た目と音だけ。
+
+= Read when the game starts.
+> ゲームの起動時に読まれます。
+
+= New playthrough only: your save is set up with it, so it stays on for that save whatever is chosen here.
+> 新しいプレイのみ: あなたのセーブはこれで設定されているため、ここで何を選んでも、そのセーブではオンのままです。
+
+= New playthrough only: it is chosen when you start a new game. Your save keeps the mods it was started with.
+> 新しいプレイのみ: ニューゲームを始めるときに選びます。セーブは、始めたときのMODを保ちます。
+
+= New playthrough only: it is chosen when you start a new game.
+> 新しいプレイのみ: ニューゲームを始めるときに選びます。
+
+= (It says %s, but %s.)
+> (%s とありますが、%s。)
+
+= In use now.
+> 今使用中。
+
+= Can't be used: %s. Fix or remove it in the mods folder, then open this page again.
+> 使えません: %s。MODフォルダで直すか削除してから、このページをもう一度開いてください。
+
+= List "%s": 1 mod on
+> リスト "%s": MOD 1個オン
+
+= List "%s": %d mods on
+> リスト "%s": MOD %d 個オン
+
+= Save this mod list and start the game again with it. Until you do, nothing changes: EXIT or B leaves the list as it was.
+> このMODリストを保存して、これでゲームを始めなおします。それまでは何も変わりません: とじるかBで、リストは元のままです。
+
+= Nothing has changed yet. Switch mods on or off above (L / R, or X / Y, move one up or down the order: further down wins when two mods change the same file).
+> まだ何も変わっていません。上でMODをオン/オフにしてください(L / RかX / Yで順番を上下に動かします: 2つのMODが同じファイルを変えるときは、下のほうが優先)。
+
+= List "%s"
+> リスト "%s"
+
+= Leave without applying: the mod list stays as it was.
+> 適用せずに出る: MODリストは元のままです。
+
+= Nothing has changed, so there is nothing to apply.
+> 何も変わっていないため、適用するものがありません。
+
+= This test run can't save the mod list: %s
+> このテスト実行はMODリストを保存できません: %s
+
+= The mod list couldn't be saved to mods.ini, so nothing was changed.
+> MODリストを mods.ini に保存できなかったため、何も変更されませんでした。
+
+= L / R: move up / down the order
+> L / R: 順番を上下に動かす
+
+= Apply and restart
+> 適用して再起動
+
+= Missing
+> なし
+
+= Can't load
+> 読みこめません
+
+= (can't load) %s
+> (読みこめません)%s
+
+= Trade with a friend
+> 友だちと交換
+
+= Battle a friend
+> 友だちと対戦
+
+= Trade or battle with a friend over the internet.
+> インターネットで友だちと交換や対戦をします。
+
+= The PC version's settings: picture, sound, controls and more.
+> PC版のせってい: 絵、音、操作など。
+
+= Back to the title menu.
+> タイトルメニューにもどります。
+
+= Your title, name and character for online battles.
+> オンライン対戦での、あなたの称号、名前、キャラクター。
+
+= Back to EXTRAS.
+> おまけにもどります。
+
+= Online battles are not in this build yet.
+> オンライン対戦は、このビルドにはまだありません。
+
+= Michael (look 1)
+> ミナト(見た目1)
+
+= Michael (look 2)
+> ミナト(見た目2)
+
+= Michael (look 3)
+> ミナト(見た目3)
+
+= Hero (Ruby/Sapphire, boy)
+> 主人公(ルビー/サファイア、男の子)
+
+= Hero (Ruby/Sapphire, girl)
+> 主人公(ルビー/サファイア、女の子)
+
+= Hero (FireRed/LeafGreen, boy)
+> 主人公(ファイアレッド/リーフグリーン、男の子)
+
+= Hero (FireRed/LeafGreen, girl)
+> 主人公(ファイアレッド/リーフグリーン、女の子)
+
+= Hero (Emerald, boy)
+> 主人公(エメラルド、男の子)
+
+= Hero (Emerald, girl)
+> 主人公(エメラルド、女の子)
+
+= Trainer %u
+> トレーナー %u
+
+= Colosseum: %s
+> コロシアム: %s
+
+= (the game's own)
+> (ゲーム本来のもの)
+
+= (unknown)
+> (不明)
+
+= TRAINER CARD
+> トレーナーカード
+
+= the game's own model
+> ゲーム本来のモデル
+
+= no picture made yet
+> まだ絵が作られていません
+
+= (name)
+> (名前)
+
+= would like to battle!
+> が しょうぶを しかけてきた!
+
+= TITLE
+> 称号
+
+= NAME
+> 名前
+
+= CHARACTER
+> キャラクター
+
+= DONE
+> おわり
+
+= Up/Down: row   A: change   B: done
+> 上/下: 行   A: 変える   B: おわり
+
+= game's own
+> ゲーム本来
+
+= A: type   B: delete   choose OK when done
+> A: 入力   B: 消す   おわったらOKを選ぶ
+
+= Purification speed
+> きよめの速さ
+
+= How many times faster a Shadow Pokemon's heart opens (walking, battling, the Purify Chamber). 1 is the original.
+> ダークポケモンのこころが開く速さが何倍になるか(歩く、戦う、きよめの間)。1が元の速さです。
+
+= The language of the game's texts, menus and pictures. English (US) is the USA game as it is. The others come from the European (PAL) copy of the game, added on the launcher's Extra assets page ("Languages (from the European disc)"), and Japanese from the Japanese copy ("Japanese (from the Japanese disc)"); a language the pack doesn't have falls back to English. Applies the next time the game starts. It changes only text and pictures, not how the game plays.
+> ゲームの文章、メニュー、絵の言語です。英語(US)は、USA版ゲームそのままです。ほかはヨーロッパ版(PAL)のゲームのコピーから来ており、ランチャーの追加アセットページ(「言語(ヨーロッパ版ディスクから)」)で追加します。日本語は日本版のコピー(「日本語(日本版ディスクから)」)から来ます。パックにない言語は英語になります。次にゲームを始めたときに有効になります。変わるのは文章と絵だけで、ゲームの遊びかたは変わりません。
+
+= English (US)
+> 英語(US)
+
+= German
+> ドイツ語
+
+= French
+> フランス語
+
+= Italian
+> イタリア語
+
+= Spanish
+> スペイン語
+
+= European disc image (for languages)
+> ヨーロッパ版ディスクイメージ(言語用)
+
+= The European (PAL) Pokemon XD disc image the launcher's Extra assets page makes the language pack from (empty: none chosen yet).
+> ランチャーの追加アセットページで言語パックを作るための、ヨーロッパ版(PAL)のPokemon XDのディスクイメージです(空: まだ選んでいません)。
+
+= Japanese disc image (for Japanese)
+> 
+
+= The Japanese Pokemon XD disc image the launcher's Extra assets page makes the Japanese pack from (empty: none chosen yet).
+> 
+
+= Developer menu (cheats)
+> 開発者メニュー(チート)
+
+= F9 opens a menu of the developers' own debug tools left in the game: go to any place, any point of the story, set story flags, start battles, get items and Pokemon. For testing; runs that used it are marked in their recording and bug reports.
+> F9で、ゲームに残された開発者自身のデバッグツールのメニューが開きます: 好きな場所やストーリーの時点へ行く、ストーリーのフラグを設定する、戦闘を始める、どうぐやポケモンを手に入れる。テスト用です。これを使ったプレイは、記録とバグレポートに印がつきます。
+
+= Fast-forward switched itself off: this PC can't keep up with it.
+> 早送りは自動でオフになりました: このPCでは追いつけません。
+
+= Fast battle animations switched themselves off: this PC can't keep up with them.
+> 戦闘アニメの高速化は自動でオフになりました: このPCでは追いつけません。
+
+= The picture never came back from the graphics card.
+> グラフィックスカードから絵が戻ってきませんでした。
+
+= Saved %s (%dx%d)
+> %s を保存しました(%dx%d)
+
+= Could not save %s
+> %s を保存できませんでした
+
+= The picture could not be taken (no readback on this graphics card?).
+> 写真を撮れませんでした(このグラフィックスカードでは読み戻しができませんか?)。
+
+= Photo mode (%s: back to the game)
+> フォトモード(%s: ゲームにもどる)
+
+= The game is paused.
+> ゲームは止まっています。
+
+= Move: W A S D, up/down: E Q (Shift faster, Ctrl slower)
+> 移動: W A S D、上下: E Q (Shiftで速く、Ctrlでゆっくり)
+
+= Look: hold the right mouse button; wheel: speed; tilt: Z C
+> 見まわし: 右マウスボタンを押しつづける。ホイール: 速さ。かたむき: Z C
+
+= Controller: sticks, triggers up/down, shoulders tilt
+> コントローラー: スティック、トリガーで上下、ショルダーでかたむき
+
+= P: photo   R: reset   H: hide this window
+> P: 写真   R: リセット   H: このウィンドウを隠す
+
+= Speed
+> 速さ
+
+= Field of view
+> 視野角
+
+= %.0f degrees
+> %.0f 度
+
+= Tilt
+> かたむき
+
+= Hide menus and text (2D)
+> メニューと文字を隠す(2D)
+
+= As the game draws
+> ゲームの描画どおり
+
+= Photo size
+> 写真のサイズ
+
+= Take photo
+> 写真を撮る
+
+= Reset camera
+> カメラをリセット
+
+= Back to the game
+> ゲームにもどる
+
+= Photos: %s
+> 写真: %s
+
+= Any time
+> いつでも
+
+= On restart
+> 再起動で
+
+= New playthrough only
+> 新しいプレイのみ
+
+= Video
+> 映像
+
+= Audio
+> 音声
+
+= Gameplay
+> ゲームプレイ
+
+= Accessibility
+> アクセシビリティ
+
+= System
+> システム
+
+= Rules
+> ルール
+
+= Physical / special split
+> 物理 / 特殊の分類
+
+= Battle style
+> 戦闘のスタイル
+
+= Teams
+> チーム
+
+= Pokemon each
+> ひとり何びき
+
+= Pool size
+> プールの大きさ
+
+= Bans each
+> ひとりのバン数
+
+= First pick
+> 先に選ぶ人
+
+= Offers per pick
+> 選ぶごとの提示数
+
+= Pool
+> プール
+
+= Evolution
+> 進化
+
+= Legendary Pokemon
+> 伝説のポケモン
+
+= Levels
+> レベル
+
+= Items
+> どうぐ
+
+= Time per choice
+> 選ぶ時間
+
+= Shadow Pokemon obey
+> ダークポケモンが従う
+
+= Gen 4
+> 第4世代
+
+= Gen 4 + modern types
+> 第4世代 + 新しいタイプ
+
+= Off (as in XD)
+> オフ(XDのとおり)
+
+= On (as in Gen 4)
+> オン(第4世代のとおり)
+
+= Preset teams
+> 用意されたチーム
+
+= From a save (party or PC)
+> セーブから(てもちかPC)
+
+= Free pick, Gen 1-3
+> 自由選択、第1〜3世代
+
+= Free pick, Gen 1-4
+> 自由選択、第1〜4世代
+
+= Needs the Gen 4 rules.
+> 第4世代ルールが必要です。
+
+= Snake draft
+> スネークドラフト
+
+= Random offers
+> ランダム提示
+
+= The host
+> ホスト
+
+= Coin flip
+> コイントス
+
+= Any stage
+> どの進化段階でも
+
+= Fully evolved only
+> 最終進化のみ
+
+= Last stage of a line
+> 系統の最後の段階
+
+= Allowed
+> 使える
+
+= Not allowed
+> 使えない
+
+= As they are
+> そのまま
+
+= All the same level
+> すべて同じレベル
+
+= Capped at a level
+> レベルで上限
+
+= Own bag items (never used up in the save)
+> 自分のバッグのどうぐ(セーブでは減らない)
+
+= Only with teams from a save.
+> セーブからのチームのときだけ。
+
+= Standard kit (Max Potion, Full Heal, Revive)
+> 標準セット(まんたんのくすり、なんでもなおし、げんきのかたまり)
+
+= No limit
+> 制限なし
+
+= 30 seconds
+> 30秒
+
+= 60 seconds
+> 60秒
+
+= 90 seconds
+> 90秒
+
+= 120 seconds
+> 120秒
+
+= As in the story (they may refuse)
+> ストーリーのとおり(従わないことがある)
+
+= Like purified ones
+> きよめたポケモンのように
+
+= This PC has no Gen 4 pack yet (make it from your Pokemon Battle Revolution disc in the launcher).
+> このPCにはまだ第4世代パックがありません(ランチャーで、ポケモンバトルレボリューションのディスクから作ってください)。
+
+= Works with: %s.
+> 対応ゲーム: %s。
+
+= Works with: %s
+> 対応ゲーム: %s
+
+= shared parts only
+> 共通部分のみ
+
+= nothing for it in this mod
+> このMODには用意なし
+
+= This mod has no part made for this game: only its shared parts (pictures, shared scripts) apply.
+> このMODにはこのゲーム用の部分がありません。共通部分(画像・共通スクリプト)のみ適用されます。
+
+= This mod has nothing for this game, so it changes nothing.
+> このMODにはこのゲーム用のものがないため、何も変更しません。

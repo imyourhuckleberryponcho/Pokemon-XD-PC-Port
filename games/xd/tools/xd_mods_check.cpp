@@ -71,6 +71,8 @@ int main(int argc, char** argv) {
   options.modsFolder = argc >= 3 ? fs::path(argv[2]) : user / L"mods";
   options.listFile = argc >= 4 ? fs::path(argv[3]) : user / em::kListFile;
   options.disc = em::OpenDiscView();
+  options.finishRows = xd::data::BuildRooms;
+  options.checkEntry = xd::data::CheckModEntry;
   options.dataCatalog = xd::data::BuildDataCatalog;
   size_t dolSize = 0;
   const uint8_t* dol = PortDisc_Dol(&dolSize);
@@ -116,7 +118,8 @@ int main(int argc, char** argv) {
     check(port != nullptr && std::vector<uint8_t>(port, port + size) == expected, r.discPath + ": so does PortDisc_ReadFile");
     PortDisc_Free(port);
 
-    if (r.rebuilt && !r.added) {
+    const bool isFsys = r.discPath.size() > 5 && r.discPath.compare(r.discPath.size() - 5, 5, ".fsys") == 0;
+    if (r.rebuilt && !r.added && isFsys) {
       std::vector<uint8_t> base;
       if (!r.file.empty()) {
         base = read_local(r.file);
