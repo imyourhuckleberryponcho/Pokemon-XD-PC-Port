@@ -24,6 +24,9 @@ import shutil
 import subprocess
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import readme_text
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FOLDER_NAME = 'Pokemon XD PC'
 PBR_MODELS = os.path.join(ROOT, 'build', 'pbr_models_dist', 'pbr_models')   # optional: included when built
@@ -39,23 +42,35 @@ RUNTIME = ['msvcp140.dll', 'msvcp140_1.dll', 'msvcp140_2.dll', 'msvcp140_atomic_
 FONTS = ['Inter-Regular.ttf', 'Inter-SemiBold.ttf', 'InterDisplay-Bold.ttf', 'OFL.txt', 'NotoSansJP-Regular-subset.ttf',
          'OFL-NotoSansJP.txt']
 
-READ_ME = """Pokemon XD PC port
-==================
+READ_ME_TEMPLATE = r"""Pokemon XD PC port @VERSION@
+========================
 
-Start "Pokemon XD Launcher.exe". It opens the launcher: choose your disc image, how you want to play, your
-controls and mods, then press Play.
+Public beta: thank you for trying it! Expect bugs, and keep a copy of your save now and then.
+Questions, bug reports, other players: @DISCORD@
 
-You need your own copy of Pokemon XD: Gale of Darkness (USA version, game ID GXXE01) as a disc image
-file (.iso, .rvz, .gcm, ...). Nothing from the game comes with this program, and your disc image is
-never changed.
+What you need
+-------------
+- Your own copy of Pokemon XD: Gale of Darkness (USA version, game ID GXXE01) as a disc image file
+  (.iso, .rvz, .gcm, ...). Nothing from the game comes with this program, and your disc image is never changed.
+- Windows 10 or 11, 64-bit, and a graphics card that supports Direct3D 12 (most cards of the last ten years). If
+  Direct3D 12 doesn't work, the game tries Vulkan and then Direct3D 11 by itself; those are less tested.
+  Older or laptop graphics cards are untested: please tell us how it runs on yours.
 
-The "Original" preset plays exactly like the GameCube game. Every improvement is a setting you can
-switch on in the launcher (Settings page).
+How to start
+------------
+1. Start "Pokemon XD Launcher.exe". It opens the launcher.
+2. Disc page: choose your disc image. It is checked (a minute the first time) and remembered.
+3. The first time, the launcher asks how you want to play (see the presets below) and prepares the game's
+   graphics for your PC in the background; you can press Play meanwhile.
+4. Press Play. Controls, your saves and bug reports have pages of their own in the launcher.
 
+@PRESETS@
+@HOWTO@
+@NEW@
 Where your things are kept
 --------------------------
 Settings, mods, the memory card (your save), logs and the icon made from your disc are kept in
-    %APPDATA%\\Pokemon XD
+    @DATA@
 (type that into the address bar of a File Explorer window to open it). Deleting this program's folder
 doesn't touch them.
 
@@ -63,301 +78,27 @@ Portable use (everything inside this folder instead, for example on a USB stick)
 data_location.json next to "Pokemon XD Launcher.exe" containing
     {"version": 1, "mode": "portable"}
 Your things are then kept in the "portable" folder next to it. (The same file inside the "game"
-folder works too; its portable folder is then game\\portable.)
-
-Licence
--------
-The port's own code is under the MIT licence (earlier releases stay CC0). The decomp code it builds on is CC0.
-The parts made by others keep their own licences (game\\licenses).
-
-Shortcuts
----------
-The launcher's Disc page has "Create Start menu shortcut" and "Create desktop shortcut". They point to
-"Pokemon XD Launcher.exe" and use an icon made from your own disc. If you move this folder, make them again.
-
-The "game" folder
------------------
-Holds the game (xd.exe), the launcher (xd_launcher.exe), the libraries they use, the launcher's font
-and the licences of the parts made by others (game\\licenses). Keep it next to "Pokemon XD Launcher.exe".
-You can also start xd.exe directly by dragging your disc image onto it; it uses the same settings.
-
-Updates
--------
-The launcher can look for a newer version (Disc page, "Version and updates"), but only if you want it
-to: it asks you once, and even then it asks again before downloading anything. A new version is
-installed into its own folder next to "game" (for example "game-1.2.0"); the one you had stays, and
-the Disc page can go back to it. Your saves, settings and mods are not touched by an update.
-
-Problems
---------
-In the game, F10 writes a bug report (screenshot, log, settings, the button presses that led there) into
-%APPDATA%\\Pokemon XD\\reports. A crash or a freeze writes one by itself. The launcher's Reports page
-lists them; "Export..." saves one as a .zip file, with a name and in a place you choose, to send
-yourself. Nothing is ever sent anywhere by the program.
-
-Discord
--------
-If the Discord app is running on this PC, the launcher and the game show what you are doing ("In the launcher",
-"Story mode", "In a battle", "Online battle") and for how long, next to your name in Discord. It talks only to the
-Discord app on this same PC; nothing goes over the internet from the program, and no save name, trainer name or
-place is shown. It is on by default and is not part of the presets (Original too). To turn it off: Settings page
-of the launcher, or SETTINGS in the game, "Discord presence".
-"""
-
-# Appended for test builds (--tester): what a tester needs to know.
-TESTER_NOTES = """
-Public beta {version}
-=====================
-Thank you for trying it! This is a beta: expect bugs, and keep a copy of your save.
-Questions, bug reports, other players: https://discord.gg/XVbDVXH4Pn
-
-New in 0.6.0
-------------
-- The port's own code is now under the MIT license (earlier releases stay CC0).
-- Japanese name entry: the name now shows once, on its boxes.
-- Pokemon XG: trainers judge benched Pokemon the same way XG does on Dolphin.
-- Pokemon XG: a Pokemon with Download no longer freezes the game when it comes out.
-- Online double battles: the host can choose moves for both Pokemon again.
-- Pokemon XG (the fan romhack) is supported: play it from your own XG disc, with the randomizer, the challenges and online XG-to-XG battles.
-- Japanese language pack: build it from your own Japanese disc (Extra assets in the launcher) and play the game in Japanese.
-- Japanese and European save import: saves from Dolphin or a GameCube memory card can be brought in (the launcher's save import).
-- Discord presence: if the Discord app is running, it shows what you are playing and for how long. It is a setting and is on by default.
-- Fixed the weather tint (Sunny Day and the others) not covering the whole picture in widescreen.
-- Fixed the first picture after pausing the game sometimes being black.
-
-New in 0.5.6
-------------
-- Fixed the game closing by itself at the start of some battles in randomizer games, when a trainer's Pokemon knew Conversion.
-- Fixed the title screen never appearing (only clouds) when a language pack (Spanish, French, German, Italian) and the Gen 4 rules were both on;
-  if a title ever fails to appear, the loading screen now says so after about 25 seconds.
-- Fixed black ground (grass, paths, battle floors) when Resolution is set to Match the window and the window's height isn't a multiple of 5.
-- Fixed the lightning at Kaminko's house.
-
-New in 0.5.5
-------------
-- Mac: the launcher no longer closes right after opening when you have a save (it opens normally now).
-  It also keeps a log file now.
-- The Strategy Memo's cry screen shows the right waveform for every Pokemon (some showed none, or another
-  Pokemon's).
-- Mac: the first-run report no longer reports false problems when Apple's developer tools are not set up.
-- Mac players: approve the new version once in System Settings > Privacy & Security > Open Anyway.
-
-New in 0.5.4
-------------
-- Linux and Mac: the game no longer crashes when a Pokemon levels up and learns a new move while it
-  already knows four (the "forget a move" screen). Windows was not affected.
-- The loading screen could stay stuck after "Restart into ..." (the game never got past the title menu). The
-  restart now presses NEW GAME again if the game did not take it, and hands the title over to you with a short
-  note if it still does not start.
-- A folder name with accents or other non-English letters (for example "Diagnostico" with an accent) no longer
-  breaks creating the language pack or starting the game from that folder. Needs Windows 10 version 1903 or newer.
-
-New in 0.5.3
-------------
-- Online battles: fixes the two PCs showing different stages and then drifting apart after the first turn
-  (a "desync"). Both now agree on the arena and the random numbers before the battle starts, and the
-  Pokemon are checked to be the same on both sides.
-- Online battles: rooms with one Pokemon per side (singles) now really fight singles.
-- Online battles: the friend who joins no longer sees the battle menus piled up in the middle of the screen
-  with the widescreen edge menus on.
-- Online battles: a save made with the randomizer or the Gen 4 rules can now host a room.
-- Online battles: a loading screen (with the music) now covers the short time while the lobby's menus
-  are pressed for you, so button mashing can no longer disturb it. It gives up and lets go after 90 seconds.
-- Preparing the game for your PC (shaders and pictures) now runs hidden in the background, says so in
-  plain words in the launcher, and is safe to interrupt: closing the launcher stops it, and the next
-  start picks up cleanly. You can press Play while it is still working.
-- Updater: a copy in a flat folder (as the old 0.4.0 download unpacked) is now offered a proper player
-  folder beside it, and a game kept inside OneDrive or another synced folder gets a hint to move it.
-
-New in 0.5.2
-------------
-- Online battles: making a room with the Gen 4 rules now offers "Restart into the room" (0.5.1 said a
-  restart could not fix it and only offered Back).
-- Linux: fixes "Could not place the game's memory at its GameCube addresses", which stopped about every
-  second start on newer Linux versions (2024 and later, e.g. Arch).
-
-New in 0.5.1
-------------
-- Fixes the quick black flashes some players saw every second or two while playing 0.5.0 (caused by the
-  new save pictures in the save list).
-
-New in 0.5.0
-------------
-- Online friend battles (VS MODE): one of you makes a room, the other types its code. Both PCs run the
-  battle and only the button presses travel, encrypted, straight between the two PCs (no server of ours).
-  Teams: a preset, your own save's party or PC boxes, or any Pokemon you pick; the host chooses the rules
-  (Classic / Gen 4 / modern types), Shadow Pokemon on or off, and the levels. If your router does not let the
-  two PCs connect, the game says so. (Tested on one PC and over a loopback; not yet through two real home
-  routers: tell us how it goes.)
-- Online trading with friends: at the Pokemon Center PC in the story and from ONLINE on the title screen.
-  Every Pokemon is checked before it is offered; both of you say Yes before anything changes; a dropped
-  connection changes nothing. Pokemon that evolve by trade evolve in the game's own scene.
-- Modern types (New Game option): the Fairy type and the later type chart.
-- Randomizer: randomize the starter (random, pick 1 of 3, or the Eevee family).
-- Other languages: English (UK), German, French, Italian and Spanish from your own PAL disc (Extra assets
-  page, then Language on the Play page). The port's own texts in French, German, Italian and Spanish are
-  machine-made: corrections are welcome.
-- Launcher: import saves from Dolphin / GameCube, trade with a Game Boy Advance save, import a Colosseum
-  save; every page works with a controller (Steam Deck).
-- HD texture packs (Dolphin-style), a speedrun timer, skipping the logo movies and play statistics
-  (battles, bosses, time; caught / snagged / purified counts and steps are NOT done yet).
-- The port's own screens look like the game's, with a loading screen. New Game and the save picker restart
-  straight into the playthrough. The physical/special split is chosen per playthrough. The in-game
-  SETTINGS page has a 60 fps row. Leafeon and Glaceon have full-body pictures in the Eevee offer.
-- Fixed: the crash in the Eevee offer with Leaf Stone / Ice Stone (Gen 4); the battle menu in widescreen;
-  black pictures in the launcher; menus that ran too fast on high-refresh monitors; B now backs out of the
-  New Game setup screen.
-
-New in 0.4.2 (bug fixes)
-------------------------
-- Pick any of your saves right at Continue: with more than one save, CONTINUE on the title screen shows
-  all of them with a picture of where you saved, the trainer, play time and the rules of that save. One
-  save: Continue works as before.
-- Shadow Pokemon's moves showed as blank rows in the move menu: fixed (they show their Shadow moves again).
-- Randomizer together with Gen 4: no more "mod conflict" window for the game's own parts.
-- Ditto and Dialga from Battle Revolution now come with their full detail and shine ("make again" in the
-  launcher's Extra assets page to update models made before).
-- Randomizer: TM descriptions fit their box.
-- After choosing randomizer / Gen 4 / mods on the New Game screen the game restarts straight into New Game,
-  without the logos and title menu.
-- First start of the launcher: it asks how you want to play (Original or Enhanced). Enhanced is the
-  default of a new install; players who already have settings keep them.
-
-New in 0.4.1
-------------
-- Gen 4 Pokemon (107 of them, Turtwig to Arceus) for a NEW playthrough: if you own Pokemon Battle
-  Revolution (Wii, USA), the launcher's Extra assets page now makes the Gen 4 pack too ("Make models and
-  Gen 4 pack", about half a minute). Then choose "Gen 4 Pokemon and rules" on the New Game screen. They
-  have their own models, faces, cries, level-up moves and evolutions (Gible -> Gabite -> Garchomp,
-  Piloswine -> Mamoswine...); Magnezone and Probopass evolve by Thunder Stone. Many Gen 4 moves work as in
-  Diamond and Pearl (Close Combat, U-turn, Stealth Rock, Gravity, Healing Wish, Sucker Punch...), and so
-  do their abilities (Solar Power, Dry Skin, Motor Drive, Technician, Mold Breaker, Download...). Your save
-  stays tied to the pack: without it, the game says so and leaves the save alone. Without Gen 4 chosen, the
-  game is exactly as before.
-- In a Gen 4 playthrough: Leafeon (Leaf Stone) and Glaceon (Ice Stone), both offered with the other stones
-  at the start; Weavile, Gliscor and Chansey by levelling up holding Razor Claw, Razor Fang, Oval Stone;
-  Gallade, Froslass, Honchkrow, Mismagius, Togekiss, Roserade by the Dawn, Dusk and Shiny Stones; the
-  Linking Cord does trade evolutions (Electivire, Magmortar, Rhyperior, Porygon-Z, Dusknoir, and XD's own
-  Alakazam, Machamp, Golem, Gengar...). All those items, and TM51 to TM92 from Diamond and Pearl, are
-  prizes at the Poke Coupon exchange. Older Pokemon can learn the TMs they could learn in Diamond and Pearl.
-- Gen 4 Pokemon at the Poke Spots (a New Game choice with Gen 4): each spot keeps its own Pokemon and adds
-  Gen 4 ones that fit it, with a starter as a rare find (Chimchar, Turtwig, Piplup).
-- Randomizer: "Include Gen 4 Pokemon" (needs the Gen 4 pack). Older randomizer codes give the same game
-  as before.
-- The Battle Revolution converter is part of the program now (no Python): the 388 models take seconds.
-- Updates on Linux and the Mac too (the launcher asks first, as on Windows).
-- Linux: the launcher's backgrounds are drawn from your disc.
-- For modders: script mods (Lua) and mods that add new Pokemon, moves and items (docs/MODDING.md).
-- Fixed: a crash during some move animations with frame rate 60 ("draw vertex data overrun"); a rare
-  crash when closing the window on Windows.
-
-New in 0.4.0
-------------
-- MODS on the title screen: switch mods on or off and set their order inside the game (Apply restarts
-  to the title with the new set; your saves keep the mods they were made with).
-- Battle Revolution models (Windows and Linux; Mac new and untested): if you own Pokemon Battle Revolution (Wii, USA), the
-  launcher's new Extra assets page turns your disc's Pokemon into models this game can show (about 3-5
-  minutes, once). Then switch on "Battle Revolution models" in Settings. Built in, not a mod.
-- Randomizer: shops (off, shuffled, everyday goods, anything), random move tutor moves, Poke Spot options,
-  TM descriptions that fit their box.
-- Physical/special split (Settings, off unless you turn it on): Attack or Sp. Atk follows the move, as
-  from Diamond and Pearl on.
-- Fast-forward and fast battle animations: the sound plays faster at its own pitch (no more squeaky
-  sound), and on a PC that can't keep up they slow down to what it manages instead of stuttering.
-- Controllers: Nintendo controllers go by the letters printed on them (A is A); a second controller takes
-  over from a built-in one (Steam Deck); two-player setups stay as they are.
-- Linux launcher (Disc, Extra assets, Settings, Controls, Save, Mods, Reports); on the Mac the app now
-  opens the launcher (new, not yet run on a Mac).
-- Fixed: long streaks across the screen in Extreme Speed, Fly, confusion stars and electric moves;
-  Flamethrower shooting straight up; the move tutor; the SETTINGS button on top of the VS MODE menu.
-
-New in 0.3.6 (fixes after the first days in public)
----------------------------------------------------
-- Mac: the game stopped after a few minutes of play ("no memory below 2 GB for a task's stack"). Its
-  working memory is now kept for it from the start. Quitting no longer ends in a crash message.
-- Disc images of the shrunk ".nkit.iso" kind no longer get the "content is different from a known-good
-  copy" warning: the game says that such a copy cannot be compared, and starts.
-- The log no longer says "STUCK" while a message window is waiting for you.
-
-New in 0.3.5
-------------
-- Several saves and a save manager: the launcher's Save page keeps more than one playthrough. The circle
-  in front of a save chooses the one the game loads; click a save to see what is on it, rename it, look
-  at its backups and restore one.
-- Slow PCs: the sound engine needs about a quarter of the processor time it did; the sound holds up
-  better when pictures take long; fast-forward switches itself off (with a line on the screen) when the
-  PC cannot keep up. Play logs now say how hard the PC is working: if the game runs slowly on yours,
-  a report (F10) after a few minutes of play helps us a lot.
-- Sound: the GameCube sound chip's built-in routines were compared with a real console's and are equal.
-- More of the GameCube's own timing is modelled (how long the console takes to load and set up a scene).
-  It is NOT switched on yet: it stays off until it is proven.
-- Linux and Mac builds exist as separate downloads (Linux: test build; Mac: untested).
-
-Earlier (0.3.0)
----------------
-- New Game setup screen (not in the "Original" preset): after the game's NEW GAME you choose how this
-  playthrough is played - Faithful or Enhanced, a randomizer, challenge rules. The choice is kept with
-  the save. If a save's choice and your settings differ later, CONTINUE asks which one you want.
-- Randomizer: Light, Classic or Chaos, or Custom with every switch its own row (wild Pokemon, trainers,
-  Shadow Pokemon, items, which move each TM teaches, trainers' levels / held items / natures ...). Each
-  randomized game has a code you can share: the same code makes the same game. The game starts again
-  by itself once when you pick one.
-- Challenge runs: "No items in battle", Nuzlocke ("fainted is lost": it goes to the last PC box and
-  can't come back; one catch per area) and level caps (no experience past the next boss's highest level).
-- Frame rate 60 (Settings; 30 is the default): in-between pictures make 3D motion smoother. The game
-  itself still runs exactly as at 30. Menus and text are not smoothed yet.
-- Fixed: memory use now follows the GameCube's in more places (four real bugs found on the way).
-Known in the new parts: a few randomized TM descriptions are cut off at the box's edge.
-
-Earlier (0.2.2)
----------------
-- Fixed: a Shadow Pokemon snagged from a trainer (Teddiursa at the HQ Lab) vanished after the battle
-  instead of joining your party or PC box.
-- Fixed: objects, people or the sky missing the first time you saw a place (fine after a restart). The
-  launcher now prepares the game's shaders once for your PC when you choose the disc: the first time this
-  takes a few minutes (progress bar on the Disc page; Play waits for it). After a graphics driver update
-  or a new version it runs again.
-- Faster on PCs with few processor cores (laptops): the game no longer keeps a whole core busy while it
-  waits for the picture. Each play log now notes how hard the graphics chip works: if the game runs
-  slowly, please send a report (F10) after a few minutes of play.
-- Widescreen: menus and the battle boxes that sit at the screen's sides now sit at the sides of the wide
-  picture; people at the wide sides no longer vanish; the opening's starry background is fixed.
-- Reports exported from the launcher are about 8 times smaller.
-- Settings: a new settings screen in the game's own style on the title screen, the game's own menu
-  sounds, music fades while a settings page is open, and button pictures for Xbox / PlayStation
-  controllers and the keyboard (Settings, Controls).
-
-Earlier (0.2.1)
----------------
-- Fixed: the game could freeze for good while drawing (a bug in the graphics library on Direct3D 12).
-- Fixed: a crash when a menu was drawn while the game changed places.
-- Fixed: a crash when a wild Pokemon fainted at the Cave Poke Spot (Spinda).
-- Fixed: healing items such as Antidote cured the wrong conditions (Antidote cured burns).
-- Fixed: one of the game's echo (reverb) effects was never switched on.
-- Separate volumes for music, sound effects and Pokemon cries (Settings).
-- The launcher's Reports page has "Save my last play session...": use it when the game froze or was
-  closed without a report.
-- The game's own data tables are now read from your disc instead of being built into the program.
-
-What your PC needs
-------------------
-- Windows 10 or 11, 64-bit.
-- A graphics card that supports Direct3D 12 (most cards of the last ten years). If Direct3D 12 doesn't work,
-  the game tries Vulkan and then Direct3D 11 by itself; those are less tested. Without any of them the
-  game can't show a picture.
-- Older or laptop graphics cards are untested: please tell us how it runs on yours.
+folder works too; its portable folder is then game\portable.)
 
 Your save and its backups
 -------------------------
-Each time the game saves, it first keeps a copy of your save as it was: the newest 10, in
-%APPDATA%\\Pokemon XD\\save_backups. To go back to one, open the launcher's Save page, pick it under
-"Backups" and press "Restore..." (with the game closed); the save it replaces is backed up first. Still,
-copy the folder %APPDATA%\\Pokemon XD\\USA somewhere safe now and then.
+Your first save is the memory card in
+    @CARD@
+one .gci file, in the same format Dolphin uses. In the launcher's Save page you can keep several saves
+side by side: the circle in front of a save chooses the one the game loads, and every save after the
+first one is kept in its own folder under
+    @SAVES@
+(Pokemon XG has a set of its own under @XG@.)
+Each time the game saves, it first keeps a copy of the save as it was: the newest 10, in the "save_backups"
+folder next to that save's card (for your first save: @BACKUPS@). To go back to one, open the
+launcher's Save page, pick the save, choose a backup under "Backups" and press "Restore..." (with the game
+closed); the save it replaces is backed up first. Still, copy the folder @CARDTOP@
+somewhere safe now and then.
 
 Settings inside the game
 ------------------------
 - In the field menu (POKeMON / P*DA / ITEMS / SAVE / EXIT), press down on EXIT: SETTINGS, then A.
-- On the title screen's menu, press left on OPTIONS: SETTINGS, then A.
+- On the title screen's menu, press left on OPTIONS: EXTRAS (ONLINE, MODS, SETTINGS), then A on SETTINGS.
 While the settings page is open the game is paused completely. Changes take effect at once and are kept
 (the launcher's Settings page has them too). Alt+Enter switches full screen on and off.
 
@@ -371,39 +112,67 @@ Playing faster (not in the "Original" preset)
 - Fast battle animations: move animations run at fast-forward speed.
 Runs that used these are marked in their reports, so please leave them on if you like: just say so.
 
+Shortcuts
+---------
+The launcher's Disc page has "Create Start menu shortcut" and "Create desktop shortcut". They point to
+"Pokemon XD Launcher.exe" and use an icon made from your own disc. If you move this folder, make them again.
+
+The "game" folder
+-----------------
+Holds the game (xd.exe), the launcher (xd_launcher.exe), the libraries they use, the launcher's fonts,
+the converters (pbr_models, xd_languages) and the licences of the parts made by others (game\licenses).
+Keep it next to "Pokemon XD Launcher.exe". You can also start xd.exe directly by dragging your disc image
+onto it; it uses the same settings.
+
+Updates
+-------
+The launcher can look for a newer version (Disc page, "Version and updates"), but only if you want it
+to: it asks you once, and even then it asks again before downloading anything. A new version is
+installed into its own folder next to "game" (for example "game-1.2.0"); the one you had stays, and
+the Disc page can go back to it. Your saves, settings and mods are not touched by an update.
+
 When something goes wrong
 -------------------------
 - Press F10 at the moment you see it (wrong picture, wrong text, odd sound, stuck). It saves a report
-  with a picture and the button presses that led there, so the problem can be replayed exactly.
-- After a crash or a freeze a report is made by itself.
+  with a picture and the button presses that led there, so the problem can be replayed exactly. It is
+  kept in @DATA@\reports.
+- After a crash or a freeze a report is made by itself (a freeze: after about a minute; close the game then).
 - Open the launcher's Reports page, pick the report, press "Export..." and post the .zip file in the
-  Discord's bug-reports channel (https://discord.gg/XVbDVXH4Pn), with a sentence about what you were doing. "Hide my Windows user name" is on by default; leave the crash
-  dump unticked unless you are asked for it.
+  Discord's bug-reports channel (@DISCORD@), with a sentence about what you were doing.
+  "Hide my Windows user name" is on by default; leave the crash dump unticked unless you are asked for it.
+  Nothing is ever sent anywhere by the program itself.
 - No report? (The game froze and you closed it, or it closed by itself.) Open the launcher's Reports
   page and press "Save my last play session...". It saves the last time you played as one .zip file:
   what the game wrote about itself, your button presses and your memory card. Post that file instead.
   You can also pick an older session from the list there.
 
-Known issues in this build
---------------------------
-- Timing is a few frames off the GameCube in some loads and scene starts (not visible in normal play;
-  it matters for speedruns). The "Original" preset is not yet frame-exact.
-- Sound is very close to the GameCube, but not bit-for-bit identical.
-- Widescreen (an improvement, off in Original): people standing in the wide side areas keep still until
-  they come back into the middle (the GameCube never animates them there); some lists and popups don't
-  move to the sides yet. Please press F10 when something looks wrong.
-- One tester got stuck at the HQ Lab when Professor Krane should hand over the Snag Machine (new game).
-  We could not make it happen yet: if it happens to you, press F10 right there and send the report.
-- If the game ever stops responding, it saves a report by itself after a minute (close the game then).
-  Please send that report, or use the Reports page's "Save my last play session...".
-- Many improvements in the Settings page say "not yet": they are planned and do nothing so far.
-
+@KNOWN@
 Developer menu (cheats)
 -----------------------
 For jumping ahead in the story or testing a place: Settings page, System tab, "Developer menu
 (cheats)"; then F9 in the game. Runs that used it are marked in their reports. Not available with the
 Original preset.
+
+Licence
+-------
+The port's own code is under the MIT licence (earlier releases stay CC0). The decomp code it builds on is CC0.
+The parts made by others keep their own licences (game\licenses).
 """
+
+
+def read_me(version):
+    """The Windows Read me (the shared sections are in tools/readme_text.py, so the three systems read the same)."""
+    rt = readme_text
+    p = rt.paths('windows')
+    text = READ_ME_TEMPLATE
+    for key, value in (('@PRESETS@', rt.presets()), ('@HOWTO@', rt.howto('windows')), ('@NEW@', rt.new_in()),
+                       ('@KNOWN@', rt.known_issues('windows')), ('@CARDTOP@', p['data'] + '\\USA'),
+                       ('@CARD@', p['card']), ('@SAVES@', p['saves']), ('@XG@', p['xg']),
+                       ('@BACKUPS@', p['backups']), ('@DATA@', p['data']), ('@DISCORD@', rt.DISCORD_URL),
+                       ('@VERSION@', version)):
+        text = text.replace(key, value)
+    return text
+
 
 NOTICES = """Parts made by others, used by this program
 ==========================================
@@ -474,8 +243,7 @@ def main():
     ap.add_argument('--version', default=None,
                     help='the version written to game\\version.txt (default: project() VERSION in CMakeLists.txt); '
                          'the launcher shows it and the updater compares with it (docs/UPDATER.md)')
-    ap.add_argument('--tester', action='store_true',
-                    help='a test build: the Read me gets the testers\' notes (known issues, how to report)')
+    ap.add_argument('--tester', action='store_true', help='(kept for old scripts: the Read me is the same for every build)')
     a = ap.parse_args()
     version = a.version or project_version()
     if not re.fullmatch(r'\d+(\.\d+){0,3}', version):
@@ -559,9 +327,7 @@ def main():
     # reaches its players with our next release, nothing for them to refresh (their note, 2026-11-14).
     shutil.copy2(os.path.join(ROOT, 'recomplauncher.json'), out)
     with open(os.path.join(out, 'Read me.txt'), 'w', encoding='utf-8', newline='\r\n') as f:
-        f.write(READ_ME)
-        if a.tester:
-            f.write(TESTER_NOTES.format(version=version))
+        f.write(read_me(version))
 
     # Nothing else may be in it: no debug files, test tools, data folder files, disc pictures or game data.
     allowed_top = {'Pokemon XD Launcher.exe', 'Read me.txt', 'recomplauncher.json', 'game'}

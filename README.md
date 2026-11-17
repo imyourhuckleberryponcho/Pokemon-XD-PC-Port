@@ -23,12 +23,124 @@ page, one per system:
 |---|---|
 | **Windows** 10 / 11 (64-bit) | The main build: what is developed and tested every day. |
 | **Linux** (x86_64) | Test build. Checked against the Windows build in automatic runs (same random numbers, same saves, same sound), but so far only with software graphics: it has **not been played on a real Linux PC or a Steam Deck** yet. |
-| **Mac** | Test build. Two players have run it on Apple M2 Macs (macOS 15 and 27, through Rosetta 2): picture, sound, controllers, settings and saving work. 0.3.5 stopped after a few minutes of play; 0.3.6 has the fix, which has not been played on a Mac yet. It is an Intel (x86_64) program: Apple-silicon Macs run it through Rosetta 2. New in 0.4.0: the app opens the launcher (with Battle Revolution models); this is the first Mac build with it and it has not been played on a Mac yet. More testers wanted. |
+| **Mac** | Test build. Players have run it on Apple M2 Macs (macOS 15 and 27, through Rosetta 2): picture, sound, controllers, settings and saving work. It is an Intel (x86_64) program: Apple-silicon Macs run it through Rosetta 2. The app opens the launcher. The newest parts (Pokémon XG, the Japanese pack, save import, Discord) have not been tried on a Mac yet. More testers wanted. |
 
 **Found a bug, or want to help test?** Join the [Discord](https://discord.gg/XVbDVXH4Pn) — see
 *Reporting a bug* below.
 
-New in 0.6.0: Pokémon XG (the fan romhack) can be played from your own XG disc, with the randomizer, the challenges and online XG-to-XG battles; a Japanese language pack can be built from your own Japanese disc; Japanese and European saves can be imported (Dolphin or GameCube); Discord presence shows what you are playing (a setting, on by default); and the weather tint in widescreen and a black first picture after pausing are fixed. Japanese name entry shows the name once, on its boxes; in Pokémon XG trainers judge benched Pokémon as XG does and a Pokémon with Download no longer freezes the game; online double battles let the host choose moves for both Pokémon again. The port's own code is now under the MIT license (earlier releases stay CC0).
+## Quick start
+
+1. **You need** your own copy of Pokémon XD: Gale of Darkness (USA, `GXXE01`) as a disc image (`.iso`, `.rvz`, `.gcm`, ...). Windows 10 or 11, 64-bit, a graphics card with Direct3D 12 (Vulkan or Direct3D 11 as fall-backs).
+2. **Download** your system's file from the [Releases](../../releases) page and unpack it.
+3. **Start** `Pokemon XD Launcher.exe` (Linux: `Pokemon XD Launcher.sh`; Mac: the app). On the launcher's Disc page choose your disc image, then press Play.
+4. **Pick how you play** (the launcher asks the first time): **Original** is exactly the GameCube game, **Enhanced** adds the port's improvements (recommended), **Custom** is your own mix.
+
+The download's `Read me.txt` has all of the following, step by step.
+
+## How to...
+Everything here is done in the launcher (it opens first) unless it says "in the game". Your own discs are only read, never
+changed, and nothing from any disc comes with this program: what you make from them is kept in your data folder
+(`%APPDATA%\Pokemon XD`), on your PC.
+
+### Play Pokemon XG (from your own XG disc)
+- You need a disc image of Pokemon XG version 1.2.1 (the fan game) that you made yourself; this program does not
+  include it.
+- Launcher, Disc page: choose that image the way you would choose the XD one. It says "XG mode"; press Play.
+- XG keeps its own saves, apart from XD's (in the folder "xg" inside your data folder), so your XD saves are never touched.
+  A save only loads in its own game; the Save page marks every save XD or XG.
+- Works in XG: the randomizer (also the starter), the challenge rules, and online battles and trades with other XG
+  players (XD and XG players cannot play each other).
+- Not in XG (greyed with a reason): Gen 4 Pokemon and rules, the Fairy / modern types (XG has its own), and language
+  packs (they would replace XG's own text).
+- To play XD again, choose your XD disc on the Disc page.
+
+### Play in Japanese or another language (Extra assets, Language)
+- The game stays your USA copy (keep it on the Disc page: the game's code comes from it); a language pack only
+  changes its text, menus and pictures. You make a pack from a disc of that version.
+- Japanese: launcher, Extra assets page, "Pokemon XD (Japanese)": choose your Japanese disc (game ID GXXJ01) and
+  press "Make the Japanese pack". It copies a few hundred MB and takes a few minutes.
+- German, French, Italian and Spanish: the same page, "Pokemon XD (European, PAL)": choose your European disc
+  (GXXP01) and press "Make the language pack".
+- When it says Done, choose the language in the "Language" row of the Play bar at the bottom of the launcher (or in
+  the game: SETTINGS, Language). It applies the next time the game starts; in the game the "Restart now" row
+  does that for you. Choose English (US) to go back.
+- The port's own screens in these languages are machine-made translations: corrections are welcome.
+
+### Battle Revolution models and the Gen 4 pack (Extra assets; needs your own Pokemon Battle Revolution disc)
+- You need a disc image of Pokemon Battle Revolution (Wii, USA) as well as your XD disc.
+- Launcher, Extra assets page, "Pokemon Battle Revolution (USA)": choose the disc and press "Make models and Gen 4
+  pack". It usually takes a minute or two and is done once.
+- Models: tick "Use them in the game" (the setting "Battle Revolution models", also in Settings and in the game's
+  SETTINGS). Pokemon in battle then look like Battle Revolution's. It is an improvement, so it makes the preset
+  Custom; it applies the next time the game starts. Without it the game looks as before.
+- Gen 4 Pokemon (107 of them, Turtwig to Arceus): start a NEW playthrough, and on the New Game setup screen choose
+  "Gen 4 Pokemon and rules". A save made with it stays tied to the pack and says so if the pack is missing. Not in
+  the Original preset, and not in XG.
+- After a program update, "Look again" and, if it says out of date, "make again" on the Extra assets page.
+
+### Play online (battles and trades with a friend)
+- You both need your own copy of the game, the same version of this program, and the same game (XD with XD,
+  XG with XG). It works in every preset.
+- Make a room: on the title screen choose VS MODE, then ONLINE BATTLE (or EXTRAS, ONLINE, Battle a friend), then
+  "Make a room". Choose the rules (rule set, single or double battles, teams, levels, items). The game shows a
+  6-letter room code (like ABC-DEF) in big letters: tell it to your friend and wait on that screen (it keeps
+  looking for about 3 minutes).
+- Join a room: the same menu, "Join a room"; type the code (on-screen keyboard, or your keyboard). You see the host's
+  rules in plain words and what you may be missing (for example the Gen 4 pack: the game offers to restart into
+  the room). Press Accept, then both press Ready. The game presses its own menus for you while a loading
+  screen is up: do not press buttons then. Afterwards: Rematch or Leave.
+- Trade: title screen, EXTRAS, ONLINE, "Trade with a friend", or in the story at the Pokemon Center PC, "Trade with
+  a friend online". Same room code. Every Pokemon is checked before it is offered, and both of you say Yes before
+  anything changes; a dropped connection changes nothing.
+- The two PCs connect directly. There is no server of ours: only the button presses travel, encrypted, between you
+  two. Free public services are used just to introduce the two PCs to each other. Your friend can see your
+  internet address (the game warns you): only share a code with people you trust.
+- "Could not open a direct connection" means one of your networks blocks it (a VPN, a strict router, some mobile
+  or company networks). Try: turn a VPN off; have one of you play on another network, for example a phone hotspot;
+  check that the code is typed right and that you both have the same version. Still stuck: press F10 right
+  then and send the report (see "When something goes wrong").
+
+### Bring a save in (Save page: Dolphin / GameCube, Japanese, European, GBA, Colosseum)
+Do these with the game closed. Nothing is ever replaced: you always get a NEW save, and the file you chose is only copied.
+- Dolphin or a GameCube memory card: Save page, "Import from Dolphin / GameCube...". The launcher looks in Dolphin's
+  folders by itself (USA, European and Japanese saves) and lists what it finds; click one to see what is in it, then
+  "Add as a new save". Something elsewhere (a .gci, a whole memory card image, a cheat device's .gcs / .sav): "Choose a file...".
+- Japanese save: "Import a Japanese save...". It is turned into the USA game's layout: trainer, Pokemon, PC boxes, bag,
+  Pokedex and story are kept; names stay in Japanese characters, and the game goes on at the entrance of the place you
+  saved in. The text stays English unless you made the Japanese pack and chose Japanese (see above).
+- European save: added as it is. With the European language pack made and its language chosen, it reads as you played it;
+  otherwise the text is English.
+- Game Boy Advance trade: open a save on the Save page, press "GBA trade...", choose a GBA save (Ruby, Sapphire, Emerald,
+  FireRed, LeafGreen), pick one Pokemon on each side (the list says why one cannot go) and press "Trade these two". Both saves
+  are backed up first; the GBA save is not changed (a new copy named &lt;name&gt;.traded.sav is made beside it).
+- Colosseum: open a save, press "Colosseum import...", choose a Pokemon Colosseum (USA) save, tick the Pokemon and press
+  "Copy the ticked Pokemon into the PC boxes". Shadow Pokemon not purified yet and Eggs stay behind.
+- Saves from XD and XG look alike: when the launcher cannot tell which game a save is from it asks you.
+
+### Randomizer and challenges
+- Start a NEW GAME (not in the Original preset). The New Game setup screen opens; there choose Randomizer: Light,
+  Classic, Chaos or Custom (every switch its own row: wild Pokemon, trainers, Shadow Pokemon, items, TMs, the starter
+  and more). Every randomized game has a code: the same code makes the same game, so you can share it; "Use a friend's
+  code" types one in.
+- Challenge rules on the same screen: No items in battle, Nuzlocke (a fainted Pokemon is lost to the last PC box, one
+  catch per area) and level caps (no experience past the next boss's highest level).
+- The choice is kept with the save. The game restarts once by itself to apply it, straight back into your New Game.
+  Randomizer and the challenges also work in XG.
+
+### Discord presence
+- If the Discord app is running on this PC, the launcher and the game show what you are doing ("In the launcher",
+  "Story mode", "In a battle", "Online battle") and for how long, next to your name in Discord. It is on by default,
+  talks only to the Discord app on this same PC, and shows no save name, trainer name or place.
+- To turn it off: Settings page of the launcher, or SETTINGS in the game, "Discord presence".
+
+### New in 0.6.0
+
+- **Pokémon XG** (the fan romhack) can be played from your own XG disc, with the randomizer, the challenges and online XG-to-XG battles and trades.
+- **Japanese language pack**: build it from your own Japanese disc (Extra assets in the launcher) and play the game in Japanese.
+- **Japanese and European save import**: saves from Dolphin or a GameCube memory card can be brought in.
+- **Discord presence** shows what you are playing and for how long (a setting, on by default).
+- The port's own code is now under the **MIT license** (earlier releases stay CC0).
+- Fixed: online double battles (the host can choose moves for both Pokémon again); Japanese name entry (the name shows once, on its boxes); Pokémon XG (trainers judge benched Pokémon as XG does on Dolphin, and a Pokémon with Download no longer freezes the game); the weather tint in widescreen; a black first picture after pausing.
 
 New in 0.5.6: no more game closing by itself at the start of some randomizer battles (a trainer's Pokémon that knew Conversion); the title screen now appears with a language pack and the Gen 4 rules together (and the loading screen says so if a title ever fails to appear); no more black ground with Resolution set to Match the window when the window's height isn't a multiple of 5; and the lightning at Kaminko's house is fixed.
 
@@ -52,12 +164,11 @@ New in 0.5.0:
 - **Online friend battles** in VS MODE: one of you makes a room, the other types its code. Both PCs run the battle and
   only the button presses travel, encrypted, straight between the two PCs (no server of ours). Teams: a preset, your own
   save's party or PC boxes, or any Pokémon you pick; the host chooses the rules (Classic / Gen 4 / modern types), Shadow
-  Pokémon on or off and the levels. If your router doesn't let the two PCs connect, the game says so (not yet tried
-  through two real home routers).
+  Pokémon on or off and the levels. If your router doesn't let the two PCs connect, the game says so.
 - **Online trading with friends**, at the Pokémon Center PC in the story and from ONLINE on the title screen. Every
   Pokémon is checked; both say Yes before anything changes. Trade evolutions happen in the game's own scene.
 - **Modern types** (New Game option: the Fairy type and the later type chart), **randomized starter**, **other languages**
-  (English UK, German, French, Italian, Spanish from your own PAL disc; the port's own translations are machine-made,
+  (German, French, Italian and Spanish from your own PAL disc; the port's own translations are machine-made,
   corrections welcome), **HD texture packs**, a **speedrun timer** with skip-the-logos and play statistics (caught /
   snagged / purified counts and steps are not done yet).
 - Launcher: **save import** (Dolphin / GameCube, Game Boy Advance trade, Colosseum) and every page works with a controller.
@@ -66,79 +177,7 @@ New in 0.5.0:
 - Fixed: the Eevee-offer crash with Leaf / Ice Stone (Gen 4), the widescreen battle menu, black launcher pictures, menus
   too fast on high-refresh monitors; B backs out of the New Game setup.
 
-New in 0.4.2 (bug fixes):
-
-- **Pick your save at Continue:** with more than one save, Continue on the title screen lists them all with a picture
-  of where you saved, the trainer, the play time and the rules of that save. With one save, nothing changes.
-- **Shadow Pokémon's moves** were blank in the move menu: fixed.
-- **Randomizer with Gen 4:** no more "mod conflict" window for the game's own parts (your own mods are still checked).
-- **Ditto and Dialga** from Battle Revolution come with their full detail and shine. Press **make again** on the
-  launcher's Extra assets page to update models you made before.
-- **Randomizer:** TM descriptions fit their box.
-- After choosing randomizer, Gen 4 or mods on the New Game screen, the game restarts straight into New Game (no logos or
-  title menu in between).
-- The launcher asks once how you want to play (Original or Enhanced); Enhanced is the default of a new install.
-  Players who already have settings keep them.
-
-New in 0.4.1:
-
-- **Gen 4 Pokémon** (107, Turtwig to Arceus) for a new playthrough: own Pokémon Battle Revolution? The launcher's
-  **Extra assets** page now also makes a Gen 4 pack from your disc; choose **Gen 4 Pokémon and rules** on the New Game
-  screen. Own models, faces, cries, level-up moves and evolutions; their moves and abilities work as in Diamond and
-  Pearl. Leafeon and Glaceon by stone, held-item evolutions, the Linking Cord for trade evolutions, and all those items
-  plus TM51-TM92 as Poké Coupon prizes. Off by default: without it the game is exactly as before.
-- **Gen 4 Pokémon at the Poké Spots** (added to each spot, in theme; the Sinnoh starters as rare finds) and a
-  randomizer option **Include Gen 4 Pokémon**.
-- The Battle Revolution converter is built into the program (no Python), updates on Linux and the Mac, script mods
-  and mods that add new Pokémon, moves and items.
-- Fixed: a crash in some move animations at 60 fps; a rare crash when closing the window on Windows.
-
-New in 0.4.0:
-
-- **MODS on the title screen:** switch mods on or off and set their order inside the game.
-- **Battle Revolution models** (Windows and Linux; Mac: new, untested): own Pokémon Battle Revolution (Wii, USA)? The launcher's new
-  **Extra assets** page turns your disc's Pokémon into models this game can show, then a setting switches them on.
-  Built in, made on your PC from your own disc; nothing from either game is included.
-- **Randomizer:** shops, move tutor moves, Poké Spot options, TM descriptions that fit.
-- **Physical/special split** (off unless you turn it on), as from Diamond and Pearl on.
-- **Fast-forward sound at its own pitch**, and fast speeds slow down instead of stuttering on PCs that can't keep up.
-- **Controllers:** Nintendo controllers by their printed letters; a second controller takes over from a built-in
-  one (Steam Deck).
-- **Linux launcher**, and on the Mac the app now opens the launcher (new, untested on a Mac).
-- **Fixed:** streaks across the screen in some move effects, Flamethrower going straight up, the move tutor, the
-  SETTINGS button over the VS MODE menu.
-
-New in 0.3.6 (fixes after the first days in public):
-
-- **Mac:** the game stopped after a few minutes of play; its working memory is now kept for it from the start.
-  Quitting no longer ends in a crash message.
-- **Shrunk disc images** (`.nkit.iso`) no longer get the "content is different from a known-good copy" warning:
-  the game says that such a copy cannot be compared, and starts.
-- The log no longer says "STUCK" while a message window is waiting for you.
-
-New in 0.3.5:
-
-- **Several saves and a save manager** in the launcher: keep more than one playthrough, choose which one the game
-  loads, look at what is on each, restore automatic backups.
-- **Linux and Mac builds** (see the table above).
-- **Slow PCs:** the sound holds up better when pictures take long, fast-forward switches itself off when the PC
-  cannot keep up, and the log says how hard the PC is working (helps us with reports from weak laptops).
-- **Sound:** the GameCube sound chip's built-in routines were checked against a real console's and are equal.
-- **Timing:** more of the GameCube's own timing is modelled (how long the console takes to load and set up a
-  scene). It is not switched on yet: it stays off until it is proven against Dolphin.
-
-From 0.3.0:
-
-- **New Game setup screen** (not in the Original preset): choose how a playthrough is played — Faithful or Enhanced,
-  a randomizer, challenge rules. The choice is kept with the save; Continue asks when the save and your settings
-  disagree.
-- **Randomizer:** Light, Classic, Chaos or Custom, every category its own switch (wild Pokémon, trainers, Shadow
-  Pokémon, items, TM moves, trainers' levels, held items and natures). Made from your own disc when the game
-  starts; each randomized game has a code, and the same code makes the same game.
-- **Challenge runs:** no items in battle; Nuzlocke (a fainted Pokémon is lost to the last PC box, one catch per
-  area); level caps (no experience past the next boss's highest level).
-- **Frame rate 60** (a setting, 30 by default): in-between pictures for smoother 3D motion. The game's logic still
-  runs exactly as at 30; this was checked over every test recording (same random numbers, same saves).
+Older versions (0.4.2 and before): the full history is on the [releases page](https://github.com/imyourhuckleberryponcho/Pokemon-XD-PC-Port/releases).
 
 What works today:
 
@@ -221,7 +260,7 @@ please tell us how far you get.
 - The game keeps some memory addresses in the GameCube's small format. On the Mac the program now hands out its own
   memory from low addresses for that, and the automatic runs show it working, but only a real playthrough can prove
   it everywhere. If the game ever stops with a message about an "address above 4 GB", please report it.
-- There is no launcher on the Mac yet. If A and B (confirm and cancel) seem the wrong way round on your
+- If A and B (confirm and cancel) seem the wrong way round on your
   controller, the line `gamepad1.layout = label` (or `= position`) in `settings.ini` in
   `~/Library/Application Support/Pokemon XD` changes whether the buttons follow their printed letters or their
   place on the controller. Please tell us which controller it was.
@@ -230,9 +269,13 @@ please tell us how far you get.
 
 ### Saves
 
-Saves stay in the GameCube's own format, one `.gci` file per save in `%APPDATA%\Pokemon XD\USA\Card A` —
-the same layout as Dolphin's "GCI folder" memory cards, so saves can be copied between Dolphin and the port.
-Included tools: `xd_save_dump` (show what is in a save), `xd_save_convert` (GameCube/PC byte order) and
+Saves stay in the GameCube's own format, one `.gci` file per save, in `%APPDATA%\Pokemon XD\USA\Card A` (your first save) —
+the same layout as Dolphin's "GCI folder" memory cards, so saves can be copied between Dolphin and the port. The launcher's
+Save page keeps several saves side by side (every save after the first is in `%APPDATA%\Pokemon XD\saves\<id>`), makes
+automatic backups (the newest 10, in a `save_backups` folder beside each save) and imports saves from Dolphin or a GameCube
+card (USA, European and Japanese), trades with Game Boy Advance saves and copies Pokémon over from a Colosseum save.
+Pokémon XG keeps its own saves (`%APPDATA%\Pokemon XD\xg`).
+Tools you can build: `xd_save_dump` (show what is in a save), `xd_save_convert` (GameCube/PC byte order) and
 `xd_gba_trade` (trade with Game Boy Advance Pokémon saves the way the GameCube link cable does).
 
 ### Icon and launcher background
@@ -251,10 +294,10 @@ exactly; **Enhanced**, the recommended improvements; or **Custom**), change sing
 from the GameCube is marked), set up the controls, turn mods on or off and see what is on your save. Everything is
 stored in `%APPDATA%\Pokemon XD\settings.ini`; `xd_settings list` shows every setting with its meaning.
 The **Original** preset is the default and behaves like the GameCube; enhancements are off unless you turn them
-on. Available now: **higher internal resolution**, anti-aliasing and texture filtering; **widescreen** (16:9,
+on. Available now: **higher internal resolution**; **widescreen** (16:9,
 16:10, 21:9 or the window's shape: a wider 3D view, with menus and battle boxes at the screen's sides); **frame
 rate 60**; **frame pacing** for monitors that aren't 60 Hz; full screen; fast-forward, text speed and fast battle
-animations; separate volumes; photo mode. Options that are listed but say "not yet" come later. The same settings
+animations; separate volumes; photo mode. A few options are marked "doesn't work yet" (anti-aliasing, texture filtering, original fog and glow, battle speed, run button, fix original bugs, purification speed): they are planned and do nothing so far. The same settings
 can be changed inside the game: SETTINGS below EXIT in the field menu, or left of OPTIONS on the title screen
 (the game is paused completely while that page is open). **Discord presence**: if the Discord app is running on
 the same PC, the launcher and the game show "In the launcher" / "Story mode" / "In a battle" / "Online battle" and the
@@ -262,8 +305,7 @@ elapsed time in your Discord status. It talks only to the Discord app on your ow
 (a named pipe on Windows, a socket on Linux and Mac): nothing is sent over the internet by the port, and no save
 name, trainer name or place is included. It is on by default, is a preference (not part of the presets, so also on in
 Original, where it never touches the game) and is never active in test runs; "Discord presence" in the launcher's
-Settings or the in-game SETTINGS turns it off (docs/PRESENCE.md). Mods: see `xd_data_mods` and `xd_mods_check` (game data and file replacement mods, loaded from
-`%APPDATA%\Pokemon XD\mods`).
+Settings or the in-game SETTINGS turns it off (docs/PRESENCE.md).
 
 ## Building
 
@@ -337,8 +379,7 @@ Settings or the in-game SETTINGS turns it off (docs/PRESENCE.md). Mods: see `xd_
 5. Randomizer and challenge runs (Nuzlocke, level caps, no items) — first versions done in 0.3.0.
 6. Linux and Mac builds, several saves with a save manager — first versions in 0.3.5 (Linux and Mac need testers).
    **Next:** GameCube-exact timing switched on once proven, slow-PC work, more randomizer and challenge options.
-7. Deeper modding and editors.
-8. Pokémon Colosseum, on the same base.
+7. Pokémon Colosseum, on the same base.
 
 ## Thanks
 

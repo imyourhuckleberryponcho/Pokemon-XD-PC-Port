@@ -201,7 +201,7 @@ for f in "$ROOT/LICENSE" "$ROOT/third_party/aurora/LICENSE" "$ROOT/third_party/S
   if [ -f "$f" ]; then cp "$f" "$APP/Contents/Resources/licenses/$(basename "$(dirname "$f")")-$(basename "$f")"; fi
 done
 
-sed "s/@VERSION@/$VERSION/g" "$HERE/Read me (Mac).txt" > "$DEST/Read me.txt"
+sed -e "/^=== SHARED TEXT /d" -e "s/@VERSION@/$VERSION/g" "$HERE/Read me (Mac).txt" > "$DEST/Read me.txt"
 # 0.5.0: the download's zip holds ONLY the app at its top (below), because a 0.4.2 launcher installs a Mac update file
 # only in that shape (an app and nothing beside it). So the Read me also lives inside the app (Show Package Contents >
 # Contents > Resources); the copy beside the app stays in the folder for CI and for people who build it themselves.
