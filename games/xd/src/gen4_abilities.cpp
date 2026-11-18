@@ -1,6 +1,8 @@
+#include "i18n.h"
 #include "xd_challenges.h"
 #include "xd_gen4.h"
 #include "xd_gen4_abilities.h"
+#include "xd_xg.h"
 
 #include <cctype>
 #include <cstdint>
@@ -23,6 +25,8 @@ struct Ability {
 constexpr uint32_t kGroup = 0x7D0;
 constexpr uint32_t kFirstText = 0x8000;
 constexpr uint8_t kFirst = 77, kLast = 123;
+constexpr uint32_t kNoEffectText = 0x9100;
+bool sRowsInstalled = false;
 
 constexpr Ability kAbilities[] = {
     {77, "Tangled Feet", "Raises evasion if confused."},
@@ -78,7 +82,7 @@ constexpr Ability kAbilities[] = {
 
 namespace xd::gen4 {
 
-bool AbilityTextsWanted() { return xd::gen4::Loaded() || xd::challenges::Active("gen4_rules"); }
+bool AbilityTextsWanted() { return !xd::xg::On() && (xd::gen4::Loaded() || xd::challenges::Active("gen4_pokemon")); }
 
 constexpr const char* kMessages[] = {
     "{0F} was hurt by its Solar Power!",
@@ -103,11 +107,28 @@ void AppendAbilityTexts(std::vector<std::pair<uint32_t, std::string>>& texts) {
     texts.emplace_back((kGroup << 20) | (kFirstText + a.id * 2 + 1), a.text);
   }
   for (size_t i = 0; i < sizeof kMessages / sizeof kMessages[0]; i++) texts.emplace_back((kGroup << 20) | (0x9000 + i), kMessages[i]);
+  texts.emplace_back((kGroup << 20) | kNoEffectText, engine::i18n::Tr("No effect with the XD rules."));
+}
+
+const char* Gen4AbilityName(uint32_t id) {
+  for (const Ability& a : kAbilities) {
+    if (a.id == id) return a.name;
+  }
+  return nullptr;
 }
 
 void AppendAbilityNames(std::vector<std::pair<std::string, int64_t>>& out) {
   if (!AbilityTextsWanted()) return;
   for (const Ability& a : kAbilities) out.emplace_back(a.name, a.id);
+}
+
+void SyncAbilityDescriptions() {
+  if (!sRowsInstalled) return;
+  const bool rules = xd::challenges::Active("gen4_rules");
+  auto* rows = reinterpret_cast<uint32_t*>(pokemon_tokusei_data);
+  for (const Ability& a : kAbilities) {
+    rows[3 * a.id + 2] = (kGroup << 20) | (rules ? kFirstText + a.id * 2 + 1 : kNoEffectText);
+  }
 }
 
 void InstallAbilityRows() {
@@ -128,6 +149,8 @@ void InstallAbilityRows() {
     row[2] = (kGroup << 20) | (kFirstText + a.id * 2 + 1);
   }
   pokemon_tokusei_data_number = kLast + 1;
+  sRowsInstalled = true;
+  SyncAbilityDescriptions();
   std::fprintf(stderr, "[gen4] ability table grown: %u -> %u rows (names and descriptions of Diamond/Pearl abilities)\n", old,
                pokemon_tokusei_data_number);
 }

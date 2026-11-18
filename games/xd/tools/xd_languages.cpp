@@ -19,7 +19,8 @@ namespace fs = std::filesystem;
 
 namespace {
 
-constexpr const char* kVersion = "1.1.0";
+constexpr const char* kVersion = "1.1.1";
+constexpr const char* kJpVersion = "1.1.0";
 
 uint32_t Be32(const uint8_t* p) { return (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3]; }
 void PutBe32(std::vector<uint8_t>& v, uint32_t x) {
@@ -67,7 +68,14 @@ struct UsInfo {
   std::map<std::string, int> messages;
   std::vector<uint8_t> toc;
   std::set<std::string> files;
+  std::map<std::string, uint64_t> suffixHash;
 };
+
+uint64_t HashBytes(const uint8_t* data, size_t size) {
+  uint64_t h = 1469598103934665603ull;
+  for (size_t i = 0; i < size; i++) h = (h ^ data[i]) * 1099511628211ull;
+  return h ^ size;
+}
 
 bool WriteFile(const fs::path& path, const void* data, size_t size) {
   std::error_code ec;
@@ -889,7 +897,7 @@ int MakeJapanese(const std::string& jpDisc, const std::string& xdDisc, const std
   const std::string json = xd::languages::PackJson({"jp"}, made, xd::languages::kJpGameId);
   WriteFile(outTmp / xd::languages::kPackFile, json.data(), json.size());
   const std::string mod = std::string("{\n  \"id\": \"") + xd::languages::kJpManifestId +
-                          "\",\n  \"name\": \"Japanese\",\n  \"version\": \"" + kVersion +
+                          "\",\n  \"name\": \"Japanese\",\n  \"version\": \"" + kJpVersion +
                           "\",\n  \"description\": \"The Japanese text of the Japanese disc.\",\n  \"game\": [\"GXXE01\"],\n"
                           "  \"count\": 1,\n  \"unit\": \"language\",\n  \"units\": \"languages\",\n  \"detail\": \"Japanese\"\n}\n";
   WriteFile(outTmp / "mod.json", mod.data(), mod.size());
@@ -908,7 +916,8 @@ int main(int argc, char** argv) {
   for (int i = 1; i < argc; i++) {
     const std::string a = argv[i];
     if (a == "--version") {
-      std::printf("xd_languages %s\n", kVersion);
+      const bool jp = i + 1 < argc && std::string(argv[i + 1]) == "jp";
+      std::printf("xd_languages %s\n", jp ? kJpVersion : kVersion);
       return 0;
     }
     const auto value = [&](std::string& dst) {
@@ -955,6 +964,7 @@ int main(int argc, char** argv) {
         PortDisc_Free(data);
         continue;
       }
+      if (!BaseName(name).empty()) us.suffixHash[name] = HashBytes(data, size);
       for (uint32_t i = 0; i < fsys.count; i++) {
         FsysEntry e{};
         if (!Fsys_Entry(&fsys, i, &e)) continue;
@@ -1022,6 +1032,15 @@ int main(int argc, char** argv) {
     if (data == nullptr || !Fsys_Open(data, size, &fsys)) {
       PortDisc_Free(data);
       continue;
+    }
+    if (!BaseName(name).empty()) {
+      const auto same = us.suffixHash.find(name);
+      if (same != us.suffixHash.end() && same->second == HashBytes(data, size)) {
+        std::fprintf(stderr, "left out %s: the USA disc has the same file (not a language archive)\n", name.c_str());
+        PortDisc_Free(data);
+        kept++;
+        continue;
+      }
     }
     int messages = 0;
     std::vector<FsysReplacement> replacements;

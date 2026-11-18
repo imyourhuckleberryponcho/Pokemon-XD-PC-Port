@@ -476,11 +476,12 @@ void RestartNow(const char* why) {
   sRestartNow = true;
 }
 
-bool RestartForRoom(bool gen4) {
+bool RestartForRoom(bool gen4, bool gen4Rules) {
   ep::Setup setup;
   setup.engine = ep::DefaultEngine(es::Global());
   setup.mods = sLoaded;
-  if (gen4) setup.challenges.push_back("gen4_rules");
+  if (gen4) setup.challenges.push_back("gen4_pokemon");
+  if (gen4 && gen4Rules) setup.challenges.push_back("gen4_rules");
   const fs::path file = xd::CardRoot() / L"playthroughs" / L"next_new_game.json";
   if (!WriteSetup(file, setup)) {
     std::fprintf(stderr, "[playthrough] could not write %ls: no restart for the room\n", file.wstring().c_str());
@@ -590,8 +591,8 @@ namespace {
 bool HasRule(const std::vector<std::string>& rules, const char* id) {
   return xd::xg::OffForRule(id) == nullptr && std::find(rules.begin(), rules.end(), id) != rules.end();
 }
-bool RandoGen4(const std::string& code) { return xd::xg::Off(xd::xg::Feature::Gen4) == nullptr && xd::randomizer::CodeIncludesGen4(code); }
-bool HasGen4(const std::vector<std::string>& rules) { return HasRule(rules, "gen4_rules"); }
+bool RandoGen4(const std::string& code) { return xd::xg::Off(xd::xg::Feature::Gen4Pokemon) == nullptr && xd::randomizer::CodeIncludesGen4(code); }
+bool HasGen4(const std::vector<std::string>& rules) { return HasRule(rules, "gen4_pokemon") || HasRule(rules, "gen4_rules"); }
 bool HasGen4Spots(const std::vector<std::string>& rules) { return HasGen4(rules) && HasRule(rules, "gen4_spots"); }
 }
 

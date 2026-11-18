@@ -116,6 +116,7 @@ class Link {
  public:
   ~Link() { Close(); }
   bool Open(const std::string& path) {
+    lastError_ = 0;
     for (int attempt = 0; attempt < 3; attempt++) {
       h_ = CreateFileA(path.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, nullptr);
       if (h_ != INVALID_HANDLE_VALUE || GetLastError() != ERROR_PIPE_BUSY) break;
@@ -194,6 +195,7 @@ class Link {
  public:
   ~Link() { Close(); }
   bool Open(const std::string& path) {
+    lastError_ = 0;
     if (path.size() >= sizeof(sockaddr_un::sun_path)) return false;
     fd_ = ::socket(AF_UNIX, SOCK_STREAM, 0);
     if (fd_ < 0) return false;
@@ -373,9 +375,21 @@ struct Client::Impl {
     Log("disconnected", why);
   }
 
+  static bool IsAccessDenied(unsigned long e) {
+#ifdef _WIN32
+    return e == ERROR_ACCESS_DENIED;
+#else
+    return e == static_cast<unsigned long>(EACCES) || e == static_cast<unsigned long>(EPERM);
+#endif
+  }
+
+  bool accessDenied = false;
+
   bool TryConnect() {
+    accessDenied = false;
     for (const std::string& path : Candidates(cfg.endpointOverride)) {
       if (!link.Open(path)) {
+        if (IsAccessDenied(link.lastError_)) accessDenied = true;
         if (cfg.log && !cfg.endpointOverride.empty()) Log("cannot open", path + " (error " + std::to_string(link.lastError_) + ")");
         continue;
       }
@@ -470,7 +484,10 @@ struct Client::Impl {
             fails++;
             const int ms = fails >= cfg.maxQuickRetries ? cfg.retryLongIntervalMs : cfg.retryIntervalMs;
             nextTry = Clock::now() + std::chrono::milliseconds(ms);
-            if (fails == 1) Log("no chat program found; trying again later");
+            if (fails == 1) {
+              if (accessDenied) Log("Discord may be running as administrator (access to its connection was denied); run it normally to show the status; trying again later");
+              else Log("no chat program found; trying again later");
+            }
           }
         }
         if (!connected) continue;

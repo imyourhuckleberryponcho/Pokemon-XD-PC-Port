@@ -158,8 +158,24 @@ Discord presence
   "Story mode", "In a battle", "Online battle") and for how long, next to your name in Discord. It is on by default,
   talks only to the Discord app on this same PC, and shows no save name, trainer name or place.
 - To turn it off: Settings page of the launcher, or SETTINGS in the game, "Discord presence".
+- If nothing shows up while Discord is open, check that Discord is not running as administrator: a program started normally cannot reach it.
 """
 
+
+NEW_061 = """New in 0.6.1
+------------
+New:
+- Gen 4 Pokemon and the Gen 4 rules are now two separate choices: you can have the Gen 4 Pokemon (made from your own
+  Battle Revolution disc) without the Gen 4 rules, and with the rules off the Gen 3 abilities work as before.
+- Gen 4 Pokemon also work in Pokemon XG.
+- A Performance option (Settings) for weaker PCs.
+- Smoother play on weak PCs: the sound chip now runs on its own thread.
+Fixed:
+- Magmortar's colours: its body was all red. Re-make the Battle Revolution models in the launcher (Extra assets says
+  "Out of date: make again").
+- Deoxys was invisible with the Spanish language pack. Re-make the language pack in the launcher (Extra assets says
+  "Out of date: make again").
+"""
 
 NEW_060 = """New in 0.6.0
 ------------

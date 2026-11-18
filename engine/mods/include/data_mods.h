@@ -44,6 +44,7 @@ struct DataTable {
   std::vector<DataField> fields;
   std::string entryNames;
   bool addable = false;
+  bool addableBuiltIn = false;
   uint32_t addFirstId = 0;
   uint32_t addMax = 0;
   std::string idList;

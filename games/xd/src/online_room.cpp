@@ -63,6 +63,7 @@ bool LevelValid(const std::string& v) {
 }
 
 std::string GenName(const std::string& ruleSet, const std::string& edition) {
+  if (ruleSet == "gen4pokemon") return edition == "xg" ? "Gen 4 Pokemon with the classic XG rules" : "Gen 4 Pokemon with the classic XD rules";
   if (ruleSet == "gen4") return "Gen 4 Pokemon and rules";
   if (ruleSet == "gen4mt") return "Gen 4 Pokemon and rules with the modern types";
   return edition == "xg" ? "the classic XG rules" : "the classic XD rules";
@@ -75,7 +76,7 @@ bool RulesValid(const RoomRules& r, std::string* error) {
     if (error) *error = m;
     return false;
   };
-  if (!OneOf(r.ruleSet, {"classic", "gen4", "gen4mt"})) return fail("rules must be classic, gen4 or gen4mt");
+  if (!OneOf(r.ruleSet, {"classic", "gen4pokemon", "gen4", "gen4mt"})) return fail("rules must be classic, gen4pokemon, gen4 or gen4mt");
   if (!OneOf(r.items, {"none", "bag", "kit"})) return fail("items must be none, bag or kit");
   if (!OneOf(std::to_string(r.timerSeconds), {"0", "30", "60", "90", "120"})) return fail("timer must be 0 (off), 30, 60, 90 or 120");
   if (!OneOf(r.shadowObey, {"story", "purified"})) return fail("shadow_obey must be story or purified");

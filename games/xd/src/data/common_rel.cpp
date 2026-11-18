@@ -777,6 +777,8 @@ int resolve_main(uint32_t gcAddress, void** out) {
 }
 
 static int32_t (*sAbilityCapsule)(uint32_t item, int32_t* consume) = nullptr;
+static void (*sSpeciesRowsHook)(void*, uint32_t) = nullptr;
+extern "C" void PortXD_SetSpeciesRowsHook(void (*f)(void*, uint32_t)) { sSpeciesRowsHook = f; }
 extern "C" void PortXD_SetAbilityCapsuleFunction(int32_t (*f)(uint32_t, int32_t*)) { sAbilityCapsule = f; }
 
 int resolve_xg_unrelocated(Loaded* l, uint32_t gcEntryOffset, uint32_t fieldGcOffset, void** out) {
@@ -1451,6 +1453,7 @@ extern "C" bool PortXD_ConvertCommonRel(const uint8_t* relFile, size_t relSize, 
         out->pokemon_data_number = *static_cast<uint32_t*>(out->globals[g].value);
       }
     }
+    if (out->pokemon_data != nullptr && sSpeciesRowsHook != nullptr) sSpeciesRowsHook(out->pokemon_data, out->pokemon_data_number);
   }
   out->tablesFound = (uint32_t)n;
   {

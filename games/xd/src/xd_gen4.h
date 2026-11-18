@@ -15,6 +15,9 @@ bool PackPresent(std::string* why = nullptr);
 
 void Prepare(bool wanted, bool spots, engine::mods::LoadOptions& options, std::vector<engine::mods::DataModFile>& dataFiles);
 
+bool TranslateForXG(const engine::mods::DataCatalog& catalog, const engine::mods::EntryReader& read, std::vector<engine::mods::DataModFile>& files,
+                    std::string& error);
+
 void AfterLoad(const engine::mods::LoadResult& result);
 
 bool Loaded();

@@ -237,6 +237,9 @@
 = The mod %s, %s: the game has no message #%d that can be changed.
 > Mod %s, %s: nel gioco non c'è nessun messaggio #%d che si possa modificare.
 
+= The new rows of %s can't be put into %s: its layout is not the one this knows. They are left out.
+> Le nuove righe di %s non possono essere inserite in %s: la sua struttura non è quella che questo programma conosce. Vengono lasciate fuori.
+
 = The mod %s: texts for new rows can't be added on this disc; they keep the text of the row they copy.
 > Mod %s: su questo disco non si possono aggiungere testi per le nuove righe; mantengono il testo della riga che copiano.
 
@@ -474,6 +477,9 @@
 = it adds people, zones, chests or music to rooms (objects/)
 > aggiunge persone, zone, bauli o musica alle stanze (objects/)
 
+= it adds text to rooms (texts/)
+> aggiunge testo alle stanze (texts/)
+
 = it replaces %s, which isn't only pictures or sound
 > sostituisce %s, che non contiene solo immagini o suoni
 
@@ -548,6 +554,12 @@
 
 = Made for another game or game version (%s); this disc is %s. It isn't used.
 > Fatto per un altro gioco o un'altra versione del gioco (%s); questo disco è %s. Non viene usato.
+
+= This mod has no part made for this game: only its shared parts (pictures, shared scripts) apply.
+> Questa mod non ha una parte fatta per questo gioco: valgono solo le sue parti condivise (immagini, script condivisi).
+
+= This mod has nothing for this game, so it changes nothing.
+> Questa mod non ha niente per questo gioco, quindi non cambia nulla.
 
 = A compatibility patch: it is only used when "%s" is on too, and that is not the case. Not used.
 > Una patch di compatibilità: viene usata solo se è attivo anche «%s», e non è così. Non usata.
@@ -2034,8 +2046,8 @@
 = Challenge runs: Nuzlocke, level caps, no items in battle
 > Partite sfida: Nuzlocke, limiti di livello, niente strumenti in lotta
 
-= Gen 4 Pokemon and rules, Fairy type, shiny odds
-> Pokémon e regole della 4a generazione, tipo Folletto, probabilità degli shiny
+= Gen 4 Pokemon, Gen 4 rules, Fairy type, shiny odds
+> Pokémon Gen 4, regole Gen 4, tipo Folletto, probabilità degli shiny
 
 = Speed-ups: fast-forward, faster text, faster loading and saving
 > Accelerazioni: avanzamento rapido, testo più veloce, caricamento e salvataggio più rapidi
@@ -2064,8 +2076,8 @@
 = TMs listed with their move, your controller's own button pictures, photo mode, a pause when the window is in the background
 > MT elencate con la loro mossa, le immagini dei tasti del tuo controller, modalità foto, una pausa quando la finestra è in secondo piano
 
-= The New Game setup lets you choose randomizer, challenge runs, Gen 4 Pokemon and rules, Fairy type, shiny odds and more for each new save.
-> La schermata di Nuova partita ti permette di scegliere randomizer, sfide, Pokémon e regole della 4a generazione, tipo Folletto, probabilità degli shiny e altro per ogni nuovo salvataggio.
+= The New Game setup lets you choose randomizer, challenge runs, Gen 4 Pokemon, Gen 4 rules, Fairy type, shiny odds and more for each new save.
+> La schermata di Nuova partita ti permette di scegliere randomizer, sfide, Pokémon Gen 4, regole Gen 4, tipo Folletto, probabilità degli shiny e altro per ogni nuovo salvataggio.
 
 = The game's own rules stay as they were until you choose otherwise.
 > Le regole del gioco restano quelle originali finché non scegli diversamente.
@@ -2483,6 +2495,9 @@
 
 = Made for another game or game version: it won't be used with this disc.
 > Fatto per un altro gioco o un'altra versione del gioco: non verrà usato con questo disco.
+
+= Works with: %s
+> Funziona con: %s
 
 = Not used: 
 > Non usato: 
@@ -3507,8 +3522,8 @@
 = Make models and Gen 4 pack
 > Crea modelli e pacchetto Gen 4
 
-= The program pbr_models, which ships with the game, converts the Pokemon models on that disc into extra assets (the folder extra_assets\\pbr in your data folder) made here on your PC; XD keeps its own model for any Pokemon without one. The same Make also builds the Gen 4 pack (the folder extra_assets\\pbr_gen4: the Diamond/Pearl Pokemon with their models, cries, faces, moves and stats) that the New Game rule "Gen 4 Pokemon and rules" uses. They are built in, not a mod.
-> Il programma pbr_models, incluso nel gioco, converte i modelli dei Pokémon di quel disco in risorse extra (la cartella extra_assets\\pbr nella tua cartella dati) create qui sul tuo PC; XD tiene il proprio modello per ogni Pokémon che non ne ha uno. Lo stesso Crea costruisce anche il pacchetto Gen 4 (la cartella extra_assets\\pbr_gen4: i Pokémon di Diamante/Perla con i loro modelli, versi, volti, mosse e statistiche) usato dalla regola di Nuova partita "Pokémon e regole Gen 4". Sono integrati, non un mod.
+= The program pbr_models, which ships with the game, converts the Pokemon models on that disc into extra assets (the folder extra_assets\\pbr in your data folder) made here on your PC; XD keeps its own model for any Pokemon without one. The same Make also builds the Gen 4 pack (the folder extra_assets\\pbr_gen4: the Diamond/Pearl Pokemon with their models, cries, faces, moves and stats) that the New Game choices "Gen 4 Pokemon" and "Gen 4 rules" use. They are built in, not a mod.
+> Il programma pbr_models, incluso nel gioco, converte i modelli dei Pokémon di quel disco in risorse extra (la cartella extra_assets\\pbr nella tua cartella dati) create qui sul tuo PC; XD tiene il proprio modello per ogni Pokémon che non ne ha uno. Lo stesso Crea costruisce anche il pacchetto Gen 4 (la cartella extra_assets\\pbr_gen4: i Pokémon di Diamante/Perla con i loro modelli, versi, volti, mosse e statistiche) usato dalle scelte di Nuova partita «Pokémon Gen 4» e «Regole Gen 4». Sono integrati, non un mod.
 
 = Gen 4 Pokemon
 > Pokémon Gen 4
@@ -3936,11 +3951,14 @@
 = In each area you may catch one Pokemon of your choice, snagged or wild. After that, Poke Balls can't be used in that area's battles.
 > In ogni area puoi catturare un solo Pokémon a tua scelta, rubato o selvatico. Dopo, in quell'area non si possono più usare Poké Ball nelle lotte.
 
-= Gen 4 Pokemon and rules
-> Pokémon e regole Gen 4
+= The 107 Diamond/Pearl Pokemon (their models, cries and names), 113 moves and the new items, TMs and evolutions, made from your own Pokemon Battle Revolution disc. The battles keep the GameCube rules: the new moves that need Gen 4 rules do a plain hit or fail, and a Pokemon whose ability is new uses a Gen 3 ability instead, or has none.
+> I 107 Pokémon di Diamante/Perla (con i loro modelli, versi e nomi), 113 mosse e i nuovi strumenti, MT ed evoluzioni, creati dal tuo disco di Pokémon Battle Revolution. Le lotte mantengono le regole del GameCube: le nuove mosse che richiedono le regole Gen 4 fanno un semplice colpo o falliscono, e un Pokémon con un'abilità nuova usa invece un'abilità della 3ª generazione, oppure non ne ha.
 
-= The 107 Diamond/Pearl Pokemon (their models, cries and names) and 113 moves, made from your own Pokemon Battle Revolution disc, and the rules they need: abilities (Technician, Adaptability, Iron Fist, Scrappy...) and the new effects of moves such as U-turn and Trick Room.
-> I 107 Pokémon di Diamante/Perla (con i loro modelli, versi e nomi) e 113 mosse, creati dal tuo disco di Pokémon Battle Revolution, e le regole che servono: abilità (Tecnico, Adattabilità, Pugno Ferreo, Scrappy...) e i nuovi effetti di mosse come Retromarcia e Distortempo.
+= Gen 4 rules
+> Regole Gen 4
+
+= The Diamond/Pearl rules for battles (needs the Gen 4 Pokemon): abilities (Technician, Adaptability, Iron Fist, Scrappy...) and the new effects of moves such as U-turn and Trick Room.
+> Le regole di Diamante/Perla per le lotte (richiede i Pokémon Gen 4): le abilità (Tecnico, Adattabilità, Pugno Ferreo, Scrappy...) e i nuovi effetti di mosse come Retromarcia e Distortempo.
 
 = Modern types (Fairy)
 > Tipi moderni (Folletto)
@@ -4097,6 +4115,9 @@
 
 = The game did not start by itself: the title menu is yours.
 > Il gioco non è partito da solo: il menu del titolo è tuo.
+
+= The game's title screen did not come up. Close the game and start it again; if it happens again, send a report (F10).
+> La schermata del titolo del gioco non è comparsa. Chiudi il gioco e riavvialo; se succede di nuovo, invia un rapporto (F10).
 
 = Pokemon XD - mods
 > Pokémon XD - mod
@@ -4446,6 +4467,9 @@
 = Rules: %s
 > Regole: %s
 
+= Gen 4 Pokemon with the classic XD rules
+> Pokémon Gen 4 con le regole classiche di XD
+
 = Gen 4 Pokemon and moves
 > Pokémon e mosse della 4a generazione
 
@@ -4715,9 +4739,6 @@
 
 = Rematch: the same room and settings again.
 > Rivincita: stessa stanza e stesse impostazioni.
-
-= Gen 4 rules
-> Regole Gen 4
 
 = Gen 4 with modern types
 > Gen 4 con tipi moderni
@@ -5328,6 +5349,9 @@
 = Shiny Bonsly / Munchlax
 > Bonsly / Munchlax cromatici
 
+= %s (needs %s)
+> %s (richiede: %s)
+
 = START
 > START
 
@@ -5372,6 +5396,9 @@
 
 = Not available: %s. The Gen 4 Pokemon, moves, cries and models are made from your own Pokemon Battle Revolution disc (launcher, Extra assets page).
 > Non disponibile: %s. I Pokémon, le mosse, i versi e i modelli Gen 4 vengono creati dal tuo disco di Pokémon Battle Revolution (launcher, pagina Risorse extra).
+
+= Greyed: switch "%s" on first. %s
+> Disattivato: attiva prima «%s». %s
 
 = Challenge rule, for this playthrough from start to end. %s
 > Regola di sfida, per questa partita dall'inizio alla fine. %s
@@ -5459,6 +5486,9 @@
 
 = Changes: %s.
 > Modifiche: %s.
+
+= Works with: %s.
+> Funziona con: %s.
 
 = Looks and sound only.
 > Solo aspetto e suono.
@@ -5916,29 +5946,20 @@
 = This PC has no Gen 4 pack yet (make it from your Pokemon Battle Revolution disc in the launcher).
 > Questo PC non ha ancora il pacchetto Gen 4 (crealo dal tuo disco di Pokémon Battle Revolution nel launcher).
 
-= Works with: %s.
-> Funziona con: %s.
-
-= Works with: %s
-> Funziona con: %s
-
 = shared parts only
 > solo parti condivise
 
 = nothing for it in this mod
 > niente per questo gioco in questa mod
 
-= This mod has no part made for this game: only its shared parts (pictures, shared scripts) apply.
-> Questa mod non ha una parte fatta per questo gioco: valgono solo le sue parti condivise (immagini, script condivisi).
+= Gen 4 Pokemon, XD rules
+> Pokémon Gen 4, regole XD
 
-= This mod has nothing for this game, so it changes nothing.
-> Questa mod non ha niente per questo gioco, quindi non cambia nulla.
-= The new rows of %s can't be put into %s: its layout is not the one this knows. They are left out.
-> Le nuove righe di %s non possono essere inserite in %s: la sua struttura non è quella che questo programma conosce. Vengono lasciate fuori.
+= No effect with the XD rules.
+> Nessun effetto con le regole XD.
 
-= it adds text to rooms (texts/)
-> aggiunge testo alle stanze (texts/)
+= Performance mode
+> Modalità prestazioni
 
-
-= The game's title screen did not come up. Close the game and start it again; if it happens again, send a report (F10).
-> La schermata del titolo del gioco non è comparsa. Chiudi il gioco e riavvialo; se succede di nuovo, invia un rapporto (F10).
+= For slow PCs: the picture is drawn smaller (three quarters of the GameCube's 640x480, a little softer) and the in-between pictures of Frame rate 60 are left out, so the graphics chip has far less to do. Only how the picture is drawn changes; the game itself runs exactly as before. It replaces the Resolution and Frame rate choices while it is on. Applies at once.
+> Per i PC lenti: l'immagine viene disegnata più piccola (tre quarti dei 640x480 del GameCube, un po' più morbida) e le immagini intermedie della frequenza 60 vengono omesse, così la scheda grafica ha molto meno da fare. Cambia solo come viene disegnata l'immagine; il gioco in sé funziona esattamente come prima. Sostituisce le scelte Risoluzione e Frequenza fotogrammi finché è attiva. Si applica subito.

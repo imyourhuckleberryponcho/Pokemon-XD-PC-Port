@@ -21,8 +21,8 @@ const std::vector<launcher::GameInfo::ExtraSource>& ExtraSources() {
     pbr.how = Tr("The program pbr_models, which ships with the game, converts the Pokemon models on that disc into "
                  "extra assets (the folder extra_assets\\pbr in your data folder) made here on your PC; XD keeps its own "
                  "model for any Pokemon without one. The same Make also builds the Gen 4 pack (the folder extra_assets\\pbr_gen4: "
-                 "the Diamond/Pearl Pokemon with their models, cries, faces, moves and stats) that the New Game rule "
-                 "\"Gen 4 Pokemon and rules\" uses. They are built in, not a mod.");
+                 "the Diamond/Pearl Pokemon with their models, cries, faces, moves and stats) that the New Game choices "
+                 "\"Gen 4 Pokemon\" and \"Gen 4 rules\" use. They are built in, not a mod.");
     pbr.discSetting = "system.extra_disc.pbr";
     pbr.manifestId = xd::battle_models::kManifestId;
     pbr.switchSetting = xd::battle_models::kSetting;
@@ -87,6 +87,7 @@ const std::vector<launcher::GameInfo::ExtraSource>& ExtraSources() {
                       "from it.");
     japanese.discSetting = "system.extra_disc.languages_jp";
     japanese.manifestId = xd::languages::kJpManifestId;
+    japanese.versionArgument = "jp";
     japanese.converterStem = "xd_languages";
     japanese.converterFolder = "xd_languages";
     japanese.converterOverrideEnv = "XD_LANGUAGES_EXE";

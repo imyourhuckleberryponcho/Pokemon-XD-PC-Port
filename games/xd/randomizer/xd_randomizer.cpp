@@ -1360,6 +1360,10 @@ bool LoadGen4Species(const std::filesystem::path& file, std::string& error) {
   return true;
 }
 
+void TranslateGen4Species(const std::function<void(Gen4Species&)>& fix) {
+  for (Gen4Species& g : sGen4) fix(g);
+}
+
 bool CodeIncludesGen4(const std::string& code) {
   er::Settings s;
   bool seedOnly = false;

@@ -575,7 +575,7 @@ target_compile_options(xd_musyx PRIVATE ${XD_FLAG_UNDEF_DEBUG})
 endif () # XD_BUILD_GAME
 
 add_library(xd_port STATIC src/dol_tables.c src/data/common_rel.cpp)
-target_include_directories(xd_port PUBLIC src src/data)
+target_include_directories(xd_port PUBLIC src src/data PRIVATE ${CMAKE_SOURCE_DIR}/engine/mods) # (json.h: the Gen 4 pack on XG, src/gen4_xg.cpp)
 target_link_libraries(xd_port PUBLIC platform_disc engine_formats)
 xd_use_decomp_headers(xd_port)
 
@@ -706,6 +706,9 @@ add_executable(online_draft_test tools/online_draft_test.cpp src/online_draft.cp
 target_link_libraries(online_draft_test PRIVATE monocypher engine_i18n)
 add_executable(online_lobby_test tools/online_lobby_test.cpp src/online_lobby.cpp src/online_room.cpp src/online_draft.cpp src/online_commit.cpp)
 target_link_libraries(online_lobby_test PRIVATE monocypher engine_i18n)
+add_executable(gen4_xg_test tools/gen4_xg_test.cpp src/gen4_xg.cpp)
+target_include_directories(gen4_xg_test PRIVATE ${CMAKE_SOURCE_DIR}/engine/mods)
+target_link_libraries(gen4_xg_test PRIVATE engine_mods)
 add_executable(online_team_test tools/online_team_test.cpp src/online_team.cpp src/online_room.cpp)
 target_link_libraries(online_team_test PRIVATE xd_legality xd_save)
 
@@ -829,7 +832,7 @@ set(XD_PROGRAM_LIBS xd_port engine_presence engine_net xd_legality xd_legality_d
 set(XD_PROGRAM_PORT_SOURCES src/boot.c src/disc_tables.cpp src/disc_verify.c src/disc_choice.cpp src/game_new.cpp src/heap_check.cpp src/heap_model.cpp src/musyx_dsp_program.c
   src/renderdoc_capture.c src/screenshot.cpp src/bug_report.cpp src/settings_boot.cpp src/mods_boot.cpp src/languages_boot.cpp src/gslog_port.cpp src/state_dump.cpp src/timing_log.cpp src/cpu_cost_hooks.cpp src/fsys_unpack_cost.cpp src/dvd_open_cost.cpp src/bound_walk_cost.cpp src/perf_marks.cpp src/cpu_counters.cpp src/warp.cpp src/render_icon.cpp src/shader_prep.cpp src/pc_load.cpp src/dsp_coef.cpp
   src/data/rel_link.cpp src/data/main_program_map.cpp src/dev_menu.cpp src/task_stacks.cpp src/input_ticks.cpp
-  src/particle_check.cpp src/settings_menu.cpp src/speedups.cpp src/move_split.cpp src/gen4_moves.cpp src/xg_calc_harness.cpp src/xg_calc_questions.cpp src/gen4_abilities.cpp src/gen4_ability_effects.cpp src/script_hooks.cpp src/script_global_ext.cpp src/online_battle.cpp src/trainer_card.cpp src/trainer_card_game.cpp src/trainer_card_page.cpp src/online_lobby.cpp src/online_mirror.cpp src/online_room.cpp src/online_team.cpp src/online_commit.cpp src/online_draft.cpp src/online_draft_game.cpp src/online_vs_row.cpp src/added_rows.cpp src/gen4_pack.cpp src/gen4_machines.cpp src/replay_pacing.cpp src/audio_categories.cpp src/button_icons.cpp src/settings_switches.cpp src/hook_defaults.cpp src/tm_names.cpp src/shiny_odds.cpp src/hd_textures.cpp src/texture_observers.cpp src/type_icons.cpp src/modern_types.cpp src/speedrun.cpp
+  src/particle_check.cpp src/settings_menu.cpp src/speedups.cpp src/move_split.cpp src/gen4_moves.cpp src/xg_calc_harness.cpp src/xg_calc_questions.cpp src/gen4_abilities.cpp src/gen4_ability_effects.cpp src/script_hooks.cpp src/script_global_ext.cpp src/online_battle.cpp src/trainer_card.cpp src/trainer_card_game.cpp src/trainer_card_page.cpp src/online_lobby.cpp src/online_mirror.cpp src/online_room.cpp src/online_team.cpp src/online_commit.cpp src/online_draft.cpp src/online_draft_game.cpp src/online_vs_row.cpp src/added_rows.cpp src/gen4_pack.cpp src/gen4_machines.cpp src/gen4_xg.cpp src/replay_pacing.cpp src/audio_categories.cpp src/button_icons.cpp src/settings_switches.cpp src/hook_defaults.cpp src/tm_names.cpp src/shiny_odds.cpp src/hd_textures.cpp src/texture_observers.cpp src/type_icons.cpp src/modern_types.cpp src/speedrun.cpp
   src/widescreen.cpp src/save_picker.cpp src/playthrough.cpp src/challenges.cpp src/level_caps.cpp src/battles_won.cpp src/discord_presence.cpp src/walk_helper.cpp src/gen4_evolutions.cpp src/gen4_eevee.cpp src/pc_trade.cpp src/starter.cpp)
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/story_flag_names_data.cpp"
   COMMAND ${CMAKE_COMMAND} -DTEXT_FILE=${CMAKE_CURRENT_SOURCE_DIR}/data/story_flag_names.txt

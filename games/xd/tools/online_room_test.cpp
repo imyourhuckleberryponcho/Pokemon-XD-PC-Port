@@ -31,6 +31,12 @@ int main() {
   CHECK(ParseRules("rules=gen4;items=kit;timer=60;shadow=on;shadow_obey=purified;level=all:50;team=free14", r, &err));
   CHECK(r.ruleSet == "gen4" && r.items == "kit" && r.timerSeconds == 60 && r.shadowAllowed && r.level == "all:50" && r.team == "free14");
   CHECK(!ParseRules("rules=gen9", r, &err));
+
+  CHECK(ParseRules("rules=gen4pokemon;team=free14", r, &err) && r.ruleSet == "gen4pokemon");
+  CHECK(RoomGen4Pokemon("gen4pokemon") && !RoomGen4Rules("gen4pokemon"));
+  CHECK(RoomGen4Pokemon("gen4") && RoomGen4Rules("gen4") && RoomGen4Pokemon("gen4mt") && RoomGen4Rules("gen4mt"));
+  CHECK(!RoomGen4Pokemon("classic") && !RoomGen4Rules("classic"));
+  CHECK(RulesText(r).find("Gen 4 Pokemon with the classic XD rules") != std::string::npos);
   CHECK(!ParseRules("timer=45", r, &err));
   CHECK(!ParseRules("items=balls", r, &err));
   CHECK(!ParseRules("level=cap:0", r, &err));

@@ -189,7 +189,7 @@ public:
         Problem(file, tv.line, "adds rows to the table " + Quote(tableKey) + ", which the game doesn't have" + Hint());
         continue;
       }
-      if (!t->addable || !Usable(*t)) {
+      if (!(t->addable || (t->addableBuiltIn && file.builtIn)) || !Usable(*t)) {
         Problem(file, tv.line, "adds rows to " + Quote(t->name) + ", which can't get new rows (new rows work for the Pokemon, move, item, flag, room, battle and trainer-deck tables)");
         continue;
       }

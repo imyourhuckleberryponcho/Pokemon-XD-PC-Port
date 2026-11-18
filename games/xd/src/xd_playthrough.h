@@ -49,7 +49,7 @@ void RestartToTitle();
 bool PickerPossible();
 void PickerAnswer(const xd::picker::Row* row);
 
-bool RestartForRoom(bool gen4);
+bool RestartForRoom(bool gen4, bool gen4Rules);
 
 const std::vector<std::string>& ContinueProblems();
 void ContinueAnswer(bool carryOn);

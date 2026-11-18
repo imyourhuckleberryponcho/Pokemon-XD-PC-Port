@@ -795,6 +795,7 @@ struct Row {
 };
 const Row kRows[] = {
     {"video.resolution_scale", [] { return Tr("Resolution"); }, 1, false, ""},
+    {"video.performance", [] { return Tr("Performance mode"); }, 0, false, ""},
     {"video.widescreen", [] { return Tr("Widescreen"); }, 0, false, ""},
     {"video.fullscreen", [] { return Tr("Full screen"); }, 0, false, ""},
     {"video.borderless_window", [] { return Tr("Borderless window"); }, 0, false, ""},
@@ -1438,6 +1439,30 @@ std::string RuleBlockedWhy(const char* id) {
   return {};
 }
 
+int RuleIndex(const char* id) {
+  const auto& rules = xd::challenges::Rules();
+  for (int i = 0; i < static_cast<int>(rules.size()); i++) {
+    if (std::strcmp(rules[i].id, id) == 0) return i;
+  }
+  return -1;
+}
+
+const xd::challenges::Rule* NeededOff(int rule) {
+  const char* need = xd::challenges::Requires(xd::challenges::Rules()[rule].id);
+  if (need == nullptr) return nullptr;
+  const int at = RuleIndex(need);
+  return at >= 0 && !s.rules[at] ? &xd::challenges::Rules()[at] : nullptr;
+}
+
+void SetRule(int rule, bool on) {
+  s.rules[rule] = on;
+  if (on) return;
+  for (int i = 0; i < static_cast<int>(s.rules.size()); i++) {
+    const char* need = xd::challenges::Requires(xd::challenges::Rules()[i].id);
+    if (need != nullptr && std::strcmp(need, xd::challenges::Rules()[rule].id) == 0) s.rules[i] = false;
+  }
+}
+
 const char* RandomizerStyleName(int style) {
   switch (style) {
   case 1: return Tr("Light");
@@ -1667,7 +1692,7 @@ void BuildRows() {
     for (int i = 0; i < static_cast<int>(schema.switches.size()); i++) {
       const int parent = SwitchParent(i);
       if (parent >= 0 && rs.Get(schema, schema.switches[parent].id) == 0) continue;
-      if (schema.switches[i].id == "gen4" && xd::xg::Off(xd::xg::Feature::Gen4) != nullptr) continue;
+      if (schema.switches[i].id == "gen4" && xd::xg::Off(xd::xg::Feature::Gen4Pokemon) != nullptr) continue;
       if (schema.switches[i].id == "starter.similar" && rs.Get(schema, "starter.choice") == 2) continue;
       s.rows.push_back({Kind::RandomizerSwitch, nullptr, -1, i});
     }
@@ -1689,6 +1714,10 @@ engine::playthrough::Setup Chosen() {
   const std::vector<std::string> options = s.engine == engine::playthrough::Engine::Enhanced
                                                ? xd::shiny::OptionsOf(s.shinyOdds, s.shinyUnlock)
                                                : std::vector<std::string>();
+  if (s.rStyle != 0 && xd::xg::Off(xd::xg::Feature::Gen4Pokemon) == nullptr && xd::randomizer::CodeIncludesGen4(s.rCode) &&
+      std::find(rules.begin(), rules.end(), "gen4_pokemon") == rules.end()) {
+    rules.insert(rules.begin(), "gen4_pokemon");
+  }
   engine::playthrough::Setup setup = xd::pt::SetupOf(s.engine, s.defaults.mods, s.rStyle != 0 ? s.rCode : std::string(), rules, options);
   setup.speedrun.present = setup.speedrun.on = s.timer[0] != 0;
   setup.speedrun.withoutLoads = s.timer[0] == 2;
@@ -1739,6 +1768,7 @@ std::string RowLabel(const SRow& r) {
     if (!RuleBlockedWhy(xd::challenges::Rules()[r.sw].id).empty()) {
       return Fmt(Tr("%s (not available)"), xd::challenges::Rules()[r.sw].label());
     }
+    if (const xd::challenges::Rule* need = NeededOff(r.sw)) return Fmt(Tr("%s (needs %s)"), xd::challenges::Rules()[r.sw].label(), need->label());
     return xd::challenges::Rules()[r.sw].label();
   default: return Tr("START");
   }
@@ -1805,6 +1835,9 @@ std::string RowInfo(const SRow& r) {
                     "Revolution disc (launcher, Extra assets page)."),
                  s.gen4Why.c_str());
     }
+    if (const xd::challenges::Rule* need = NeededOff(r.sw)) {
+      return Fmt(Tr("Greyed: switch \"%s\" on first. %s"), need->label(), xd::challenges::Rules()[r.sw].info());
+    }
     return Fmt(Tr("Challenge rule, for this playthrough from start to end. %s"), xd::challenges::Rules()[r.sw].info());
   default:
     return restart ? Tr("Start the new game with this setup. The game starts again with these mods first; then choose NEW "
@@ -1843,6 +1876,13 @@ void Open(void*) {
   for (size_t i = 0; i < s.rules.size(); i++) {
     const std::vector<std::string>& had = s.defaults.challenges;
     s.rules[i] = std::find(had.begin(), had.end(), xd::challenges::Rules()[i].id) != had.end();
+  }
+  for (size_t i = 0; i < s.rules.size(); i++) {
+    const char* need = s.rules[i] ? xd::challenges::Requires(xd::challenges::Rules()[i].id) : nullptr;
+    if (need == nullptr) continue;
+    const int at = RuleIndex(need);
+    if (at >= 0 && std::strcmp(xd::challenges::Rules()[i].id, "gen4_rules") == 0) s.rules[at] = true;
+    else if (at >= 0 && !s.rules[at]) s.rules[i] = false;
   }
   const es::Registry& reg = es::Global();
   s.engineBefore = engine::playthrough::Engine::Faithful;
@@ -1946,7 +1986,9 @@ void Draw(ImDrawList* dl, float dt) {
     const float labelW = static_cast<float>(TextWidth(label.c_str())), room = 321.f - 8.f - 74.f;
     const float indent =
         r.kind == Kind::RandomizerSwitch && SwitchParent(r.sw) >= 0 ? 16.f : 0.f;
-    DrawText(dl, sc, 74.f + indent, std::floor(mid - static_cast<float>(sFontW + 1) / 2.f), label.c_str(), white,
+    const bool dim = r.kind == Kind::Challenges && (NeededOff(r.sw) != nullptr || !RuleBlockedWhy(xd::challenges::Rules()[r.sw].id).empty());
+    const uint8_t* ink = dim ? grey : white;
+    DrawText(dl, sc, 74.f + indent, std::floor(mid - static_cast<float>(sFontW + 1) / 2.f), label.c_str(), ink,
              labelW > room - indent ? (room - indent) / labelW : 1.f);
     const float boxY = mid - 12.f;
     std::string left, right, value;
@@ -1999,8 +2041,8 @@ void Draw(ImDrawList* dl, float dt) {
     }
     if (set >= 0) {
       DrawItem(dl, sc, set == 0 ? kOptChoice : kOptChoice2, set == 0 ? 321.f : 449.f, boxY, -1.f, -1.f, sel ? pulse : 255);
-      DrawTextCentred(dl, sc, 321.f, boxY, 121.f, 24.f, left.c_str(), white);
-      DrawTextCentred(dl, sc, 449.f, boxY, 121.f, 24.f, right.c_str(), white);
+      DrawTextCentred(dl, sc, 321.f, boxY, 121.f, 24.f, left.c_str(), ink);
+      DrawTextCentred(dl, sc, 449.f, boxY, 121.f, 24.f, right.c_str(), ink);
     } else {
       const bool soon = false;
       DrawItem(dl, sc, kOptChoice, 321.f, boxY, 249.f, -1.f, soon ? 110 : (sel ? pulse : 255), 14.f);
@@ -2105,7 +2147,9 @@ bool Frame(void*, const PortMenuInput* in) {
     if (left || right || a) {
       const bool blocked = !RuleBlockedWhy(xd::challenges::Rules()[r.sw].id).empty();
       if (blocked) break;
-      s.rules[r.sw] = left ? true : right ? false : !s.rules[r.sw];
+      const bool on = left ? true : right ? false : !s.rules[r.sw];
+      if (on && NeededOff(r.sw) != nullptr) break;
+      SetRule(r.sw, on);
       event = kSoundMove;
     }
     break;

@@ -8,6 +8,7 @@
 #include "xd_starter.h"
 #include "xd_added_rows.h"
 #include "xd_gen4.h"
+#include "xd_gen4_xg.h"
 #include "xd_modern_types.h"
 #include "xd_languages.h"
 #include "xd_scripts.h"
@@ -220,8 +221,11 @@ extern "C" bool PortXD_LoadMods(void) {
   options.dataCatalog = [](const em::EntryReader& read, em::DataCatalog& out, std::string& error) {
     if (!xd::data::BuildDataCatalog(read, out, error)) return false;
     if (const char* why = xd::xg::Off(xd::xg::Feature::DataAddRows)) {
-      for (em::DataTable& t : out.tables) t.addable = false;
-      std::fprintf(stderr, "[mods] data mods: no added rows in this edition (%s)\n", why);
+      for (em::DataTable& t : out.tables) {
+        t.addableBuiltIn = t.addable && (t.name == "pokemon_data" || t.name == "waza_data" || t.name == "item_data_prime");
+        t.addable = false;
+      }
+      std::fprintf(stderr, "[mods] data mods: no added rows from user mods in this edition (%s); the Gen 4 pack's rows are allowed\n", why);
     }
     return true;
   };
@@ -248,20 +252,34 @@ extern "C" bool PortXD_LoadMods(void) {
     options.generateData = [randomizerCode, gen4Files](const em::DataCatalog& catalog, const em::EntryReader& read,
                                                        std::vector<em::DataModFile>& out, std::string& error) {
       namespace xr = xd::randomizer;
-      for (const em::DataModFile& f : gen4Files) out.push_back(f);
+      if (xd::xg::On() && xd::gen4::Loaded()) {
+        std::vector<em::DataModFile> packFiles = gen4Files;
+        if (!xd::gen4::TranslateForXG(catalog, read, packFiles, error)) {
+          error = "the Gen 4 Pokemon cannot be used on this XG disc: " + error;
+          return false;
+        }
+        for (em::DataModFile& f : packFiles) out.push_back(std::move(f));
+      } else {
+        for (const em::DataModFile& f : gen4Files) out.push_back(f);
+      }
       if (randomizerCode.empty()) return true;
       engine::randomizer::Settings s;
       xr::ApplyStyle(s, xr::Style::Classic);
       bool seedOnly = false;
       if (!engine::randomizer::DecodeCode(xr::GetSchema(), randomizerCode, s, seedOnly, error)) return false;
-      if (xd::xg::Off(xd::xg::Feature::Gen4) != nullptr) s.Set(xr::GetSchema(), "gen4", 0);
-      if (xr::CodeIncludesGen4(randomizerCode) && xd::xg::Off(xd::xg::Feature::Gen4) == nullptr) {
+      if (xd::xg::Off(xd::xg::Feature::Gen4Pokemon) != nullptr) s.Set(xr::GetSchema(), "gen4", 0);
+      if (xr::CodeIncludesGen4(randomizerCode) && xd::xg::Off(xd::xg::Feature::Gen4Pokemon) == nullptr) {
         if (!xd::gen4::Loaded()) {
           error = "this randomizer code includes the Gen 4 Pokemon, but their files are not available (made from your Pokemon "
                   "Battle Revolution disc on the launcher's Extra assets page)";
           return false;
         }
         if (!xr::LoadGen4Species(xd::gen4::PackFolder() / L"randomizer.txt", error)) return false;
+        if (const auto* tr = xd::gen4::xg::Active()) xr::TranslateGen4Species([tr](xr::Gen4Species& g) {
+          tr->MapLearnset(g.level, g.move);
+          for (uint32_t& a : g.abilities) a = tr->MapAbility(a);
+          tr->MapTypes(g.name, g.types);
+        });
       }
       xr::Result r;
       if (!xr::Generate(catalog, read, s, r, error, xd::xg::On() ? &xr::kXGStarterBase : nullptr)) return false;

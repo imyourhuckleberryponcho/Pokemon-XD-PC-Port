@@ -51,6 +51,7 @@ struct Choices {
   const char* shapeName = "";
   Pacing pacing = Pacing::Original;
   int32_t resolutionScale = 1;
+  bool performance = false;
   bool fullscreen = false;
   bool borderless = false;
 };
@@ -80,10 +81,12 @@ Choices read_settings() {
     c.pacing = Pacing::Auto;
   } else if (pacing == r.ChoiceIndex("video.frame_pacing", "low_latency")) {
     c.pacing = Pacing::LowLatency;
-  } else if (r.Enum("video.frame_rate").Get() == r.ChoiceIndex("video.frame_rate", "60")) {
+  } else if (r.Enum("video.frame_rate").Get() == r.ChoiceIndex("video.frame_rate", "60") &&
+             !r.Bool("video.performance").Get()) {
     c.pacing = Pacing::Auto;
   }
   c.resolutionScale = r.Int("video.resolution_scale").Get();
+  c.performance = r.Bool("video.performance").Get();
   c.fullscreen = r.Bool("video.fullscreen").Get();
   c.borderless = r.Bool("video.borderless_window").Get();
   return c;
@@ -161,10 +164,15 @@ void apply_pacing(SDL_Window* window, const char* when) {
   std::fprintf(stderr, "[video] %s: frame pacing %s\n", when, why);
 }
 
-int32_t resolution_scale() { return sWindowResolution ? 0 : std::max<int32_t>(0, sChoices.resolutionScale); }
+constexpr float kPerformanceScale = 0.75f;
+float resolution_scale() {
+  if (sWindowResolution) return 0.f;
+  if (sChoices.performance) return kPerformanceScale;
+  return static_cast<float>(std::max<int32_t>(0, sChoices.resolutionScale));
+}
 
 void apply_resolution(SDL_Window* window, const char* when, bool always) {
-  const int32_t scale = resolution_scale();
+  const float scale = resolution_scale();
   int w = 0, h = 0;
   if (window == nullptr || !SDL_GetWindowSizeInPixels(window, &w, &h) || w <= 0 || h <= 0) {
     return;
@@ -175,7 +183,7 @@ void apply_resolution(SDL_Window* window, const char* when, bool always) {
   }
   sWideScale.store(static_cast<float>(aspect * 0.75), std::memory_order_relaxed);
   const double shownHeight = std::min(static_cast<double>(h), w / aspect);
-  const double drawnHeight = scale > 0 ? 480.0 * scale : shownHeight;
+  const double drawnHeight = scale > 0 ? 480.0 * static_cast<double>(scale) : shownHeight;
   const AuroraSampler sampler = drawnHeight > shownHeight * 1.01 ? SAMPLER_AREA : SAMPLER_BILINEAR;
   if (sampler != sSampler) {
     aurora_set_resampler(sampler);
@@ -185,7 +193,10 @@ void apply_resolution(SDL_Window* window, const char* when, bool always) {
   }
   if (scale > 0) {
     std::fprintf(stderr, "[video] %s: resolution %s: drawn %dx%d, shown %.0f lines high in a %dx%d window (%s)\n",
-                 when, scale == 1 ? "native (as the GameCube)" : (std::to_string(scale) + "x").c_str(),
+                 when,
+                 scale == 1.f ? "native (as the GameCube)"
+                 : scale < 1.f ? "performance (below native)"
+                               : (std::to_string(static_cast<int>(scale)) + "x").c_str(),
                  static_cast<int>(std::lround(drawnHeight * aspect)), static_cast<int>(drawnHeight), shownHeight, w, h,
                  sampler == SAMPLER_AREA                 ? "scaled down: area average"
                  : std::fabs(drawnHeight - shownHeight) < 1.0 ? "same size"
@@ -482,7 +493,7 @@ void PortVideo_Configure(AuroraConfig* config) {
 
 void PortVideo_UseWindowResolution(void) { sWindowResolution = true; }
 
-float PortVideo_ResolutionScale(void) { return static_cast<float>(resolution_scale()); }
+float PortVideo_ResolutionScale(void) { return resolution_scale(); }
 
 float PortVideo_WideScale(void) { return sWideScale.load(std::memory_order_relaxed); }
 
@@ -492,9 +503,9 @@ void PortVideo_ApplySettings(void) {
   sChoices = read_settings();
   sChoices.pacing = pacing;
   SDL_Window* window = aurora_get_window();
-  if (sChoices.resolutionScale != before.resolutionScale) {
-    VISetFrameBufferScale(static_cast<float>(resolution_scale()));
-    std::fprintf(stderr, "[video] resolution now %d (0 = the window's size)\n", resolution_scale());
+  if (sChoices.resolutionScale != before.resolutionScale || sChoices.performance != before.performance) {
+    VISetFrameBufferScale(resolution_scale());
+    std::fprintf(stderr, "[video] resolution now %g (0 = the window's size)\n", static_cast<double>(resolution_scale()));
   }
   if (sChoices.widescreen != before.widescreen || sChoices.aspect != before.aspect) {
     AuroraSetWidescreen(sChoices.widescreen ? sChoices.aspect : 0.f);
@@ -509,7 +520,7 @@ void PortVideo_SetSettingsSaver(void (*save)(void)) { sSaveSettings = save; }
 void PortVideo_Start(void) {
   SDL_Window* window = aurora_get_window();
   AuroraSetViewportPolicy(AURORA_VIEWPORT_FIT);
-  VISetFrameBufferScale(static_cast<float>(resolution_scale()));
+  VISetFrameBufferScale(resolution_scale());
   if (sChoices.widescreen) {
     AuroraSetWidescreen(sChoices.aspect);
     if (window != nullptr) {

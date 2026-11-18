@@ -28,12 +28,16 @@ int main() {
   CHECK(r.timerSeconds == 90 && r.ruleSet == "classic" && r.team == "preset");
   std::vector<Row> rows = SettingRows(r, noPack);
   const Row* rules = Find(rows, "rules");
-  CHECK(rules && rules->options.size() == 3 && rules->options[1].enabled == false && !rules->options[1].why.empty());
+  CHECK(rules && rules->options.size() == 4 && rules->options[1].enabled == false && rules->options[2].enabled == false && !rules->options[1].why.empty());
   CHECK(Find(rows, "levelN") == nullptr && Find(rows, "obey") == nullptr && Find(rows, "d_size") == nullptr);
 
   CHECK(!Cycle(r, "rules", 1, noPack) && r.ruleSet == "classic");
+  CHECK(Cycle(r, "rules", 1, pack) && r.ruleSet == "gen4pokemon");
   CHECK(Cycle(r, "rules", 1, pack) && r.ruleSet == "gen4");
+  CHECK(Cycle(r, "rules", -1, pack) && r.ruleSet == "gen4pokemon");
   CHECK(Cycle(r, "rules", -1, pack) && r.ruleSet == "classic");
+  r.ruleSet = "gen4pokemon";
+  CHECK(Sanitized(r, noPack).ruleSet == "classic" && Sanitized(r, pack).ruleSet == "gen4pokemon");
 
   r = DefaultRoom();
   for (int i = 0; i < 2; i++) Cycle(r, "team", 1, pack);
@@ -79,6 +83,13 @@ int main() {
   PcInfo xgPc;
   xgPc.edition = "xg";
   CHECK(SettingRows(r, xgPc)[0].options[0].label == "Classic XG");
+
+  xgPc.gen4PackPresent = true;
+  xgPc.gen4RulesOff = "XG has its own modern rules.";
+  const Row xgRules = SettingRows(r, xgPc)[0];
+  CHECK(xgRules.options[1].value == "gen4pokemon" && xgRules.options[1].enabled && xgRules.options[1].label.find("XG rules") != std::string::npos);
+  CHECK(xgRules.options[2].value == "gen4" && !xgRules.options[2].enabled && xgRules.options[2].why == xgPc.gen4RulesOff);
+  CHECK(xgRules.options[3].value == "gen4mt" && !xgRules.options[3].enabled);
 
   Peer p;
   CHECK(Apply(p, Msg("ACCEPT")) && p.accepted);

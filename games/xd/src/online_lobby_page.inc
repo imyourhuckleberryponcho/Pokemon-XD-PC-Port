@@ -401,7 +401,7 @@ bool StepConnect(ImDrawList* dl, const Screen& sc, const PortMenuInput* in) {
 
 std::vector<std::string> RoomLinesTr(const RoomRules& r) {
   std::vector<std::string> l;
-  l.push_back(Fmt(Tr("Rules: %s"), r.ruleSet == "gen4" ? Tr("Gen 4 Pokemon and moves") : r.ruleSet == "gen4mt" ? Tr("Gen 4 Pokemon and moves with the modern types") : L.pc.edition == "xg" ? Tr("Classic XG") : Tr("Classic XD")));
+  l.push_back(Fmt(Tr("Rules: %s"), r.ruleSet == "gen4pokemon" ? Tr("Gen 4 Pokemon with the classic XD rules") : r.ruleSet == "gen4" ? Tr("Gen 4 Pokemon and moves") : r.ruleSet == "gen4mt" ? Tr("Gen 4 Pokemon and moves with the modern types") : L.pc.edition == "xg" ? Tr("Classic XG") : Tr("Classic XD")));
   l.push_back(Fmt(Tr("Battle: %s, physical/special split %s"), r.style == "double" ? Tr("double") : Tr("single"), r.split ? Tr("on") : Tr("off")));
   l.push_back(Fmt(Tr("Teams: %s"), r.team == "preset"   ? Tr("preset teams")
                                    : r.team == "save"   ? Tr("you bring a team from one of your saves")
@@ -515,7 +515,7 @@ bool StepJoinView(ImDrawList* dl, const Screen& sc, const PortMenuInput* in) {
 
 bool RestartCures() {
   xd::online::Capabilities after = L.mine;
-  after.ruleSet = L.rules.ruleSet != "classic" ? "gen4" : "classic";
+  after.ruleSet = xd::online::RoomGen4Pokemon(L.rules.ruleSet) ? "gen4" : "classic";
   after.randomizer.clear();
   const xd::online::Capabilities& room = L.host ? after : L.theirs;
   const xd::online::Verdict v = xd::online::Judge(room, L.rules, after, true);
@@ -537,7 +537,7 @@ bool StepRestart(ImDrawList* dl, const Screen& sc, const PortMenuInput* in) {
         resume = "join|" + L.code;
         Send(xd::online::Msg("LEAVE"));
       }
-      if (xd::pt::RestartForRoom(L.rules.ruleSet != "classic")) {
+      if (xd::pt::RestartForRoom(xd::online::RoomGen4Pokemon(L.rules.ruleSet), xd::online::RoomGen4Rules(L.rules.ruleSet))) {
 #ifdef _WIN32
         _putenv_s("XD_ONLINE_ROOM_RESUME", resume.c_str());
 #else
@@ -1050,7 +1050,7 @@ void StartDrive(bool rematch) {
   static RoomRules sRules;
   if (!rematch) sRules = L.rules;
   std::vector<std::string> chips;
-  chips.push_back(sRules.ruleSet == "gen4" ? Tr("Gen 4 rules") : sRules.ruleSet == "gen4mt" ? Tr("Gen 4 with modern types") : L.pc.edition == "xg" ? Tr("Classic XG") : Tr("Classic XD"));
+  chips.push_back(sRules.ruleSet == "gen4pokemon" ? Tr("Gen 4 Pokemon") : sRules.ruleSet == "gen4" ? Tr("Gen 4 rules") : sRules.ruleSet == "gen4mt" ? Tr("Gen 4 with modern types") : L.pc.edition == "xg" ? Tr("Classic XG") : Tr("Classic XD"));
   chips.push_back(sRules.style == "double" ? Tr("Double battle") : Tr("Single battle"));
   if (sRules.split) chips.push_back(Tr("Split on"));
   ls::CoverBattle(chips, rematch);

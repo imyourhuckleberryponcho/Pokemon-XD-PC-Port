@@ -296,12 +296,13 @@ SecondStatus ComputeSecondStatus(const fs::path& folder, const std::string& mani
   return st;
 }
 
-std::string QueryVersion(const fs::path& converter, const fs::path& logFile, int waitMs) {
+std::string QueryVersion(const fs::path& converter, const fs::path& logFile, int waitMs, const std::string& versionArgument) {
   std::error_code ec;
   if (!fs::is_regular_file(converter, ec)) return {};
   sys::StartRequest request;
   request.program = converter;
   request.arguments = {"--version"};
+  if (!versionArgument.empty()) request.arguments.push_back(versionArgument);
   request.folder = converter.parent_path();
   request.hidden = true;
   request.outputFile = logFile;

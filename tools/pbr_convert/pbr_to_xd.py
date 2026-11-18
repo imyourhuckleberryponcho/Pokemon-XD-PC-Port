@@ -633,6 +633,9 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
         if order:
             base_px = sdr.textures[layers[order[0]]['texture']]['data']
             order = order[:1] + [k for k in order[1:] if sdr.textures[layers[k]['texture']]['data'] != base_px]
+        # the glow layer (see below, 1.2.1): flag 0x02, the layer index at +0x6E, the colour at +0x70
+        glow_k = pos.get(raw[0x6E]) if (raw[0x5D] & 0x02) and raw[0x6E] != 0xFF else None
+        glow_f = sum(raw[0x70:0x73]) / 765.0
         if not (raw[0x5D] & 0x01) and (raw[0x5D] & 0x02) and order:
             # a brightness sheet on an unlit glowing material (Torkoal's shell holes: a scrolling flicker) is left
             # out: multiplied in it halved the glow, added it went pink-white; XD's own holes are plain bright red
@@ -730,6 +733,18 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
                         tx.flags, tx.blending = 0x00070081, 1.0
                         if spec_f < 0.98:
                             tx.image = _dimmed(m, alpha, l['texture'], spec_f, dimmed)
+                    elif (l['kind'] == 'uv' and not grey and not see and glow_k is not None and k == glow_k
+                          and glow_f >= 0.5
+                          and _brightness(tl) >= 0.3):
+                        # PBR's GLOW layer (1.2.1; record flag 0x02 + the layer named at +0x6E + its colour at +0x70, the
+                        # same fields that make Torkoal's shell holes glow): a picture that is ADDED to the lit surface
+                        # at the glow colour's strength, not multiplied into it. Magmortar's flame sheet (record 1,
+                        # average 34 %) multiplied in turned the whole body red and killed the yellow cannons and the
+                        # pink mouth. Only strong glows (colour 50 % or more; Umbreon's rings, 10 %, and Rotom's aura, 20 %, could not be
+                        # checked and stay as they were). Glow sheets under 30 % brightness were already added (the branch below) and stay as they were.
+                        tx.flags, tx.blending = 0x00070010, 1.0
+                        if glow_f < 0.98:
+                            tx.image = _dimmed(m, alpha, l['texture'], glow_f, dimmed)
                     elif l['kind'] == 'uv' and (grey or not see) and _brightness(tl) < 0.3:
                         # a nearly black brightness sheet that is not a shine mask (Huntail's repeated speckle,
                         # average 13 of 255; Corphish's, Shelgon's, Regirock's: 0 to 22 %): multiplied in it

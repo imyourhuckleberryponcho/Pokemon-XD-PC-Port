@@ -35,6 +35,7 @@ uint32_t PortVI_GetFlipCount(void);
 u32 VIGetRetraceCount(void);
 void OSSetPeriodicAlarm(void* alarm, int64_t start, int64_t period, void (*handler)(void*, void*));
 void PortOS_InterruptCost(int64_t ticks);
+void PortDsp_Join(void);
 void OSCancelAlarm(void* alarm);
 }
 
@@ -434,6 +435,7 @@ size_t fold_block(int n) {
 }
 
 void take_block(void*, void*) {
+  PortDsp_Join();
   const u32 addr = sNextAddr, length = sNextLength;
   sBlocks++;
   if (length != 0) {

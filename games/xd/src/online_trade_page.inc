@@ -210,7 +210,7 @@ void Open(void*) {
   if (P.live || PortXD_LiveCommonTables() != nullptr) P.rules->names->SetLiveText(&PortXD_LiveMessage);
   P.cfg.rules = &P.rules->rules;
   P.cfg.names = P.rules->names.get();
-  P.cfg.original = !xd::challenges::Active("gen4_rules") && xd::pt::LoadedRandomizer().empty() && PortDisc_OverlayCount() == 0 &&
+  P.cfg.original = !xd::challenges::Active("gen4_pokemon") && xd::pt::LoadedRandomizer().empty() && PortDisc_OverlayCount() == 0 &&
                    std::getenv("XD_TRADE_ENHANCED") == nullptr;
   if (P.cfg.original) {
     P.originalRules = std::make_unique<xd::legality::DiscRules>();

@@ -23,6 +23,14 @@ std::vector<Definition> StandardSettings() {
                      {0, "Match the window"}})
           .OriginalNote("the GameCube draws 640x480 (Native).")
           .Implemented(),
+      D::Bool("video.performance", C::Video, "Performance mode",
+              "For slow PCs: the picture is drawn smaller (three quarters of the GameCube's 640x480, a little softer) "
+              "and the in-between pictures of Frame rate 60 are left out, so the graphics chip has far less to do. "
+              "Only how the picture is drawn changes; the game itself runs exactly as before. It replaces the "
+              "Resolution and Frame rate choices while it is on. Applies at once.",
+              false, false)
+          .OriginalNote("the GameCube's own picture, drawn at its own size.")
+          .Implemented(),
       D::Enum("video.anti_aliasing", C::Video, "Anti-aliasing", "Smooths the jagged edges of 3D models.",
               {{"off", "Off"}, {"2x", "2x"}, {"4x", "4x"}, {"8x", "8x"}}, "off", "4x"),
       D::Enum("video.texture_filtering", C::Video, "Texture filtering",

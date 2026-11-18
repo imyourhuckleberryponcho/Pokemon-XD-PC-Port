@@ -10,7 +10,11 @@ namespace xd::gen4 {
 
 void AppendAbilityTexts(std::vector<std::pair<uint32_t, std::string>>& texts);
 void InstallAbilityRows();
+void SyncAbilityDescriptions();
+void SyncSpeciesAbilities();
+std::pair<uint8_t, uint8_t> RulesOffAbilities(const std::string& species, uint8_t a, uint8_t b);
 void AppendAbilityNames(std::vector<std::pair<std::string, int64_t>>& out);
+const char* Gen4AbilityName(uint32_t id);
 
 class StageGuard {
  public:

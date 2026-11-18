@@ -1,6 +1,7 @@
 #include "xd_challenges.h"
 #include "xd_gen4.h"
 #include "xd_gen4_abilities.h"
+#include "xd_xg.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -120,7 +121,7 @@ constexpr uint16_t kIronFist = 89, kAdaptability = 91, kSniper = 97, kNoGuard = 
                    kFilter = 111, kScrappy = 113, kSolidRock = 116, kReckless = 120;
 constexpr uint16_t kHeatproof = 85, kDrySkin = 87, kSolarPower = 94, kSkillLink = 92, kSnowCloak = 81;
 
-bool Gen4On() { return xd::challenges::Active("gen4_rules"); }
+bool Gen4On() { return !xd::xg::On() && xd::challenges::Active("gen4_rules"); }
 
 uint16_t PowerOverride(uint16_t waza, void* attacker, void* defender);
 bool GravityActive();
@@ -1274,6 +1275,50 @@ void ComingIn(void* p, uint8_t sideCode) {
 
 }
 
+struct RulesOffMove {
+  uint16_t move;
+  uint16_t donor;
+};
+constexpr RulesOffMove kRulesOffMoves[] = {
+    {375, 105},
+    {389, 1}, {379, 1}, {409, 1}, {407, 1},
+    {390, 276},
+    {485, 94}, {471, 1},
+    {442, 85}, {443, 58}, {444, 53},
+    {414, 38},
+    {394, 1}, {383, 1}, {385, 1}, {470, 1},
+    {466, 0}, {453, 0}, {386, 0}, {376, 0}, {413, 0}, {412, 0}, {410, 0}, {401, 0}, {387, 0}, {452, 0}, {377, 0}, {400, 0}, {408, 0},
+    {393, 0}, {397, 0}, {465, 0}, {404, 0}, {405, 0}, {411, 0}, {395, 0}, {402, 0}, {403, 0}, {381, 0}, {481, 0}, {399, 0},
+};
+
+bool IsPackEffectSlot(uint16_t seq) {
+  switch (seq) {
+  case 12: case 14: case 15: case 21: case 22: case 55: case 56: case 61: case 63: case 64: case 74: case 96: case 110: case 131: case 141:
+    return true;
+  default:
+    return false;
+  }
+}
+
+void* RulesOffScript(void* script) {
+  void* mover = fightTargetGetPtrAsNowFightType(0x11, 0);
+  if (mover == nullptr) return script;
+  const uint16_t used = fightOutPokemon_GetUseWazaDataId(mover);
+  if (used < 375 || used > 487) return script;
+  const uint16_t seq = wazaDB_GetSeqId(used);
+  if (!IsPackEffectSlot(seq)) return script;
+  const auto* table = static_cast<const uint8_t*>(PortXD_GameAddress(kWazaEffectTbl));
+  if (script != PortXD_GameAddress(GetBe32(table + 4 * seq))) return script;
+  for (const RulesOffMove& m : kRulesOffMoves) {
+    if (m.move != used) continue;
+    void* to = m.donor == 0 ? PortXD_GameAddress(kFailedWithMessage)
+                            : PortXD_GameAddress(GetBe32(table + 4 * wazaDB_GetSeqId(m.donor)));
+    std::fprintf(stderr, "[gen4] move %u without the Gen 4 rules: %s\n", used, m.donor == 0 ? "it fails" : "the effect of an XD move");
+    return to;
+  }
+  return script;
+}
+
 extern "C" {
 
 uint32_t PortXD_Gen4NowNimbleness(void* fop, uint8_t useBadge, uint8_t weather, uint16_t rnd, void* hero) {
@@ -1288,6 +1333,7 @@ uint32_t PortXD_Gen4NowNimbleness(void* fop, uint8_t useBadge, uint8_t weather, 
 }
 
 void PortXD_Gen4CallWazaSeq(void* floor, void* script, uint32_t flag) {
+  if (!Gen4On() && xd::gen4::Loaded() && !xd::xg::On()) script = RulesOffScript(script);
   if (Gen4On()) {
     EnsureInstalled();
     Tick();
@@ -1427,6 +1473,7 @@ void PortXD_Gen4Counter(void) {
 }
 
 void PortXD_Gen4MoveTexts(void (*add)(void* ctx, uint32_t id, const char* text), void* ctx) {
+  if (xd::xg::On()) return;
   if (!Gen4On() && !xd::gen4::Loaded()) return;
   for (const MoveText& t : kMoveTexts) add(ctx, t.id, t.text);
 }

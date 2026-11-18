@@ -100,7 +100,8 @@ extern "C" {
 
 static void FollowSetting() {
   if (!sStarted || sSetting == engine::settings::kNoSetting) return;
-  bool want = engine::settings::Global().ValueOf(sSetting).i == sChoice60;
+  bool want = engine::settings::Global().ValueOf(sSetting).i == sChoice60 &&
+              !engine::settings::Global().Bool("video.performance").Get();
   for (int i = 0; i < sSwitchCount; i++) {
     if (sField() >= sSwitches[i].field) want = sSwitches[i].on;
   }

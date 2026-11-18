@@ -201,6 +201,7 @@ struct GameInfo {
     std::string doneText;
     std::string converterStem;
     std::string converterFolder;
+    std::string versionArgument;
     std::string converterOverrideEnv;
     std::vector<std::string> converterArguments;
     std::string secondFolder;

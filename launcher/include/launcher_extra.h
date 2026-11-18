@@ -53,7 +53,8 @@ struct SecondStatus {
 SecondStatus ComputeSecondStatus(const std::filesystem::path& folder, const std::string& manifestFile, const std::string& expectedId,
                                  int wantedVersion, const std::string& provides, bool firstOutOfDate);
 
-std::string QueryVersion(const std::filesystem::path& converter, const std::filesystem::path& logFile, int waitMs);
+std::string QueryVersion(const std::filesystem::path& converter, const std::filesystem::path& logFile, int waitMs,
+                         const std::string& versionArgument = {});
 
 class DiscCheck {
  public:

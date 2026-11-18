@@ -14,6 +14,7 @@ struct Rule {
 
 const std::vector<Rule>& Rules();
 const Rule* Find(const std::string& id);
+const char* Requires(const std::string& id);
 
 std::vector<std::string> TestSwitch();
 

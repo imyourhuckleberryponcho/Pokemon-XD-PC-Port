@@ -97,7 +97,7 @@ constexpr int kStandInPosition = 2;
 
 uint16_t sFace[2] = {0, 0};
 
-bool Active() { return sOn && xd::challenges::Active("gen4_rules") && !xd::starter::Randomized(); }
+bool Active() { return sOn && xd::challenges::Active("gen4_pokemon") && !xd::starter::Randomized(); }
 
 Item* Real(int idx) { return static_cast<Item*>(PortXD_RealMenuItemPtr(kEeveeMenu, static_cast<uint32_t>(idx))); }
 
@@ -299,7 +299,7 @@ extern "C" void* menuItemBiosGetPtr(int32_t menuID, uint32_t index) {
 }
 
 extern "C" int32_t menuScriptEevee(void) {
-  if (sOn && xd::challenges::Active("gen4_rules") && xd::starter::Randomized()) {
+  if (sOn && xd::challenges::Active("gen4_pokemon") && xd::starter::Randomized()) {
     static bool said = false;
     if (!said) std::fprintf(stderr, "[gen4] Eevee offer: the starter is randomized, the game's own five choices are shown\n"), said = true;
   }

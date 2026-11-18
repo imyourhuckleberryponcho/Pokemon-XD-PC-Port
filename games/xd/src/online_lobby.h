@@ -10,6 +10,7 @@ namespace xd::online {
 
 struct PcInfo {
   std::string edition = "xd";
+  std::string gen4RulesOff;
   std::string gen4Off;
   bool gen4PackPresent = false;
   bool gen4Loaded = false;

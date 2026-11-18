@@ -1,5 +1,6 @@
 #include "xd_battles_won.h"
 #include "xd_challenges.h"
+#include "xd_gen4_abilities.h"
 #include "xd_playthrough.h"
 #include "xd_xg.h"
 
@@ -504,10 +505,13 @@ const std::vector<Rule>& Rules() {
       {"nuzlocke_one_per_area", [] { return Tr("Nuzlocke: one catch per area"); },
        [] { return Tr("In each area you may catch one Pokemon of your choice, snagged or wild. After that, Poke Balls can't be used "
        "in that area's battles."); }},
-      {"gen4_rules", [] { return Tr("Gen 4 Pokemon and rules"); },
-       [] { return Tr("The 107 Diamond/Pearl Pokemon (their models, cries and names) and 113 moves, made from your own Pokemon Battle Revolution "
-       "disc, and the rules they need: abilities (Technician, Adaptability, Iron Fist, Scrappy...) and the new effects of moves "
-       "such as U-turn and Trick Room."); }},
+      {"gen4_pokemon", [] { return Tr("Gen 4 Pokemon"); },
+       [] { return Tr("The 107 Diamond/Pearl Pokemon (their models, cries and names), 113 moves and the new items, TMs and evolutions, made from "
+       "your own Pokemon Battle Revolution disc. The battles keep the GameCube rules: the new moves that need Gen 4 rules do a plain hit "
+       "or fail, and a Pokemon whose ability is new uses a Gen 3 ability instead, or has none."); }},
+      {"gen4_rules", [] { return Tr("Gen 4 rules"); },
+       [] { return Tr("The Diamond/Pearl rules for battles (needs the Gen 4 Pokemon): abilities (Technician, Adaptability, Iron Fist, "
+       "Scrappy...) and the new effects of moves such as U-turn and Trick Room."); }},
       {"modern_types", [] { return Tr("Modern types (Fairy)"); },
        [] { return Tr("The Fairy type from the later games: its place in the type chart (strong against Fighting, Dragon and Dark; weak to Poison "
        "and Steel; Dragon moves do nothing to it), its name and picture, the Pokemon that became Fairy (Clefairy, Jigglypuff, Togepi, "
@@ -527,6 +531,11 @@ const Rule* Find(const std::string& id) {
   for (const Rule& r : Rules()) {
     if (id == r.id) return &r;
   }
+  return nullptr;
+}
+
+const char* Requires(const std::string& id) {
+  if (id == "gen4_rules" || id == "gen4_spots") return "gen4_pokemon";
   return nullptr;
 }
 
@@ -558,6 +567,10 @@ void SetActive(const std::vector<std::string>& ids, const char* why) {
     if (Find(id) != nullptr) known.push_back(id);
     else std::fprintf(stderr, "[challenge] this playthrough has a rule this version doesn't know (\"%s\"): not enforced\n", id.c_str());
   }
+  if (std::find(known.begin(), known.end(), "gen4_rules") != known.end() &&
+      std::find(known.begin(), known.end(), "gen4_pokemon") == known.end()) {
+    known.insert(known.begin(), "gen4_pokemon");
+  }
   sRuleLog.clear();
   sFaints.clear();
   sLost.clear();
@@ -570,6 +583,8 @@ void SetActive(const std::vector<std::string>& ids, const char* why) {
   if (sCapWrote && std::find(known.begin(), known.end(), "level_cap") == known.end()) SetLimit(100, "the rule is off");
   const bool changed = known != sActive;
   sActive = known;
+  xd::gen4::SyncSpeciesAbilities();
+  xd::gen4::SyncAbilityDescriptions();
   static const bool pcOff = [] {
     const char* e = std::getenv("XD_CHALLENGE_PC_REFUSAL");
     return e != nullptr && std::strcmp(e, "0") == 0;

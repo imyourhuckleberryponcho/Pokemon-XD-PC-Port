@@ -23,6 +23,9 @@ struct RoomRules {
   bool split = false;
 };
 
+inline bool RoomGen4Pokemon(const std::string& ruleSet) { return ruleSet != "classic"; }
+inline bool RoomGen4Rules(const std::string& ruleSet) { return ruleSet == "gen4" || ruleSet == "gen4mt"; }
+
 struct Capabilities {
   int protocol = kBattleProtocol;
   std::string disc = "GXXE01";

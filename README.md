@@ -13,7 +13,7 @@ This repository contains **no game assets, ROMs, ISOs or executables**, and none
 You need your own legally obtained copy of the game (USA, `GXXE01`); the port reads everything from your disc
 image while it runs.
 
-## Status: public beta — version 0.6.0
+## Status: public beta — version 0.6.1
 
 **Playable from New Game into the story, with known bugs.** It is not finished: expect crashes, stalls and
 graphics differences, and keep backups of saves you care about. Downloads are on the [Releases](../../releases)
@@ -132,6 +132,12 @@ Do these with the game closed. Nothing is ever replaced: you always get a NEW sa
   "Story mode", "In a battle", "Online battle") and for how long, next to your name in Discord. It is on by default,
   talks only to the Discord app on this same PC, and shows no save name, trainer name or place.
 - To turn it off: Settings page of the launcher, or SETTINGS in the game, "Discord presence".
+
+### New in 0.6.1
+
+- **Gen 4 Pokemon and Gen 4 rules are two separate choices.** You can use the Gen 4 Pokemon without the Gen 4 rules, and with the rules off the Gen 3 abilities work as before. Gen 4 Pokemon also work in Pokémon XG.
+- **Performance option** (Settings) and smoother play on weak PCs: the sound chip now runs on its own thread.
+- Fixed: Magmortar's colours (re-make the Battle Revolution models in the launcher: Extra assets says "Out of date: make again"); Deoxys invisible with the Spanish language pack (re-make the language pack).
 
 ### New in 0.6.0
 

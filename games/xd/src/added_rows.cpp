@@ -48,14 +48,14 @@ void Install(const engine::mods::LoadResult& result) {
   PortXD_SetAddedRows(rows.data(), rows.size());
   uint16_t firstMove = 0;
   for (const auto& r : sRows) {
-    if (r.table == "waza_data" && r.bytes.size() > 0x16 && r.bytes[0x16] != 0xA4 && r.id <= 0xFFFF && (firstMove == 0 || r.id < firstMove)) {
+    if (r.table == "waza_data" && r.bytes.size() > 0x16 && r.bytes[0x16] != 0xA4 && r.mod != "gen4" && r.id <= 0xFFFF && (firstMove == 0 || r.id < firstMove)) {
       firstMove = static_cast<uint16_t>(r.id);
     }
   }
   std::vector<uint16_t> never;
   for (const auto& r : sRows) {
     if (r.table == "waza_data" && firstMove != 0 && r.id >= firstMove && r.id <= 0xFFFF && r.bytes.size() > 0x0C && r.bytes[0x0C] == 0 &&
-        r.bytes[0x16] != 0xA4 && never.size() < 1024) {
+        r.bytes[0x16] != 0xA4 && r.mod != "gen4" && never.size() < 1024) {
       never.push_back(static_cast<uint16_t>(r.id));
     }
   }

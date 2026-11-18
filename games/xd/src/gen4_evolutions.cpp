@@ -30,7 +30,7 @@ constexpr uint16_t kEverstoneEffect = 0x26;
 std::vector<xd::gen4::ExtraEvolution> sList;
 int32_t sCord = -1;
 
-bool Gen4On() { return xd::challenges::Active("gen4_rules"); }
+bool Gen4On() { return xd::challenges::Active("gen4_pokemon"); }
 
 }
 

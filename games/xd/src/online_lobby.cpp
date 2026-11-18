@@ -67,8 +67,9 @@ std::vector<Row> SettingRows(const RoomRules& r, const PcInfo& pc) {
   const bool g4 = r.ruleSet != "classic";
   const std::string noPack = pc.gen4Off.empty() ? std::string(kNoPack) : pc.gen4Off;
   rows.push_back(MakeRow("rules", "Rules",
-                         {Opt("classic", pc.edition == "xg" ? "Classic XG" : "Classic XD"), Opt("gen4", "Gen 4", pc.gen4PackPresent, noPack),
-                          Opt("gen4mt", "Gen 4 + modern types", pc.gen4PackPresent, noPack)},
+                         {Opt("classic", pc.edition == "xg" ? "Classic XG" : "Classic XD"), Opt("gen4pokemon", pc.edition == "xg" ? "Gen 4 Pokemon, XG rules" : "Gen 4 Pokemon, XD rules", pc.gen4PackPresent, noPack),
+                          Opt("gen4", "Gen 4", pc.gen4PackPresent && pc.gen4RulesOff.empty(), pc.gen4RulesOff.empty() ? noPack : pc.gen4RulesOff),
+                          Opt("gen4mt", "Gen 4 + modern types", pc.gen4PackPresent && pc.gen4RulesOff.empty(), pc.gen4RulesOff.empty() ? noPack : pc.gen4RulesOff)},
                          r.ruleSet));
   rows.push_back(MakeRow("split", "Physical / special split", {Opt("off", pc.edition == "xg" ? "Off (as in XG)" : "Off (as in XD)"), Opt("on", "On (as in Gen 4)")}, r.split ? "on" : "off"));
   rows.push_back(MakeRow("style", "Battle style", {Opt("single", "Single battle"), Opt("double", "Double battle")}, r.style));
@@ -205,7 +206,7 @@ bool Cycle(RoomRules& r, const std::string& id, int dir, const PcInfo& pc) {
 
 std::vector<std::string> RoomLines(const RoomRules& r, const std::string& edition) {
   std::vector<std::string> l;
-  l.push_back(std::string("Rules: ") + (r.ruleSet == "gen4" ? "Gen 4 Pokemon and moves" : r.ruleSet == "gen4mt" ? "Gen 4 Pokemon and moves with the modern types" : (edition == "xg" ? "Classic XG" : "Classic XD")));
+  l.push_back(std::string("Rules: ") + (r.ruleSet == "gen4pokemon" ? (edition == "xg" ? "Gen 4 Pokemon with the classic XG rules" : "Gen 4 Pokemon with the classic XD rules") : r.ruleSet == "gen4" ? "Gen 4 Pokemon and moves" : r.ruleSet == "gen4mt" ? "Gen 4 Pokemon and moves with the modern types" : (edition == "xg" ? "Classic XG" : "Classic XD")));
   l.push_back(std::string("Battle: ") + (r.style == "double" ? "double" : "single") + ", physical/special split " + (r.split ? "on" : "off"));
   std::string team = r.team == "preset"   ? "preset teams"
                      : r.team == "save"   ? "you bring a team from one of your saves"

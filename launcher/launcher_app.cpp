@@ -2247,7 +2247,7 @@ void App::DrawWelcomeWindow() {
     bullets({Tr("The New Game setup screen"),
              Tr("Randomizer"),
              Tr("Challenge runs: Nuzlocke, level caps, no items in battle"),
-             Tr("Gen 4 Pokemon and rules, Fairy type, shiny odds"),
+             Tr("Gen 4 Pokemon, Gen 4 rules, Fairy type, shiny odds"),
              Tr("Speed-ups: fast-forward, faster text, faster loading and saving"),
              Tr("Widescreen, a sharper picture, photo mode, HD texture packs")});
     ImGui::Spacing();
@@ -2263,7 +2263,7 @@ void App::DrawWelcomeWindow() {
              Tr("TMs listed with their move, your controller's own button pictures, photo mode, a pause when the window is in "
                 "the background")});
     ImGui::Spacing();
-    ImGui::TextWrapped("%s", Tr("The New Game setup lets you choose randomizer, challenge runs, Gen 4 Pokemon and rules, "
+    ImGui::TextWrapped("%s", Tr("The New Game setup lets you choose randomizer, challenge runs, Gen 4 Pokemon, Gen 4 rules, "
                                 "Fairy type, shiny odds and more for each new save."));
     ImGui::Spacing();
     Dim(Tr("The game's own rules stay as they were until you choose otherwise."));
@@ -3475,7 +3475,7 @@ void App::ExtraLook(int index) {
     std::error_code ec;
     const bool found = fs::is_regular_file(converter, ec);
     const std::string version =
-        found ? extra::QueryVersion(converter, game_.settingsFolder / "extra_assets" / PathOf(src.id + "_version.txt"), 5000)
+        found ? extra::QueryVersion(converter, game_.settingsFolder / "extra_assets" / PathOf(src.id + "_version.txt"), 5000, src.versionArgument)
               : std::string();
     const extra::Status status = extra::ComputeStatus(ExtraFolder(src), src.manifestId, found, version, src.modelsFolder);
     const std::vector<std::string> contents =

@@ -697,6 +697,8 @@ std::optional<ConvertOut> convert_pass(const sdr::Sdr& sdr, const Pkx& xd_pkx, c
     std::map<int, int> pos;
     for (size_t k = 0; k < orig.size(); k++) pos[orig[k]] = (int)k;
     std::optional<int> spec;
+    int glow_k = (raw[0x5D] & 0x02) && raw[0x6E] != 0xFF && pos.count(raw[0x6E]) ? pos[raw[0x6E]] : -1;
+    double glow_f = (double)(raw[0x70] + raw[0x71] + raw[0x72]) / 765.0;
     if (raw[0x76] != 0xFF && pos.count(raw[0x76])) spec = pos[raw[0x76]];
     if (spec && layers[*spec].uv) spec.reset();
     if (spec && *spec == 0) {
@@ -844,6 +846,11 @@ std::optional<ConvertOut> convert_pass(const sdr::Sdr& sdr, const Pkx& xd_pkx, c
             t2.flags = 0x00070081;
             t2.blending = 1.0;
             if (spec_f < 0.98) t2.image = dimmed(m, alpha, l.texture, spec_f, dimmed_cache);
+          } else if (l.uv && !grey && !see && glow_k >= 0 && (int)k == glow_k && glow_f >= 0.5 &&
+                     brightness(tl) >= 0.3) {
+            t2.flags = 0x00070010;
+            t2.blending = 1.0;
+            if (glow_f < 0.98) t2.image = dimmed(m, alpha, l.texture, glow_f, dimmed_cache);
           } else if (l.uv && (grey || !see) && brightness(tl) < 0.3) {
             t2.flags = 0x00070010;
             t2.blending = 1.0;

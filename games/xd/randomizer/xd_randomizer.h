@@ -5,6 +5,7 @@
 #include <randomizer.h>
 
 #include <filesystem>
+#include <functional>
 #include <map>
 #include <set>
 #include <string>
@@ -72,6 +73,7 @@ struct Gen4Species {
 };
 void SetGen4Species(std::vector<Gen4Species> species);
 bool LoadGen4Species(const std::filesystem::path& randomizerTxt, std::string& error);
+void TranslateGen4Species(const std::function<void(Gen4Species&)>& fix);
 bool CodeIncludesGen4(const std::string& code);
 
 Style StyleOf(const engine::randomizer::Settings& s);

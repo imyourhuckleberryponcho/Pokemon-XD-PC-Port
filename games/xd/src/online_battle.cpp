@@ -254,7 +254,7 @@ xd::online::Capabilities MyCapabilities() {
   xd::online::Capabilities c;
   c.disc = "GXXE01";
   c.edition = xd::xg::Edition();
-  if (xd::xg::Off(xd::xg::Feature::Gen4) == nullptr && (xd::gen4::Loaded() || xd::gen4::PackPresent())) {
+  if (xd::xg::Off(xd::xg::Feature::Gen4Pokemon) == nullptr && (xd::gen4::Loaded() || xd::gen4::PackPresent())) {
     if (xd::gen4::Loaded()) c.ruleSet = "gen4";
     std::string text;
     std::error_code ec;
@@ -267,6 +267,7 @@ xd::online::Capabilities MyCapabilities() {
     } else {
       c.gen4Pack = "unknown";
     }
+    if (xd::xg::On()) c.gen4Pack += "+xg1";
   }
   std::vector<std::string> ids = xd::pt::LoadedModIds();
   std::sort(ids.begin(), ids.end());
@@ -492,10 +493,11 @@ void ApplyRoomRules() {
     if (xd::challenges::Active(r.id)) sSavedChallenges.push_back(r.id);
   }
   std::vector<std::string> room;
-  if (S.rules.ruleSet != "classic") room.push_back("gen4_rules");
+  if (xd::online::RoomGen4Pokemon(S.rules.ruleSet)) room.push_back("gen4_pokemon");
+  if (xd::online::RoomGen4Rules(S.rules.ruleSet)) room.push_back("gen4_rules");
   xd::challenges::SetActive(room, "online battle: the room's rules");
-  Log("the room's rules are in force for this battle (split %s, Gen 4 mechanics %s, own challenge rules off: %zu)", S.rules.split ? "on" : "off",
-      S.rules.ruleSet != "classic" ? "on" : "off", sSavedChallenges.size());
+  Log("the room's rules are in force for this battle (split %s, Gen 4 Pokemon %s, Gen 4 rules %s, own challenge rules off: %zu)", S.rules.split ? "on" : "off",
+      xd::online::RoomGen4Pokemon(S.rules.ruleSet) ? "on" : "off", xd::online::RoomGen4Rules(S.rules.ruleSet) ? "on" : "off", sSavedChallenges.size());
 }
 void RestoreOwnRules() {
   if (!sRulesApplied) return;
@@ -896,7 +898,7 @@ bool ConnectRoom() {
       EndEarly(Fmt(Tr("The room's rules are not valid: %s"), why.c_str()));
       return false;
     }
-    if (mine.rules.ruleSet != mine.caps.ruleSet) {
+    if (xd::online::RoomGen4Pokemon(mine.rules.ruleSet) != xd::online::RoomGen4Pokemon(mine.caps.ruleSet)) {
       EndEarly(Fmt(Tr("The room's rules say \"%s\" but this game is set up for \"%s\": start the game with the room's rules first."), mine.rules.ruleSet.c_str(),
                    mine.caps.ruleSet.c_str()));
       return false;
@@ -1068,7 +1070,8 @@ Capabilities LobbyCapabilities() { return MyCapabilities(); }
 PcInfo LobbyPcInfo() {
   PcInfo p;
   p.edition = xd::xg::Edition();
-  if (const char* why = xd::xg::Off(xd::xg::Feature::Gen4)) p.gen4Off = why;
+  if (const char* why = xd::xg::Off(xd::xg::Feature::Gen4)) p.gen4RulesOff = why;
+  if (const char* why = xd::xg::Off(xd::xg::Feature::Gen4Pokemon)) p.gen4Off = why;
   p.gen4PackPresent = xd::gen4::PackPresent() && p.gen4Off.empty();
   p.gen4Loaded = xd::gen4::Loaded();
   return p;

@@ -1,6 +1,11 @@
 #include "i18n.h"
 #include "xd_gen4.h"
+#include "xd_challenges.h"
+#include "xd_gen4_abilities.h"
 #include "xd_gen4_machines.h"
+#include "xd_gen4_xg.h"
+#include "xd_gen4_abilities.h"
+#include "xd_xg.h"
 
 #include "data/common_rel.h"
 #include "xd_user_folder.h"
@@ -17,6 +22,7 @@
 #include <fstream>
 #include <iterator>
 #include <map>
+#include <memory>
 #include <sstream>
 
 namespace {
@@ -231,6 +237,7 @@ void ResolveEvolutions(const engine::mods::LoadResult& result, const std::map<st
     }
   }
   xd::gen4::SetExtraEvolutions(list, cord);
+  if (xd::xg::On()) eeveeOk = false;
   xd::gen4::SetEeveeChoices(eeveeOk, eevee[0], eevee[1], eevee[2], eevee[3]);
   std::fprintf(stderr, "[gen4] evolutions: %zu in the PC-only list (%d left out), Linking Cord %s, Eevee offer %s\n", list.size(), refused,
                cord >= 0 ? ("item " + std::to_string(cord)).c_str() : "not in this run", eeveeOk ? "7 choices" : "5 choices");
@@ -285,7 +292,7 @@ void Prepare(bool wanted, bool spots, engine::mods::LoadOptions& options, std::v
   if (!wanted) return;
   std::string why;
   if (!PackPresent(&why)) {
-    std::fprintf(stderr, "[gen4] Gen 4 rules are on, but %s: the game starts without the Gen 4 Pokemon\n", why.c_str());
+    std::fprintf(stderr, "[gen4] Gen 4 Pokemon are on, but %s: the game starts without the Gen 4 Pokemon\n", why.c_str());
     PortMessage_Show(PORT_MESSAGE_WARNING, Tr("Pokemon XD - Gen 4"),
                      TrFmt(Tr("The Gen 4 Pokemon can't be used: %s.\n\nThey are made from your own Pokemon Battle Revolution disc on "
                               "the launcher's \"Extra assets\" page.\nThe game starts without them."),
@@ -319,6 +326,7 @@ void Prepare(bool wanted, bool spots, engine::mods::LoadOptions& options, std::v
     }
     dataFiles.push_back(std::move(d));
   }
+  if (xd::xg::On()) spots = false;
   if (spots) {
     engine::mods::DataModFile d;
     d.mod = "gen4";
@@ -336,7 +344,8 @@ void Prepare(bool wanted, bool spots, engine::mods::LoadOptions& options, std::v
       std::fprintf(stderr, "[gen4] the Poke Spot set is not in the pack: the spots keep their own Pokemon\n");
     }
   }
-  machines::Load(pack);
+  if (!xd::xg::On()) machines::Load(pack);
+  if (xd::xg::On()) sGoods.clear();
   ReadText(pack / L"evolutions.txt", sEvoText);
   options.extraLayers.push_back({"pbr_gen4", "Gen 4 Pokemon", pack});
   sRows = tables.rows;
@@ -344,6 +353,34 @@ void Prepare(bool wanted, bool spots, engine::mods::LoadOptions& options, std::v
   sLoaded = true;
   std::fprintf(stderr, "[gen4] pack %s: %zu data file(s), %zu table row group(s), %zu model rows\n", pack.string().c_str(),
                dataFiles.size(), sRows.size(), sPkx.size());
+}
+
+bool TranslateForXG(const engine::mods::DataCatalog& catalog, const engine::mods::EntryReader& read, std::vector<engine::mods::DataModFile>& files,
+                    std::string& error) {
+  static std::unique_ptr<xg::Translator> translator;
+  xg::SetActive(nullptr);
+  xg::Tables tables;
+  if (!xg::BuildTables(catalog, read, tables, error)) return false;
+  tables.packAbilities.assign(124, "");
+  for (uint32_t id = 77; id <= 123; id++) {
+    if (const char* n = xd::gen4::Gen4AbilityName(id)) tables.packAbilities[id] = n;
+  }
+  translator = std::make_unique<xg::Translator>(std::move(tables));
+  std::string machines;
+  ReadText(PackFolder() / L"machines.txt", machines);
+  if (!translator->Run(files, machines, error)) return false;
+  if (const char* dump = std::getenv("XD_GEN4_XG_DUMP")) {
+    std::error_code ec;
+    std::filesystem::create_directories(dump, ec);
+    for (const engine::mods::DataModFile& f : files) {
+      std::ofstream out(std::filesystem::path(dump) / std::filesystem::path(f.label).filename(), std::ios::binary);
+      out << f.text;
+    }
+  }
+  for (const std::string& line : translator->Report()) std::fprintf(stderr, "[gen4 xg] %s\n", line.c_str());
+  std::fprintf(stderr, "[gen4 xg] %zu new move row(s) on XG, the rest of the Gen 4 moves use XG's own moves or a stand-in\n", translator->AddedMoves().size());
+  xg::SetActive(translator.get());
+  return true;
 }
 
 void AfterLoad(const engine::mods::LoadResult& result) {
@@ -434,5 +471,88 @@ void ApplyMainTables() {
 }
 
 }
+
+namespace {
+struct StandIn {
+  const char* species;
+  uint8_t ability;
+};
+constexpr StandIn kStandIns[] = {
+    {"Bidoof", 12}, {"Bibarel", 12},
+    {"Cranidos", 69}, {"Rampardos", 69},
+    {"Combee", 55},
+    {"Cherrim", 34}, {"Leafeon", 34},
+    {"Croagunk", 11}, {"Toxicroak", 11},
+    {"Electivire", 72},
+    {"Snover", 43}, {"Abomasnow", 43},
+    {"Gallade", 39},
+    {"Porygon-Z", 36},
+    {"Phione", 44}, {"Manaphy", 44},
+};
+constexpr uint32_t kTokuseiOff = 0x32;
+std::map<uint32_t, std::pair<uint8_t, uint8_t>> sOrigAbilities;
+uint8_t* sSpeciesRows = nullptr;
+uint32_t sSpeciesCount = 0;
+constexpr uint32_t kRowSize = 0x124;
+
+bool SameName(const std::string& a, const char* b) {
+  size_t i = 0;
+  for (; i < a.size() && b[i] != 0; i++) {
+    const char x = a[i] == '_' ? ' ' : a[i], y = b[i];
+    if (std::tolower(static_cast<unsigned char>(x)) != std::tolower(static_cast<unsigned char>(y))) return false;
+  }
+  return i == a.size() && b[i] == 0;
+}
+}
+
+namespace xd::gen4 {
+
+std::pair<uint8_t, uint8_t> RulesOffAbilities(const std::string& species, uint8_t a, uint8_t b) {
+  const bool g4a = a >= 77, g4b = b >= 77;
+  if (!g4a && !g4b) return {a, b};
+  const uint8_t gen3 = (a >= 1 && a <= 76) ? a : (b >= 1 && b <= 76) ? b : 0;
+  if (gen3 != 0) return {gen3, gen3};
+  uint8_t pick = 0;
+  for (const StandIn& s : kStandIns) {
+    if (SameName(species, s.species)) pick = s.ability;
+  }
+  return {pick, pick};
+}
+
+void SyncSpeciesAbilities() {
+  if (xd::xg::On()) return;
+  if (!sLoaded || sSpeciesRows == nullptr) return;
+  const bool rules = xd::challenges::Active("gen4_rules");
+  int changed = 0;
+  for (const SpeciesRef& s : sSpecies) {
+    if (s.id == 0) continue;
+    if (s.id >= sSpeciesCount) continue;
+    uint8_t* row = sSpeciesRows + static_cast<size_t>(s.id) * kRowSize;
+    auto it = sOrigAbilities.find(s.id);
+    if (it == sOrigAbilities.end()) it = sOrigAbilities.emplace(s.id, std::make_pair(row[kTokuseiOff], row[kTokuseiOff + 1])).first;
+    const auto want = rules ? it->second : RulesOffAbilities(s.key, it->second.first, it->second.second);
+    if (row[kTokuseiOff] != want.first || row[kTokuseiOff + 1] != want.second) changed++;
+    row[kTokuseiOff] = want.first;
+    row[kTokuseiOff + 1] = want.second;
+  }
+  static int last = -1;
+  if (changed != 0 || last < 0) {
+    std::fprintf(stderr, "[gen4] species abilities for %s: %d species row(s) changed\n",
+                 rules ? "the Gen 4 rules (the pack's own)" : "the XD rules (Gen 3 abilities, stand-ins, none)", changed);
+    last = changed;
+  }
+}
+
+}
+
+static void SpeciesRows(void* rows, uint32_t count) {
+  sSpeciesRows = static_cast<uint8_t*>(rows);
+  sSpeciesCount = count;
+  sOrigAbilities.clear();
+  xd::gen4::SyncSpeciesAbilities();
+}
+
+extern "C" void PortXD_SetSpeciesRowsHook(void (*f)(void*, uint32_t));
+namespace { const bool sHooked = (PortXD_SetSpeciesRowsHook(&SpeciesRows), true); }
 
 extern "C" void PortXD_Gen4MainTables(void) { xd::gen4::ApplyMainTables(); }
