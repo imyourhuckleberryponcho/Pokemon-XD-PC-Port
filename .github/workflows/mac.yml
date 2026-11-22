@@ -784,8 +784,10 @@ jobs:
           { echo "### Verdict"; echo '```'; cat "$V"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           exit $BAD
 
+      # The zip goes up whenever it was made: a failed check after packaging is a finding for the testers (the
+      # verdict lists it), not a reason to lose the download (0.7.0: test-only gaps held the zip back).
       - name: Upload the Mac zip
-        if: success() && inputs.stage == 'all'
+        if: always() && inputs.stage == 'all' && hashFiles('dist/*.zip') != ''
         uses: actions/upload-artifact@v7
         with:
           name: Pokemon XD PC - Mac (test)
