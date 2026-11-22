@@ -29,7 +29,7 @@ class Blob:
     def __init__(self, data=b'', align=4):
         self.b = bytearray(data)
         self.align = align
-        self.ptrs = []           # (offset in this blob, target blob, offset in target)
+        self.ptrs = []
         self.at = None
 
     def ptr(self, off, target, add=0):
@@ -75,7 +75,7 @@ class Builder:
         return head + body
 
 
-# ---- animation track bytes ----
+
 
 def _pack_num(v, frac):
     kind = frac & 0xE0
@@ -98,7 +98,7 @@ def choose_format(values, tolerance):
         return 0x20
     top = max(abs(v) for v in values)
     if top == 0:
-        return 0x60              # signed bytes, all zero
+        return 0x60
     for frac in range(15, -1, -1):
         if top * (1 << frac) <= 32767:
             if 0.5 / (1 << frac) <= tolerance:
@@ -136,7 +136,7 @@ def write_fobj_keys(keys, frac_value, frac_slope):
                 out += _pack_num(s, frac_slope)
             if op in (OP_CON, OP_LIN, OP_SPL0, OP_SPL, OP_KEY):
                 if k == n - 1 and w == 0:
-                    break        # the last key carries no wait
+                    break
                 while True:
                     d = w & 0x7F
                     w >>= 7
@@ -149,7 +149,7 @@ def write_fobj_keys(keys, frac_value, frac_slope):
     return bytes(out)
 
 
-# ---- the model ----
+
 
 def joint_flags(model):
     """HSD joint flags for a model that was not read from an HSD file (the pattern of XD's own Pokemon)."""
@@ -168,8 +168,8 @@ def joint_flags(model):
             flags[i] |= JOBJ_SKELETON
         if j.hidden:
             flags[i] |= JOBJ_HIDDEN
-        flags[i] |= 0x8          # "classical" scaling: the game multiplies T * R * S down the tree, no compensation
-        flags[i] |= getattr(j, 'billboard', 0)   # camera-facing kind (0xE00), set by the converter
+        flags[i] |= 0x8
+        flags[i] |= getattr(j, 'billboard', 0)
     for me in model.meshes:
         f = JOBJ_OPA | JOBJ_LIGHTING
         if not me.rigid:
@@ -207,7 +207,7 @@ def cut_into_pieces(me):
         while progress and left:
             progress = False
             rest = []
-            # first everything that needs no new matrix, then the triangle that needs the fewest new ones
+
             best = None
             best_new = None
             for t in left:
@@ -236,13 +236,13 @@ class Writer:
     def __init__(self, model):
         self.m = model
         self.b = Builder()
-        self.b.new(32, 32)       # nothing of ours sits at offset 0 (a pointer of 0 reads as "none" in tools)
+        self.b.new(32, 32)
         self.report = {'pobj': 0, 'reflect_pieces': 0, 'most_envelopes': 0, 'display_list_bytes': 0, 'track_bytes': 0, 'texture_bytes': 0}
 
     def floats(self, values, align=4):
         return self.b.add(struct.pack('>%df' % len(values), *values), align)
 
-    # --- textures and materials ---
+
     def image_blob(self, i):
         if i not in self.images:
             im = self.m.images[i]
@@ -297,7 +297,7 @@ class Writer:
         self.materials[i] = o
         return o
 
-    # --- meshes ---
+
     def mesh_blobs(self, me):
         """The polygon objects of one mesh (linked); returns the first."""
         m = self.m
@@ -312,7 +312,7 @@ class Writer:
         has_nrm = any(v.nrm is not None for v in me.verts)
         has_uv = any(v.uv is not None for v in me.verts)
         has_col = any(v.color is not None for v in me.verts)
-        # more coordinate sets (a material with several picture layers placed differently: GX TEX1, TEX2)
+
         n_uvx = max((len(v.uvx) for v in me.verts if v.uvx), default=0) if has_uv else 0
         pos_i, nrm_i, uv_i, col_i = {}, {}, {}, {}
         pos_l, nrm_l, uv_l, col_l = [], [], [], []
@@ -422,7 +422,7 @@ class Writer:
                 o.ptr(0x14, tab)
             pobjs.append(o)
             self.report['pobj'] += 1
-            # pieces drawn with a reflection (sphere-map) layer: what the graphics layer fails on past about 50 (docs/GEN4.md 10.5)
+
             mt = self.m.materials[me.material] if me.material is not None else None
             if mt is not None and any((t.flags & 0xF) == 1 for t in mt.textures):
                 self.report['reflect_pieces'] = self.report.get('reflect_pieces', 0) + 1
@@ -430,7 +430,7 @@ class Writer:
             a.ptr(4, b)
         return pobjs[0] if pobjs else None
 
-    # --- animations ---
+
     def aobj_blob(self, a, tolerances):
         if a is None:
             return None
@@ -441,8 +441,8 @@ class Writer:
             keys = t.keys
             if not keys:
                 continue
-            if len([k for k in keys if k[0] != OP_SLP]) < 2 and t.kind != 40:   # 40 = particle spawn track: one key is its normal shape
-                # never a one-key track
+            if len([k for k in keys if k[0] != OP_SLP]) < 2 and t.kind != 40:
+
                 k = [k for k in keys if k[0] != OP_SLP][0]
                 keys = [(OP_CON, k[1], 0.0, int(max(a.end, 1))), (OP_CON, k[1], 0.0, 0)]
             fmt = getattr(t, 'src_format', None)
@@ -475,7 +475,7 @@ class Writer:
             for i, j in enumerate(m.joints):
                 kids.setdefault(j.parent, []).append(i)
             tail = [False] * n
-            for i in reversed(range(n)):    # (children and later siblings have larger numbers: the joint list is depth first)
+            for i in reversed(range(n)):
                 sib = kids[m.joints[i].parent]
                 later = sib[sib.index(i) + 1] if sib.index(i) + 1 < len(sib) else None
                 tail[i] = bool(empty(i)) and all(tail[c] for c in kids.get(i, [])) and (later is None or tail[later])
@@ -501,7 +501,7 @@ class Writer:
             for a, b in zip(roots, roots[1:]):
                 if not getattr(nodes[a], 'shared', False):
                     nodes[a].ptr(self.next_off, nodes[b])
-            # the shared nodes link among themselves once (every node a shared one points to is shared too)
+
             linked = share.setdefault('linked', set())
             for i in [k for k in list(share) if k != 'linked']:
                 if i in linked:
@@ -535,7 +535,7 @@ class Writer:
         if any(f is None for f in flags):
             made = joint_flags(m)
             flags = [made[i] if f is None else f for i, f in enumerate(flags)]
-        # joints
+
         self.child_off, self.next_off = 8, 12
         self.joint_blob = None
         blobs = [self.b.new(0x40) for _ in m.joints]
@@ -561,15 +561,15 @@ class Writer:
                 a.ptr(4, b)
             if dobjs:
                 o.ptr(0x10, dobjs[0])
-        # animations
+
         def tol(kind):
             return 0.0005 if 1 <= kind <= 3 else 0.002
         anim_roots, mat_roots = [], []
         self.child_off, self.next_off = 0, 4
-        # (a model read from a game file keeps its own shape: the list of material animation trees ends at the first animation without one; models
-        # the converters make from nothing write one for every animation, as before)
+
+
         last_mat = max([k for k, a in enumerate(m.animations) if a.has_material_tree or a.materials] or [-1]) if getattr(m, 'prune_material_trees', False) else len(m.animations)
-        share_aj = {} if getattr(m, 'prune_material_trees', False) else None   # (a model read from a game file: share the empty tails of the animation trees)
+        share_aj = {} if getattr(m, 'prune_material_trees', False) else None
         for k_an, an in enumerate(m.animations):
             def make_aj(i, an=an):
                 o = self.b.new(0x14)
@@ -634,7 +634,7 @@ class Writer:
         scene = self.b.new(0x10)
         scene.ptr(0, sets)
         publics = [('scene_data', scene, 0)]
-        # bound boxes
+
         if m.animations and all(a.bounds for a in m.animations):
             bb = bytearray(struct.pack('>HH', len(m.animations), 0))
             for k, a in enumerate(m.animations):

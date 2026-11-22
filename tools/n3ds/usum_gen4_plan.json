@@ -1,0 +1,429 @@
+{
+ "_note": "Gen 4 species number -> [model archive name (pkx_g4_<name>), national number of the XD species whose model lends its container]. Names and numbers only; the same names as the Battle Revolution pack uses, so both sources fill the same archives.",
+ "plan": {
+  "387": [
+   "naetle",
+   152
+  ],
+  "388": [
+   "hayashigame",
+   111
+  ],
+  "389": [
+   "dodaitose",
+   59
+  ],
+  "390": [
+   "hikozaru",
+   66
+  ],
+  "391": [
+   "moukazaru",
+   8
+  ],
+  "392": [
+   "goukazaru",
+   150
+  ],
+  "393": [
+   "pochama",
+   280
+  ],
+  "394": [
+   "pottaishi",
+   8
+  ],
+  "395": [
+   "emperte",
+   260
+  ],
+  "396": [
+   "mukkuru",
+   276
+  ],
+  "397": [
+   "mukubird",
+   198
+  ],
+  "398": [
+   "mukuhawk",
+   277
+  ],
+  "399": [
+   "bippa",
+   231
+  ],
+  "400": [
+   "beadaru",
+   8
+  ],
+  "401": [
+   "korobohshi",
+   280
+  ],
+  "402": [
+   "korotock",
+   296
+  ],
+  "403": [
+   "kolink",
+   152
+  ],
+  "404": [
+   "luxio",
+   136
+  ],
+  "405": [
+   "rentorar",
+   154
+  ],
+  "406": [
+   "subomie",
+   175
+  ],
+  "407": [
+   "roserade",
+   8
+  ],
+  "408": [
+   "zugaidos",
+   8
+  ],
+  "409": [
+   "rampald",
+   8
+  ],
+  "410": [
+   "tatetops",
+   152
+  ],
+  "411": [
+   "torideps",
+   154
+  ],
+  "412": [
+   "minomucchi",
+   175
+  ],
+  "413": [
+   "minomadam",
+   316
+  ],
+  "414": [
+   "gamale",
+   267
+  ],
+  "415": [
+   "mitsuhoney",
+   284
+  ],
+  "416": [
+   "beequen",
+   269
+  ],
+  "417": [
+   "pachirisu",
+   241
+  ],
+  "418": [
+   "buoysel",
+   241
+  ],
+  "419": [
+   "floazel",
+   8
+  ],
+  "420": [
+   "cherinbo",
+   43
+  ],
+  "421": [
+   "cherrim",
+   43
+  ],
+  "422": [
+   "karanakushi",
+   174
+  ],
+  "423": [
+   "tritodon",
+   316
+  ],
+  "424": [
+   "eteboth",
+   296
+  ],
+  "425": [
+   "fuwante",
+   358
+  ],
+  "426": [
+   "fuwaride",
+   375
+  ],
+  "427": [
+   "mimirol",
+   66
+  ],
+  "428": [
+   "mimilop",
+   8
+  ],
+  "429": [
+   "mumargi",
+   355
+  ],
+  "430": [
+   "dongkarasu",
+   334
+  ],
+  "431": [
+   "nyarmar",
+   231
+  ],
+  "432": [
+   "bunyatto",
+   196
+  ],
+  "433": [
+   "lisyan",
+   251
+  ],
+  "434": [
+   "skunpuu",
+   136
+  ],
+  "435": [
+   "skutank",
+   111
+  ],
+  "436": [
+   "dohmirror",
+   343
+  ],
+  "437": [
+   "dohtakun",
+   375
+  ],
+  "439": [
+   "manene",
+   296
+  ],
+  "440": [
+   "pinpuku",
+   158
+  ],
+  "441": [
+   "perap",
+   276
+  ],
+  "442": [
+   "mikaruge",
+   386
+  ],
+  "443": [
+   "fukamaru",
+   158
+  ],
+  "444": [
+   "gabite",
+   260
+  ],
+  "445": [
+   "gaburias",
+   248
+  ],
+  "446": [
+   "gonbe",
+   143
+  ],
+  "447": [
+   "riolu",
+   66
+  ],
+  "448": [
+   "lucario",
+   8
+  ],
+  "449": [
+   "hippopotas",
+   136
+  ],
+  "450": [
+   "kabaldon",
+   243
+  ],
+  "451": [
+   "scorupi",
+   213
+  ],
+  "452": [
+   "dorapion",
+   123
+  ],
+  "453": [
+   "gureggru",
+   296
+  ],
+  "454": [
+   "dokurog",
+   296
+  ],
+  "455": [
+   "muskippa",
+   317
+  ],
+  "456": [
+   "keikouo",
+   349
+  ],
+  "457": [
+   "neolant",
+   117
+  ],
+  "458": [
+   "tamanta",
+   129
+  ],
+  "459": [
+   "yukikaburi",
+   296
+  ],
+  "460": [
+   "yukinooh",
+   297
+  ],
+  "461": [
+   "manyula",
+   8
+  ],
+  "462": [
+   "jibacoil",
+   375
+  ],
+  "463": [
+   "berobelt",
+   160
+  ],
+  "464": [
+   "dosidon",
+   160
+  ],
+  "465": [
+   "mojumbo",
+   297
+  ],
+  "466": [
+   "elekible",
+   248
+  ],
+  "467": [
+   "booburn",
+   260
+  ],
+  "468": [
+   "togekiss",
+   334
+  ],
+  "469": [
+   "megayanma",
+   193
+  ],
+  "470": [
+   "leafia",
+   197
+  ],
+  "471": [
+   "glacia",
+   58
+  ],
+  "472": [
+   "glion",
+   267
+  ],
+  "473": [
+   "mammoo",
+   243
+  ],
+  "474": [
+   "porygon_Z",
+   338
+  ],
+  "475": [
+   "erureido",
+   308
+  ],
+  "476": [
+   "dainose",
+   93
+  ],
+  "477": [
+   "yonoir",
+   344
+  ],
+  "478": [
+   "yukimenoko2",
+   344
+  ],
+  "479": [
+   "rotom",
+   343
+  ],
+  "480": [
+   "yuxie",
+   385
+  ],
+  "481": [
+   "emrit",
+   251
+  ],
+  "482": [
+   "agnome",
+   385
+  ],
+  "483": [
+   "dialga",
+   243
+  ],
+  "484": [
+   "palkia",
+   160
+  ],
+  "485": [
+   "heatran",
+   232
+  ],
+  "486": [
+   "regigigas",
+   297
+  ],
+  "487": [
+   "giratina",
+   95
+  ],
+  "488": [
+   "cresselia",
+   267
+  ],
+  "489": [
+   "phione",
+   349
+  ],
+  "490": [
+   "manaphy",
+   72
+  ],
+  "491": [
+   "darkrai",
+   93
+  ],
+  "492": [
+   "shaymin",
+   133
+  ],
+  "493": [
+   "arceus",
+   154
+  ]
+ }
+}

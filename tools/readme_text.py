@@ -18,7 +18,7 @@ MAC_README = os.path.join(ROOT, 'games', 'xd', 'mac', 'Read me (Mac).txt')
 RELEASES_URL = 'https://github.com/imyourhuckleberryponcho/Pokemon-XD-PC-Port/releases'
 DISCORD_URL = 'https://discord.gg/XVbDVXH4Pn'
 
-# What differs per system: the data folder and how a path is written.
+
 SYSTEMS = {
     'windows': {'data': '%APPDATA%\\Pokemon XD', 'sep': '\\', 'launcher': '"Pokemon XD Launcher.exe"',
                 'example': '"Pokemon XD Launcher.exe" --no-launcher --fullscreen --preset enhanced',

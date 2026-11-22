@@ -29,15 +29,15 @@ import readme_text
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FOLDER_NAME = 'Pokemon XD PC'
-PBR_MODELS = os.path.join(ROOT, 'build', 'pbr_models_dist', 'pbr_models')   # optional: included when built
-# The Ultra Sun / Ultra Moon model converter (tools/n3ds/package_usum_models.py: the Python converter frozen with PyInstaller;
-# there is no C++ port of it yet), game/usum_models/usum_models.exe for the Extra assets page. Optional: included when built.
+PBR_MODELS = os.path.join(ROOT, 'build', 'pbr_models_dist', 'pbr_models')
+
+
 USUM_MODELS = os.path.join(ROOT, 'build', 'usum_models_dist', 'usum_models')
 
-# The programs and libraries in game\ (next to each other: xd.exe and xd_launcher.exe load the same ones).
+
 PROGRAMS = ['xd_launcher.exe', 'xd.exe']
-# The shipped pipeline list (games/xd/shaders/pipelines.txt, built by tools/pipeline_list.py): drawing settings
-# only, no game data. Aurora reads it next to xd.exe; the launcher prepares those shaders once per PC.
+
+
 PIPELINE_LIST = 'initial_pipeline_cache.db'
 LIBRARIES = ['SDL3.dll', 'webgpu_dawn.dll', 'nod.dll', 'dxcompiler.dll', 'dxil.dll', 'zlib1.dll', 'libpng16.dll']
 RUNTIME = ['msvcp140.dll', 'msvcp140_1.dll', 'msvcp140_2.dll', 'msvcp140_atomic_wait.dll', 'vcruntime140.dll',
@@ -270,18 +270,18 @@ def main():
         shutil.copy2(os.path.join(build, f), game)
     for f in FONTS:
         shutil.copy2(os.path.join(build, 'fonts', f), os.path.join(game, 'fonts'))
-    # The Battle Revolution model converter, game\pbr_models\pbr_models.exe (the launcher's Extra assets page runs it;
-    # it holds no game data). Since 0.4.1 the C++ program (engine/formats/pbr, byte-identical to the frozen Python
-    # 1.1.0): the build's pbr_models.exe with nod.dll and the C++ runtime beside it (Windows looks for a program's DLLs in
-    # its own folder, not the one above). Else, as in 0.4.0, the frozen Python one when it has been built.
+
+
+
+
     crt = vc_redist()
     pbr_dir = os.path.join(game, 'pbr_models')
     if os.path.isfile(os.path.join(build, 'pbr_models.exe')):
         os.makedirs(pbr_dir)
         for f in ('pbr_models.exe', 'nod.dll'):
             shutil.copy2(os.path.join(build, f), pbr_dir)
-        # (since the Gen 4 pack it links the port's data layer, which brings SDL3, Dawn, libpng and zlib: the launcher
-        # starts it in its own folder, so they must be beside it too, or it can't start: 2026-11-13)
+
+
         for f in ('SDL3.dll', 'webgpu_dawn.dll', 'libpng16.dll', 'zlib1.dll'):
             if os.path.isfile(os.path.join(build, f)):
                 shutil.copy2(os.path.join(build, f), pbr_dir)
@@ -289,12 +289,12 @@ def main():
             if os.path.isfile(os.path.join(crt, f)):
                 shutil.copy2(os.path.join(crt, f), pbr_dir)
         print('pbr_models: the C++ converter (game/pbr_models)')
-        # The Colosseum characters converter (engine/formats/colo, docs/COLOSSEUM_MODELS.md): beside pbr_models, one folder of
-        # converters (the launcher's Extra assets page runs game\pbr_models\colo_models.exe; same libraries).
+
+
         if os.path.isfile(os.path.join(build, 'colo_models.exe')):
             shutil.copy2(os.path.join(build, 'colo_models.exe'), pbr_dir)
             print('colo_models: the Colosseum characters converter (game/pbr_models)')
-        # xd_data_mods: usum_models' Gen 5-7 build reads XD's move / TM tables through it (same libraries; it is found next to pbr_models)
+
         if os.path.isfile(os.path.join(build, 'xd_data_mods.exe')):
             shutil.copy2(os.path.join(build, 'xd_data_mods.exe'), pbr_dir)
             print('xd_data_mods: reads XD tables for the Gen 5-7 build (game/pbr_models)')
@@ -304,8 +304,8 @@ def main():
     if os.path.isfile(os.path.join(USUM_MODELS, 'usum_models.exe')):
         shutil.copytree(USUM_MODELS, os.path.join(game, 'usum_models'))
         print('usum_models: the frozen Python converter (game/usum_models)')
-    # The language pack maker, game\xd_languages\xd_languages.exe (the Extra assets page's "Languages (from the European disc)":
-    # docs/LANGUAGES.md; no game data in it), with nod.dll and the C++ runtime beside it as for pbr_models.
+
+
     lang_dir = os.path.join(game, 'xd_languages')
     if os.path.isfile(os.path.join(build, 'xd_languages.exe')):
         os.makedirs(lang_dir)
@@ -330,17 +330,17 @@ def main():
                  os.path.join(game, 'licenses', 'Noto Sans JP font (OFL).txt'))
     with open(os.path.join(game, 'licenses', 'Third-party notices.txt'), 'w', encoding='utf-8', newline='\r\n') as f:
         f.write(NOTICES)
-    # The version, next to the programs: the launcher shows it, and its updater compares the published one with it
-    # (an update is a new game-<version> folder beside this one: docs/UPDATER.md).
+
+
     with open(os.path.join(game, 'version.txt'), 'w', encoding='ascii', newline='\r\n') as f:
         f.write(version + '\n')
-    # RecompLauncher (recomplauncher.com) reads this first, next to the launcher in the download: a change to it
-    # reaches its players with our next release, nothing for them to refresh (their note, 2026-11-14).
+
+
     shutil.copy2(os.path.join(ROOT, 'recomplauncher.json'), out)
     with open(os.path.join(out, 'Read me.txt'), 'w', encoding='utf-8', newline='\r\n') as f:
         f.write(read_me(version))
 
-    # Nothing else may be in it: no debug files, test tools, data folder files, disc pictures or game data.
+
     allowed_top = {'Pokemon XD Launcher.exe', 'Read me.txt', 'recomplauncher.json', 'game'}
     allowed_ext = {'.exe', '.dll', '.ttf', '.txt'}
     allowed_exe = {'Pokemon XD Launcher.exe', 'xd.exe', 'xd_launcher.exe'}
@@ -356,11 +356,11 @@ def main():
             if n == PIPELINE_LIST and os.path.dirname(p) == game:
                 continue
             if os.path.relpath(p, game).startswith('xd_languages' + os.sep) and n in ('xd_languages.exe', 'nod.dll') + tuple(RUNTIME):
-                continue   # the language pack maker's folder
+                continue
             if os.path.relpath(p, game).startswith('usum_models' + os.sep):
-                continue   # the Ultra Sun / Ultra Moon converter's own folder (a frozen Python program)
+                continue
             if os.path.relpath(p, game).startswith('pbr_models' + os.sep):
-                continue   # the converter's own folder (a frozen Python program: .pyd, .dll, .zip files)
+                continue
             if ext not in allowed_ext or (ext == '.exe' and n not in allowed_exe):
                 bad.append(os.path.relpath(p, out))
     if bad:
@@ -368,10 +368,10 @@ def main():
     print(f'{out}: version {version}, {sum(len(f) for _, _, f in os.walk(out))} files, {total / 1e6:.1f} MB')
     if not crt:
         print('  (without the C++ runtime files)')
-    # The symbols of exactly this build, for testers' crash dumps: build\symbols\<version> (never in the player
-    # folder). Kept by this tool since 0.3.0, whose own were lost when build\release was built again before anyone
-    # copied them (they were rebuilt from the tag: build\symbols\0.3.0\NOTE.txt). A folder that is already
-    # there is replaced: the player folder made last is the one that ships.
+
+
+
+
     symbols = os.path.join(ROOT, 'build', 'symbols', version)
     os.makedirs(symbols, exist_ok=True)
     kept = 0

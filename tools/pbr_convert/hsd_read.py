@@ -21,7 +21,7 @@ class Pkx:
     """The container around the archive: header (0x84 bytes), sections (0xD0 each), optional particle bank."""
     def __init__(self):
         self.header = b''
-        self.sections = []       # bytes, 0xD0 each
+        self.sections = []
         self.particles = b''
         self.archive = b''
 
@@ -58,7 +58,7 @@ class Pkx:
         out += bytes(align32(len(out)) - len(out))
         return bytes(out)
 
-    # the fields a converter touches
+
     def head_joint(self):
         return struct.unpack_from('>H', self.header, 0x6E)[0]
 
@@ -130,7 +130,7 @@ def read_fobj_keys(data, frac_value, frac_slope):
             count += (d & 0x7F) << shift
             shift += 7
         if op == 0:
-            break                 # padding at the end of the data
+            break
         for _ in range(count):
             v = s = 0.0
             w = 0
@@ -139,7 +139,7 @@ def read_fobj_keys(data, frac_value, frac_slope):
             if op in (OP_SPL, OP_SLP):
                 s, pos = num(pos, frac_slope)
             if op in (OP_CON, OP_LIN, OP_SPL0, OP_SPL, OP_KEY):
-                if pos >= n:      # the last key has no wait (FObjLoadWait: end of data)
+                if pos >= n:
                     keys.append((op, v, s, 0))
                     return keys
                 shift = 0
@@ -159,12 +159,12 @@ class Reader:
         self.arc = Archive(archive_bytes)
         self.d = self.arc.d
         self.model = Model()
-        self.joint_at = {}       # file offset -> joint index
-        self.joint_off = []      # joint index -> file offset
+        self.joint_at = {}
+        self.joint_off = []
         self.image_at = {}
         self.tlut_at = {}
         self.mat_at = {}
-        self.dobj_count = {}     # joint index -> number of display objects
+        self.dobj_count = {}
         self.warnings = []
 
     def u32(self, o):
@@ -179,7 +179,7 @@ class Reader:
     def cstr(self, o):
         return self.d[o:self.d.index(b'\0', o)].decode('latin1') if o else None
 
-    # --- joints ---
+
     def read_joints(self, o, parent):
         d = self.d
         while o:
@@ -202,7 +202,7 @@ class Reader:
             self.read_joints(self.u32(o + 8), idx)
             o = self.u32(o + 0xC)
 
-    # --- materials ---
+
     def image(self, o):
         if o not in self.image_at:
             im = Image()
@@ -262,7 +262,7 @@ class Reader:
         self.model.materials.append(m)
         return self.mat_at[o]
 
-    # --- meshes ---
+
     def vertex_layout(self, o):
         lay = []
         while self.u32(o) != 0xFF:
@@ -321,10 +321,10 @@ class Reader:
             raise ValueError('skinned mesh on joint %d has no skeleton above it' % jidx)
         world = self.world
         if x == jidx or not m.joints[x].flags & JOBJ_SKELETON_ROOT:
-            # the two other cases of _HSD_mkEnvelopeModelNodeMtx (XD's Moltres, joint 109): the mesh joint is itself
-            # a bound joint (its bind space = inverse of its inverse bind matrix), or the nearest one above it is a
-            # bound joint, not a skeleton root (world x inverse bind of that joint, then the mesh joint). Positions
-            # come out in the bind space, the one every inverse bind matrix starts from; no skeleton root is named.
+
+
+
+
             ib = m.joints[x].inv_bind
             if ib is None:
                 raise ValueError('skinned mesh on joint %d: joint %d has no inverse bind matrix' % (jidx, x))
@@ -367,7 +367,7 @@ class Reader:
             if u:
                 raise ValueError('shared-vertex skin (two-joint polygon object): not handled')
             me.rigid = True
-        # the display list
+
         p, end = disp, disp + ndisp * 32
         cache = {}
         while p < end:
@@ -442,9 +442,9 @@ class Reader:
         if col:
             a = col[0]
             o = a['ptr'] + a['stride'] * col[1]
-            if a['comp'] == 5:       # RGBA8
+            if a['comp'] == 5:
                 c = tuple(self.d[o:o + 4])
-            elif a['comp'] == 1:     # RGB8
+            elif a['comp'] == 1:
                 c = tuple(self.d[o:o + 3]) + (255,)
             else:
                 self.note_once('vertex colour format %d read as white' % a['comp'])
@@ -456,7 +456,7 @@ class Reader:
             w = envs[mtx]
             m = conv
             if conv is None:
-                # the mesh sits on the skeleton root: a fully bound vertex is in its joint's own space
+
                 if len(w) == 1 and w[0][1] >= 1.0 - 1.2e-7:
                     jb = self.model.joints[w[0][0]].inv_bind
                     m = mat_inv(jb) if jb else mat_mul(mat_inv(self.world[self.model.skeleton_root]), self.world[w[0][0]])
@@ -472,7 +472,7 @@ class Reader:
             me.verts.append(v)
         return i
 
-    # --- animations ---
+
     def aobj(self, o):
         if not o:
             return None
@@ -608,15 +608,15 @@ class Reader:
 def image_bytes(w, h, fmt, mipmap=0, max_lod=0.0):
     """Byte size of a GX texture (all mip levels)."""
     def level(w, h):
-        if fmt in (0, 8):                # I4, CI4
+        if fmt in (0, 8):
             return ((w + 7) // 8) * ((h + 7) // 8) * 32
-        if fmt in (1, 2, 9):             # I8, IA4, CI8
+        if fmt in (1, 2, 9):
             return ((w + 7) // 8) * ((h + 3) // 4) * 32
-        if fmt in (3, 4, 5, 10):         # IA8, RGB565, RGB5A3, CI14X2
+        if fmt in (3, 4, 5, 10):
             return ((w + 3) // 4) * ((h + 3) // 4) * 32
-        if fmt == 6:                     # RGBA8
+        if fmt == 6:
             return ((w + 3) // 4) * ((h + 3) // 4) * 64
-        if fmt == 14:                    # CMPR
+        if fmt == 14:
             return ((w + 7) // 8) * ((h + 7) // 8) * 32
         raise ValueError('texture format %d' % fmt)
     n = level(w, h)

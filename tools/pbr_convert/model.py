@@ -14,9 +14,9 @@ Conventions
 """
 import math
 
-# key ops (HSD's numbers)
+
 OP_CON, OP_LIN, OP_SPL0, OP_SPL, OP_SLP, OP_KEY = 1, 2, 3, 4, 5, 6
-# joint track kinds (HSD's numbers)
+
 J_ROTX, J_ROTY, J_ROTZ, J_PATH, J_TRAX, J_TRAY, J_TRAZ, J_SCAX, J_SCAY, J_SCAZ = 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
 
 IDENT = [1.0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 1.0, 0]
@@ -116,13 +116,13 @@ class Joint:
     def __init__(self):
         self.name = None
         self.parent = -1
-        self.flags = None        # HSD joint flags when read from an HSD file (the writer works them out if None)
+        self.flags = None
         self.rot = (0.0, 0.0, 0.0)
         self.scale = (1.0, 1.0, 1.0)
         self.pos = (0.0, 0.0, 0.0)
-        self.inv_bind = None     # 3x4 or None
+        self.inv_bind = None
         self.hidden = False
-        self.note = ''           # where it came from (PBR node kind...), not written
+        self.note = ''
 
 
 class Vertex:
@@ -130,7 +130,7 @@ class Vertex:
 
     def __init__(self, pos, nrm=None, uv=None, color=None, weights=None, uvx=None):
         self.pos, self.nrm, self.uv, self.color, self.weights = pos, nrm, uv, color, weights
-        self.uvx = uvx           # more coordinate sets (GX TEX1, TEX2): tuple of (u, v) or None each, or None
+        self.uvx = uvx
 
     def key(self):
         return (self.pos, self.nrm, self.uv, self.color, self.weights, self.uvx)
@@ -138,19 +138,19 @@ class Vertex:
 
 class Mesh:
     def __init__(self):
-        self.joint = 0           # owner joint (index)
-        self.material = 0        # index into Model.materials
+        self.joint = 0
+        self.material = 0
         self.rigid = False
-        self.verts = []          # Vertex; weights = tuple of (joint index, weight), None when rigid
-        self.tris = []           # (a, b, c) into verts, GX winding
-        self.pobj_flags = None   # HSD polygon-object flags as read (culling bits...), None = writer's default
+        self.verts = []
+        self.tris = []
+        self.pobj_flags = None
         self.name = ''
 
 
 class Image:
     def __init__(self):
         self.width = self.height = 0
-        self.format = 0          # GX texture format number
+        self.format = 0
         self.mipmap = 0
         self.min_lod = self.max_lod = 0.0
         self.data = b''
@@ -167,20 +167,20 @@ class Tlut:
 class Texture:
     """One texture layer of a material (HSD's TObj)."""
     def __init__(self):
-        self.image = None        # index into Model.images
-        self.tlut = None         # index into Model.tluts
+        self.image = None
+        self.tlut = None
         self.tex_id = 0
-        self.src = 4             # GX_TG_TEX0
+        self.src = 4
         self.rot = (0.0, 0.0, 0.0)
         self.scale = (1.0, 1.0, 1.0)
         self.trans = (0.0, 0.0, 0.0)
-        self.wrap_s = self.wrap_t = 1    # 0 clamp, 1 repeat, 2 mirror
+        self.wrap_s = self.wrap_t = 1
         self.repeat_s = self.repeat_t = 1
-        self.flags = 0x00030010          # UV coordinates, diffuse light map, colour "blend" (XD's usual)
+        self.flags = 0x00030010
         self.blending = 1.0
         self.mag_filter = 1
-        self.lod = None          # raw 16 bytes or None
-        self.tev = None          # raw 32 bytes or None
+        self.lod = None
+        self.tev = None
 
 
 class Material:
@@ -192,15 +192,15 @@ class Material:
         self.specular = (0xFF, 0xFF, 0xFF, 0xFF)
         self.alpha = 1.0
         self.shininess = 50.0
-        self.textures = []       # Texture
-        self.pe = None           # raw 12 bytes or None
+        self.textures = []
+        self.pe = None
 
 
 class Track:
     def __init__(self, kind, keys=None, start=0.0):
-        self.kind = kind         # HSD track number (J_* for joints; material / texture numbers elsewhere)
+        self.kind = kind
         self.start = start
-        self.keys = keys or []   # (op, value, slope, wait)
+        self.keys = keys or []
 
 
 class AnimObj:
@@ -215,7 +215,7 @@ class TexAnim:
     def __init__(self):
         self.tex_id = 0
         self.aobj = None
-        self.images = []         # indices into Model.images
+        self.images = []
         self.tluts = []
 
 
@@ -229,11 +229,11 @@ class MatAnim:
 class Animation:
     def __init__(self):
         self.name = ''
-        self.joints = {}         # joint index -> AnimObj
-        self.joint_flags = {}    # joint index -> AnimJoint flags as read
-        self.materials = {}      # joint index -> list (one per display object of the joint) of MatAnim or None
+        self.joints = {}
+        self.joint_flags = {}
+        self.materials = {}
         self.has_material_tree = False
-        self.bounds = None       # list of (minx, miny, minz, maxx, maxy, maxz), one per frame, or None
+        self.bounds = None
 
     def end(self):
         e = 0.0
@@ -244,14 +244,14 @@ class Animation:
 
 class Model:
     def __init__(self):
-        self.joints = []         # depth-first order = HSD's joint numbering
+        self.joints = []
         self.skeleton_root = 0
-        self.meshes = []         # in drawing order per joint
+        self.meshes = []
         self.materials = []
         self.images = []
         self.tluts = []
         self.animations = []
-        self.bound_head = None   # the two 16-bit numbers before each animation's boxes, as read
+        self.bound_head = None
 
     def children(self, j):
         return [i for i, x in enumerate(self.joints) if x.parent == j]
@@ -268,7 +268,7 @@ class Model:
         return out
 
 
-# ---- animation evaluation (used to check the converter's own output and to make bound boxes) ----
+
 
 def _hermite(t, dur, p0, p1, d0, d1):
     s = t / dur

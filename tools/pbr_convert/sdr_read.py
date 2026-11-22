@@ -51,7 +51,7 @@ class Curve:
         self.what = self.axis = 0
         self.values = []
         self.slopes = []
-        self.keys = None         # [(interp, value index, slope in, slope out, time)] or None
+        self.keys = None
         self.fps = 60
 
     def at(self, t):
@@ -246,9 +246,9 @@ class Sdr:
         me = {'verts': [], 'weights': None, 'uvs': [], 'uvsets': [], 'parts': []}
         nv = self.u16(m + 2)
         vp = self.u32(m + 8)
-        # Vertex record size: 24 bytes (position, normal) or, when header byte 1 has 0x20, 48 (position, normal and
-        # two more direction vectors: GX attribute 0x19, normal + binormal + tangent) (checked: the parts' attribute
-        # lists give the position's stride, byte 5 of its entry: 0x18 or 0x30; 38 meshes on the disc have 0x20).
+
+
+
         stride = 48 if b[m + 1] & 0x20 else 24
         p0 = self.u32(m + 0x18)
         if p0:
@@ -328,7 +328,7 @@ class Sdr:
                         else:
                             c[a] = self.u16(q)
                             q += 2
-                    nrm = c.get(10, c.get(0x19))   # 0x19 = normal + binormal + tangent: the normal is the first
+                    nrm = c.get(10, c.get(0x19))
                     corners.append((c.get(9), nrm, c.get(13), c.get(14), c.get(15)))
                 prim = op & 0xF8
                 if prim == 0x90:

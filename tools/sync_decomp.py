@@ -28,10 +28,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 SNAP = os.path.join(ROOT, "snapshot")
 DEFAULT_DECOMP = os.path.join(os.path.dirname(ROOT), "Pokemon-XD-Decomp")
-# configure.py + tools/project.py describe how the decomp compiles each file (C or C++, extra
-# include folders); gen_build_list.py turns them into the port's build list.
+
+
 PATHS = ["src", "include", "configure.py", "tools/project.py", "tools/ninja_syntax.py"]
-# Sub-projects the decomp builds from (MusyX, the audio engine), and which of their folders to copy.
+
 SUBMODULES = ["extern/musyx"]
 SUBMODULE_PATHS = ["src", "include", "LICENSE"]
 
@@ -76,21 +76,21 @@ def main():
         with tarfile.open(fileobj=io.BytesIO(data)) as tf:
             try:
                 tf.extractall(tmp, filter="data")
-            except TypeError:  # Python older than 3.12
+            except TypeError:
                 tf.extractall(tmp)
         os.rename(tmp, dest)
         n = sum(len(f) for _, _, f in os.walk(dest))
         print(f"Extracted {n} files to {dest}")
 
-    # Sub-projects (git submodules) aren't in `git archive`: take each at the exact commit the
-    # decomp commit records, from the sub-project's own repository (read-only).
+
+
     for sub in SUBMODULES:
         sub_dest = os.path.join(dest, sub)
         if os.path.exists(sub_dest):
             continue
         entry = git(args.decomp, "ls-tree", sha, sub).split()
         if len(entry) >= 3 and entry[1] == "tree":
-            # A public copy of the decomp holds the sub-project as plain files of its own: take them from there.
+
             sub_sha = entry[2]
             data = git(args.decomp, "archive", "--format=tar", sub_sha, *SUBMODULE_PATHS, binary=True)
         elif len(entry) < 3 or entry[1] != "commit":

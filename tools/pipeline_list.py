@@ -36,7 +36,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_LIST = ROOT / "games" / "xd" / "shaders" / "pipelines.txt"
 AURORA = ROOT / "third_party" / "aurora"
-SCHEMA = 1  # Aurora's PipelineCacheSchema (lib/gfx/pipeline_cache.cpp)
+SCHEMA = 1
 TYPES = {0: "clear", 1: "gx", 2: "rml"}
 VERSION_SOURCES = {0: ("lib/gfx/clear.hpp", "ClearPipelineConfigVersion"),
                    1: ("lib/gx/pipeline.hpp", "GXPipelineConfigVersion"),
@@ -61,7 +61,7 @@ def aurora_versions() -> dict[int, int]:
     return out
 
 
-Row = tuple  # (type, version, hash, first_frame, config bytes)
+Row = tuple
 
 
 def read_list(path: Path) -> dict[tuple[int, int], Row]:
@@ -166,7 +166,7 @@ def cmd_gather(args) -> int:
     for db in sources:
         new = old = 0
         for t, ver, h, ff, cfg in read_db(db):
-            if t not in (0, 1):  # clear + GX; Aurora's own UI pipelines (rml) are not the game's
+            if t not in (0, 1):
                 continue
             if versions.get(t) is not None and ver != versions[t]:
                 old += 1
@@ -182,7 +182,7 @@ def cmd_gather(args) -> int:
     if outdated_all:
         print("  outdated (another Aurora pipeline version, dropped; the same pipeline may be counted in several caches): "
               + ", ".join(f"{TYPES.get(t, t)} v{v}: {n}" for (t, v), n in sorted(outdated_all.items())))
-    # Rows of an older version in the list itself go too.
+
     stale = [k for k, r in rows.items() if versions.get(r[0]) is not None and r[1] != versions[r[0]]]
     for k in stale:
         del rows[k]

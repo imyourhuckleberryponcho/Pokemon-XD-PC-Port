@@ -27,7 +27,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(os.path.dirname(HERE), 'pbr_survey'))
 
-CONVERTER_VERSION = '1.2.1'   # bump when the converter's output changes
+CONVERTER_VERSION = '1.2.1'
 MOD_ID = 'battle-revolution-models'
 PBR_ID = 'RPBE01'
 XD_ID = 'GXXE01'
@@ -197,8 +197,8 @@ def run(a):
 
 
 def main():
-    # `pbr_models --version` prints `version <CONVERTER_VERSION>`: the launcher compares it with an existing mod's
-    # mod.json version to say "out of date: make again" after an update that changes the output.
+
+
     if sys.argv[1:] == ['--version']:
         say('version ' + CONVERTER_VERSION)
         return 0

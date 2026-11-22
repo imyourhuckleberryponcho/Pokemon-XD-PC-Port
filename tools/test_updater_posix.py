@@ -35,8 +35,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'tools'))
 sys.path.insert(0, os.path.join(ROOT, 'tools', 'publish'))
 sys.dont_write_bytecode = True
-import sign_update  # noqa: E402
-import test_updater as tu  # noqa: E402  (the Windows test: the local feed server and helpers)
+import sign_update
+import test_updater as tu
 
 check = tu.check
 APP = 'Pokemon XD.app'
@@ -69,7 +69,7 @@ class Run:
 
     def staging_candidates(self):
         c = [os.path.join(self.xdg, 'Pokemon XD', 'updates'), os.path.join(self.home, '.local', 'share', 'Pokemon XD', 'updates')]
-        if self.a.system == 'mac':  # (SDL's preference folder: the real home of this account, whatever HOME says)
+        if self.a.system == 'mac':
             c.append(os.path.join(os.path.expanduser('~'), 'Library', 'Application Support', 'Pokemon XD', 'updates'))
             c.append(os.path.join(self.home, 'Library', 'Application Support', 'Pokemon XD', 'updates'))
         return c
@@ -115,7 +115,7 @@ class Run:
         return code, text, self.feed.requests[before:]
 
 
-# ── The install under test, per system ──
+
 
 class Install:
     """A player's installation of version `version`: Linux = a folder with the start script and game/; Mac = the app."""
@@ -154,7 +154,7 @@ class Install:
 def make_linux_tree(a, root, version):
     """A Linux player folder like tools/package_linux.py's: Pokemon XD.sh + game/ (launcher, libraries, version.txt)."""
     sys.path.insert(0, os.path.join(ROOT, 'tools'))
-    import package_linux  # noqa: E402
+    import package_linux
     game = os.path.join(root, 'game')
     os.makedirs(game)
     build = os.path.abspath(a.build)
@@ -165,7 +165,7 @@ def make_linux_tree(a, root, version):
         shutil.copy2(os.path.join(build, 'icon.png'), game)
     if os.path.isdir(os.path.join(build, 'fonts')):
         shutil.copytree(os.path.join(build, 'fonts'), os.path.join(game, 'fonts'))
-    with open(os.path.join(game, 'xd'), 'w') as f:  # (the game itself is never started here)
+    with open(os.path.join(game, 'xd'), 'w') as f:
         f.write('#!/bin/sh\necho stand-in game\n')
     os.chmod(os.path.join(game, 'xd'), 0o755)
     with open(os.path.join(game, 'version.txt'), 'w') as f:
@@ -265,7 +265,7 @@ def main():
     TARNAME = 'Pokemon-XD-PC-0.0.2-linux.tar.gz'
     FILE = TARNAME if SYS == 'linux' else 'Pokemon-XD-PC-0.0.2-mac.zip'
 
-    # The update 0.0.2 of all three systems, signed with a throwaway key.
+
     seed = secrets.token_bytes(32)
     pub = sign_update.public_key(seed).hex()
     keyfile = os.path.join(a.work, 'keys', 'test_key.txt')
@@ -313,7 +313,7 @@ def main():
     def installed_version(inst):
         return inst.current_version()
 
-    # 1. The first start: the question, and nothing sent before it is answered. "No": never online.
+
     run = Run(a, 'no', feed, pub, shots)
     inst = Install(a, 'no', '0.0.1').make()
     code, log, reqs = run.launcher(inst.exe, 'shot:{shots}/1_first_question.png|quit', '1_first_start')
@@ -329,7 +329,7 @@ def main():
     check(reqs == ['/update.json'] and 'Version 0.0.2 is available' in log,
           '"Check now" works with the setting off (asks the feed once, nothing downloaded)')
 
-    # 2. "Yes": the check at start, the offer, Update now.
+
     run = Run(a, 'yes', feed, pub, shots)
     run.forget_state()
     inst = Install(a, 'yes', '0.0.1').make()
@@ -375,11 +375,11 @@ def main():
     check(data_after == data_before, 'the player\'s data (settings folder, mods, card) unchanged')
 
     if SYS == 'linux':
-        # The start script opens 0.0.2 (which itself checks at start: up to date).
+
         code, log, reqs = run.launcher(inst.starter, 'wait:update|shot:{shots}/2_new_version.png|quit', '2_starter_new')
         check("version 0.0.2 (player's folder, game-0.0.2)" in log, 'the start script opens version 0.0.2')
         check('You have the newest version (0.0.2)' in log, '0.0.2 checks at start: up to date')
-        # 0.5.0 renamed the start script; this fixture is the OLD folder ("Pokemon XD.sh"): it stays and the new name appears beside it
+
         new_start = os.path.join(inst.root, 'Pokemon XD Launcher.sh')
         check(os.path.isfile(new_start) and os.access(new_start, os.X_OK), 'the update adds the new start script name, executable')
         code, log, reqs = run.launcher(new_start, 'wait:update|quit', '2_starter_newname')
@@ -394,7 +394,7 @@ def main():
         check(tu.read_pointer(inst.root) == {'current': 'game-0.0.2', 'previous': 'game'}, '"Use version 0.0.2 again"')
     else:
         state = os.path.join(inst.root, '.Pokemon XD updates')
-        # An update waiting when the launcher starts: that start puts it in place (and quits; the helper does it).
+
         code, log, reqs = run.launcher(inst.exe, 'wait:update|quit', '2_start_with_waiting_update')
         check('an update was waiting' in log, 'a start with an update waiting hands over to the helper: ' + ' '.join(log.splitlines()[-3:]))
         for _ in range(90):
@@ -410,7 +410,7 @@ def main():
             check(r.returncode == 0, 'the app in place verifies (ad hoc signature intact): ' + (r.stderr or '').strip()[:200])
         code, log, reqs = run.launcher(inst.exe, 'wait:update|size:1100x1500|page:disc|shot:{shots}/2_new_version.png|quit', '2_new_app')
         check('version 0.0.2' in log and 'You have the newest version (0.0.2)' in log, 'the new app runs: version 0.0.2, up to date')
-        # Go back: previous becomes the waiting app; "Restart now" puts it in place.
+
         code, log, reqs = run.launcher(inst.exe, 'update:back|update:restart', '2_go_back')
         for _ in range(90):
             if installed_version(inst) == '0.0.1':
@@ -419,7 +419,7 @@ def main():
         check(installed_version(inst) == '0.0.1', 'Go back + restart: 0.0.1 is in place again')
         code, log, reqs = run.launcher(inst.exe, 'wait:update|quit', '2_old_again')
         check('was skipped earlier: not asked' in log, 'the version left behind is not offered again at start')
-        # Restart now straight after an update
+
         run2 = Run(a, 'yes2', feed, pub, shots)
         run2.forget_state()
         inst2 = Install(a, 'yes2', '0.0.1').make()
@@ -430,10 +430,10 @@ def main():
             time.sleep(1)
         check(inst2.current_version() == '0.0.2', '"Restart now": the helper puts the new app in place')
 
-    # 2b. One file per system: the update file is the WHOLE player download (Linux: "Pokemon XD PC 0.0.2 - Linux (test)/Pokemon XD.sh,
-    # game/..." as tools/package_linux.py makes it; Mac: the folder holding Pokemon XD.app and its Read me), signed as it is with
-    # sign_update.py pack --player-downloads. The launcher takes what is inside. (Section 2 above is today's layout, the one
-    # every older launcher needs.)
+
+
+
+
     feed2_dir = os.path.join(a.work, 'feed_whole')
     os.makedirs(feed2_dir)
     feed2 = tu.Feed(feed2_dir)
@@ -486,7 +486,7 @@ def main():
         pend = os.path.join(inst.root, '.Pokemon XD updates', 'pending', APP)
         check(os.path.isfile(os.path.join(pend, 'Contents', 'MacOS', 'xd_launcher')), 'one file: the new app waits')
 
-    # 3. Tampered feeds and packages: refused, nothing installed, nothing left.
+
     for mode, expect in (('badsig', 'signature is wrong'), ('wrongkey', 'signature is wrong'),
                          ('badhash', 'SHA-256 differs'), ('toobig', 'larger than expected')):
         feed.mode = mode
@@ -504,7 +504,7 @@ def main():
             check(not any(r.endswith(('.zip', '.tar.gz')) for r in reqs), f'{mode}: the package was never downloaded')
     feed.mode = 'good'
 
-    # 4. Skip this version.
+
     run = Run(a, 'skip', feed, pub, shots)
     run.forget_state()
     inst = Install(a, 'skip', '0.0.1').make()
@@ -516,7 +516,7 @@ def main():
     check(log.count('Version 0.0.2 is available') == 2, '"Check now" still shows it')
     check(inst.listing() == listing, 'skip: nothing installed')
 
-    # 5. An update that has no package for this system (an old, Windows-only manifest): nothing offered.
+
     only = os.path.join(a.work, 'feed_winonly')
     os.makedirs(only)
     r = subprocess.run([sys.executable, os.path.join(ROOT, 'tools', 'publish', 'sign_update.py'), 'pack',

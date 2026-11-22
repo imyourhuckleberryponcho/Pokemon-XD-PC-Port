@@ -55,8 +55,8 @@ import sdr_read
 from model import (Model, Joint, Mesh, Vertex, Material, Texture, Image, Animation, AnimObj, Track, MatAnim, TexAnim,
                    mat_mul, mat_inv, mat_srt, OP_LIN, OP_CON, J_ROTX, J_TRAX, J_SCAX)
 
-FACE_ACTIONS = ('tx_sleep', 'tx_wakeup', 'tx_wink', None)   # XD's four face records, in header order
-T_TRAU, T_TRAV = 2, 3                                       # HSD texture tracks: slide sideways / up and down
+FACE_ACTIONS = ('tx_sleep', 'tx_wakeup', 'tx_wink', None)
+T_TRAU, T_TRAV = 2, 3
 
 FPS = 30.0
 
@@ -105,7 +105,7 @@ def texture_alpha(fmt, w, h, data):
     or 'xlu' (in-between values: blended). Looks at the texels only."""
     import numpy as np
     d = np.frombuffer(data, dtype=np.uint8)
-    if fmt == 14:                        # CMPR: 8-byte blocks; colour 0 <= colour 1 makes index 3 see-through
+    if fmt == 14:
         blk = d[:len(d) // 8 * 8].reshape(-1, 8)
         c0 = blk[:, 0].astype(int) << 8 | blk[:, 1]
         c1 = blk[:, 2].astype(int) << 8 | blk[:, 3]
@@ -114,17 +114,17 @@ def texture_alpha(fmt, w, h, data):
         for sh in (6, 4, 2, 0):
             cnt += int((((bits >> sh) & 3) == 3).sum())
         return 'texedge' if cnt > 0.002 * w * h else 'opa'
-    if fmt in (0, 1):                    # I4 / I8: one brightness channel, which GX also gives as alpha (Gastly's
-        return 'xlu'                     # glow sheet): blended, so its dark part is see-through
-    if fmt == 5:                         # RGB5A3
+    if fmt in (0, 1):
+        return 'xlu'
+    if fmt == 5:
         v = d[:len(d) // 2 * 2].reshape(-1, 2)
         al = np.where((v[:, 0] & 0x80) == 0, (v[:, 0] >> 4) & 7, 7)
-    elif fmt == 6:                       # RGBA8: blocks of 64 bytes, the first 32 = (A, R) pairs
+    elif fmt == 6:
         blk = d[:len(d) // 64 * 64].reshape(-1, 64)
         al = (blk[:, 0:32:2].reshape(-1).astype(int) * 7 + 127) // 255
-    elif fmt == 2:                       # IA4
+    elif fmt == 2:
         al = ((d >> 4).astype(int) * 7 + 7) // 15
-    elif fmt == 3:                       # IA8
+    elif fmt == 3:
         al = (d[0::2].astype(int) * 7 + 127) // 255
     else:
         return 'opa'
@@ -138,8 +138,8 @@ def texture_alpha(fmt, w, h, data):
     return 'opa'
 
 
-# What XD's sections are for, as PBR action names in order of preference. Counted over the 388 pairs: for each
-# section, which PBR action has the length of the XD animation the section plays.
+
+
 PHYSICAL = ('tackle', 'kime_phy', 'punch', 'kick', 'hikkaku', 'kyukoka', 'binta', 'kime', 'kime_a')
 ROLE_NAMES = {0: ('wait', 'kuchu_wait'), 16: ('kuchu_wait', 'wait'), 8: ('damage', 'damege', 'damage_a'),
               10: ('down', 'kuchu_down'), 9: ('damage', 'damege', 'down'), 6: ('kime', 'wait_a', 'wait'),
@@ -362,8 +362,8 @@ def _matte_cut(m, classes, i, cache):
         rim += [(y, x) for y in range(y0, y1 + 1) for x in (x0, x1)] + [(y, x) for x in range(x0, x1 + 1) for y in (y0, y1)]
     if sum(white[p] for p in rim) < 0.95 * len(rim):
         return i
-    # from the rim inwards through light pixels; their transparency follows their lightness (white = clear, the
-    # eye's soft edge fades), so the copy is RGB5A3 (CMPR has only clear or solid: the eye came out blocky)
+
+
     lo = 200
     light = opaque & (px[..., :3].min(axis=2) > lo)
     cut = np.zeros_like(opaque)
@@ -422,9 +422,9 @@ class StopConversion(Exception):
     """Raised by convert(stats=...) once the measurements are in (survey runs: nothing is written)."""
 
 
-POSE_TOL_PCT = 1.0      # a model whose converted pose is further than this (% of its height) from the source gets
-                        # its sheared bones held by pairs of joints (see convert)
-SHEAR_TOL = 0.003       # ... every bone whose 3x3 a single joint holds worse than this (fraction of its size)
+POSE_TOL_PCT = 1.0
+
+SHEAR_TOL = 0.003
 
 
 def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under_joint', tol_scale=1.0, xd_full=None,
@@ -450,16 +450,16 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
     ev = pbr_eval.Eval(sdr, compensate)
     if gen4 is not None and gen4.get('comp_t'):
         ev.comp_t = True
-    # gen4: a Pokemon with no XD model (docs/GEN4.md): xd_pkx / xd_model are a STAND-IN's; gen4 = {'pick_names':
-    # slot -> action name, 'roles': XD joint -> (PBR node name, place in the body)} from the stand-in's own pair
-    # (gen4.py)
+
+
+
     odd = sorted(set(n.kind for n in sdr.nodes if n.kind not in (0, 2, 3, 6)))
     if odd:
         log('NOTE: node kind %s (not known what it is): kept as a plain joint' % odd)
     m = Model()
-    # --- joints: XD's two top joints, every PBR node, then one holder joint per skinned mesh node ---
-    # (XD's skeleton root is joint 0 itself in two thirds of its models, joint 1 to 4 in most others: ours is
-    # always joint 1, holding whatever XD has between joint 0 and its skeleton root)
+
+
+
     from model import mat_decompose
     x0 = xd_model.joints[0] if gen4 is None else Joint()
     x1 = Joint()
@@ -467,17 +467,17 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
         xs = xd_model.world_static()
         xm1 = mat_mul(mat_inv(xs[0]), xs[xd_model.skeleton_root])
         x1.scale, x1.rot, x1.pos = mat_decompose(xm1)
-        # PBR's own top nodes often hold the very same transform (same artists' files: Slaking's "ani_top" = XD's
-        # joint 1, turn -103 deg, scale 0.85; Vigoroth's "null_broll"). Copied as joint 1 as well, the model got it
-        # TWICE: Slaking upside down, Vigoroth on its back (2026-11-12). Where a PBR node above the first bone holds
-        # XD's transform, joint 1 stays plain.
+
+
+
+
         w0 = ev.world(ev.sample(None).local)[0]
         xm1 = np.vstack([np.array(xm1, dtype=float).reshape(3, 4), [0, 0, 0, 1]])
         for i, nd in enumerate(sdr.nodes):
             if nd.kind == 2:
                 break
-            # a node that is not plain, at the same place (within 10 % of the offset: Vigoroth's 9 %) and turned alike (within 20 deg: Vigoroth's PBR node rests at
-            # -88 deg where XD's joint says -79)
+
+
             dt = np.linalg.norm(w0[i][:3, 3] - xm1[:3, 3])
             ra, rb = w0[i][:3, :3], xm1[:3, :3]
             ra = ra / np.cbrt(max(abs(np.linalg.det(ra)), 1e-12))
@@ -496,10 +496,10 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
     m.skeleton_root = 1
     spose = ev.sample(None)
     s0, r0, t0 = pbr_eval.decompose(spose, ev, pairs=pairs)
-    # Joint numbers (the game numbers a model's joints depth first, and XD's tables and our tracks go by those
-    # numbers): node i is joint jn[i]; a node held by a PAIR of joints has the pair's first joint (translation,
-    # compensating scale) just before it, ja[i] = jn[i] - 1, and children, meshes and skin weights stay on jn[i]
-    # (the second joint: rotation, the node's own scale). pl = the paired nodes; extended entry nn + k = ja of pl[k].
+
+
+
+
     pl = sorted(pairs)
     nn = len(sdr.nodes)
     jn, ja, j_ = [], {}, 2
@@ -510,7 +510,7 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
         jn.append(j_)
         j_ += 1
     node_of = {j: i for i, j in enumerate(jn)}
-    ext_joint = list(jn) + [ja[i] for i in pl]       # extended entry -> joint number
+    ext_joint = list(jn) + [ja[i] for i in pl]
     for i, n in enumerate(sdr.nodes):
         par = jn[n.parent] if n.parent >= 0 else 1
         if i in pairs:
@@ -535,7 +535,7 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
             j.parent = 1
             holder[i] = len(m.joints)
             m.joints.append(j)
-    # --- textures and materials ---
+
     alpha = []
     for t in sdr.textures:
         im = Image()
@@ -543,7 +543,7 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
             raise ValueError('texture format code 0x%X not known' % t['code'])
         im.width, im.height, im.format, im.data = t['width'], t['height'], t['format'], t['data']
         if im.format == 10:
-            # a palette picture (Regigigas's body): drawn out into colours, kept as RGB5A3
+
             import gx_tex
             im.data = gx_tex.encode_rgb5a3(gx_tex.decode_c14x2(im.width, im.height, im.data, t['palette_format']))
             im.format = 5
@@ -556,9 +556,9 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
         alpha.append(texture_alpha(im.format, im.width, im.height, im.data))
         m.images.append(im)
     classes = {}
-    # A textured material on a mesh without texture coordinates is a reflection map (Steelix's and Metagross's
-    # metal: the picture is placed by the surface's direction). XD's own Steelix writes those as flags 0x00030081
-    # (coordinates: reflection; light map: extra), blend 0.65 (dump_hsd on XD's file); we write the same.
+
+
+
     no_uv = set()
     with_uv = set()
     for n in sdr.nodes:
@@ -566,49 +566,49 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
             for part in n.mesh['parts']:
                 (with_uv if n.mesh['uvs'] else no_uv).add(part['material'])
     reflect = no_uv - with_uv
-    # Materials of one name are one material in the artist's tool: Steelix's "ref_E3" is on seven segments without
-    # coordinates and one with a few; all eight are reflection.
+
+
     ref_names = set(sdr.materials[i]['name'] for i in reflect if i is not None)
     reflect |= set(i for i, pm in enumerate(sdr.materials) if pm['name'] in ref_names and pm['texture'] is not None)
-    layer_tex = {}       # (material, PBR layer) -> output texture number (GX texture map), for the eye animations
-    dimmed = {}          # (picture, strength) -> darkened copy (shine)
-    mattes = {}          # picture -> copy without white boxes round its pieces (Castform's eyes)
+    layer_tex = {}
+    dimmed = {}
+    mattes = {}
     for mi, pm in enumerate(sdr.materials):
         ma = Material()
         ma.name = pm['name']
         ma.draw_class = 'opa'
-        # PBR's picture layers (2026-11-12): up to four per material, each placed by one of the mesh's coordinate
-        # sets or reflected; Dusclops's face = skin + eye white + eye strip (the blink slides the third). Written as
-        # XD's own layered materials are (XD's Dusclops, Registeel): the first coordinate layer as before, further
-        # coordinate layers pasted on by their picture's transparency (0x00010010), reflection layers last, the same
-        # way (0x00010081). Layers in that order: a material whose layer 0 is a reflection gets it on top.
+
+
+
+
+
         orig = [k for k, l in enumerate(pm.get('layers', [])) if l['texture'] is not None]
         layers = [pm['layers'][k] for k in orig]
         if not layers and pm['texture'] is not None:
             layers = [{'texture': pm['texture'], 'kind': 'uv', 'uvset': 0, 'offset': (0.0, 0.0), 'rotation': 0.0,
                        'scale': (1.0, 1.0)}]
         order = [k for k, l in enumerate(layers) if l['kind'] == 'uv'] + [k for k, l in enumerate(layers) if l['kind'] != 'uv']
-        # Shine (2026-11-12, by comparing with XD's own models): a reflection on top is ADDED (Luvdisc's and
-        # Wailord's nearly black shine sheets change nothing), and a brightness-only coordinate layer next to it is
-        # where the shine goes (Huntail's: average 13 of 255 = almost none; Scizor's: 225). HSD cannot multiply two
-        # layers before adding, so the shine picture is a copy darkened by the mask's average and the mask is left
-        # out. Without a mask it depends on the picture (below: greyscale pasted by its brightness, opaque colour
-        # blended 0.4, intensity + alpha added at half strength). A layer showing the base picture again (Onix,
-        # Magcargo: same picture twice) is left out too: multiplied by itself it came out dark.
+
+
+
+
+
+
+
         shine, masked = 1.0, False
-        # PBR's own shine settings (found 2026-11-12, every layered material agrees): record +0x76 = the shine
-        # layer (a reflection), +0x74 = the layer masking it (0xFF none), +0x78 = the shine's colour = its strength
-        # (Registeel 0x66 = 40 %, XD's own Registeel blends 0.4; Nosepass 0x0A = 4 %; Milotic and Voltorb 0x26;
-        # Glalie's ice 0x4D). Where they are given, the shine is ADDED at that strength (times the mask's average);
-        # the guesses below stay for materials without them.
+
+
+
+
+
         raw = pm['raw']
         pos = {o: k for k, o in enumerate(orig)}
         spec = pos.get(raw[0x76]) if raw[0x76] != 0xFF else None
         if spec is not None and layers[spec]['kind'] == 'uv':
             spec = None
         if spec == 0 and any(l['kind'] == 'uv' for l in layers):
-            # the shine as PBR's FIRST layer with a picture after it (Registeel's metal): added on top it came out
-            # white; the guesses below (pasted by brightness) match XD's own Registeel
+
+
             spec = None
         spec_f = None
         if spec is not None:
@@ -633,15 +633,15 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
         if order:
             base_px = sdr.textures[layers[order[0]]['texture']]['data']
             order = order[:1] + [k for k in order[1:] if sdr.textures[layers[k]['texture']]['data'] != base_px]
-        # the glow layer (see below, 1.2.1): flag 0x02, the layer index at +0x6E, the colour at +0x70
+
         glow_k = pos.get(raw[0x6E]) if (raw[0x5D] & 0x02) and raw[0x6E] != 0xFF else None
         glow_f = sum(raw[0x70:0x73]) / 765.0
         if not (raw[0x5D] & 0x01) and (raw[0x5D] & 0x02) and order:
-            # a brightness sheet on an unlit glowing material (Torkoal's shell holes: a scrolling flicker) is left
-            # out: multiplied in it halved the glow, added it went pink-white; XD's own holes are plain bright red
+
+
             order = order[:1] + [k for k in order[1:] if not (layers[k]['kind'] == 'uv'
                                  and sdr.textures[layers[k]['texture']]['format'] in (0, 1))]
-        animated = {}             # layer -> the axes its slide animation moves (1 u, 2 v)
+        animated = {}
         for k_, blocks in (pm.get('anims') or ({0: pm['anim']} if pm.get('anim') else {})).items():
             animated[k_] = {c.axis for chs in blocks.values() for c in chs or [] if c.what == 0x14}
         if layers:
@@ -655,45 +655,45 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
                 ma.draw_class = 'opa'
                 tx.flags, tx.blending = 0x00030081, 0.65
                 if order[0] == spec:
-                    # the shine on the material's own colour (Glalie's ice, Unown, Anorith's eye glass, Registeel's
-                    # limbs): BLENDED at its strength (added, Registeel's limbs came out white)
+
+
                     tx.blending = max(0.05, spec_f)
                 if first['kind'] != 'uv':
-                    # only a reflection: what it is mixed with is the material's own colour (Unown's black body:
-                    # ambient and diffuse 0; Glalie's ice: pale blue)
+
+
                     ma.ambient, ma.diffuse = tuple(pm['ambient']), tuple(pm['diffuse'])
             elif t['format'] in (0, 1) and (pm['raw'][0x5D] & 0x60) == 0x60 and pm['ambient'][:3] != (255, 255, 255):
-                # A brightness-only picture on a SOLID material (flag byte 0x60 on; Gastly's see-through glow has it
-                # off) that is not self-lit (ambient 255: Sableye's eye glow): Lairon's lower body, Clamperl's lid
-                # inside, Nosepass's dark face, Sandshrew's and Dratini's bellies. A grey picture drawn as any
-                # picture is (multiplied by PBR's diffuse 204 the white bellies came out grey). Tried once before the
-                # reflection layers were told apart: it broke Anorith's eyes and Magnemite's body, which are
-                # reflections (layer record kind 0) and handled above now (2026-11-12)
+
+
+
+
+
+
                 ma.draw_class = 'opa'
             elif ma.draw_class != 'opa':
                 tx.flags = 0x00230010
                 ma.rendermode = 0x40002015 if ma.draw_class == 'texedge' else 0x60002015
                 if t['format'] in (0, 1):
-                    # A brightness-only sheet (Gastly's glow) takes its colour from the material: PBR's diffuse
-                    # colour (record +0x64) times the picture (HSD colour map "modulate" instead of "blend").
+
+
                     ma.diffuse = tuple(pm['diffuse'])
                     tx.flags = 0x00240010
                     fl0 = pm['raw'][0x5D]
                     if (fl0 & 0x01) and not (fl0 & 0x62):
-                        # lit, see-through, no glow colour: only Gastly's aura (survey 2026-11-12). Its diffuse is
-                        # a very dark purple (30, 16, 37): lit as ours are it came out a black haze where XD's own
-                        # aura is a bright purple drawn unlit (rendermode 0x60002011). The hue at full brightness,
-                        # unlit
+
+
+
+
                         top = max(max(pm['diffuse'][:3]), 1)
                         c = tuple(min(255, round(x * 255 / top)) for x in pm['diffuse'][:3]) + (255,)
                         ma.diffuse = ma.ambient = c
                         ma.rendermode &= ~0x4
-            # PBR's flag byte (record +0x5D; survey of all 3,900 materials 2026-11-12): bit 0x01 = lit, 0x02 = has a
-            # glow colour (+0x70), 0x60 both off on see-through glows. Unlit + glow colour (Chinchou's and Lanturn's
-            # lures: ambient and diffuse black, so lit they came out black; Torkoal's shell holes: ambient white + a
-            # faint red glow): drawn unlit in ambient + glow times the picture, as XD's own lures are (rendermode
-            # 0x60002011); the see-through kind ADDED to the picture behind with XD's own lure blend
-            # (pe 19 00 00 00 01 04 01 05 03 07 00 07: blend, source alpha + one).
+
+
+
+
+
+
             fl = pm['raw'][0x5D]
             glow = tuple(pm['raw'][0x70:0x74])
             if not (fl & 0x01) and (fl & 0x02) and glow[:3] != (0, 0, 0):
@@ -714,19 +714,19 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
                     tx.image = l['texture']
                     tl = sdr.textures[l['texture']]
                     tx.wrap_s, tx.wrap_t = tl['wrap_s'], tl['wrap_t']
-                    # How a layer goes on top (2026-11-12), by what its picture holds:
-                    #  - brightness only (I4 / I8): a coordinate layer is shading detail, multiplied in (colour map
-                    #    "modulate"; pasted, it painted Scizor white); a reflection is pasted by its transparency,
-                    #    which in these sheets is the brightness (Luvdisc's dark shine: almost nothing; Registeel's
-                    #    metal: about half, as XD's own Registeel's blend 0.4)
-                    #  - with transparency of its own: pasted by it (Dusclops's eye, Castform's eyes)
-                    #  - opaque colour: coordinate layer multiplied in
-                    #  - a reflection: added (see "Shine" above)
+
+
+
+
+
+
+
+
                     grey = tl['format'] in (0, 1)
                     see = alpha[l['texture']] != 'opa'
                     mid = l['kind'] == 'uv' and grey and k > 1 and _mid_sheet(tl)
-                    # a nearly black sheet added next to such a mid-grey sheet (Rayquaza's white rings on black)
-                    # washed XD's yellow rings out to white: added at 0.3 strength (rings yellow as in XD)
+
+
                     ring_add = any(j > 1 and layers[j]['kind'] == 'uv' and sdr.textures[layers[j]['texture']]['format'] in (0, 1)
                                    and _mid_sheet(sdr.textures[layers[j]['texture']]) for j in order)
                     if k == spec:
@@ -736,20 +736,20 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
                     elif (l['kind'] == 'uv' and not grey and not see and glow_k is not None and k == glow_k
                           and glow_f >= 0.5
                           and _brightness(tl) >= 0.3):
-                        # PBR's GLOW layer (1.2.1; record flag 0x02 + the layer named at +0x6E + its colour at +0x70, the
-                        # same fields that make Torkoal's shell holes glow): a picture that is ADDED to the lit surface
-                        # at the glow colour's strength, not multiplied into it. Magmortar's flame sheet (record 1,
-                        # average 34 %) multiplied in turned the whole body red and killed the yellow cannons and the
-                        # pink mouth. Only strong glows (colour 50 % or more; Umbreon's rings, 10 %, and Rotom's aura, 20 %, could not be
-                        # checked and stay as they were). Glow sheets under 30 % brightness were already added (the branch below) and stay as they were.
+
+
+
+
+
+
                         tx.flags, tx.blending = 0x00070010, 1.0
                         if glow_f < 0.98:
                             tx.image = _dimmed(m, alpha, l['texture'], glow_f, dimmed)
                     elif l['kind'] == 'uv' and (grey or not see) and _brightness(tl) < 0.3:
-                        # a nearly black brightness sheet that is not a shine mask (Huntail's repeated speckle,
-                        # average 13 of 255; Corphish's, Shelgon's, Regirock's: 0 to 22 %): multiplied in it
-                        # blackened the body; added it changes little. The same for an opaque colour sheet that is
-                        # nearly black (Kyogre's: its red line pattern on black, average 2 %: the body went black)
+
+
+
+
                         tx.flags, tx.blending = 0x00070010, 1.0
                         if ring_add:
                             tx.image = _dimmed(m, alpha, l['texture'], 0.3, dimmed)
@@ -757,17 +757,17 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
                         tx.flags = 0x00010010 if see and not grey else 0x00040010
                         tx.blending = 1.0
                         if mid:
-                            # 2x brightened (clamped); its dark lines (the ring outlines, under 0x50) lifted to
-                            # white so they no longer blacken the yellow rings of the base picture
+
+
                             tx.image = _dimmed(m, alpha, l['texture'], 2.0, dimmed, 160)
                         if see and not grey:
                             tx.image = _matte_cut(m, alpha, l['texture'], mattes)
                     elif shine < 1.0 and not masked and tl['format'] in (0, 1):
-                        # brightness only, no mask: pasted by its transparency (= brightness): Registeel's metal,
-                        # Voltorb's highlight (added at half strength Voltorb went pink, 2026-11-12)
+
+
                         tx.flags, tx.blending = 0x00010081, 1.0
                     elif not masked and tl['format'] not in (2, 3) and not see:
-                        # opaque colour, no mask: blended 0.4, as XD's own Registeel (added, Nosepass went pale)
+
                         tx.flags, tx.blending = 0x00030081, 0.4
                     else:
                         tx.flags, tx.blending = 0x00070081, 1.0
@@ -781,14 +781,14 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
                 if l['kind'] == 'uv' and not (q == 0 and mi in reflect):
                     tx.src = 4 + min(l['uvset'], 2)
                     _layer_placement(tx, l, animated.get(k, set()))
-            # A see-through material (diffuse alpha, record +0x67, below 255; survey 2026-11-12): Anorith's eye
-            # glass (26 of 255: drawn solid it hid the eye as a grey ball), Ninjask's and Ledyba's wings, Starmie's
-            # and Staryu's jewels, Sableye's gems. Drawn as HSD's see-through kind with the material's alpha
-            # (rendermode alpha from the material 0x2000, XLU + no depth write 0x60000000, as XD's own xlu pieces).
-            # The untextured "lambert1" ones are PBR's touch boxes (left out above). Only where it looked right in
-            # game: plain picture layers on a solid-flagged material (0x60: wings) or reflection layers only (glass).
-            # A picture + reflection material (Milotic's body: 128) went see-through all over, and Torkoal's glowing
-            # shell holes (flag 0x81) came out dull: there the number means something else.
+
+
+
+
+
+
+
+
             kinds = set(l['kind'] for l in layers)
             if pm['diffuse'][3] < 255 and (kinds == {'uv'} and (pm['raw'][0x5D] & 0x60) == 0x60 or kinds == {'reflect'}):
                 ma.alpha = pm['diffuse'][3] / 255.0
@@ -796,11 +796,11 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
                 ma.rendermode |= 0x60002000
         else:
             ma.rendermode = 0x2005
-            # No picture: the colour is the material's own (PBR record +0x60 ambient, +0x64 diffuse: black eyes
-            # and mouths, grey teeth). Left at XD's white they were white (Ditto's eyes, 2026-11-12).
+
+
             ma.ambient, ma.diffuse = tuple(pm['ambient']), tuple(pm['diffuse'])
         m.materials.append(ma)
-    # --- meshes ---
+
     static_world_pbr = ev.world(spose.local)[0]
     combos = set()
     world_static = m.world_static()
@@ -810,19 +810,19 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
         if n.kind != 3 or n.mesh is None:
             continue
         if n.name.startswith('col_'):
-            # PBR's touch boxes (col_faceShape, col_lhandShape ...: 12 untextured triangles each): never drawn by
-            # PBR; drawn, they are the white boxes over Butterfree's body (2026-11-12). Kept out of the model.
+
+
             hidden_boxes += 1
             continue
         if 'shadow' in n.name.lower() and all(sdr.materials[p_['material']]['texture'] is None for p_ in n.mesh['parts']):
-            # Jumpluff's untextured "lhandShadow" / "rhandShadow" blobs round its puffs (the only ones, survey
-            # 2026-11-12): shadow helpers, drawn they were grey boxes on the puffs. Left out like the touch boxes.
+
+
             hidden_boxes += 1
             continue
         pm = n.mesh
-        # A mesh node with a mirroring transform (scale -1: Makuhita's body, Golduck's, Entei's wing pieces; 7
-        # models, 2026-11-12): PBR turns its triangles' front side round; XD's game does not, so the body showed
-        # its inside (Makuhita looked turned away and dark). Its triangles are written the other way round.
+
+
+
         mirrored = np.linalg.det(static_world_pbr[i][:3, :3]) < 0
         for part in pm['parts']:
             me = Mesh()
@@ -878,7 +878,7 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
                     log('NOTE: skin weight on a node that is not a joint: bound where it stands')
                     m.joints[j].inv_bind = mat_inv(mat_mul(root_inv, world_static[j]))
     log('skin: %d different weight combinations at step %g' % (len(combos), step))
-    # --- which PBR action plays in which XD slot ---
+
     xd_frames = [int(round(a.end())) for a in xd_model.animations]
     if gen4 is None:
         pick, how, users = pick_actions(sdr, xd_pkx, xd_frames, log)
@@ -887,9 +887,9 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
     if stats is not None:
         stats['pick_names'] = {i: sdr.actions[a][0] for i, a in enumerate(pick) if a is not None}
         stats['pick_times'] = {i: (sdr.actions[a][2], sdr.actions[a][3]) for i, a in enumerate(pick) if a is not None}
-    # Retiming (no-counterpart models): an action the stand-in plays in a slot is stretched so that its HIT lands at
-    # the stand-in's hit and it ends when the stand-in's does (PBR's action table: start, hit, end), because XD's
-    # move scripts time their effects against the slot, not against the model
+
+
+
     tmaps = {}
     if gen4 is not None:
         for slot, a in enumerate(pick):
@@ -904,8 +904,8 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
             else:
                 fn = (lambda t, hs=hs, es=es, hg=hg, eg=eg: t * hg / hs if t <= hs else hg + (t - hs) * (eg - hg) / (es - hs))
             tmaps[a] = (max(int(round(es * FPS)), 1), fn)
-    # --- eyes: XD's face records (sleep, wake up, blink) name an animation slot each; that slot gets PBR's tx_
-    # action of the same kind (its body stays as it is: only the picture slides) ---
+
+
     names = [x[0] for x in sdr.actions]
     eye_mats = [i for i, pm in enumerate(sdr.materials) if pm.get('anim')]
     face_slots, face_kept = {}, set()
@@ -924,7 +924,7 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
         if kind and 0 <= idx < len(xd_frames):
             idle_slot = idx
             break
-    # --- size: the PBR model is brought to the size XD's model has on the field ---
+
     j0m = np.eye(4)
     j0m[:3, :] = np.array(mat_srt(x0.scale, x0.rot, x0.pos)).reshape(3, 4)
 
@@ -938,8 +938,8 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
     idle_act = pick[idle_slot] if pick else None
     xb = xd_model.animations[idle_slot].bounds if xd_model.animations else None
     if stats is not None and idle_act is not None:
-        # survey hook (changes nothing in the output): PBR's native idle box (its own top nodes, no XD transform) and
-        # XD's idle box, mean extent per axis over the frames
+
+
         po = poses[idle_act]
         bo = pbr_eval.boxes(ev.points(np.eye(4)[None, None] @ ev.world(po.local), po.visible))
         stats['pbr_native'] = tuple(float(x) for x in (bo[:, 3:] - bo[:, :3]).mean(axis=0))
@@ -953,9 +953,9 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
             raise StopConversion()
     if idle_act is not None and xb and (any(abs(v) > 1e-4 for v in tuple(x1.rot) + tuple(x1.pos))
                                         or any(abs(v - 1) > 1e-4 for v in x1.scale)):
-        # XD's transform above its skeleton, or none? PBR's top nodes may hold part of it already (Entei: XD's
-        # joints = size 4.59 and a quarter turn, PBR's "kime_skl" = the size alone: copied, the size was taken
-        # twice and the body turned). Both tried; the one whose idle pose fits XD's idle box better is kept.
+
+
+
         po = poses[idle_act]
         xbn = np.array(xb)
 
@@ -994,7 +994,7 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
             log('NOTE: size factor far from 1: PBR\'s model or its idle pose is very different from XD\'s')
     m.joints[1].scale = scale1
     root = root_matrix(scale1)
-    # --- every used action sampled, taken apart, and checked against the source ---
+
     data = {}
     worst = (0.0, '', 0)
     height = None
@@ -1031,7 +1031,7 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
             nfr = min(len(ob), len(xbn))
             d = float(np.abs(ob[:nfr] - xbn[:nfr]).mean() / height)
             log('CHECK: idle box against XD\'s own model: %.1f %% of the height apart on average' % (100.0 * d))
-    # --- travel: XD's animations stay in place; a PBR action that carries the body away is held back ---
+
     travel = {}
     for slot, a in enumerate(pick):
         if a is None or slot not in users or a in travel:
@@ -1051,7 +1051,7 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
             travel[a] = -off
             log('NOTE: "%s" carries the body %.0f %% of its height away and XD\'s animation stays in place: travel taken out' % (
                 sdr.actions[a][0], 100.0 * own / height))
-    # --- channels to write: whatever differs from the static value in any used action ---
+
     ne = nn + len(pl)
     chan = np.zeros((ne, 3, 3), dtype=bool)
     stat = (s0[0], r0[0], t0[0])
@@ -1066,8 +1066,8 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
         log('INFO: %d mesh node(s) switched on and off by the animations (visibility tracks written)' % len(vis_nodes))
     kinds = (J_SCAX, J_ROTX, J_TRAX)
     j0inv = np.linalg.inv(j0m[:3, :3])
-    # where each animated material is drawn: (joint, display object number); the writer makes one display
-    # object per mesh, in m.meshes order, on the mesh's joint
+
+
     n_dobj, mat_places = {}, {}
     for me in m.meshes:
         k = n_dobj.get(me.joint, 0)
@@ -1177,16 +1177,16 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
         if an.bounds is None:
             an.bounds = [idle_box[0]] * (max(xd_frames[slot], 1) + 1)
     m.bound_head = list(xd_model.bound_head or [])
-    # --- XD's container, re-pointed: each XD joint -> the PBR joint nearest to it in the idle pose ---
+
     xw = pose_at(xd_model, xd_model.animations[idle_slot] if xd_model.animations else None, 0.0)
     ipose = poses[idle_act] if idle_act is not None else spose
     iw = root[None, None] @ ev.world(ipose.local[:1])
     cands = [(jn[i], iw[0, i, :3, 3]) for i, n in enumerate(sdr.nodes) if n.kind in (0, 2)]
     cpos = np.array([c[1] for c in cands])
 
-    # Roles (docs/GEN4.md): an XD attachment joint is the PBR effect point (ef_*, fixed names in every PBR model)
-    # nearest to it on the stand-in's own pair; a model with no XD counterpart takes the point of the same name, or
-    # else the one at the same place in the body (position as a fraction of the bones' box).
+
+
+
     body = [(jn[i], iw[0, i, :3, 3]) for i, n in enumerate(sdr.nodes) if n.kind == 2 or n.name.startswith('ef_')]
     bpos = np.array([c[1] for c in body]) if body else np.zeros((1, 3))
     blo, bext = bpos.min(axis=0), np.maximum(bpos.max(axis=0) - bpos.min(axis=0), 1e-6)
@@ -1194,7 +1194,7 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
 
     def norm(p):
         q = (np.asarray(p) - blo) / bext
-        return (float(q[0]) - 0.5, float(q[1]), float(q[2]) - 0.5)   # x, z about the middle, y from the feet
+        return (float(q[0]) - 0.5, float(q[1]), float(q[2]) - 0.5)
 
     def role_of(p):
         j = min(efs, key=lambda c: float(((c[1] - p) ** 2).sum()))[0]
@@ -1225,10 +1225,10 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
             stats.setdefault('roles', {})[xj] = role_of(p)
         return cands[int(((cpos - p[None]) ** 2).sum(axis=1).argmin())][0]
 
-    # Camera-facing pieces (2026-11-12): XD marks the joints of its flat cards as billboards (HSD joint flags
-    # 0xE00: Jumpluff's three puffs, Gastly's aura); PBR's file has no such mark that was found. Each XD billboard
-    # joint -> our nearest rigid textured mesh node in the idle pose, which gets the same billboard kind (seen
-    # edge-on, Jumpluff's puffs looked squashed).
+
+
+
+
     mesh_nodes = [(jn[i], iw[0, i, :3, 3]) for i, n in enumerate(sdr.nodes)
                   if n.kind == 3 and n.mesh is not None and n.mesh['weights'] is None and not n.name.startswith('col_')
                   and any(sdr.materials[p_['material']]['texture'] is not None for p_ in n.mesh['parts'])]
@@ -1254,16 +1254,16 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
         pkx.set_section_joints(s, new)
     log('attachment joints, XD -> ours: ' + ', '.join('%d -> %d %s' % (a, b, m.joints[b].name if b >= 0 else '') for a, b in sorted(table.items())))
     h = bytearray(pkx.header)
-    for r in range(4):               # face records without a PBR eye action to play: off
+    for r in range(4):
         rec = 0x1C + r * 0x13
         if r not in face_kept:
             h[rec] = 0
         elif h[rec] == 2:
-            # A "part" record (wazaSequenceSysPartAnimationStart case 2) names XD's own joints and display objects
-            # (parts[8], tex[8]); ours are numbered differently, and GSpartSetTexAnimIndex walks the material
-            # animation chain of that joint without a null check: a joint without one crashed the game (9 of the
-            # roster: yadon, betbeter ...). Our face slots hold only the eye tracks, so the whole-model kind (case 1,
-            # same slot id) plays the same thing.
+
+
+
+
+
             h[rec] = 1
             h[rec + 1] = 0
             h[rec + 2:rec + 0x12] = b'\xff' * 16
@@ -1278,9 +1278,9 @@ def convert(sdr, xd_pkx, xd_model, step=0.1, log=print, compensate='joint8_under
     return m, pkx
 
 
-MAX_SIDE = 256          # XD's own battle models: no picture side above 256 (Battle Revolution has 512)
-FILE_CAP = 600 * 1024   # XD's largest own battle model is 542 KB; two to four share the battle heap
-MAX_POBJ = 80           # drawing pieces (HSD polygon objects) a model may have; see convert_file
+MAX_SIDE = 256
+FILE_CAP = 600 * 1024
+MAX_POBJ = 80
 
 
 def _po2(n):
@@ -1329,12 +1329,12 @@ def fit_textures(m, classes, log, budget=None):
         bw, bh = gx_tex.TILE.get(im.format, (4, 4))
         w, h = im.width, im.height
         nw, nh = w, h
-        # a side over MAX_SIDE becomes MAX_SIDE (texture coordinates are fractions of the picture, so any size
-        # keeps the placement); halving it until it fit took Smoochum's 528-high eye strip down to 132 and the
-        # eyes came out garbled (2026-11-12)
-        # A strip of frames (Castform's 64 x 768 eyes, Smoochum's 528-high strip) keeps its length when it holds no
-        # more texels than a MAX_SIDE square (GX takes sides up to 1024): squeezed to 256 every eye frame lost two
-        # thirds of its height and the eyes came out blocky (2026-11-12)
+
+
+
+
+
+
         if w * h <= MAX_SIDE * MAX_SIDE and max(w, h) <= 1024:
             pass
         else:
@@ -1346,11 +1346,11 @@ def fit_textures(m, classes, log, budget=None):
             _reencode(im, gx_tex.resize(rgba, nw, nh), nw, nh, classes[i])
     if budget is not None:
         while size() > budget:
-            # the biggest picture that may still be halved (below 128 a Pokemon looks blurred: the cap gives way).
-            # Picking the biggest of ALL and stopping when it was small stopped Sharpedo at 690 KB (2026-11-12)
+
+
             can = [k for k in used if max(m.images[k].width, m.images[k].height) > 128]
             if not can:
-                # then opaque 16- and 32-bit pictures stored as CMPR (4 bits a texel, XD's usual), biggest first
+
                 deep = [k for k in used if m.images[k].format in (4, 5, 6) and classes[k] == 'opa']
                 if not deep:
                     break
@@ -1371,11 +1371,11 @@ def fit_textures(m, classes, log, budget=None):
     return before - after
 
 
-# Species that keep XD's own model: Battle Revolution's model lacks something XD's draws as part of the model
-# (checked in the game, whole-roster sheets 2026-11-12). Keyed by the file name (XD's archive name).
-# Models whose reflection layers are left out (2026-11-12). Ditto: with its reflection (a 32x32 shine on its one
-# skinned body mesh, 64 pieces) the game's picture never comes back from the graphics card (icon renderer: exit 2;
-# no error printed; the same layer placed by coordinates draws). Cause not found yet: build\handoff\pbrconv4.md.
+
+
+
+
+
 def graft_xd_pieces(m, xd, regions, idle_slot, alpha, log, step):
     """XD's own flame pieces put on the PBR body (Ponyta, Rapidash, Moltres, 2026-11-12). PBR draws their flames as
     particle effects the XD game does not have; XD's are see-through meshes with a sliding flame picture. Each such
@@ -1394,7 +1394,7 @@ def graft_xd_pieces(m, xd, regions, idle_slot, alpha, log, step):
     ow = [four(w) for w in pose_at(m, m.animations[idle_slot] if idle_slot < len(m.animations) else None, 0.0)]
     world_static = m.world_static()
     root_inv = mat_inv(world_static[1])
-    # which display object of its joint each XD mesh is (the material animations are listed that way)
+
     dobj, count = [], {}
     for me in xd.meshes:
         dobj.append(count.get(me.joint, 0))
@@ -1433,8 +1433,8 @@ def graft_xd_pieces(m, xd, regions, idle_slot, alpha, log, step):
         return tlut_map[i]
 
     by_name = {j.name: i for i, j in enumerate(m.joints) if j.name}
-    # The PBR body is bigger in the file than XD's (Ponyta 1.48 x, Rapidash 1.43 x: hips, shoulders, withers
-    # measured from the ground): the flames grow with it.
+
+
     hs = [ow[by_name[r[0][0]]][1, 3] / xw[r[1][0]][1, 3] for r in regions if abs(xw[r[1][0]][1, 3]) > 1e-3]
     ratio = float(np.median(hs)) if hs else 1.0
     region_of, places = {}, []
@@ -1443,9 +1443,9 @@ def graft_xd_pieces(m, xd, regions, idle_slot, alpha, log, step):
         x0, y0 = xw[xb[0]][:3, 3], ow[qa][:3, 3]
         rot, qb, u, ln, v_ = np.eye(3), None, None, None, None
         if len(pts) == 2:
-            # a span (the mane): XD's segment from bone a to bone b turned onto the PBR one from joint A to joint B,
-            # each vertex bound to A and B by how far along it lies. PBR's neck stands more upright than XD's:
-            # moved without turning, the mane stood off the neck.
+
+
+
             qb = by_name[pts[1]]
             x1, y1 = xw[xb[1]][:3, 3], ow[qb][:3, 3]
             ln = np.linalg.norm(x1 - x0)
@@ -1487,15 +1487,15 @@ def graft_xd_pieces(m, xd, regions, idle_slot, alpha, log, step):
                 nw = xw[me.joint][:3, :3] @ np.array(v.nrm) if v.nrm else None
                 ws = {me.joint: 1.0}
             else:
-                # weights as fractions of their sum (a Rapidash vertex has 1.0 on two joints at the same place:
-                # summed as they stand it went to twice its height, a spike over the mane)
+
+
                 tw = sum(w for _, w in v.weights) or 1.0
                 world = sum(w / tw * (xw[j] @ four(xd.joints[j].inv_bind) @ p) for j, w in v.weights)
                 nw = sum(w * (xw[j][:3, :3] @ four(xd.joints[j].inv_bind)[:3, :3] @ np.array(v.nrm))
                          for j, w in v.weights) if v.nrm else None
                 ws = {j: w / tw for j, w in v.weights}
-            # the region holding most of the vertex's weight moves it (two regions' moves mixed threw a Rapidash
-            # tail vertex weighted 20 % to the spine 50 units into the air: the mane's turn applied far from the neck)
+
+
             share = {}
             for j, w in ws.items():
                 if j not in region_of:
@@ -1527,7 +1527,7 @@ def graft_xd_pieces(m, xd, regions, idle_slot, alpha, log, step):
         out.tris = list(me.tris)
         m.meshes.append(out)
         mine.append(k)
-    # picture slides: XD's track of the same slot (else the idle one), looped over our slot's length
+
     for slot, an in enumerate(m.animations):
         frames = max(int(round(max([a.end for a in an.joints.values()] or [1.0]))), 1)
         src = xd.animations[slot] if slot < len(xd.animations) else None
@@ -1561,16 +1561,16 @@ def graft_xd_pieces(m, xd, regions, idle_slot, alpha, log, step):
         len(mine), sum(len(xd.meshes[k].verts) for k in picked)))
 
 
-NO_REFLECTION = {}      # (Ditto and Dialga were in here until the piece budget was found; the budget is gone too, 1.2.0)
+NO_REFLECTION = {}
 
 KEEP_XD = {
 }
 
-# PBR's flames are particle effects (node kind 7 attach points), XD's are see-through model pieces: XD's are copied
-# onto the PBR body (graft_xd_pieces)
-# XD flame bones by region: (PBR joint[, PBR joint]), (XD bone[, XD bone]) = the same place on both bodies (hip,
-# shoulder, pelvis; for a span the neck's base and the head), then the XD flame bones that go with it. Read off
-# XD's and PBR's idle poses (bone places and parent chains, 2026-11-12); +x = the Pokemon's left in both.
+
+
+
+
+
 GRAFT_XD = {
     'ponyta': [(('jnt3_1',), (7,), [16, 17, 18]), (('jnt8_1',), (20,), [29, 30, 31]),
                (('jnt4_1',), (5,), [32, 33, 34, 35]),
@@ -1580,8 +1580,8 @@ GRAFT_XD = {
                (('jnt13_1',), (36,), [43, 44]), (('jnt14_1',), (46,), [53, 54]),
                (('jnt11_1',), (4,), [30, 93, 94, 95, 96]),
                (('jnt10_1', 'jnt7_1'), (2, 59), [70, 4, 31, 32, 33, 34, 98, 99, 100, 101, 102])],
-    # Moltres: XD's flames run along each wing's edge (3 bones a side, PBR's wings stand as XD's) and the tail
-    # (PBR has no tail bones: the hips)
+
+
     'fire': [(('WL1j',), (93,), [93]), (('WL2_J',), (94,), [94]), (('WL3_J',), (95,), [95]),
              (('WR1_J',), (110,), [110]), (('WR2_J',), (111,), [111]), (('WR3_J',), (112,), [112]),
              (('KOSIjnt',), (2,), [2, 99, 100, 101, 102, 103, 104, 108])],
@@ -1612,9 +1612,9 @@ def convert_file(sdr_path, xd_path, out, log=print, step=0.1, compensate='joint8
     if xd_full is not None:
         xd_full.graft = GRAFT_XD[name]
     def build(tol_scale, quiet=False):
-        # Skin weights in steps of `step`; a model cut into more than MAX_POBJ drawing pieces (one per 10 weight
-        # combinations) is redone with coarser steps: Snorlax at 114 pieces never came back from the graphics
-        # card, at 51 it draws; 77 pieces were seen working (2026-11-12).
+
+
+
         st = step
         while True:
             model, pkx = convert(sdr, xd_pkx, xd_model, st, (lambda s: None) if quiet else log, compensate, tol_scale, xd_full,
@@ -1639,8 +1639,8 @@ def convert_file(sdr_path, xd_path, out, log=print, step=0.1, compensate='joint8
         return data, report
 
     data, report = build(1.0)
-    # Still over: the animations' keys thinned with wider tolerances (rotations 0.0003 rad -> up to 0.003 rad,
-    # 0.17 degree; moves and scales 0.001 -> 0.01) before the file is let through over the cap.
+
+
     for ts in (3.0, 10.0):
         if not cap or len(data) <= cap:
             break

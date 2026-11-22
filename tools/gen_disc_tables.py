@@ -43,40 +43,40 @@ from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DECOMP_CONFIG = ROOT.parent / "Pokemon-XD-Decomp" / "config" / "GXXE01"  # read only
+DECOMP_CONFIG = ROOT.parent / "Pokemon-XD-Decomp" / "config" / "GXXE01"
 ADDR_TSV = ROOT / "games" / "xd" / "src" / "data" / "disc_table_addresses.tsv"
 MANUAL_TSV = ROOT / "games" / "xd" / "src" / "data" / "disc_table_manual.tsv"
-GENERATOR_VERSION = 2  # 2: the GameCube view of the decomp's PC-only spare rows (pcspare_gc_view.h)
+GENERATOR_VERSION = 2
 
 PC_TARGET = "x86_64-pc-windows-msvc"
-# The GameCube layout: the PC's headers only parse for a Windows target, and 32-bit Windows lays out everything this
-# script accepts as the GameCube's compiler does (4-byte pointers, every number aligned to its size, double and
-# long long to 8). Unions, bit fields, wchar_t and long double, where they could differ, are refused, and every
-# table's GameCube size is checked against the decomp's symbol list (--addresses) and main.dol at start-up.
-GC_TARGET = "i686-pc-windows-msvc"
-# Linux build (docs/LINUX.md): the flags file names the targets itself ("pc_target": "x86_64-pc-linux-gnu",
-# "gc_target": "i686-pc-linux-gnu") and clang reads the game's files as the Linux build compiles them (Linux
-# headers; Microsoft's bit-field layout, -mms-bitfields, as the game code is compiled with there). The GameCube
-# side: 32-bit Linux aligns double and long long to 4 inside structs where the GameCube aligns them to 8, hence
-# -malign-double. Without these keys (the Windows build) nothing changes.
-LINUX_STUBS = ROOT / "tools" / "linux_gc_headers"  # gnu/stubs-32.h for machines without the 32-bit C library
 
-# Files never compiled from the snapshot anyway (games/xd/CMakeLists.txt).
+
+
+
+GC_TARGET = "i686-pc-windows-msvc"
+
+
+
+
+
+LINUX_STUBS = ROOT / "tools" / "linux_gc_headers"
+
+
 SKIPPED = [r"/dsp_import\.c$", r"/GSmovie/THP(Dec|Audio)\.cpp$", r"/GSmemman/memOverride\.cpp$"]
 
-# Leaf kinds (games/xd/src/disc_tables.h).
+
 K_NUM, K_RAW, K_FUNC, K_DATA, K_STR = 0, 1, 2, 3, 4
 
-# Classes the decomp gives GameCube byte order on PC (include/game/gcdata.h): kept as they are.
+
 RAW_RECORD = re.compile(r"^(gc_be|gc_ptr32|gc_u|gc_s|gc_f)")
 
-# Tables that must stay compiled from the decomp's source although main.dol has them: (file, table) -> why.
-# (none at the moment; the verify build, XD_DISC_TABLES_VERIFY, is how one would be found)
+
+
 KEEP_COMPILED = {}
 
-# Tables the decomp defines twice, `#ifdef __MWERKS__` the GameCube's and `#else` a PC copy that keeps the GameCube's
-# BYTES (numbers written byte-swapped so the bytes in memory are the same): from main.dol they are copied as bytes.
-# (file, table) -> why. The verify build checks each against its PC copy.
+
+
+
 GC_BYTES_TABLES = {
     ("game/menuReliveHall.cpp", "relivehallAisyou2ColorTbl"):
         "GSgfxColAu8 colours read byte by byte: the PC copy's u32s are written byte-swapped",
@@ -87,7 +87,7 @@ class GenError(Exception):
     pass
 
 
-# ---------------------------------------------------------------------------------------------------------- clang
+
 LIBCLANG_HELP = ("Building the port needs Python's libclang package (clang reads the decomp's tables for the PC "
                  "build): run  python -m pip install libclang  (the same Python CMake uses), then configure again.")
 
@@ -96,7 +96,7 @@ def cindex():
     try:
         import clang.cindex as ci
         ci.Index.create()
-    except Exception as e:  # (not installed, or its library doesn't load)
+    except Exception as e:
         raise GenError("%s (%s: %s)" % (LIBCLANG_HELP, type(e).__name__, e))
     return ci
 
@@ -110,24 +110,24 @@ def game_files(snapshot):
             continue
         if any(re.search(p, src) for p in SKIPPED):
             continue
-        # (the extra include folder some files get, as games/xd/CMakeLists.txt gives it)
+
         extra = [str(snapshot / i) for i in o.get("includes", []) if re.match(r"^include/(hsd_ref)$", i)]
         out.append((src, "c" if o.get("lang", "c") == "c" else "c++", extra))
     return out
 
 
 def clang_args(flags, lang, target, extra=()):
-    if "linux" in target or "apple" in target:  # (apple: docs/MAC.md, never run)
+    if "linux" in target or "apple" in target:
         args = ["-target", target, "-x", "c" if lang == "c" else "c++",
                 "-std=gnu11" if lang == "c" else "-std=gnu++20", "-fms-extensions", "-mms-bitfields",
                 "-Wno-everything", "-ferror-limit=0"]
-        if lang == "c":  # (MSVC's C has the C++ spelling built in; games/xd/CMakeLists.txt gives Clang the same)
+        if lang == "c":
             args += ["-Dstatic_assert=_Static_assert"]
         if target.startswith(("i686", "i386")):
-            # (hsd_ref's platform.h declares uintptr_t as `unsigned long` unless this is set: right for 64-bit Linux,
-            #  a clash with the C library's 32-bit one, which is read first instead)
+
+
             args += ["-malign-double", "-isystem", str(LINUX_STUBS), "-D_UINTPTR_T_DEFINED", "-include", "stdint.h"]
-            # (the 64-bit C library's own folder, e.g. /usr/include/x86_64-linux-gnu: its headers serve both sizes)
+
             for i in flags.get("gc_system_includes", []):
                 args += ["-isystem", i]
     else:
@@ -137,17 +137,17 @@ def clang_args(flags, lang, target, extra=()):
         args += ["-fms-compatibility-version=19.44"]
     for d in flags["defines"]:
         args.append("-D" + d)
-    # ("first_includes": Linux only, the folder whose sys/types.h passes on the system's own; games/xd/CMakeLists.txt)
+
     for i in flags.get("first_includes", []) + list(extra) + flags["includes"]:
         args += ["-I", i]
     for f in flags["force_includes"]:
         args += ["-include", f]
     if target.startswith(("i686", "i386")):
-        # The GameCube layout of tables with PC-only spare rows (the decomp's game/pcspare.h, 2026-11-12): the
-        # original row count, as main.dol has them. After the game's own forced includes (which may pull it in).
+
+
         args += ["-include", str(LINUX_STUBS / "pcspare_gc_view.h")]
-    # The PC's C library headers (Visual Studio's). Both targets use them: the decomp's code is compiled against
-    # them on PC, and only the layouts of the game's own types matter here.
+
+
     for i in flags.get("system_includes") or ([] if ("linux" in target or "apple" in target) else os.environ.get("INCLUDE", "").split(";")):
         if i:
             args += ["-isystem", i]
@@ -223,7 +223,7 @@ def errors_of(tu):
     return [str(d) for d in tu.diagnostics if d.severity >= ci.Diagnostic.Error]
 
 
-# --------------------------------------------------------------------------------------------------------- survey
+
 def survey_one(args):
     src, lang, extra, path, flags = args
     tu = parse(path, flags, lang, flags.get("pc_target", PC_TARGET), extra)
@@ -239,7 +239,7 @@ def survey(snapshot, flags, jobs):
         return list(ex.map(survey_one, work))
 
 
-# --------------------------------------------------------------------------------------------------------- layout
+
 def field_list(record_type):
     """The record's fields (through the type, so template instances like PocketVec<short> have theirs too)."""
     return list(record_type.get_fields())
@@ -279,8 +279,8 @@ def layout(pc_t, gc_t, pc_off, gc_off, leaves, where):
             leaves.append([K_RAW, pc_t.get_size(), gc_off, pc_off, 1])
             return
         if decl.kind == ci.CursorKind.UNION_DECL:
-            # An initialiser fills a union through its first member (C and C++), so main.dol's bytes are that
-            # member's; the rest of a larger union is zero, as the compiler makes it.
+
+
             pf, gf = field_list(pc_t), field_list(gc_t)
             if not pf or not gf or pf[0].spelling != gf[0].spelling:
                 raise GenError("%s: union without a first member (%s)" % (where, pc_t.spelling))
@@ -293,11 +293,11 @@ def layout(pc_t, gc_t, pc_off, gc_off, leaves, where):
             raise GenError("%s: %s has a base class" % (where, pc_t.spelling))
         if [f.spelling for f in pf] != [f.spelling for f in gf]:
             raise GenError("%s: fields differ between PC and GameCube (%s)" % (where, pc_t.spelling))
-        units = {}  # bit-field storage units: offset -> [size, bits used]
+        units = {}
         for p, g in zip(pf, gf):
             if p.is_bitfield():
-                # The decomp declares game-data bit fields with GC_BITSn (include/game/bitfield.h): on PC each
-                # name keeps the same bits of its storage unit's VALUE, so the unit is converted as one number.
+
+
                 usize = p.type.get_canonical().get_size()
                 po, go = p.get_field_offsetof(), g.get_field_offsetof()
                 pu, gu = (po // (8 * usize)) * usize, (go // (8 * usize)) * usize
@@ -328,9 +328,9 @@ def layout(pc_t, gc_t, pc_off, gc_off, leaves, where):
     size = pc_t.get_size()
     if size == 8 and gc_t.get_size() == 4 and k in (ci.TypeKind.ULONGLONG, ci.TypeKind.LONGLONG,
                                                     ci.TypeKind.ULONG, ci.TypeKind.LONG):
-        # A pointer-sized number (the decomp's GCuptr: u32 on the GameCube, uintptr_t on PC): an address or a number,
-        # converted as a pointer field is (a GameCube address -> the PC object, a small number stays a number).
-        # (ULONG/LONG: uintptr_t on 64-bit Linux is `unsigned long`; on Windows `long` is 4 bytes and never gets here)
+
+
+
         leaves.append([K_DATA, 4, gc_off, pc_off, 1])
         return
     if size != gc_t.get_size() or size not in (1, 2, 4, 8):
@@ -350,7 +350,7 @@ def compress(leaves):
                 out[-1][4] += n
                 continue
         out.append([kind, size, go, po, n])
-    # Single bytes need no conversion: a whole run of them, in the same place on both sides, is one raw copy.
+
     return out
 
 
@@ -360,8 +360,8 @@ def var_layout(pc_var, gc_var):
     pc_t, gc_t = pc_var.type.get_canonical(), gc_var.type.get_canonical()
     if pc_t.kind == ci.TypeKind.CONSTANTARRAY:
         n = pc_t.get_array_size()
-        # (a table with PC-only spare rows: the PC copy is longer than main.dol's; only the GameCube rows are filled,
-        # the spare ones stay zero)
+
+
         if gc_t.kind == ci.TypeKind.CONSTANTARRAY and gc_t.get_array_size() < n:
             n = gc_t.get_array_size()
         pe, ge = pc_t.get_array_element_type(), gc_t.get_array_element_type()
@@ -373,7 +373,7 @@ def var_layout(pc_var, gc_var):
     return 1, pc_t.get_size(), gc_t.get_size(), compress(leaves)
 
 
-# ------------------------------------------------------------------------------------------------------- references
+
 def references(var):
     """Functions and variables the initialiser of `var` names: [(name, cursor of the declaration)]."""
     ci = cindex()
@@ -397,9 +397,9 @@ def is_c_linkage(decl):
         return False
 
 
-# ------------------------------------------------------------------------------------------------------- one file
-# clang errors that don't change the layout of any table (the PC's compiler is the judge of the code; the layouts
-# are checked against MSVC's sizes, the decomp's symbol list and, in the verify build, the compiled tables).
+
+
+
 BENIGN_ERRORS = ("static assertion expression is not an integral constant expression",
                  "cannot combine with previous 'extern' declaration specifier", "conflicting types for",
                  "has a different language linkage", "must return 'int'",
@@ -568,10 +568,10 @@ def _reads(expr):
 
     def walk(c, under_addr):
         k = c.kind
-        if k == ci.CursorKind.CXX_UNARY_EXPR:  # (sizeof / alignof, C and C++)
+        if k == ci.CursorKind.CXX_UNARY_EXPR:
             toks = [t.spelling for t in c.get_tokens()]
             if toks and toks[0] in ("sizeof", "alignof", "_Alignof", "__alignof"):
-                return False  # (not evaluated)
+                return False
         if k == ci.CursorKind.UNARY_OPERATOR:
             toks = [t.spelling for t in c.get_tokens()]
             if toks and toks[0] == "&":
@@ -581,7 +581,7 @@ def _reads(expr):
         if k == ci.CursorKind.MEMBER_REF_EXPR and not under_addr:
             if c.type.get_canonical().kind != ci.TypeKind.CONSTANTARRAY:
                 return True
-            return any(walk(ch, True) for ch in c.get_children())  # (an array member: its address)
+            return any(walk(ch, True) for ch in c.get_children())
         if k == ci.CursorKind.DECL_REF_EXPR:
             d = c.referenced
             if d is not None and d.kind == ci.CursorKind.VAR_DECL and not under_addr:
@@ -589,7 +589,7 @@ def _reads(expr):
                 if t.kind not in (ci.TypeKind.CONSTANTARRAY, ci.TypeKind.INCOMPLETEARRAY):
                     return True
             return False
-        # (inside &x[i] / &s.f the address is still a constant)
+
         keep = under_addr and k in (ci.CursorKind.ARRAY_SUBSCRIPT_EXPR, ci.CursorKind.MEMBER_REF_EXPR,
                                     ci.CursorKind.PAREN_EXPR, ci.CursorKind.UNEXPOSED_EXPR)
         return any(walk(ch, keep) for ch in c.get_children())
@@ -620,11 +620,11 @@ def qualified_name(c):
         elif p.kind in (ci.CursorKind.STRUCT_DECL, ci.CursorKind.CLASS_DECL):
             if not p.spelling:
                 return None
-            # (a static member: Class::member, with a template's arguments; the compiler says if it isn't public)
+
             ts = p.type.spelling if p.type is not None and p.type.spelling else p.spelling
             cut = ts.find("<")
             head = ts if cut < 0 else ts[:cut]
-            parts.insert(0, ts[head.rfind("::") + 2:] if "::" in head else ts)  # (namespaces: added by the loop)
+            parts.insert(0, ts[head.rfind("::") + 2:] if "::" in head else ts)
         elif p.kind != ci.CursorKind.LINKAGE_SPEC:
             return None
         p = p.semantic_parent
@@ -642,8 +642,8 @@ def analyse_file(args):
     data_only = pc_funcs == 0
     errs = errors_of(pc_tu)
     fatal = [e for e in errs if not any(b in e for b in BENIGN_ERRORS)]
-    # A file clang could not read (a header not found) may show no table at all: it is listed as unread instead of
-    # passing as "no tables", so main() can stop (2026-11-10; Windows and Linux have no such file).
+
+
     header_missing = [e for e in fatal if "file not found" in e]
     if data_only and not pc_vars:
         if header_missing:
@@ -660,8 +660,8 @@ def analyse_file(args):
         return {"src": src, "kept_file": "clang can't read it for the PC: " + (fatal or errs)[0]}
     gc_tu = parse(path, flags, lang, flags.get("gc_target", GC_TARGET), extra)
     gerrs = errors_of(gc_tu)
-    # (the GameCube reading also trips the headers' checks of PC sizes: `static_assert(sizeof(X) == <PC size>)`,
-    # or the negative-array-size form of it)
+
+
     gfatal = [e for e in gerrs if not any(b in e for b in BENIGN_ERRORS + (
         "static assertion failed", "array size is negative", "declared as an array with a negative size"))]
     if gfatal or (data_only and gerrs):
@@ -676,7 +676,7 @@ def analyse_file(args):
 
     data = path.read_bytes()
     cond_inside, cond_directive = conditional_lines(data)
-    # variables declared more than once in the file (a header's `extern` declaration and the definition)
+
     decl_count = {}
     for c in pc_tu.cursor.walk_preorder():
         if c.kind == ci.CursorKind.VAR_DECL:
@@ -695,7 +695,7 @@ def analyse_file(args):
     for func, pv, gv in candidates:
         label = pv.spelling if func is None else "%s::%s" % (func.spelling, pv.spelling)
         seen_labels[label] = seen_labels.get(label, 0) + 1
-        if seen_labels[label] > 1:  # (overloads, or two blocks of one function, with a table of the same name)
+        if seen_labels[label] > 1:
             label += "#%d" % seen_labels[label]
         try:
             tok = init_token(pv)
@@ -713,8 +713,8 @@ def analyse_file(args):
                 raise GenError("its initialiser runs code")
             fixups = []
             if reads_variable(pv):
-                # CodeWarrior fills those fields at start-up (__sinit) from other variables, so main.dol has 0
-                # there: the port does the same after filling the table (each field and where its value is read).
+
+
                 fixups = init_fixups(pv)
             count, pc_stride, gc_stride, leaves = var_layout(pv, gv)
             if gc_bytes:
@@ -737,20 +737,20 @@ def analyse_file(args):
             if func is None:
                 if reg_name is None:
                     raise GenError("a class member")
-                # Linux (Clang): `template <> T C<X>::member;` without an initialiser only DECLARES the member
-                # (Microsoft's compiler takes it as the definition), so there it keeps an empty one (zero).
+
+
                 spec_member = ("linux" in flags.get("pc_target", PC_TARGET) or "apple" in flags.get("pc_target", PC_TARGET)) and lang != "c" and \
                     (re.search(rb"template\s*<\s*>\s*$", data[:ext.start.offset]) is not None or
                      re.match(rb"template\s*<\s*>", data[ext.start.offset:ext.end.offset]) is not None)
                 if data_only:
-                    # No code in the file can read the empty table, so it may stay const. (C++ wants `= {}` on a
-                    # const object; C doesn't, and `{}` is C23.)
+
+
                     edits.append((tok.extent.start.offset, ext.end.offset,
                                   b" = {}" if (is_const or spec_member) and lang != "c" else b""))
                 else:
                     if is_const:
-                        # The file's own code could read a const table at compile time (all zero once empty): it
-                        # becomes a plain variable, which only the start-up filling writes.
+
+
                         if decl_count.get(pv.get_usr(), 0) > 1:
                             raise GenError("const and declared elsewhere too (a header): needs GC_CONST in the decomp")
                         if starts.get(ext.start.offset, 0) > 1:
@@ -760,12 +760,12 @@ def analyse_file(args):
                             raise GenError("const through a typedef")
                         for a, b in ranges:
                             edits.append((a, b, b""))
-                        # (C++: a namespace-scope const has internal linkage unless extern / extern "C"; without
-                        # its const it would become external, so it gets `static`)
+
+
                         if lang != "c" and not is_static and pv.linkage == ci.LinkageKind.INTERNAL:
-                            edits.append((ext.start.offset, ext.start.offset, b"static "))  # (const meant internal)
-                    # `extern "C" T x = {...};` (no braces) or `extern T x = {...};` is a definition only through
-                    # its initialiser: it keeps an empty one (zero; the table isn't const, so nothing is folded).
+                            edits.append((ext.start.offset, ext.start.offset, b"static "))
+
+
                     lp = pv.lexical_parent
                     single_spec = lp is not None and lp.kind == ci.CursorKind.LINKAGE_SPEC and \
                         [t.spelling for t in list(lp.get_tokens())[:3]][2:3] != ["{"]
@@ -778,9 +778,9 @@ def analyse_file(args):
                 if empty_bracket is not None:
                     edits.append((empty_bracket, empty_bracket, str(outer).encode()))
             else:
-                # A static table inside a function moves to file scope, right before the function, under a name
-                # of its own; inside the function, a macro gives the old name that variable (#undef after it).
-                # (where the function's text is: at file scope or in namespaces, not inside a class body)
+
+
+
                 ns = []
                 lp = func.lexical_parent
                 while lp is not None and lp.kind != ci.CursorKind.TRANSLATION_UNIT:
@@ -792,10 +792,10 @@ def analyse_file(args):
                     lp = lp.lexical_parent
                 base = _array_base(pc_t)
                 bd = base.get_declaration()
-                # (a type declared inside the function can't be named at file scope, unless it is written in this
-                # very declaration, `static struct {...} x[] = ...`, and so moves along with it)
-                # (clang then starts the variable at its name: the declaration starts at the `static` before the
-                # struct)
+
+
+
+
                 decl_start = ext.start.offset
                 inline_type = False
                 if bd is not None and same_file(bd.extent.start.file, path) and \
@@ -809,8 +809,8 @@ def analyse_file(args):
                     raise GenError("its type is declared inside the function")
                 if not same_file(func.extent.start.file, path):
                     raise GenError("the function comes from a macro")
-                # Every use of the variable in the function (clang's references to this very declaration, so a member
-                # or another variable of the same name is left alone) is renamed to the moved table.
+
+
                 uses = []
                 for c in func.walk_preorder():
                     if c.kind == ci.CursorKind.DECL_REF_EXPR and c.referenced is not None and c.referenced == pv:
@@ -844,16 +844,16 @@ def analyse_file(args):
                         raise GenError("const, with its type written in the declaration")
                     hoisted = b"static " + data[bd.extent.start.offset:ext.start.offset] + hoisted[len(b"static "):]
                 fstart = func.extent.start.offset
-                # (`extern "C" void f() {...}` without braces: before the `extern "C"`, which belongs to f)
+
                 lp = func.lexical_parent
                 if lp is not None and lp.kind == ci.CursorKind.LINKAGE_SPEC:
                     lt = [t.spelling for t in list(lp.get_tokens())[:3]]
                     if len(lt) < 3 or lt[2] != "{":
                         fstart = lp.extent.start.offset
                 renames = [(a, a + len(pv.spelling), local_name.encode()) for a in sorted(set(uses))]
-                gone = (decl_start, ext.end.offset, b"")  # (the `;` stays: an empty statement)
+                gone = (decl_start, ext.end.offset, b"")
                 edits += [(fstart, fstart, hoisted), gone] + renames
-                # (the verify build: the same move with the initialiser kept)
+
                 no = toks[name_at].extent.start.offset
                 whole = data[decl_start:no] + local_name.encode() + data[no + len(pv.spelling):ext.end.offset]
                 verify_edits = [(fstart, fstart, whole + b";\n"), gone] + renames
@@ -868,13 +868,13 @@ def analyse_file(args):
             for name, d in references(pv).items():
                 refs.setdefault(name, {"kind": "func" if d.kind == ci.CursorKind.FUNCTION_DECL else "var",
                                        "c_linkage": is_c_linkage(d),
-                                       # (declared without a size, e.g. `extern u8 x[];`: pointers to its start only)
+
                                        "sized": d.kind != ci.CursorKind.VAR_DECL or d.type.get_size() > 0})
         except GenError as e:
             kept.append({"label": label, "reason": str(e), "pc_size": pv.type.get_size(), "line": pv.location.line,
                          "gc_size": gv.type.get_size()})
-    # (a pointer to another table of this file goes through that table; one to a kept table, as to any other
-    # variable, through its address in the list)
+
+
     own = {t["sym"] for t in tables if not t["local"]}
     refs = {k: v for k, v in refs.items() if k not in own}
     return {"src": src, "lang": lang, "extra": extra, "data_only": data_only, "tables": tables, "kept": kept,
@@ -883,7 +883,7 @@ def analyse_file(args):
 
 def is_const_object(t):
     """Is the object itself const (`const T x[]`, `T* const x`), not just what it points to?"""
-    # (clang puts an array's const on the canonical array type: `const unsigned int[5]` is const-qualified)
+
     return t.is_const_qualified() or t.get_canonical().is_const_qualified()
 
 
@@ -901,11 +901,11 @@ def analyse_all(snapshot, flags, jobs):
         with ProcessPoolExecutor(jobs) as ex:
             res = list(ex.map(analyse_file, work))
     except BrokenProcessPool:
-        # (a worker can die when the PC is short of memory, e.g. while a build runs: then one at a time)
+
         print("gen_disc_tables: worker processes failed; reading the files one at a time", file=sys.stderr)
         res = [analyse_file(w) for w in work]
     res = [r for r in res if not r.get("skip")]
-    # A reference to another file's table is found through that table (converted too), not as a reference.
+
     tables = {t["sym"] for r in res if "tables" in r for t in r["tables"] if not t["static"]}
     for r in res:
         if "tables" in r:
@@ -913,7 +913,7 @@ def analyse_all(snapshot, flags, jobs):
     return res
 
 
-# ------------------------------------------------------------------------------------------------------- addresses
+
 def read_decomp_symbols():
     """symbols.txt and splits.txt of the decomp (read only) -> (symbols [(name, section, addr, size, scope, type)],
     file ranges {src: [(start, end)]})."""
@@ -948,7 +948,7 @@ def name_matches(sym, name, local=False):
 
 
 def size_fits(gc_size, sym_size):
-    # (a few symbols are a word longer than their table: the padding up to the next 8-byte-aligned one)
+
     return gc_size <= sym_size < gc_size + 8
 
 
@@ -973,10 +973,10 @@ def write_addresses(results):
             continue
         rng = ranges.get(r["src"], [])
         in_file = [s for s in syms if any(a <= s[2] < b for a, b in rng)]
-        # static locals of the same name in one file: paired in the order of the source and of their addresses
+
         local_seen = {}
         for t in r["tables"]:
-            # the decompilation's own placements first (games/xd/src/data/disc_table_manual.tsv)
+
             base, _, nth = t["label"].partition("#")
             placed = manual.get((r["src"], base), [])
             k = int(nth) - 1 if nth else 0
@@ -992,9 +992,9 @@ def write_addresses(results):
                     local_seen[t["sym"]] = local_seen.get(t["sym"], 0) + 1
                 continue
             if t["local"]:
-                # CodeWarrior numbers a file's static locals in source order (`name$<n>`): the k-th table of that
-                # name in the source is the k-th by number, if the counts and every size agree (the verify build
-                # checks the values).
+
+
+
                 def dollar(sym):
                     m = re.search(r"\$(\d+)$", sym[0])
                     return int(m.group(1)) if m else -1
@@ -1009,7 +1009,7 @@ def write_addresses(results):
                 cands = [cands[k]] if cands else []
             else:
                 cands = [s for s in in_file if name_matches(s[0], t["sym"])]
-                if not cands:  # (a static local on the GameCube that the decomp writes at file scope: `name$<n>`)
+                if not cands:
                     cands = [s for s in in_file if name_matches(s[0], t["sym"], True)]
             if len(cands) != 1:
                 if not cands:
@@ -1019,7 +1019,7 @@ def write_addresses(results):
                 continue
             s = cands[0]
             if not size_fits(t["gc_size"], s[3]):
-                # The decomp's table isn't the game's yet (another size): it stays compiled until the decomp fixes it.
+
                 lines.append("differs\t%s\t%s\t0x%08X\t0x%X" % (r["src"], t["label"], s[2], s[3]))
                 continue
             if s[1] in (".bss", ".sbss"):
@@ -1032,7 +1032,7 @@ def write_addresses(results):
         want_type = "function" if info["kind"] == "func" else "object"
         cands = [s for s in syms if s[5] == want_type and s[4] != "local" and
                  (s[0] == name if info["c_linkage"] else name_matches(s[0], name))]
-        if not cands:  # (a static function or variable of the same file)
+        if not cands:
             cands = [s for s in info["in_file"] if s[5] == want_type and name_matches(s[0], name)]
         if len(cands) != 1:
             problems.append("reference %s (%s): %d symbols" % (name, info["src"], len(cands)))
@@ -1057,7 +1057,7 @@ def read_addresses():
     return tables, refs
 
 
-# ------------------------------------------------------------------------------------------------------- generate
+
 def c_string(s):
     return '"' + s.replace("\\", "/").replace('"', '\\"') + '"'
 
@@ -1066,8 +1066,8 @@ def stripped_source(path, tables, verify):
     """The file's bytes with each table's initialiser removed (the edits analyse_file worked out)."""
     data = path.read_bytes()
     if verify:
-        # The verify build keeps the initialisers; static tables in functions still move to file scope, so the
-        # start-up check can reach them (the move alone, with the initialiser kept, changes nothing).
+
+
         edits = []
         for t in tables:
             if t["local"]:
@@ -1117,8 +1117,8 @@ def generate(snapshot, flags, out_dir, verify, jobs):
         for name in r["refs"]:
             if name not in refs_addr:
                 missing.append("reference %s (%s)" % (name, r["src"]))
-        # The copies keep the snapshot's paths (src/game/...), so the build's per-file settings, chosen by path in
-        # games/xd/CMakeLists.txt, apply to them as to the original.
+
+
         stripped = out_dir / "stripped" / r["src"]
         wrapper = out_dir / "src" / r["src"]
         stripped.parent.mkdir(parents=True, exist_ok=True)
@@ -1134,20 +1134,20 @@ def generate(snapshot, flags, out_dir, verify, jobs):
     write_if_changed(out_dir / "disc_tables_list.c", list_source(files, verify).encode("utf-8"))
     live_tables = [(r, t) for r in results if "tables" in r for t in r["tables"]]
     manifest = {"version": GENERATOR_VERSION, "verify": verify, "files": files,
-                # (for tools/scan_exe_tables.py: each table's place in main.dol and layout)
+
                 "tables": [{"src": r["src"], "name": t["label"], "gc_address": t["gc_address"],
                             "gc_size": t["gc_size"], "pc_size": t["pc_size"], "count": t["count"],
                             "gc_stride": t["gc_stride"], "pc_stride": t["pc_stride"], "leaves": t["leaves"],
                             "data_only": r["data_only"]} for r, t in live_tables],
                 "kept": kept}
     write_if_changed(out_dir / "manifest.json", json.dumps(manifest, indent=1).encode("utf-8"))
-    # For CMake: the snapshot's files replaced by the generated ones, and those, with their settings.
+
     cm = ["set(XD_DISC_TABLE_SOURCES"] + ['  "%s"' % f["src"] for f in files] + [")", "set(XD_DISC_TABLE_WRAPPERS"]
     cm += ['  "%s"' % f["wrapper"] for f in files] + [")"]
     for f in files:
         cm.append('set_source_files_properties("%s" PROPERTIES LANGUAGE %s INCLUDE_DIRECTORIES "%s")' % (
             f["wrapper"], "C" if f["lang"] == "c" else "CXX",
-            ";".join(flags.get("first_includes", []) + f["includes"])))  # ("first_includes": Linux only)
+            ";".join(flags.get("first_includes", []) + f["includes"])))
     cm.append("set(XD_DISC_TABLES_KEPT %d)" % len(kept))
     write_if_changed(out_dir / "files.cmake", ("\n".join(cm) + "\n").encode("utf-8"))
     return results, kept
@@ -1219,7 +1219,7 @@ def list_source(files, verify):
     return "\n".join(lines) + "\n"
 
 
-# ------------------------------------------------------------------------------------------------------- report
+
 def report(results):
     """Markdown for COMPILED_DATA.md: per file, what comes from main.dol and what is still compiled in."""
     tables_addr, _ = read_addresses()
@@ -1296,11 +1296,11 @@ def main():
         if not args.out:
             ap.error("--out, --addresses, --report or --survey")
         results, kept = generate(snapshot, flags, Path(args.out), args.verify, args.jobs)
-        # A file clang cannot read keeps its tables compiled in, so the program would hold the game's data: that
-        # stops the build instead of passing with a count nobody reads (found 2026-11-10 by running the Apple
-        # targets without Apple's headers: "0 tables taken from main.dol", exit 0). Windows and Linux have no such
-        # file. XD_DISC_TABLES_ALLOW_UNREAD=1 goes on anyway (to see how far a new platform's build gets; never
-        # for a build that is given to anyone).
+
+
+
+
+
         unread = ["%s: %s" % (k["src"], k["reason"]) for k in kept if k["reason"].startswith("clang can't read it")]
         if unread:
             print("gen_disc_tables: clang could not read %d game file(s) with these targets and header folders "
@@ -1311,8 +1311,8 @@ def main():
                 print("  " + u, file=sys.stderr)
             if len(unread) > 40:
                 print("  ... and %d more" % (len(unread) - 40), file=sys.stderr)
-            # The first of them in full: every error clang gives and the files it read on the way there (a new
-            # system's first build: the one line above is rarely enough to see the cause).
+
+
             try:
                 first = next(k["src"] for k in kept if k["reason"].startswith("clang can't read it"))
                 for src, lang, extra in game_files(snapshot):
@@ -1327,7 +1327,7 @@ def main():
                     firsts = [str(Path(f)).replace("\\", "/") for f in flags.get("first_includes", [])]
                     at = next((i for i, inc in enumerate(incs)
                                if any(inc.include.name.replace("\\", "/").startswith(f) for f in firsts)), 0)
-                    for inc in incs[max(0, at - 15):at + 60]:  # (around the pass-on header, where the 16 files part)
+                    for inc in incs[max(0, at - 15):at + 60]:
                         print("    %d %s  <- %s:%d" % (inc.depth, inc.include.name, inc.location.file.name if
                               inc.location.file else "?", inc.location.line), file=sys.stderr)
                 for folder in flags.get("first_includes", []):
@@ -1338,7 +1338,7 @@ def main():
                         for m in re.finditer(r'#include "([^"]+)"', text):
                             print("  %s: %s" % (m.group(1), "is there" if os.path.isfile(m.group(1)) else "NOT THERE"),
                                   file=sys.stderr)
-            except Exception as e:  # (diagnosis only: never the reason a build stops)
+            except Exception as e:
                 print("  (details not available: %s)" % e, file=sys.stderr)
             if os.environ.get("XD_DISC_TABLES_ALLOW_UNREAD") != "1":
                 print("Their tables would stay compiled into the program (the game's data inside it), so this is an "

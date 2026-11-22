@@ -13,8 +13,8 @@ The library's file name per system is LIB_NAME: nod.dll (Windows), libnod.so (Li
 """
 import ctypes, hashlib, os, struct, sys
 
-# WHY a per-system name: the Linux and Mac packages ship libnod.so / libnod.dylib (what Aurora's nod package
-# builds there), not nod.dll; pbr_models looks for LIB_NAME next to itself.
+
+
 LIB_NAME = 'nod.dll' if sys.platform == 'win32' else 'libnod.dylib' if sys.platform == 'darwin' else 'libnod.so'
 DEFAULT_DLL = LIB_NAME if sys.platform == 'win32' else LIB_NAME
 
@@ -71,7 +71,7 @@ class Disc:
         self.boot = self.meta.boot.bytes()
         self.game_id = self.boot[:6].decode('latin1')
         self.is_wii = bool(n.nod_partition_is_wii(self.part))
-        self.files = {}   # path -> (fst index, size)
+        self.files = {}
         fst = self.meta.fst.bytes()
         count = be32(fst, 8)
         names = fst[count * 12:]

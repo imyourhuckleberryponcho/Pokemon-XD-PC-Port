@@ -1,0 +1,432 @@
+{
+ "_note": "Forms the builder makes: national number, form number of the dump's own list, kind. Numbers only.",
+ "stone_copy": "Moon Stone",
+ "forms": [
+  {
+   "nat": 19,
+   "form": 1,
+   "kind": "alola"
+  },
+  {
+   "nat": 20,
+   "form": 1,
+   "kind": "alola"
+  },
+  {
+   "nat": 26,
+   "form": 1,
+   "kind": "alola"
+  },
+  {
+   "nat": 27,
+   "form": 1,
+   "kind": "alola"
+  },
+  {
+   "nat": 28,
+   "form": 1,
+   "kind": "alola"
+  },
+  {
+   "nat": 37,
+   "form": 1,
+   "kind": "alola"
+  },
+  {
+   "nat": 38,
+   "form": 1,
+   "kind": "alola"
+  },
+  {
+   "nat": 50,
+   "form": 1,
+   "kind": "alola"
+  },
+  {
+   "nat": 51,
+   "form": 1,
+   "kind": "alola"
+  },
+  {
+   "nat": 52,
+   "form": 1,
+   "kind": "alola"
+  },
+  {
+   "nat": 53,
+   "form": 1,
+   "kind": "alola"
+  },
+  {
+   "nat": 74,
+   "form": 1,
+   "kind": "alola"
+  },
+  {
+   "nat": 75,
+   "form": 1,
+   "kind": "alola"
+  },
+  {
+   "nat": 76,
+   "form": 1,
+   "kind": "alola"
+  },
+  {
+   "nat": 88,
+   "form": 1,
+   "kind": "alola"
+  },
+  {
+   "nat": 89,
+   "form": 1,
+   "kind": "alola"
+  },
+  {
+   "nat": 103,
+   "form": 1,
+   "kind": "alola"
+  },
+  {
+   "nat": 105,
+   "form": 1,
+   "kind": "alola"
+  },
+  {
+   "nat": 3,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 6,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 6,
+   "form": 2,
+   "kind": "mega"
+  },
+  {
+   "nat": 9,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 15,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 18,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 65,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 80,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 94,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 115,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 127,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 130,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 142,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 150,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 150,
+   "form": 2,
+   "kind": "mega"
+  },
+  {
+   "nat": 181,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 208,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 212,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 214,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 229,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 248,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 254,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 257,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 260,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 282,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 302,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 303,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 306,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 308,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 310,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 319,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 323,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 334,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 354,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 359,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 362,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 373,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 376,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 380,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 381,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 428,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 445,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 448,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 460,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 475,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 531,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 719,
+   "form": 1,
+   "kind": "mega"
+  },
+  {
+   "nat": 382,
+   "form": 1,
+   "kind": "primal"
+  },
+  {
+   "nat": 383,
+   "form": 1,
+   "kind": "primal"
+  },
+  {
+   "nat": 479,
+   "form": 1,
+   "kind": "alt",
+   "label": "Heat",
+   "model": "12"
+  },
+  {
+   "nat": 479,
+   "form": 2,
+   "kind": "alt",
+   "label": "Wash",
+   "model": "13"
+  },
+  {
+   "nat": 479,
+   "form": 3,
+   "kind": "alt",
+   "label": "Frost",
+   "model": "14"
+  },
+  {
+   "nat": 479,
+   "form": 4,
+   "kind": "alt",
+   "label": "Fan",
+   "model": "15"
+  },
+  {
+   "nat": 479,
+   "form": 5,
+   "kind": "alt",
+   "label": "Mow",
+   "model": "16"
+  },
+  {
+   "nat": 555,
+   "form": 1,
+   "kind": "battle",
+   "label": "Zen",
+   "model": "12",
+   "tag": "Zen Mode"
+  },
+  {
+   "nat": 648,
+   "form": 1,
+   "kind": "battle",
+   "label": "Pirouette",
+   "model": "12",
+   "tag": "Pirouette Forme"
+  },
+  {
+   "nat": 746,
+   "form": 1,
+   "kind": "battle",
+   "label": "School",
+   "model": "12",
+   "tag": "School Form"
+  },
+  {
+   "nat": 681,
+   "form": 1,
+   "kind": "battle",
+   "label": "Blade",
+   "model": "none",
+   "tag": "Blade Forme"
+  },
+  {
+   "nat": 774,
+   "form": 7,
+   "kind": "battle",
+   "label": "Core",
+   "model": "none",
+   "tag": "Core"
+  },
+  {
+   "nat": 778,
+   "form": 1,
+   "kind": "battle",
+   "label": "Busted",
+   "model": "none",
+   "tag": "Busted Form"
+  },
+  {
+   "nat": 658,
+   "form": 2,
+   "kind": "battle",
+   "label": "Ash",
+   "model": "13",
+   "tag": "Ash"
+  }
+ ]
+}

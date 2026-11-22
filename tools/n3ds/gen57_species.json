@@ -1,0 +1,13 @@
+{
+ "_note": "SUPERSEDED for the full pack by gen57_all.py, which builds ALL Gen 5-7 base species 494..807 (314: including Audino, Diancie, Lycanroc, Oricorio, Wishiwashi, Minior, Mimikyu, Aegislash, Zygarde) without a list: species row = national number + 26, model row = + 31, so the form rows and Megas can name any base species. This list drives only the old five-species gen57_pack.py (phase 1/2 tests).",
+ "species": [
+  {"nat": 506, "standin": 228},
+  {"nat": 507, "standin": 228},
+  {"nat": 508, "standin": 59},
+  {"nat": 498, "standin": 77},
+  {"nat": 626, "standin": 128}
+ ],
+ "moves": [
+  {"usum": 488, "donor": "SCRATCH", "why": "Flame Charge: plain hit until the hook exists"}
+ ]
+}

@@ -1,0 +1,623 @@
+move_name	Magnet Bomb	Bomba Imán	Bombe Aimant	Magnetbombe	Bombagnete	マグネットボム
+move_name	Iron Head	Cabeza de Hierro	Tête de Fer	Eisenschädel	Metaltestata	アイアンヘッド
+move_name	Mirror Shot	Disparo Espejo	Miroi-Tir	Spiegelsalve	Cristalcolpo	ミラーショット
+move_name	Flash Cannon	Cañón Resplandor	Luminocanon	Lichtkanone	Cannonflash	ラスターカノン
+move_name	Gyro Ball	Giro Bola	Gyroballe	Gyroball	Vortexpalla	ジャイロボール
+move_name	Bullet Punch	Puño Bala	Pisto-Poing	Patronenhieb	Pugnoscarica	バレットパンチ
+move_name	Metal Burst	Represión Metal	Fulmifer	Metallstoß	Metalscoppio	メタルバースト
+move_name	Aqua Ring	Acua Aro	Anneau Hydro	Wasserring	Acquanello	アクアリング
+move_name	Aqua Tail	Acua Cola	Hydro-Queue	Nassschweif	Idrondata	アクアテール
+move_name	Aqua Jet	Acua Jet	Aqua-Jet	Wasserdüse	Acquagetto	アクアジェット
+move_name	Brine	Salmuera	Saumure	Lake	Acquadisale	しおみず
+move_name	Defend Order	A Defender	Appel Défense	Blockbefehl	Comandoscudo	ぼうぎょしれい
+move_name	Attack Order	Al Ataque	Appel Attaque	Schlagbefehl	Comandourto	こうげきしれい
+move_name	Heal Order	Auxilio	Appel Soins	Heilbefehl	Comandocura	かいふくしれい
+move_name	U-turn	Ida y Vuelta	Demi-Tour	Kehrtwende	Retromarcia	とんぼがえり
+move_name	Bug Bite	Picadura	Piqûre	Käferbiss	Coleomorso	むしくい
+move_name	X-Scissor	Tijera X	Plaie Croix	Kreuzschere	Forbice X	シザークロス
+move_name	Bug Buzz	Zumbido	Bourdon	Käfergebrumm	Ronzio	むしのさざめき
+move_name	Dragon Rush	Carga Dragón	Draco-Charge	Drachenstoß	Dragofuria	ドラゴンダイブ
+move_name	Draco Meteor	Cometa Draco	Draco-Météore	Draco Meteor	Dragobolide	りゅうせいぐん
+move_name	Spacial Rend	Corte Vacío	Spatio-Rift	Raumschlag	Fendispazio	あくうせつだん
+move_name	Roar of Time	Distorsión	Hurle-Temps	Zeitenlärm	Fragortempo	ときのほうこう
+move_name	Dragon Pulse	Pulso Dragón	Draco-Choc	Drachenpuls	Dragopulsar	りゅうのはどう
+move_name	Discharge	Chispazo	Coup d’Jus	Ladungsstoß	Scarica	ほうでん
+move_name	Thunder Fang	Colmillo Rayo	Crocs Éclair	Donnerzahn	Fulmindenti	かみなりのキバ
+move_name	Magnet Rise	Levitón	Vol Magnétik	Magnetflug	Magnetascesa	でんじふゆう
+move_name	Charge Beam	Rayo Carga	Rayon Chargé	Ladestrahl	Raggioscossa	チャージビーム
+move_name	Shadow Claw	Garra Umbría	Griffe Ombre	Dunkelklaue	Ombrartigli	シャドークロー
+move_name	Shadow Force	Golpe Umbrío	Revenant	Schemenkraft	Oscurotuffo	シャドーダイブ
+move_name	Shadow Sneak	Sombra Vil	Ombre Portée	Schattenstoß	Furtivombra	かげうち
+move_name	Ominous Wind	Viento Aciago	Vent Mauvais	Unheilböen	Funestovento	あやしいかぜ
+move_name	Fire Fang	Colmillo Ígneo	Crocs Feu	Feuerzahn	Rogodenti	ほのおのキバ
+move_name	Flare Blitz	Envite Ígneo	Boutefeu	Flammenblitz	Fuococarica	フレアドライブ
+move_name	Lava Plume	Humareda	Ébullilave	Flammensturm	Lavasbuffo	ふんえん
+move_name	Magma Storm	Lluvia Ígnea	Vortex Magma	Lavasturm	Magmaclisma	マグマストーム
+move_name	Avalanche	Alud	Avalanche	Lawine	Slavina	ゆきなだれ
+move_name	Ice Fang	Colmillo Hielo	Crocs Givre	Eiszahn	Gelodenti	こおりのキバ
+move_name	Ice Shard	Esquirla Helada	Éclats Glace	Eissplitter	Geloscheggia	こおりのつぶて
+move_name	Close Combat	A Bocajarro	Close Combat	Nahkampf	Zuffa	インファイト
+move_name	Aura Sphere	Esfera Aural	Aurasphère	Aurasphäre	Sferapulsar	はどうだん
+move_name	Wake-Up Slap	Espabila	Réveil Forcé	Weckruf	Svegliopacca	めざましビンタ
+move_name	Hammer Arm	Machada	Marto-Poing	Hammerarm	Martelpugno	アームハンマー
+move_name	Focus Blast	Onda Certera	Exploforce	Fokusstoß	Focalcolpo	きあいだま
+move_name	Vacuum Wave	Onda Vacío	Onde Vide	Vakuumwelle	Vuotonda	しんくうは
+move_name	Force Palm	Palmeo	Forte-Paume	Kraftwelle	Palmoforza	はっけい
+move_name	Drain Punch	Puño Drenaje	Vampi-Poing	Ableithieb	Assorbipugno	ドレインパンチ
+move_name	Acupressure	Acupresión	Acupression	Akupressur	Acupressione	つぼをつく
+move_name	Crush Grip	Agarrón	Presse	Quetschgriff	Sbriciolmano	にぎりつぶす
+move_name	Feint	Amago	Ruse	Offenlegung	Fintoattacco	フェイント
+move_name	Trump Card	As Oculto	Atout	Trumpfkarte	Asso	きりふだ
+move_name	Lucky Chant	Conjuro	Air Veinard	Beschwörung	Fortuncanto	おまじない
+move_name	Copycat	Copión	Photocopie	Imitator	Copione	まねっこ
+move_name	Double Hit	Doble Golpe	Coup Double	Doppelschlag	Doppiosmash	ダブルアタック
+move_name	Natural Gift	Don Natural	Don Naturel	Beerenkräfte	Dononaturale	しぜんのめぐみ
+move_name	Wring Out	Estrujón	Essorage	Auswringen	Strizzata	しぼりとる
+move_name	Giga Impact	Gigaimpacto	Giga Impact	Gigastoß	Gigaimpatto	ギガインパクト
+move_name	Captivate	Seducción	Séduction	Liebreiz	Incanto	ゆうわく
+move_name	Judgment	Sentencia	Jugement	Urteilskraft	Giudizio	さばきのつぶて
+move_name	Rock Climb	Treparrocas	Escalade	Kraxler	Scalaroccia	ロッククライム
+move_name	Last Resort	Última Baza	Dernier Recours	Zuflucht	Ultimascelta	とっておき
+move_name	Me First	Yo Primero	Moi d’Abord	Egotrip	Precedenza	さきどり
+move_name	Worry Seed	Abatidoras	Soucigraine	Sorgensamen	Affannoseme	なやみのタネ
+move_name	Seed Bomb	Bomba Germen	Canon Graine	Samenbomben	Semebomba	タネばくだん
+move_name	Energy Ball	Energibola	Éco-Sphère	Energieball	Energipalla	エナジーボール
+move_name	Seed Flare	Fulgor Semilla	Fulmigraine	Schocksamen	Infuriaseme	シードフレア
+move_name	Grass Knot	Hierba Lazo	Nœud Herbe	Strauchler	Laccioerboso	くさむすび
+move_name	Power Whip	Latigazo	Mégafouet	Blattgeißel	Vigorcolpo	パワーウィップ
+move_name	Leaf Storm	Lluevehojas	Tempête Verte	Blättersturm	Verdebufera	リーフストーム
+move_name	Wood Hammer	Mazazo	Martobois	Holzhammer	Mazzuolegno	ウッドハンマー
+move_name	Heal Block	Anticura	Anti-Soin	Heilblockade	Anticura	かいふくふうじ
+move_name	Zen Headbutt	Cabezazo Zen	Psykoud’Boul	Zen-Kopfstoß	Cozzata Zen	しねんのずつき
+move_name	Heart Swap	Cambiaalmas	Permucœur	Statustausch	Cuorbaratto	ハートスワップ
+move_name	Guard Swap	Cambiadefensa	Permugarde	Schutztausch	Barattoscudo	ガードスワップ
+move_name	Power Swap	Cambiafuerza	Permuforce	Krafttausch	Barattoforza	パワースワップ
+move_name	Lunar Dance	Danza Lunar	Danse Lune	Lunartanz	Lunardanza	みかづきのまい
+move_name	Healing Wish	Deseo Cura	Vœu Soin	Heilopfer	Curardore	いやしのねがい
+move_name	Trick Room	Espacio Raro	Distorsion	Bizarroraum	Distortozona	トリックルーム
+move_name	Miracle Eye	Gran Ojo	Œil Miracle	Wunderauge	Miracolvista	ミラクルアイ
+move_name	Gravity	Gravedad	Gravité	Erdanziehung	Gravità	じゅうりょく
+move_name	Psycho Shift	Psicocambio	Échange Psy	Psybann	Psicotransfer	サイコシフト
+move_name	Psycho Cut	Psicocorte	Coupe Psycho	Psychoklinge	Psicotaglio	サイコカッター
+move_name	Power Trick	Truco Fuerza	Astuce Force	Krafttrick	Ingannoforza	パワートリック
+move_name	Power Gem	Joya de Luz	Rayon Gemme	Juwelenkraft	Gemmoforza	パワージェム
+move_name	Rock Polish	Pulimento	Poliroche	Steinpolitur	Lucidatura	ロックカット
+move_name	Stone Edge	Roca Afilada	Lame de Roc	Steinkante	Pietrataglio	ストーンエッジ
+move_name	Rock Wrecker	Romperrocas	Roc-Boulet	Felswerfer	Devastomasso	がんせきほう
+move_name	Head Smash	Testarazo	Fracass’Tête	Kopfstoß	Zuccata	もろはのずつき
+move_name	Stealth Rock	Trampa Rocas	Piège de Roc	Tarnsteine	Levitoroccia	ステルスロック
+move_name	Dark Void	Brecha Negra	Trou Noir	Schlummerort	Vuototetro	ダークホール
+move_name	Assurance	Buena Baza	Assurance	Gewissheit	Garanzia	ダメおし
+move_name	Punishment	Castigo	Punition	Strafattacke	Punizione	おしおき
+move_name	Embargo	Embargo	Embargo	Itemsperre	Divieto	さしおさえ
+move_name	Sucker Punch	Golpe Bajo	Coup Bas	Tiefschlag	Sbigoattacco	ふいうち
+move_name	Fling	Lanzamiento	Dégommage	Schleuder	Lancio	なげつける
+move_name	Nasty Plot	Maquinación	Machination	Ränkeschmied	Congiura	わるだくみ
+move_name	Dark Pulse	Pulso Umbrío	Vibrobscur	Finsteraura	Neropulsar	あくのはどう
+move_name	Night Slash	Tajo Umbrío	Tranche-Nuit	Nachthieb	Nottesferza	つじぎり
+move_name	Switcheroo	Trapicheo	Passe-Passe	Wechseldich	Rapidscambio	すりかえ
+move_name	Payback	Vendetta	Représailles	Gegenstoß	Rivincita	しっぺがえし
+move_name	Mud Bomb	Bomba Fango	Boue-Bombe	Schlammbombe	Pantanobomba	どろばくだん
+move_name	Earth Power	Tierra Viva	Telluriforce	Erdkräfte	Geoforza	だいちのちから
+move_name	Gastro Acid	Bilis	Suc Digestif	Magensäfte	Gastroacido	いえき
+move_name	Gunk Shot	Lanzamugre	Détricanon	Mülltreffer	Sporcolancio	ダストシュート
+move_name	Toxic Spikes	Púas Tóxicas	Pics Toxik	Giftspitzen	Fielepunte	どくびし
+move_name	Poison Jab	Puya Nociva	Direct Toxik	Gifthieb	Velenpuntura	どくづき
+move_name	Cross Poison	Veneno X	Poison Croix	Giftstreich	Velenocroce	クロスポイズン
+move_name	Chatter	Cháchara	Babil	Geschwätz	Schiamazzo	おしゃべり
+move_name	Defog	Despejar	Anti-Brume	Auflockern	Scacciabruma	きりばらい
+move_name	Brave Bird	Pájaro Osado	Rapace	Sturzflug	Baldeali	ブレイブバード
+move_name	Pluck	Picoteo	Picore	Pflücker	Spennata	ついばむ
+move_name	Roost	Respiro	Atterrissage	Ruheort	Trespolo	はねやすめ
+move_name	Air Slash	Tajo Aéreo	Lame d’Air	Luftschnitt	Eterelama	エアスラッシュ
+move_name	Tailwind	Viento Afín	Vent Arrière	Rückenwind	Ventoincoda	おいかぜ
+move_doc	Roost	Recupera la mitad de los PS.	Rend la moitié des PV du lanceur.	Heilt die Hälfte der KP.	Recupera metà dei PS.	HPを　はんぶん　かいふくする
+move_doc	Gravity	Aumenta la gravedad cinco turnos.	Alourdit la gravité pendant 5 tours.	Verstärkt fünf Runden die Schwerkraft.	Aumenta la gravità per cinque turni.	５ターン　じゅうりょくが　つよまる
+move_doc	Miracle Eye	Los Psíquicos dañan a los Siniestros.	Les attaques Psy touchent les Ténèbres.	Psycho-Attacken treffen Unlicht.	Le mosse Psico colpiscono i Buio.	あくタイプに　エスパーが　あたる
+move_doc	Wake-Up Slap	Daña más si el rival duerme.	Frappe fort un ennemi endormi.	Trifft Schlafende besonders hart.	Colpisce forte chi dorme.	ねむっている　あいてに　つよい
+move_doc	Hammer Arm	Puñetazo pesado que baja VELOCIDAD.	Coup lourd qui baisse la VITESSE.	Schwerer Hieb, senkt INIT.	Pugno pesante, cala la VELOCITÀ.	おもい　パンチで　すばやさが　さがる
+move_doc	Gyro Ball	Más daño si el usuario es más lento.	Plus fort si le lanceur est lent.	Stärker, je langsamer der Anwender.	Più forte se è più lento.	じぶんが　おそいほど　つよい
+move_doc	Healing Wish	Se debilita y cura al siguiente.	Le lanceur tombe K.O. et soigne.	Heilt den Nachfolger, wird K.O.	Va K.O. e cura il compagno.	たおれて　つぎの　ポケモンを　なおす
+move_doc	Brine	Más daño si el rival tiene la mitad de PS.	Plus fort si la cible a moins de 50% PV.	Stärker bei maximal halben KP.	Più forte se ha metà PS.	あいての　HPが　はんぶんだと　つよい
+move_doc	Natural Gift	Potencia y tipo según la baya.	Puissance et type selon la baie.	Stärke und Typ folgen der Beere.	Forza e tipo dipendono dalla bacca.	もっている　きのみで　かわる
+move_doc	Feint	Golpea aunque use Protección.	Touche malgré Abri ou Détection.	Trifft auch trotz Schutz.	Colpisce anche con Protezione.	まもるを　むしして　こうげき
+move_doc	Pluck	Picotea y se come la baya rival.	Picore et mange la baie ennemie.	Pickt und frisst die Beere.	Becca e mangia la bacca avversaria.	ついばんで　きのみを　たべる
+move_doc	Tailwind	Dobla la VELOCIDAD del equipo 3 turnos.	Double la VITESSE de l'équipe 3 tours.	Verdoppelt drei Runden INIT.	Raddoppia la VELOCITÀ per 3 turni.	３ターン　チームの　すばやさが　２ばい
+move_doc	Acupressure	Sube mucho una estadística propia.	Augmente beaucoup une stat du lanceur.	Erhöht einen Wert stark.	Aumenta molto una statistica.	ステータスを　ぐーんと　あげる
+move_doc	Metal Burst	Devuelve el daño con más fuerza.	Renvoie les dégâts avec plus de force.	Gibt Schaden verstärkt zurück.	Restituisce il danno più forte.	うけた　ダメージを　おおきく　かえす
+move_doc	U-turn	Ataca y se retira del combate.	Attaque, puis le lanceur s'enfuit.	Greift an, dann Wechsel.	Attacca, poi torna indietro.	こうげきして　ひっこむ
+move_doc	Close Combat	Ataque temerario que baja DEFENSA.	Attaque risquée qui baisse la DEFENSE.	Waghalsig, senkt VERTEIDIGUNG.	Attacco rischioso, cala la DIFESA.	むぼうな　こうげきで　ぼうぎょが　さがる
+move_doc	Payback	Más daño si el usuario ataca último.	Plus fort si le lanceur attaque après.	Stärker, wenn zuletzt am Zug.	Più forte se agisce per ultimo.	あとから　こうげきすると　つよい
+move_doc	Assurance	Más daño si el rival ya está herido.	Plus fort si la cible est déjà blessée.	Stärker bei bereits Verletzten.	Più forte se è già ferito.	ダメージを　うけた　あいてに　つよい
+move_doc	Embargo	Impide al rival usar su objeto.	Empêche la cible d'utiliser son objet.	Verhindert den Gebrauch von Items.	Impedisce di usare il suo strumento.	あいてが　どうぐを　つかえなくなる
+move_doc	Fling	Lanza el objeto que lleva al rival.	Lance l'objet tenu sur la cible.	Wirft das Item auf das Ziel.	Lancia lo strumento tenuto.	もっている　どうぐを　なげつける
+move_doc	Psycho Shift	Pasa su estado al rival.	Transmet son statut à la cible.	Überträgt den Status aufs Ziel.	Passa il suo stato al bersaglio.	じぶんの　じょうたいいじょうを　うつす
+move_doc	Trump Card	Más daño cuantos menos PP quedan.	Plus fort s'il reste peu de PP.	Stärker bei wenigen AP.	Più forte con pochi PP.	PPが　すくないほど　つよい
+move_doc	Heal Block	Impide al rival recuperar PS.	Empêche la cible de récupérer des PV.	Verhindert Heilung.	Impedisce al bersaglio di curarsi.	あいてが　かいふくできなくなる
+move_doc	Wring Out	Más daño cuantos más PS tiene el rival.	Plus fort si la cible a beaucoup de PV.	Stärker bei vielen KP des Ziels.	Più forte se ha molti PS.	あいての　HPが　おおいほど　つよい
+move_doc	Power Trick	Intercambia ATAQUE y DEFENSA.	Échange ATTAQUE et DEF.	Tauscht ANGRIFF und VERTEIDIGUNG.	Scambia ATTACCO e DIFESA.	こうげきと　ぼうぎょを　いれかえる
+move_doc	Gastro Acid	Anula la habilidad del rival.	Annule le talent de la cible.	Hebt die Fähigkeit des Ziels auf.	Annulla l'abilità del bersaglio.	あいての　とくせいを　むこうにする
+move_doc	Lucky Chant	Protege al equipo de golpes críticos.	Protège l'équipe des coups critiques.	Schützt das Team vor Volltreffern.	Protegge il team dai brutti colpi.	きゅうしょに　あたらなくなる
+move_doc	Me First	Copia el ataque rival con más fuerza.	Copie l'attaque ennemie en plus fort.	Kopiert die Attacke verstärkt.	Copia la mossa più forte.	あいての　わざを　つよくして　つかう
+move_doc	Copycat	Copia el último movimiento usado.	Copie la dernière capacité utilisée.	Kopiert die letzte Attacke.	Copia l'ultima mossa usata.	さいごに　でた　わざを　まねる
+move_doc	Power Swap	Intercambia cambios de ATAQUE con el rival.	Échange les changements d'ATTAQUE.	Tauscht ANGRIFF-Werte.	Scambia le modifiche di ATTACCO.	こうげきの　へんかを　いれかえる
+move_doc	Guard Swap	Intercambia cambios de DEFENSA con el rival.	Échange les changements de DEFENSE.	Tauscht VERT.-Änderungen.	Scambia le modifiche di DIFESA.	ぼうぎょの　へんかを　いれかえる
+move_doc	Punishment	Más daño si el rival mejoró sus stats.	Plus fort si les stats de la cible ont monté.	Stärker bei erhöhten Werten.	Più forte se le sue statistiche salgono.	あいての　のうりょくが　あがるほど　つよい
+move_doc	Last Resort	Solo tras usar todos los demás ataques.	Utilisable après toutes les autres.	Nur nach allen anderen Attacken.	Dopo aver usato tutte le altre mosse.	ほかの　わざを　つかったあとに　だせる
+move_doc	Worry Seed	Cambia su habilidad a Insomnio.	Change son talent en Insomnia.	Ändert die Fähigkeit zu Insomnia.	Cambia la sua abilità in Insonnia.	あいての　とくせいを　ふみんに　する
+move_doc	Sucker Punch	Ataca antes si el rival ataca.	Frappe d'abord si la cible attaque.	Trifft zuerst, wenn das Ziel angreift.	Colpisce prima se l'altro attacca.	あいてが　こうげきなら　さきに　うつ
+move_doc	Toxic Spikes	Esparce púas venenosas.	Sème des pointes empoisonnées.	Streut giftige Stacheln.	Sparge aculei velenosi.	あいての　あしもとに　どくびしを　まく
+move_doc	Heart Swap	Intercambia cambios de stats con el rival.	Échange les changements de stats.	Tauscht Statusänderungen.	Scambia le modifiche alle statistiche.	のうりょくの　へんかを　いれかえる
+move_doc	Aqua Ring	Un velo de agua que cura PS.	Un voile d'eau qui rend des PV.	Ein Wasserschleier heilt KP.	Un velo d'acqua che cura i PS.	みずの　ベールで　HPが　かいふくする
+move_doc	Magnet Rise	Flota gracias al magnetismo.	Lévite grâce au magnétisme.	Schwebt dank Magnetismus.	Levita grazie al magnetismo.	じりょくで　ふゆうする
+move_doc	Flare Blitz	Carga ígnea que hiere al usuario.	Charge ardente qui blesse aussi le lanceur.	Feurige Attacke mit Rückstoß.	Carica di fuoco con contraccolpo.	ほのおで　とっしん　はんどうも　うける
+move_doc	Force Palm	Golpe de palma que puede paralizar.	Frappe de la paume, peut paralyser.	Kann Gegner lähmen.	Può paralizzare il bersaglio.	てのひらで　うつ　まひさせることが　ある
+move_doc	Aura Sphere	Esfera de aura que no falla.	Sphère d'aura qui ne rate jamais.	Aura-Kugel, die immer trifft.	Sfera d'aura che non manca mai.	はどうの　たまで　かならず　あたる
+move_doc	Rock Polish	Pule el cuerpo y sube mucho VELOCIDAD.	Se polit pour beaucoup monter la VITESSE.	Erhöht INIT stark.	Aumenta molto la VELOCITÀ.	からだを　みがいて　すばやさが　ぐーんと　あがる
+move_doc	Poison Jab	Pinchazo que puede envenenar.	Piqûre qui peut empoisonner.	Kann Gegner vergiften.	Può avvelenare il bersaglio.	どくの　つきで　どくに　することが　ある
+move_doc	Dark Pulse	Onda maligna que puede amedrentar.	Onde néfaste qui peut apeurer.	Kann Gegner zurückschrecken lassen.	Può far tentennare il bersaglio.	あくの　はどうで　ひるませることが　ある
+move_doc	Night Slash	Corte con alta probabilidad de crítico.	Entaille à fort taux de critique.	Hohe Volltrefferquote.	Alta probabilità di brutto colpo.	きゅうしょに　あたりやすい
+move_doc	Aqua Tail	Cola que golpea como una ola.	Queue qui frappe comme une vague.	Schwanz wie eine Welle.	Coda che colpisce come un'onda.	おおなみのように　しっぽで　うつ
+move_doc	Seed Bomb	Golpea con semillas duras.	Frappe avec des graines dures.	Schleudert harte Samen.	Colpisce con semi duri.	かたい　タネを　ぶつける
+move_doc	Air Slash	Corta con aire. Puede amedrentar.	Entaille d'air, peut apeurer.	Luftklinge, kann zurückschrecken.	Lama d'aria, può far tentennare.	くうきの　やいばで　ひるませることが　ある
+move_doc	X-Scissor	Corta al rival en forma de X.	Entaille en forme de X.	Schlitzt in X-Form.	Taglia a forma di X.	Xのかたちに　きりさく
+move_doc	Bug Buzz	Zumbido que puede bajar DEF. ESP.	Vibrations qui peuvent baisser DEF. SPE.	Kann SP.-VERT. senken.	Può calare DIF. SP.	むしの　おんぱで　とくぼうが　さがる
+move_doc	Dragon Pulse	Onda de choque lanzada por la boca.	Onde de choc lancée de la gueule.	Stoßwelle aus dem Maul.	Onda d'urto dalla bocca.	くちから　しょうげきはを　はなつ
+move_doc	Dragon Rush	Embestida feroz que puede amedrentar.	Charge féroce, peut apeurer.	Heftiger Ansturm, kann Rückschreck.	Carica feroce, può far tentennare.	はげしく　ぶつかり　ひるませることが　ある
+move_doc	Power Gem	Rayo de luz brillante como una gema.	Rayon de lumière comme un joyau.	Strahl wie von Edelsteinen.	Raggio di luce come gemme.	ほうせきのような　ひかりで　うつ
+move_doc	Drain Punch	Puñetazo que cura la mitad del daño.	Poing qui rend la moitié des dégâts.	Heilt um die Hälfte des Schadens.	Pugno che cura metà del danno.	あたえた　ダメージの　はんぶん　かいふく
+move_doc	Vacuum Wave	Onda de aire que ataca primero.	Onde d'air qui frappe d'abord.	Luftwelle, die zuerst trifft.	Onda d'aria che colpisce prima.	くうきの　なみで　さきに　うつ
+move_doc	Focus Blast	Onda de energía. Puede bajar DEF. ESP.	Onde de focus, peut baisser DEF. SPE.	Kann SP.-VERT. senken.	Può calare DIF. SP.	きあいで　とくぼうが　さがることが　ある
+move_doc	Energy Ball	Usa la naturaleza. Puede bajar DEF. ESP.	Puise dans la nature, baisse DEF. SPE.	Kann SP.-VERT. senken.	Energia naturale, può calare DIF. SP.	しぜんの　ちからで　とくぼうが　さがる
+move_doc	Brave Bird	Picado temerario que hiere al usuario.	Piqué risqué qui blesse le lanceur.	Waghalsiger Sturzflug mit Rückstoß.	Picchiata che ferisce chi attacca.	むぼうな　ていくうひこう　はんどうも　ある
+move_doc	Earth Power	Hace estallar el suelo. Baja DEF. ESP.	Fait jaillir le sol, baisse DEF. SPE.	Kann SP.-VERT. senken.	Fa esplodere il suolo, cala DIF. SP.	じめんから　ふきだし　とくぼうが　さがる
+move_doc	Switcheroo	Intercambia objetos con el rival.	Échange les objets tenus.	Tauscht die Items.	Scambia gli strumenti tenuti.	あいてと　どうぐを　いれかえる
+move_doc	Giga Impact	Carga enorme. Descansa el turno siguiente.	Charge géante, repos au tour suivant.	Gewaltiger Ansturm, danach Pause.	Carica enorme, poi riposa.	はげしく　ぶつかる　つぎは　うごけない
+move_doc	Nasty Plot	Sube mucho el AT. ESP. del usuario.	Augmente beaucoup l'ATQ. SPE.	Erhöht SP.-ANGR. stark.	Aumenta molto ATT. SP.	わるだくみで　とくこうが　ぐーんと　あがる
+move_doc	Bullet Punch	Puñetazo rápido que ataca primero.	Coup rapide qui frappe d'abord.	Schneller Hieb, trifft zuerst.	Pugno rapido, colpisce prima.	はやい　パンチで　さきに　うつ
+move_doc	Avalanche	Más daño si el rival atacó primero.	Plus fort si le lanceur est touché.	Stärker, wenn zuvor getroffen.	Più forte se colpito prima.	さきに　こうげきされると　つよい
+move_doc	Ice Shard	Lanza hielo que ataca primero.	Lance de la glace, frappe d'abord.	Eisbrocken, trifft zuerst.	Lancia ghiaccio, colpisce prima.	こおりを　とばして　さきに　うつ
+move_doc	Shadow Claw	Zarpazo con alta prob. de crítico.	Griffe à fort taux de critique.	Klaue mit hoher Volltrefferquote.	Artiglio, alta prob. di brutto colpo.	かげの　ツメで　きゅうしょに　あたりやすい
+move_doc	Thunder Fang	Mordisco que paraliza o amedrenta.	Morsure qui paralyse ou apeure.	Biss, lähmt oder schreckt zurück.	Morso che paralizza o fa tentennare.	かみついて　まひや　ひるみを　ねらう
+move_doc	Ice Fang	Mordisco que congela o amedrenta.	Morsure qui gèle ou apeure.	Biss, friert ein oder schreckt zurück.	Morso che congela o fa tentennare.	かみついて　こおりや　ひるみを　ねらう
+move_doc	Fire Fang	Mordisco que quema o amedrenta.	Morsure qui brûle ou apeure.	Biss, verbrennt oder schreckt zurück.	Morso che scotta o fa tentennare.	かみついて　やけどや　ひるみを　ねらう
+move_doc	Shadow Sneak	Una sombra ataca primero.	Une ombre frappe d'abord.	Ein Schatten trifft zuerst.	Un'ombra colpisce prima.	かげを　のばして　さきに　うつ
+move_doc	Mud Bomb	Lanza barro. Puede bajar PRECISIÓN.	Lance de la boue, baisse PRECISION.	Kann GENAUIGKEIT senken.	Lancia fango, può calare PRECISIONE.	どろを　なげて　めいちゅうが　さがる
+move_doc	Psycho Cut	Cuchillas psíquicas. Crítico alto.	Lames psy. Fort taux de critique.	Psycho-Klingen, hohe Volltrefferq.	Lame psichiche, brutto colpo facile.	エスパーの　やいば　きゅうしょ
+move_doc	Zen Headbutt	Cabezazo que puede amedrentar.	Coup de tête qui peut apeurer.	Kopfstoß, kann zurückschrecken.	Testata che può far tentennare.	ずつきで　ひるませることが　ある
+move_doc	Mirror Shot	Luz pulida. Puede bajar PRECISIÓN.	Lumière polie, baisse PRECISION.	Kann GENAUIGKEIT senken.	Luce lucida, può calare PRECISIONE.	ひかりを　はなって　めいちゅうが　さがる
+move_doc	Flash Cannon	Luz del cuerpo. Puede bajar DEF. ESP.	Lumière du corps, baisse DEF. SPE.	Kann SP.-VERT. senken.	Luce dal corpo, cala DIF. SP.	ひかりを　はなって　とくぼうが　さがる
+move_doc	Rock Climb	Embestida que puede confundir.	Charge qui peut rendre confus.	Ansturm, kann verwirren.	Carica che può confondere.	ぶつかって　こんらんさせることが　ある
+move_doc	Defog	Baja la evasión y despeja el campo.	Baisse l'esquive et dégage le terrain.	Senkt Fluchtwert, räumt das Feld.	Cala la fuga e libera il campo.	かいひを　さげて　しょうがいを　はらう
+move_doc	Trick Room	Los lentos mueven antes durante 5 turnos.	Les plus lents agissent d'abord 5 tours.	Langsame sind fünf Runden zuerst dran.	I lenti agiscono prima per 5 turni.	５ターン　おそい　ほうが　さきに　うごく
+move_doc	Draco Meteor	Caen meteoros. Baja mucho AT. ESP.	Des météores tombent, baisse ATQ. SPE.	Meteore fallen, senkt SP.-ANGR. stark.	Cadono meteore, cala molto ATT. SP.	りゅうせいぐんで　とくこうが　がくっと　さがる
+move_doc	Discharge	Descarga eléctrica que puede paralizar.	Décharge qui peut paralyser.	Stromstoß, kann lähmen.	Scarica che può paralizzare.	でんきを　はなって　まひさせることが　ある
+move_doc	Lava Plume	Llamarada ardiente que puede quemar.	Souffle brûlant qui peut brûler.	Glühende Lava, kann verbrennen.	Vampata che può scottare.	ねっぷうで　やけどに　することが　ある
+move_doc	Leaf Storm	Tormenta de hojas. Baja mucho AT. ESP.	Tempête de feuilles, baisse ATQ. SPE.	Blättersturm, senkt SP.-ANGR. stark.	Tempesta di foglie, cala ATT. SP.	はっぱの　あらしで　とくこうが　がくっと　さがる
+move_doc	Power Whip	Azota al rival con lianas.	Fouette violemment avec des lianes.	Peitscht heftig mit Ranken.	Frusta con forza con le viti.	つるで　はげしく　たたきつける
+move_doc	Rock Wrecker	Lanza una gran roca. Descansa después.	Lance un énorme rocher, puis repos.	Riesiger Fels, danach Pause.	Lancia un masso, poi riposa.	おおきな　いわを　なげる　つぎは　うごけない
+move_doc	Cross Poison	Corte que puede envenenar. Crítico alto.	Entaille qui peut empoisonner.	Kann vergiften, hohe Volltrefferq.	Può avvelenare, brutto colpo facile.	どくの　きりさき　きゅうしょに　あたりやすい
+move_doc	Gunk Shot	Dispara porquería. Puede envenenar.	Tire des déchets, peut empoisonner.	Wirft Unrat, kann vergiften.	Spara rifiuti, può avvelenare.	ゴミを　なげて　どくに　することが　ある
+move_doc	Iron Head	Cabezazo de acero que puede amedrentar.	Coup de tête d'acier, peut apeurer.	Stahlkopfstoß, kann zurückschrecken.	Testata d'acciaio, può far tentennare.	はがねの　ずつきで　ひるませることが　ある
+move_doc	Magnet Bomb	Bombas de acero que nunca fallan.	Bombes d'acier qui ne ratent pas.	Stahlbomben, die immer treffen.	Bombe d'acciaio che non mancano.	はがねの　ばくだんで　かならず　あたる
+move_doc	Stone Edge	Pinchos de piedra. Crítico alto.	Pierres pointues, fort taux de critique.	Spitze Steine, hohe Volltrefferq.	Pietre aguzze, brutto colpo facile.	とがった　いしで　きゅうしょに　あたりやすい
+move_doc	Captivate	Baja mucho el AT. ESP. del otro sexo.	Baisse beaucoup l'ATQ. SPE. du sexe opposé.	Senkt SP.-ANGR. beim Gegengeschlecht.	Cala molto ATT. SP. del sesso opposto.	ぎゃくの　せいべつの　とくこうが　さがる
+move_doc	Stealth Rock	Rocas flotantes que dañan al rival.	Rochers flottants qui blessent.	Schwebende Felsen schaden Gegnern.	Rocce fluttuanti che feriscono.	ういている　いわで　あいてを　きずつける
+move_doc	Grass Knot	Más daño con rivales pesados.	Plus fort si la cible est lourde.	Stärker bei schwerem Ziel.	Più forte se il bersaglio pesa.	あいてが　おもいほど　つよい
+move_doc	Chatter	Ataque parlanchín que puede confundir.	Attaque bavarde, peut rendre confus.	Schwatzattacke, kann verwirren.	Attacco chiassoso, può confondere.	おしゃべりで　こんらんさせることが　ある
+move_doc	Judgment	Su tipo depende de la tabla que lleva.	Son type dépend de la plaque tenue.	Typ hängt von der Tafel ab.	Il tipo dipende dalla lastra.	もっている　プレートで　タイプが　かわる
+move_doc	Bug Bite	Muerde al rival y se come su baya.	Mord la cible et mange sa baie.	Beißt und frisst die Beere.	Morde e mangia la bacca.	かみついて　きのみを　たべる
+move_doc	Charge Beam	Rayo eléctrico. Puede subir AT. ESP.	Rayon électrique, peut monter ATQ. SPE.	Kann SP.-ANGR. erhöhen.	Raggio elettrico, può alzare ATT. SP.	でんきの　ビームで　とくこうが　あがる
+move_doc	Wood Hammer	Golpea con el cuerpo y sufre daño.	Frappe de tout le corps, avec recul.	Wuchtiger Hieb mit Rückstoß.	Colpisce col corpo, con contraccolpo.	からだごと　たたきつけ　はんどうも　ある
+move_doc	Aqua Jet	Ataca primero con agua a presión.	Frappe d'abord avec un jet d'eau.	Wasserstoß, trifft zuerst.	Getto d'acqua che colpisce prima.	みずを　まとって　さきに　うつ
+move_doc	Attack Order	Ataca con crítico alto.	Attaque à fort taux de critique.	Hohe Volltrefferquote.	Attacco con brutto colpo facile.	きゅうしょに　あたりやすい　こうげき
+move_doc	Defend Order	Sube DEFENSA y DEF. ESP.	Monte DEFENSE et DEF. SPE.	Erhöht VERT. und SP.-VERT.	Alza DIFESA e DIF. SP.	ぼうぎょと　とくぼうが　あがる
+move_doc	Heal Order	Recupera la mitad de los PS.	Rend la moitié des PV du lanceur.	Heilt die Hälfte der KP.	Recupera metà dei PS.	HPを　はんぶん　かいふくする
+move_doc	Head Smash	Cabezazo salvaje que hiere mucho al usuario.	Coup de tête féroce, gros recul.	Wilder Kopfstoß, starker Rückstoß.	Testata selvaggia, forte contraccolpo.	はげしい　ずつき　はんどうも　おおきい
+move_doc	Double Hit	Golpea al rival dos veces seguidas.	Frappe la cible deux fois de suite.	Trifft zweimal hintereinander.	Colpisce due volte di fila.	２かい れんぞくで　たたきつける
+move_doc	Roar of Time	Ráfaga enorme. Descansa el turno siguiente.	Souffle géant, repos au tour suivant.	Gewaltiger Strahl, danach Pause.	Raggio enorme, poi riposa.	ちからを　はなつ　つぎは　うごけない
+move_doc	Spacial Rend	Desgarra el espacio. Crítico alto.	Déchire l'espace, fort taux de critique.	Zerreißt den Raum, hohe Volltrefferq.	Squarcia lo spazio, brutto colpo facile.	くうかんを　きる　きゅうしょ
+move_doc	Lunar Dance	Se debilita y cura del todo al siguiente.	Tombe K.O. et soigne complètement.	Wird K.O., heilt den Nachfolger.	Va K.O. e cura del tutto il compagno.	たおれて　つぎの　ポケモンを　かんぜんに　なおす
+move_doc	Crush Grip	Más daño cuantos más PS tiene el rival.	Plus fort si la cible a beaucoup de PV.	Stärker bei vielen KP des Ziels.	Più forte se ha molti PS.	あいての　HPが　おおいほど　つよい
+move_doc	Magma Storm	Atrapa al rival en una tormenta de fuego.	Piège la cible dans une tempête de feu.	Fängt das Ziel in einem Feuersturm.	Intrappola in una tempesta di fuoco.	ほのおの　あらしに　とじこめる
+move_doc	Dark Void	Duerme a todos los rivales.	Endort tous les ennemis.	Versetzt alle Gegner in Schlaf.	Addormenta tutti gli avversari.	あいてを　ぜんいん　ねむらせる
+move_doc	Seed Flare	Onda de choque. Puede bajar mucho DEF. ESP.	Onde de choc, peut baisser DEF. SPE.	Kann SP.-VERT. stark senken.	Onda d'urto, può calare DIF. SP.	ひかりの　はどうで　とくぼうが　がくっと　さがる
+move_doc	Ominous Wind	Ráfaga que puede subir todos los stats.	Bourrasque qui peut monter les stats.	Böe, kann alle Werte erhöhen.	Folata che può alzare ogni statistica.	あやしい　かぜで　のうりょくが　あがる
+move_doc	Shadow Force	Desaparece y ataca en el turno siguiente.	Disparaît, puis frappe au tour suivant.	Verschwindet, trifft in der nächsten Runde.	Sparisce e colpisce al turno dopo.	きえて　つぎの　ターンに　おそいかかる
+move_doc	False Swipe	Deja al rival con al menos 1 PS.	Laisse la cible à 1 PV au moins.	Lässt dem Ziel mindestens 1 KP.	Lascia almeno 1 PS al bersaglio.	あいてを　かならず　HP１で　のこす
+move_doc	Endure	Aguanta cualquier golpe con 1 PS.	Survit à tout coup avec 1 PV.	Übersteht jeden Treffer mit 1 KP.	Sopravvive a ogni colpo con 1 PS.	どんな　こうげきも　HP１で　たえる
+move_doc	Will-O-Wisp	Quema al rival con una llama siniestra.	Brûle la cible d'une flamme sinistre.	Verbrennt das Ziel mit Geisterfeuer.	Scotta il bersaglio con fiamme sinistre.	あやしい　ほのおで　やけどに　する
+move_doc	Silver Wind	Ráfaga plateada que puede subir stats.	Bourrasque argentée, peut monter les stats.	Silberwind, kann alle Werte erhöhen.	Folata argentata, può alzare le stat.	ぎんいろの　かぜで　のうりょくが　あがる
+move_doc	Explosion	Explosión enorme. El usuario se debilita.	Explosion géante. Le lanceur tombe K.O.	Riesige Explosion, Anwender wird K.O.	Esplosione enorme. Chi la usa va K.O.	おおきな　ばくはつ　じぶんは　たおれる
+move_doc	Recycle	Recupera un objeto ya gastado.	Recycle un objet déjà utilisé.	Holt ein verbrauchtes Item zurück.	Recupera uno strumento consumato.	つかった　どうぐを　もういちど　つかう
+move_doc	Thunder Wave	Descarga débil que paraliza.	Faible décharge qui paralyse.	Schwacher Stoß, der lähmt.	Debole scossa che paralizza.	よわい　でんげきで　まひさせる
+move_doc	Swords Dance	Baile que sube mucho el ATAQUE.	Danse qui monte beaucoup l'ATTAQUE.	Tanz, der ANGRIFF stark erhöht.	Danza che alza molto l'ATTACCO.	まいおどり　こうげきが　ぐーんと　あがる
+move_doc	Psych Up	Copia los cambios de stats del rival.	Copie les changements de stats.	Kopiert die Statusänderungen.	Copia le modifiche alle statistiche.	あいての　のうりょくの　へんかを　うつす
+move_doc	Rock Slide	Lanza rocas. Puede amedrentar.	Lance des rocs, peut apeurer.	Wirft Felsen, kann zurückschrecken.	Lancia rocce, può far tentennare.	いわを　おとして　ひるませることが　ある
+move_doc	Sleep Talk	Usa un ataque al azar mientras duerme.	Utilise une capacité au hasard endormi.	Zufällige Attacke im Schlaf.	Usa una mossa a caso mentre dorme.	ねむっている　あいだ　わざを　ランダムに　だす
+move_doc	Dream Eater	Se come el sueño del rival y cura PS.	Mange un rêve pour rendre des PV.	Frisst Träume, heilt KP.	Mangia i sogni e cura i PS.	ねむりの　ゆめを　たべて　HPを　かいふくする
+move_doc	Swagger	Confunde al rival, pero sube su ATAQUE.	Rend confus mais monte l'ATTAQUE.	Verwirrt, erhöht aber ANGRIFF.	Confonde ma alza l'ATTACCO.	あいてを　こんらんさせ　こうげきを　あげる
+move_doc	Substitute	Crea un señuelo con parte de los PS.	Crée un leurre avec des PV.	Erschafft einen Ersatz mit KP.	Crea un sostituto con parte dei PS.	HPを　つかって　みがわりを　つくる
+ability_name	Tangled Feet	Tumbos	Pieds Confus	Fußangel	Intricopiedi	ちどりあし
+ability_name	Motor Drive	Electromotor	Motorisé	Starthilfe	Elettrorapid	でんきエンジン
+ability_name	Rivalry	Rivalidad	Rivalité	Rivalität	Antagonismo	とうそうしん
+ability_name	Steadfast	Impasible	Impassible	Felsenfest	Cuordeciso	ふくつのこころ
+ability_name	Snow Cloak	Manto Níveo	Rideau Neige	Schneemantel	Mantelneve	ゆきがくれ
+ability_name	Gluttony	Gula	Gloutonnerie	Völlerei	Voracità	くいしんぼう
+ability_name	Anger Point	Irascible	Colérique	Kurzschluss	Grancollera	いかりのつぼ
+ability_name	Unburden	Liviano	Délestage	Entlastung	Agiltecnica	かるわざ
+ability_name	Heatproof	Ignífugo	Ignifugé	Hitzeschutz	Antifuoco	たいねつ
+ability_name	Simple	Simple	Simple	Wankelmut	Disinvoltura	たんじゅん
+ability_name	Dry Skin	Piel Seca	Peau Sèche	Trockenheit	Pellearsa	かんそうはだ
+ability_name	Download	Descarga	Télécharge	Download	Download	ダウンロード
+ability_name	Iron Fist	Puño Férreo	Poing de Fer	Eisenfaust	Ferropugno	てつのこぶし
+ability_name	Poison Heal	Antídoto	Soin Poison	Aufheber	Velencura	ポイズンヒール
+ability_name	Adaptability	Adaptable	Adaptabilité	Anpassung	Adattabilità	てきおうりょく
+ability_name	Skill Link	Encadenado	Multi-Coups	Wertelink	Abillegame	スキルリンク
+ability_name	Hydration	Hidratación	Hydratation	Hydration	Idratazione	うるおいボディ
+ability_name	Solar Power	Poder Solar	Force Soleil	Solarkraft	Solarpotere	サンパワー
+ability_name	Quick Feet	Pies Rápidos	Pied Véloce	Rasanz	Piedisvelti	はやあし
+ability_name	Normalize	Normalidad	Normalise	Regulierung	Normalità	ノーマルスキン
+ability_name	Sniper	Francotirador	Sniper	Superschütze	Cecchino	スナイパー
+ability_name	Magic Guard	Muro Mágico	Garde Magik	Magieschild	Magicscudo	マジックガード
+ability_name	No Guard	Indefenso	Annule Garde	Schildlos	Nullodifesa	ノーガード
+ability_name	Stall	Rezagado	Frein	Zeitspiel	Rallentatore	あとだし
+ability_name	Technician	Experto	Technicien	Techniker	Tecnico	テクニシャン
+ability_name	Leaf Guard	Defensa Hoja	Feuille Garde	Floraschild	Fogliamanto	リーフガード
+ability_name	Klutz	Zoquete	Maladresse	Tollpatsch	Impaccio	ぶきよう
+ability_name	Mold Breaker	Rompemoldes	Brise Moule	Überbrückung	Rompiforma	かたやぶり
+ability_name	Super Luck	Afortunado	Chanceux	Glückspilz	Supersorte	きょううん
+ability_name	Aftermath	Detonación	Boom Final	Finalschlag	Scoppio	ゆうばく
+ability_name	Anticipation	Anticipación	Anticipation	Vorahnung	Presagio	きけんよち
+ability_name	Forewarn	Alerta	Prédiction	Vorwarnung	Premonizione	よちむ
+ability_name	Unaware	Ignorante	Inconscient	Unkenntnis	Imprudenza	てんねん
+ability_name	Tinted Lens	Cromolente	Lentiteintée	Aufwertung	Lentifumé	いろめがね
+ability_name	Filter	Filtro	Filtre	Filter	Filtro	フィルター
+ability_name	Slow Start	Inicio Lento	Début Calme	Saumselig	Lentoinizio	スロースタート
+ability_name	Scrappy	Intrépido	Querelleur	Rauflust	Nervisaldi	きもったま
+ability_name	Storm Drain	Colector	Lavabo	Sturmsog	Acquascolo	よびみず
+ability_name	Ice Body	Gélido	Corps Gel	Eishaut	Corpogelo	アイスボディ
+ability_name	Solid Rock	Roca Sólida	Solide Roc	Felskern	Solidroccia	ハードロック
+ability_name	Snow Warning	Nevada	Alerte Neige	Hagelalarm	Scendineve	ゆきふらし
+ability_name	Honey Gather	Recogemiel	Cherche Miel	Honigmaul	Mielincetta	みつあつめ
+ability_name	Frisk	Cacheo	Fouille	Schnüffler	Indagine	おみとおし
+ability_name	Reckless	Audaz	Téméraire	Achtlos	Temerarietà	すてみ
+ability_name	Multitype	Multitipo	Multi-Type	Variabilität	Multitipo	マルチタイプ
+ability_name	Flower Gift	Don Floral	Don Floral	Pflanzengabe	Regalfiore	フラワーギフト
+ability_name	Bad Dreams	Mal Sueño	Mauvais Rêve	Alptraum	Sogniamari	ナイトメア
+ability_doc	Tangled Feet	Sube la evasión si está confuso.	Esquive monte si confus.	Mehr Fluchtwert bei Verwirrung.	Alza la fuga se confuso.	こんらんすると　かいひが　あがる
+ability_doc	Motor Drive	Eléctrico sube VELOCIDAD.	Électrik monte VITESSE.	Elektro-Attacken erhöhen INIT.	Mosse Elettro alzano VELOCITÀ.	でんきわざで　すばやさが　あがる
+ability_doc	Rivalry	Más fuerte ante su mismo sexo.	Plus fort contre le même sexe.	Stärker bei gleichem Geschl.	Più forte contro lo stesso sesso.	おなじ　せいべつに　つよい
+ability_doc	Steadfast	Amedrentado, sube VELOCIDAD.	Monte VITESSE si apeuré.	INIT steigt bei Zurückschrecken.	Alza VELOCITÀ se tentenna.	ひるむと　すばやさが　あがる
+ability_doc	Snow Cloak	Sube la evasión con granizo.	Monte l'esquive sous la grêle.	Erhöht Fluchtwert bei Hagel.	Alza la fuga con la grandine.	あられで　かいひが　あがる
+ability_doc	Gluttony	Come las bayas antes.	Mange les baies plus tôt.	Isst Beeren früher.	Mangia le bacche prima.	きのみを　はやく　たべる
+ability_doc	Anger Point	Con un crítico, ATAQUE al máx.	ATTAQUE max. si coup critique.	Bei Volltreffer max. ANGRIFF.	Colpo critico: ATTACCO al max.	きゅうしょで　こうげき　さいだい
+ability_doc	Unburden	Gasta objeto: sube VELOCIDAD.	Monte VITESSE si objet utilisé.	INIT steigt bei Item-Verbrauch.	Usa strumento: VELOCITÀ sale.	どうぐを　つかうと　はやくなる
+ability_doc	Heatproof	Daño de Fuego a la mitad.	Réduit de moitié les dégâts Feu.	Halbiert Feuer-Schaden.	Dimezza il danno di tipo Fuoco.	ほのおの　ダメージが　はんぶん
+ability_doc	Simple	Duplica los cambios de stats.	Double les modifs de stats.	Verdoppelt Statusänderungen.	Raddoppia le modifiche alle stat.	のうりょくへんかが　２ばい
+ability_doc	Dry Skin	El agua cura, el fuego daña más.	L'eau soigne, le feu blesse plus.	Wasser heilt, Feuer schadet.	Acqua cura, fuoco danneggia.	みずで　かいふく　ほのおに　よわい
+ability_doc	Download	Sube AT. o AT. ESP. al entrar.	Monte ATQ. ou ATQ. SPE.	Erhöht ANGR. oder SP.-ANGR.	Alza ATT./ATT. SP. all'ingresso.	でると　こうげきか　とくこうが　あがる
+ability_doc	Iron Fist	Potencia los golpes con puños.	Renforce les coups de poing.	Verstärkt Schlag-Attacken.	Potenzia le mosse di pugno.	パンチわざの　いりょくが　あがる
+ability_doc	Poison Heal	El veneno restaura PS.	Le poison rend des PV.	Gift heilt KP.	Il veleno cura i PS.	どくで　HPが　かいふくする
+ability_doc	Adaptability	Más poder a mov. del mismo tipo.	Renforce son propre type.	Eigener Typ wird stärker.	Potenzia mosse stesso tipo.	おなじタイプの　わざが　つよい
+ability_doc	Skill Link	Mov. múltiples: máx. golpes.	Multi-coups: touche au max.	Mehrfachangriffe treffen max.	Mosse multiple: colpi al max.	れんぞくわざが　かならず　さいだい
+ability_doc	Hydration	Cura estados con lluvia.	Soigne les statuts sous la pluie.	Heilt Status bei Regen.	Cura gli stati con la pioggia.	あめで　じょうたいいじょうが　なおる
+ability_doc	Solar Power	Sube AT. ESP. con sol.	Monte ATQ. SPE. sous le soleil.	Erhöht SP.-ANGR. bei Sonne.	Alza ATT. SP. col sole.	はれると　とくこうが　あがる
+ability_doc	Quick Feet	Con estado, sube VELOCIDAD.	Monte VITESSE si statut altéré.	Erhöht INIT bei Statusproblem.	Con stato, alza VELOCITÀ.	じょうたいいじょうで　すばやい
+ability_doc	Normalize	Todos sus mov. pasan a Normal.	Ses capacités passent Normal.	Alle Attacken werden Normal.	Mosse diventano Normale.	すべての　わざが　ノーマルに　なる
+ability_doc	Sniper	Críticos con más daño.	Coups critiques plus forts.	Volltreffer mit mehr Schaden.	I brutti colpi fanno più danno.	きゅうしょの　ダメージが　おおきい
+ability_doc	Magic Guard	Solo le dañan los ataques.	Seules les attaques le blessent.	Nur Attacken schaden ihm.	Solo le mosse lo danneggiano.	こうげき　いがいの　ダメージなし
+ability_doc	No Guard	Todos los mov. aciertan.	Toutes les capacités touchent.	Alle Attacken treffen immer.	Le mosse colpiscono sempre.	おたがいの　わざが　かならず　あたる
+ability_doc	Stall	Siempre se mueve el último.	Agit toujours en dernier.	Ist immer zuletzt am Zug.	Agisce sempre per ultimo.	いつも　あとから　こうどうする
+ability_doc	Technician	Potencia los mov. débiles.	Renforce les capacités faibles.	Verstärkt schwache Attacken.	Potenzia le mosse deboli.	よわい　わざの　いりょくが　あがる
+ability_doc	Leaf Guard	Evita estados con sol.	Évite les statuts sous le soleil.	Schützt vor Status bei Sonne.	Evita gli stati col sole.	はれると　じょうたいいじょうなし
+ability_doc	Klutz	No puede usar su objeto.	Ne peut pas utiliser son objet.	Kann sein Item nicht nutzen.	Non può usare lo strumento.	もっている　どうぐを　つかえない
+ability_doc	Mold Breaker	Ignora habilidades que bloquean.	Ignore les talents protecteurs.	Ignoriert Fähigkeiten des Ziels.	Ignora le abilità che bloccano.	あいての　とくせいを　むしする
+ability_doc	Super Luck	Los críticos son más frecuentes.	Plus de coups critiques.	Volltreffer häufiger.	Brutti colpi più frequenti.	きゅうしょに　あたりやすい
+ability_doc	Aftermath	Daña al que le debilita.	Blesse celui qui le met K.O.	Schadet dem Besieger.	Danneggia chi lo mette K.O.	ひんしで　あいてに　ダメージ
+ability_doc	Anticipation	Percibe mov. peligrosos.	Flaire les capacités à risque.	Ahnt gefährliche Attacken.	Avverte le mosse pericolose.	きけんな　わざを　かんじとる
+ability_doc	Forewarn	Revela el mov. más fuerte rival.	Révèle la capacité la plus forte.	Zeigt die stärkste Attacke.	Rivela la mossa più forte.	あいての　つよい　わざが　わかる
+ability_doc	Unaware	Ignora cambios de stats rival.	Ignore les stats modifiées.	Ignoriert gegnerische Werte.	Ignora le modifiche altrui.	あいての　へんかを　むしする
+ability_doc	Tinted Lens	Refuerza golpes poco eficaces.	Renforce coups peu efficaces.	Verstärkt schwache Treffer.	Potenzia i colpi poco efficaci.	いまひとつの　わざを　つよくする
+ability_doc	Filter	Debilita golpes supereficaces.	Réduit coups super efficaces.	Schwächt sehr effektive Treffer.	Riduce i colpi superefficaci.	こうかばつぐんの　ダメージが　へる
+ability_doc	Slow Start	AT. y VELOC. a la mitad al inicio.	ATQ. et VIT. réduites au début.	ANGR. und INIT anfangs halbiert.	ATT. e VELOC. a metà all'inizio.	はじめは　こうげき　すばやさ　はんぶん
+ability_doc	Scrappy	Normal y Lucha dañan Fantasma.	Normal/Combat: touche Spectre.	Normal/Kampf treffen Geist.	Normale/Lotta vs Spettro.	ゴーストにも　ノーマル　かくとう
+ability_doc	Storm Drain	Atrae los mov. de Agua.	Attire les capacités Eau.	Zieht Wasser-Attacken an.	Attira le mosse Acqua.	みずわざを　ひきよせる
+ability_doc	Ice Body	Se cura con granizo.	Récupère sous la grêle.	Heilt bei Hagel.	Si cura con la grandine.	あられの　ときに　HPが　かいふくする
+ability_doc	Solid Rock	Debilita golpes supereficaces.	Réduit coups super efficaces.	Schwächt sehr effektive Treffer.	Riduce i colpi superefficaci.	こうかばつぐんの　ダメージが　へる
+ability_doc	Snow Warning	Provoca una granizada.	Fait tomber la grêle.	Ruft Hagel hervor.	Provoca una grandinata.	あられを　ふらせる
+ability_doc	Honey Gather	Recoge miel tras combatir.	Ramasse du miel après combat.	Sammelt eventuell Honig.	Può raccogliere miele.	たたかいの　あとに　みつを　あつめる
+ability_doc	Frisk	Revisa el objeto del rival.	Fouille l'objet de la cible.	Prüft das Item des Gegners.	Vede lo strumento avversario.	あいての　どうぐを　みやぶる
+ability_doc	Reckless	Más poder a mov. con retroceso.	Renforce les capacités à recul.	Stärkt Attacken mit Rückstoß.	Potenzia mosse a contraccolpo.	はんどうわざの　いりょくが　あがる
+ability_doc	Multitype	Cambia de tipo según su tabla.	Change de type selon sa plaque.	Typ ändert sich mit Tafel.	Cambia tipo con la lastra.	プレートで　タイプが　かわる
+ability_doc	Flower Gift	Potencia a los aliados con sol.	Renforce les alliés sous le soleil.	Stärkt Partner bei Sonne.	Potenzia gli alleati col sole.	はれると　みかたも　つよくなる
+ability_doc	Bad Dreams	Daña a los rivales dormidos.	Blesse les ennemis endormis.	Schadet schlafenden Gegnern.	Danneggia chi dorme.	ねている　あいてに　ダメージ
+message	{0F} was hurt by its Solar Power!	¡{0F} se ha dañado con su Poder Solar!	{0F} souffre à cause de Force Soleil !	{0F} wurde durch Solarkraft verletzt!	{0F} è stato ferito da Solarpotere!	{0F}は　サンパワーで　ダメージを　うけた！
+message	{0F} was hurt by its Dry Skin!	¡{0F} se ha dañado con su Piel Seca!	{0F} souffre à cause de Peau Sèche !	{0F} wurde durch Trockenheit verletzt!	{0F} è stato ferito da Pellearsa!	{0F}は　かんそうはだで　ダメージを　うけた！
+message	{0F} is tormented by Bad Dreams!	¡{0F} sufre una pesadilla!	{0F} est tourmenté par Mauvais Rêve !	{0F} wird von Alptraum geplagt!	{0F} è tormentato da Sogniamari!	{0F}は　ナイトメアに　くるしんでいる！
+message	{0F} was hurt by Aftermath!	¡{0F} se ha dañado con Detonación!	{0F} souffre à cause de Boom Final !	{0F} wurde durch Finalschlag verletzt!	{0F} è stato ferito da Scoppio!	{0F}は　ゆうばくで　ダメージを　うけた！
+message	{0F} restored HP with its Dry Skin!	¡{0F} ha recuperado PS con su Piel Seca!	{0F} récupère des PV avec Peau Sèche !	{0F} erholte KP mit Trockenheit!	{0F} ha recuperato PS con Pellearsa!	{0F}は　かんそうはだで　HPを　かいふくした！
+message	{0F} restored HP with its Ice Body!	¡{0F} ha recuperado PS con su Gélido!	{0F} récupère des PV avec Corps Gel !	{0F} erholte KP mit Eishaut!	{0F} ha recuperato PS con Corpogelo!	{0F}は　アイスボディで　HPを　かいふくした！
+message	{0F} restored HP with its Poison Heal!	¡{0F} ha recuperado PS con su Antídoto!	{0F} récupère des PV avec Soin Poison !	{0F} erholte KP mit Aufheber!	{0F} ha recuperato PS con Velencura!	{0F}は　ポイズンヒールで　HPを　かいふくした！
+message	{0F}'s Hydration cured its status problem!	¡La Hidratación de {0F} curó su problema de estado!	Hydratation de {0F} soigne son statut !	Hydration von {0F} heilte das Statusproblem!	Idratazione di {0F} ha curato il suo stato!	{0F}は　うるおいボディで　じょうたいいじょうが　なおった！
+message	{0F} shuddered with Anticipation!	¡{0F} se estremeció por su Anticipación!	{0F} frémit grâce à Anticipation !	{0F} erschauderte durch Vorahnung!	{0F} ha un brivido per Presagio!	{0F}は　きけんよちで　みぶるいした！
+message	{0F} frisked the foe and found a held item!	¡{0F} cacheó al rival y halló un objeto!	{0F} fouille l'ennemi et trouve un objet !	{0F} durchsuchte den Gegner und fand ein Item!	{0F} ha indagato e trovato uno strumento!	{0F}は　おみとおしで　どうぐを　みつけた！
+message	{0F} was warned by Forewarn!	¡{0F} fue avisado por su Alerta!	{0F} est prévenu par Prédiction !	{0F} wurde durch Vorwarnung gewarnt!	{0F} è stato avvisato da Premonizione!	{0F}は　よちむで　けいかいした！
+message	Gravity intensified!	¡La gravedad se ha intensificado!	La gravité s'est accentuée !	Die Schwerkraft wurde verstärkt!	La gravità è aumentata!	じゅうりょくが　つよまった！
+message	Gravity returned to normal!	¡La gravedad ha vuelto a la normalidad!	La gravité est redevenue normale !	Die Schwerkraft ist wieder normal!	La gravità è tornata normale!	じゅうりょくが　もとに　もどった！
+message	{10} levitated with electromagnetism!	¡{10} levita con electromagnetismo!	{10} lévite grâce à l'électromagnétisme !	{10} schwebt dank Elektromagnetismus!	{10} levita con l'elettromagnetismo!	{10}は　でんじふゆうで　うきあがった！
+message	{10}'s electromagnetism wore off!	¡Se acabó el electromagnetismo de {10}!	L'électromagnétisme de {10} se dissipe !	Der Elektromagnetismus von {10} lässt nach!	L'elettromagnetismo di {10} è finito!	{10}の　でんじふゆうが　とけた！
+message	{10} wrapped itself in a veil of water!	¡{10} se envolvió en un velo de agua!	{10} s'entoure d'un voile d'eau !	{10} hüllt sich in einen Wasserschleier!	{10} si è avvolto in un velo d'acqua!	{10}は　みずの　ベールを　まとった！
+message	A veil of water restored {10}'s HP!	¡El velo de agua restauró los PS de {10}!	Le voile d'eau rend des PV à {10} !	Der Wasserschleier füllte KP von {10} auf!	Il velo d'acqua ha curato {10}!	みずの　ベールが　{10}の　HPを　かいふくした！
+message	Poison spikes were scattered around your team!	¡Se esparcieron púas venenosas a tu alrededor!	Des pointes empoisonnées entourent votre équipe !	Giftstacheln liegen um dein Team verstreut!	Aculei velenosi sono sparsi attorno alla tua squadra!	みかたの　あしもとに　どくびしが　ばらまかれた！
+message	Poison spikes were scattered around the foe's team!	¡Se esparcieron púas venenosas alrededor del rival!	Des pointes empoisonnées entourent l'équipe ennemie !	Giftstacheln liegen um das gegnerische Team verstreut!	Aculei velenosi sono sparsi attorno agli avversari!	あいての　あしもとに　どくびしが　ばらまかれた！
+message	{10} absorbed the poison spikes!	¡{10} absorbió las púas venenosas!	{10} absorbe les pointes empoisonnées !	{10} absorbierte die Giftstacheln!	{10} ha assorbito gli aculei velenosi!	{10}は　どくびしを　きゅうしゅうした！
+message	Your team is shielded from critical hits!	¡Tu equipo está a salvo de golpes críticos!	Votre équipe est protégée des coups critiques !	Dein Team ist vor Volltreffern geschützt!	La tua squadra è protetta dai brutti colpi!	みかたは　きゅうしょに　あたらなくなった！
+message	The foe's team is shielded from critical hits!	¡El equipo rival está a salvo de golpes críticos!	L'équipe ennemie est protégée des coups critiques !	Das gegnerische Team ist vor Volltreffern geschützt!	La squadra avversaria è protetta dai brutti colpi!	あいては　きゅうしょに　あたらなくなった！
+message	Your team's Lucky Chant wore off!	¡Se acabó el Conjuro de tu equipo!	Le Air Veinard de votre équipe se dissipe !	Der Glücksbann deines Teams lässt nach!	Il Cantafortuna della tua squadra è finito!	みかたの　おまじないが　とけた！
+message	The foe's team's Lucky Chant wore off!	¡Se acabó el Conjuro del equipo rival!	Le Air Veinard de l'équipe ennemie se dissipe !	Der Glücksbann des Gegners lässt nach!	Il Cantafortuna avversario è finito!	あいての　おまじないが　とけた！
+message	{10} was identified!	¡{10} fue identificado!	{10} est identifié !	{10} wurde erkannt!	{10} è stato identificato!	{10}は　みやぶられた！
+message	{10}'s ability was suppressed!	¡Se anuló la habilidad de {10}!	Le talent de {10} est annulé !	Die Fähigkeit von {10} wurde unterdrückt!	L'abilità di {10} è stata annullata!	{10}の　とくせいが　きかなくなった！
+message	{10} acquired Insomnia!	¡{10} adquirió Insomnio!	{10} acquiert Insomnia !	{10} erhielt Insomnia!	{10} ha ottenuto Insonnia!	{10}は　ふみんに　なった！
+message	{10} can't use items anymore!	¡{10} ya no puede usar objetos!	{10} ne peut plus utiliser d'objets !	{10} kann keine Items mehr nutzen!	{10} non può più usare strumenti!	{10}は　どうぐが　つかえなくなった！
+message	{10} can use items again!	¡{10} puede usar objetos otra vez!	{10} peut de nouveau utiliser des objets !	{10} kann wieder Items nutzen!	{10} può usare di nuovo gli strumenti!	{10}は　また　どうぐが　つかえる！
+message	{10} was prevented from healing!	¡{10} no puede curarse!	{10} ne peut plus se soigner !	{10} wurde am Heilen gehindert!	{10} non può curarsi!	{10}は　かいふくを　ふうじられた！
+message	{10}'s Heal Block wore off!	¡Se acabó el Anticura de {10}!	Le Anti-Soin de {10} se dissipe !	Die Heilsperre von {10} lässt nach!	Antiguarigione di {10} è finito!	{10}の　かいふくふうじが　とけた！
+message	{10} swapped Attack and Sp. Atk boosts!	¡{10} intercambió los cambios de AT. y AT. ESP.!	{10} échange les changements d'ATTAQUE !	{10} tauschte ANGRIFF-Änderungen!	{10} ha scambiato le modifiche di ATTACCO!	{10}は　こうげきの　へんかを　いれかえた！
+message	{10} swapped Defense and Sp. Def boosts!	¡{10} intercambió los cambios de DEFENSA y DEF. ESP.!	{10} échange les changements de DEFENSE !	{10} tauschte VERTEIDIGUNGs-Änderungen!	{10} ha scambiato le modifiche di DIFESA!	{10}は　ぼうぎょの　へんかを　いれかえた！
+message	{10} swapped stat changes with its foe!	¡{10} intercambió los cambios de stats con el rival!	{10} échange ses stats avec l'ennemi !	{10} tauschte Statusänderungen mit dem Gegner!	{10} ha scambiato le modifiche con l'avversario!	{10}は　あいてと　のうりょくの　へんかを　いれかえた！
+message	{10} moved its status problem to the foe!	¡{10} pasó su problema de estado al rival!	{10} transmet son statut à l'ennemi !	{10} übertrug sein Statusproblem!	{10} ha passato il suo stato all'avversario!	{10}は　じょうたいいじょうを　あいてに　うつした！
+message	Pointed stones float around your team!	¡Rocas puntiagudas flotan alrededor de tu equipo!	Des pierres pointues flottent autour de votre équipe !	Spitze Steine schweben um dein Team!	Rocce aguzze fluttuano attorno alla tua squadra!	みかたの　まわりに　とがった　いしが　ういている！
+message	Pointed stones float around the foe's team!	¡Rocas puntiagudas flotan alrededor del rival!	Des pierres pointues flottent autour de l'équipe ennemie !	Spitze Steine schweben um das gegnerische Team!	Rocce aguzze fluttuano attorno agli avversari!	あいての　まわりに　とがった　いしが　ういている！
+message	Pointed stones dug into {10}!	¡Las rocas puntiagudas se clavan en {10}!	Des pierres pointues se plantent dans {10} !	Spitze Steine bohren sich in {10}!	Rocce aguzze si conficcano in {10}!	{10}に　とがった　いしが　くいこんだ！
+message	{10} twisted the dimensions!	¡{10} ha alterado las dimensiones!	{10} tord les dimensions !	{10} verzerrte die Dimensionen!	{10} ha distorto le dimensioni!	{10}は　じくうを　ゆがめた！
+message	The twisted dimensions returned to normal!	¡Las dimensiones vuelven a la normalidad!	Les dimensions tordues redeviennent normales !	Die Dimensionen sind wieder normal!	Le dimensioni sono tornate normali!	ゆがんだ　じくうが　もとに　もどった！
+message	The tailwind blew from behind your team!	¡Sopla un viento a favor de tu equipo!	Un vent arrière souffle pour votre équipe !	Rückenwind weht hinter deinem Team!	Un vento in coda soffia sulla tua squadra!	みかたの　うしろから　おいかぜが　ふいた！
+message	The tailwind blew from behind the foe's team!	¡Sopla un viento a favor del equipo rival!	Un vent arrière souffle pour l'équipe ennemie !	Rückenwind weht hinter dem gegnerischen Team!	Un vento in coda soffia sugli avversari!	あいての　うしろから　おいかぜが　ふいた！
+message	Your team's tailwind petered out!	¡Se acabó el viento a favor de tu equipo!	Le vent arrière de votre équipe se calme !	Der Rückenwind deines Teams legt sich!	Il vento in coda della tua squadra è finito!	みかたの　おいかぜが　やんだ！
+message	The foe's team's tailwind petered out!	¡Se acabó el viento a favor del rival!	Le vent arrière de l'équipe ennemie se calme !	Der Rückenwind des Gegners legt sich!	Il vento in coda avversario è finito!	あいての　おいかぜが　やんだ！
+message	The healing wish came true for {10}!	¡El deseo curativo de {10} se hizo realidad!	Le vœu de soin se réalise pour {10} !	Der Heilwunsch erfüllte sich für {10}!	Il desiderio di cura di {10} si è avverato!	{10}の　いやしの　ねがいが　かなった！
+message	{10} became cloaked in mystical moonlight!	¡{10} se envolvió en una luz lunar mística!	{10} est entouré d'un clair de lune mystique !	{10} wurde in mystisches Mondlicht gehüllt!	{10} è avvolto da una luce lunare mistica!	{10}は　ふしぎな　つきあかりに　つつまれた！
+message	{10} ate the foe's berry!	¡{10} se comió la baya del rival!	{10} mange la baie de l'ennemi !	{10} fraß die Beere des Gegners!	{10} ha mangiato la bacca avversaria!	{10}は　あいての　きのみを　たべた！
+message	{10} ate the foe's berry and was healed!	¡{10} se comió la baya del rival y se curó!	{10} mange la baie ennemie et est soigné !	{10} fraß die gegnerische Beere und wurde geheilt!	{10} ha mangiato la bacca ed è guarito!	{10}は　あいての　きのみを　たべて　かいふくした！
+message	{10} switched its Attack and Defense!	¡{10} intercambió su ATAQUE y DEFENSA!	{10} échange son ATTAQUE et sa DEFENSE !	{10} tauschte ANGRIFF und VERTEIDIGUNG!	{10} ha scambiato ATTACCO e DIFESA!	{10}は　こうげきと　ぼうぎょを　いれかえた！
+message	{10} can't use that move in this gravity!	¡{10} no puede usar ese mov. con esta gravedad!	{10} ne peut pas l'utiliser sous cette gravité !	{10} kann das bei dieser Schwerkraft nicht!	{10} non può usarla con questa gravità!	{10}は　じゅうりょくで　その　わざが　だせない！
+item_name	Ice Stone	Piedra Hielo	Pierre Glace	Eisstein	Pietragelo	こおりのいし
+item_name	Dusk Stone	Piedra Noche	Pierre Nuit	Finsterstein	Neropietra	やみのいし
+item_name	Dawn Stone	Piedra Alba	Pierre Aube	Funkelstein	Pietralbore	めざめいし
+item_name	Shiny Stone	Piedra Día	Pierre Éclat	Leuchtstein	Pietrabrillo	ひかりのいし
+item_name	Razor Claw	Garra Afilada	Griffe Rasoir	Scharfklaue	Affilartigli	するどいツメ
+item_name	Razor Fang	Colmillo Agudo	Croc Rasoir	Scharfzahn	Affilodente	するどいキバ
+item_name	Protector	Protector	Protecteur	Schützer	Copertura	プロテクター
+item_name	Electirizer	Electrizador	Électriseur	Stromisierer	Elettritore	エレキブースター
+item_name	Magmarizer	Magmatizador	Magmariseur	Magmaisierer	Magmatore	マグマブースター
+item_name	Reaper Cloth	Tela Terrible	Tissu Fauche	Düsterumhang	Terrorpanno	れいかいのぬの
+item_name	Dubious Disc	Disco Extraño	CD Douteux	Dubiosdisc	Dubbiodisco	あやしいパッチ
+item_name	Oval Stone	Piedra Oval	Pierre Ovale	Ovaler Stein	Pietraovale	まんまるいし
+item_name	Linking Cord	Cordón Unión	Fil de Liaison	Verbindungsschnur	Filo dell'unione	つながりのヒモ
+item_doc	Ice Stone	Piedra helada que hace evolucionar a ciertos POKéMON.	Pierre glacée qui fait évoluer certains POKéMON.	Eisiger Stein. Entwickelt manche POKéMON.	Pietra gelida che evolve certi POKéMON.	こおりの　いし　ポケモンの　しんかに　つかう
+item_doc	Dusk Stone	Piedra oscura que hace evolucionar a ciertos POKéMON.	Pierre sombre qui fait évoluer certains POKéMON.	Dunkler Stein. Entwickelt manche POKéMON.	Pietra oscura che evolve certi POKéMON.	くらい　いし　ポケモンの　しんかに　つかう
+item_doc	Dawn Stone	Piedra que hace evolucionar a ciertos POKéMON.	Pierre brillante qui fait évoluer certains POKéMON.	Heller Stein. Entwickelt manche POKéMON.	Pietra lucente che evolve certi POKéMON.	あかるい　いし　ポケモンの　しんかに　つかう
+item_doc	Shiny Stone	Piedra que hace evolucionar a ciertos POKéMON.	Pierre éclatante qui fait évoluer certains POKéMON.	Glänzender Stein. Entwickelt manche POKéMON.	Pietra splendente che evolve certi POKéMON.	ひかる　いし　ポケモンの　しんかに　つかう
+item_doc	Razor Claw	Sube los críticos. Ayuda a evolucionar.	Monte le taux de critique. Aide à évoluer.	Mehr Volltreffer. Hilft bei Entwicklung.	Alza i brutti colpi. Aiuta a evolversi.	きゅうしょに　あたりやすい　しんかの　どうぐ
+item_doc	Razor Fang	Puede amedrentar al rival. Ayuda a evolucionar.	Peut apeurer la cible. Aide à évoluer.	Schreckt zurück. Hilft bei Entwicklung.	Può far tentennare. Aiuta a evolversi.	ひるませる　ことが　ある　しんかの　どうぐ
+item_doc	Protector	Para evolucionar. Sin efecto en combate.	Objet d'évolution. Sans effet en combat.	Item für die Entwicklung. Wirkt nicht im Kampf.	Strumento per evolversi. Nessun effetto in lotta.	しんかの　どうぐ　たたかいでは　こうかなし
+item_doc	Electirizer	Para evolucionar. Sin efecto en combate.	Objet d'évolution. Sans effet en combat.	Item für die Entwicklung. Wirkt nicht im Kampf.	Strumento per evolversi. Nessun effetto in lotta.	しんかの　どうぐ　たたかいでは　こうかなし
+item_doc	Magmarizer	Para evolucionar. Sin efecto en combate.	Objet d'évolution. Sans effet en combat.	Item für die Entwicklung. Wirkt nicht im Kampf.	Strumento per evolversi. Nessun effetto in lotta.	しんかの　どうぐ　たたかいでは　こうかなし
+item_doc	Reaper Cloth	Para evolucionar. Sin efecto en combate.	Objet d'évolution. Sans effet en combat.	Item für die Entwicklung. Wirkt nicht im Kampf.	Strumento per evolversi. Nessun effetto in lotta.	しんかの　どうぐ　たたかいでは　こうかなし
+item_doc	Dubious Disc	Para evolucionar. Sin efecto en combate.	Objet d'évolution. Sans effet en combat.	Item für die Entwicklung. Wirkt nicht im Kampf.	Strumento per evolversi. Nessun effetto in lotta.	しんかの　どうぐ　たたかいでは　こうかなし
+item_doc	Oval Stone	Para evolucionar. Sin efecto en combate.	Objet d'évolution. Sans effet en combat.	Item für die Entwicklung. Wirkt nicht im Kampf.	Strumento per evolversi. Nessun effetto in lotta.	しんかの　どうぐ　たたかいでは　こうかなし
+item_doc	Linking Cord	Como un intercambio para evolucionar. Úsalo en POKéMON.	Vaut un échange pour évoluer. Sur un POKéMON.	Wirkt wie Tausch und entwickelt POKéMON.	Vale uno scambio per evolversi. Usalo su POKéMON.	つうしんこうかんと　おなじ　ポケモンに　つかう
+species_name	Turtwig	Turtwig	Tortipouss	Chelast	Turtwig	ナエトル
+species_name	Grotle	Grotle	Boskara	Chelcarain	Grotle	ハヤシガメ
+species_name	Torterra	Torterra	Torterra	Chelterrar	Torterra	ドダイトス
+species_name	Chimchar	Chimchar	Ouisticram	Panflam	Chimchar	ヒコザル
+species_name	Monferno	Monferno	Chimpenfeu	Panpyro	Monferno	モウカザル
+species_name	Infernape	Infernape	Simiabraz	Panferno	Infernape	ゴウカザル
+species_name	Piplup	Piplup	Tiplouf	Plinfa	Piplup	ポッチャマ
+species_name	Prinplup	Prinplup	Prinplouf	Pliprin	Prinplup	ポッタイシ
+species_name	Empoleon	Empoleon	Pingoléon	Impoleon	Empoleon	エンペルト
+species_name	Starly	Starly	Étourmi	Staralili	Starly	ムックル
+species_name	Staravia	Staravia	Étourvol	Staravia	Staravia	ムクバード
+species_name	Staraptor	Staraptor	Étouraptor	Staraptor	Staraptor	ムクホーク
+species_name	Bidoof	Bidoof	Keunotor	Bidiza	Bidoof	ビッパ
+species_name	Bibarel	Bibarel	Castorno	Bidifas	Bibarel	ビーダル
+species_name	Kricketot	Kricketot	Crikzik	Zirpurze	Kricketot	コロボーシ
+species_name	Kricketune	Kricketune	Mélokrik	Zirpeise	Kricketune	コロトック
+species_name	Shinx	Shinx	Lixy	Sheinux	Shinx	コリンク
+species_name	Luxio	Luxio	Luxio	Luxio	Luxio	ルクシオ
+species_name	Luxray	Luxray	Luxray	Luxtra	Luxray	レントラー
+species_name	Budew	Budew	Rozbouton	Knospi	Budew	スボミー
+species_name	Roserade	Roserade	Roserade	Roserade	Roserade	ロズレイド
+species_name	Cranidos	Cranidos	Kranidos	Koknodon	Cranidos	ズガイドス
+species_name	Rampardos	Rampardos	Charkos	Rameidon	Rampardos	ラムパルド
+species_name	Shieldon	Shieldon	Dinoclier	Schilterus	Shieldon	タテトプス
+species_name	Bastiodon	Bastiodon	Bastiodon	Bollterus	Bastiodon	トリデプス
+species_name	Burmy	Burmy	Cheniti	Burmy	Burmy	ミノムッチ
+species_name	Wormadam	Wormadam	Cheniselle	Burmadame	Wormadam	ミノマダム
+species_name	Mothim	Mothim	Papilord	Moterpel	Mothim	ガーメイル
+species_name	Combee	Combee	Apitrini	Wadribie	Combee	ミツハニー
+species_name	Vespiquen	Vespiquen	Apireine	Honweisel	Vespiquen	ビークイン
+species_name	Pachirisu	Pachirisu	Pachirisu	Pachirisu	Pachirisu	パチリス
+species_name	Buizel	Buizel	Mustébouée	Bamelin	Buizel	ブイゼル
+species_name	Floatzel	Floatzel	Mustéflott	Bojelin	Floatzel	フローゼル
+species_name	Cherubi	Cherubi	Ceribou	Kikugi	Cherubi	チェリンボ
+species_name	Cherrim	Cherrim	Ceriflor	Kinoso	Cherrim	チェリム
+species_name	Shellos	Shellos	Sancoki	Schalellos	Shellos	カラナクシ
+species_name	Gastrodon	Gastrodon	Tritosor	Gastrodon	Gastrodon	トリトドン
+species_name	Ambipom	Ambipom	Capidextre	Ambidiffel	Ambipom	エテボース
+species_name	Drifloon	Drifloon	Baudrive	Driftlon	Drifloon	フワンテ
+species_name	Drifblim	Drifblim	Grodrive	Drifzepeli	Drifblim	フワライド
+species_name	Buneary	Buneary	Laporeille	Haspiror	Buneary	ミミロル
+species_name	Lopunny	Lopunny	Lockpin	Schlapor	Lopunny	ミミロップ
+species_name	Mismagius	Mismagius	Magirêve	Traunmagil	Mismagius	ムウマージ
+species_name	Honchkrow	Honchkrow	Corboss	Kramshef	Honchkrow	ドンカラス
+species_name	Glameow	Glameow	Chaglam	Charmian	Glameow	ニャルマー
+species_name	Purugly	Purugly	Chaffreux	Shnurgarst	Purugly	ブニャット
+species_name	Chingling	Chingling	Korillon	Klingplim	Chingling	リーシャン
+species_name	Stunky	Stunky	Moufouette	Skunkapuh	Stunky	スカンプー
+species_name	Skuntank	Skuntank	Moufflair	Skuntank	Skuntank	スカタンク
+species_name	Bronzor	Bronzor	Archéomire	Bronzel	Bronzor	ドーミラー
+species_name	Bronzong	Bronzong	Archéodong	Bronzong	Bronzong	ドータクン
+species_name	Mime Jr.	Mime Jr.	Mime Jr.	Pantimimi	Mime Jr.	マネネ
+species_name	Happiny	Happiny	Ptiravi	Wonneira	Happiny	ピンプク
+species_name	Chatot	Chatot	Pijako	Plaudagei	Chatot	ペラップ
+species_name	Spiritomb	Spiritomb	Spiritomb	Kryppuk	Spiritomb	ミカルゲ
+species_name	Gible	Gible	Griknot	Kaumalat	Gible	フカマル
+species_name	Gabite	Gabite	Carmache	Knarksel	Gabite	ガバイト
+species_name	Garchomp	Garchomp	Carchacrok	Knakrack	Garchomp	ガブリアス
+species_name	Riolu	Riolu	Riolu	Riolu	Riolu	リオル
+species_name	Lucario	Lucario	Lucario	Lucario	Lucario	ルカリオ
+species_name	Hippopotas	Hippopotas	Hippopotas	Hippopotas	Hippopotas	ヒポポタス
+species_name	Hippowdon	Hippowdon	Hippodocus	Hippoterus	Hippowdon	カバルドン
+species_name	Skorupi	Skorupi	Rapion	Pionskora	Skorupi	スコルピ
+species_name	Drapion	Drapion	Drascore	Piondragi	Drapion	ドラピオン
+species_name	Croagunk	Croagunk	Cradopaud	Glibunkel	Croagunk	グレッグル
+species_name	Toxicroak	Toxicroak	Coatox	Toxiquak	Toxicroak	ドクロッグ
+species_name	Carnivine	Carnivine	Vortente	Venuflibis	Carnivine	マスキッパ
+species_name	Finneon	Finneon	Écayon	Finneon	Finneon	ケイコウオ
+species_name	Lumineon	Lumineon	Luminéon	Lumineon	Lumineon	ネオラント
+species_name	Mantyke	Mantyke	Babimanta	Mantirps	Mantyke	タマンタ
+species_name	Snover	Snover	Blizzi	Shnebedeck	Snover	ユキカブリ
+species_name	Abomasnow	Abomasnow	Blizzaroi	Rexblisar	Abomasnow	ユキノオー
+species_name	Weavile	Weavile	Dimoret	Snibunna	Weavile	マニューラ
+species_name	Magnezone	Magnezone	Magnézone	Magnezone	Magnezone	ジバコイル
+species_name	Lickilicky	Lickilicky	Coudlangue	Schlurplek	Lickilicky	ベロベルト
+species_name	Rhyperior	Rhyperior	Rhinastoc	Rihornior	Rhyperior	ドサイドン
+species_name	Tangrowth	Tangrowth	Bouldeneu	Tangoloss	Tangrowth	モジャンボ
+species_name	Electivire	Electivire	Élekable	Elevoltek	Electivire	エレキブル
+species_name	Magmortar	Magmortar	Maganon	Magbrant	Magmortar	ブーバーン
+species_name	Togekiss	Togekiss	Togekiss	Togekiss	Togekiss	トゲキッス
+species_name	Yanmega	Yanmega	Yanmega	Yanmega	Yanmega	メガヤンマ
+species_name	Leafeon	Leafeon	Phyllali	Folipurba	Leafeon	リーフィア
+species_name	Glaceon	Glaceon	Givrali	Glaziola	Glaceon	グレイシア
+species_name	Gliscor	Gliscor	Scorvol	Skorgro	Gliscor	グライオン
+species_name	Mamoswine	Mamoswine	Mammochon	Mamutel	Mamoswine	マンムー
+species_name	Porygon-Z	Porygon-Z	Porygon-Z	Porygon-Z	Porygon-Z	ポリゴンＺ
+species_name	Gallade	Gallade	Gallame	Galagladi	Gallade	エルレイド
+species_name	Probopass	Probopass	Tarinorme	Voluminas	Probopass	ダイノーズ
+species_name	Dusknoir	Dusknoir	Noctunoir	Zwirrfinst	Dusknoir	ヨノワール
+species_name	Froslass	Froslass	Momartik	Frosdedje	Froslass	ユキメノコ
+species_name	Rotom	Rotom	Motisma	Rotom	Rotom	ロトム
+species_name	Uxie	Uxie	Créhelf	Selfe	Uxie	ユクシー
+species_name	Mesprit	Mesprit	Créfollet	Vesprit	Mesprit	エムリット
+species_name	Azelf	Azelf	Créfadet	Tobutz	Azelf	アグノム
+species_name	Dialga	Dialga	Dialga	Dialga	Dialga	ディアルガ
+species_name	Palkia	Palkia	Palkia	Palkia	Palkia	パルキア
+species_name	Heatran	Heatran	Heatran	Heatran	Heatran	ヒードラン
+species_name	Regigigas	Regigigas	Regigigas	Regigigas	Regigigas	レジギガス
+species_name	Giratina	Giratina	Giratina	Giratina	Giratina	ギラティナ
+species_name	Cresselia	Cresselia	Cresselia	Cresselia	Cresselia	クレセリア
+species_name	Phione	Phione	Phione	Phione	Phione	フィオネ
+species_name	Manaphy	Manaphy	Manaphy	Manaphy	Manaphy	マナフィ
+species_name	Darkrai	Darkrai	Darkrai	Darkrai	Darkrai	ダークライ
+species_name	Shaymin	Shaymin	Shaymin	Shaymin	Shaymin	シェイミ
+species_name	Arceus	Arceus	Arceus	Arceus	Arceus	アルセウス
+species_category	Turtwig	Hojita	Minifeuille	Winziglaub	Fogliolina	わかば
+species_category	Grotle	Arboleda	Bosquet	Hain	Boschetto	こだち
+species_category	Torterra	Continente	Continent	Kontinent	Continente	たいりく
+species_category	Chimchar	Chimpancé	Chimpanzé	Schimpanse	Scimpanzé	こざる
+species_category	Monferno	Juguetón	Garnement	Verspielt	Briccone	やんちゃ
+species_category	Infernape	Llama	Flamme	Flamme	Fiamma	かえん
+species_category	Piplup	Pingüino	Pingouin	Pinguin	Pinguino	ペンギン
+species_category	Prinplup	Pingüino	Pingouin	Pinguin	Pinguino	ペンギン
+species_category	Empoleon	Emperador	Empereur	Kaiser	Imperatore	こうてい
+species_category	Starly	Estornino	Étourneau	Star	Storno	むくどり
+species_category	Staravia	Estornino	Étourneau	Star	Storno	むくどり
+species_category	Staraptor	Depredador	Rapace	Raubtier	Rapace	もうきん
+species_category	Bidoof	Gran Ratón	Souridodue	Dickmaus	Topaffuto	まるねずみ
+species_category	Bibarel	Castor	Castor	Biber	Castoro	ビーバー
+species_category	Kricketot	Grillo	Criquet	Zirper	Grillo	こおろぎ
+species_category	Kricketune	Grillo	Criquet	Zirper	Grillo	こおろぎ
+species_category	Shinx	Flash	Flash	Flacker	Baleno	せんこう
+species_category	Luxio	Chispa	Étincelle	Funken	Favilla	でんこう
+species_category	Luxray	Chispa Ojos	Brillœil	Glühaugen	Occhiluce	がんこう
+species_category	Budew	Brote	Bourgeon	Knospen	Germoglio	つぼみ
+species_category	Roserade	Ramillete	Bouquet	Blumenstrauß	Floreale	ブーケ
+species_category	Cranidos	Cabezazo	Coud’Boule	Kopfstoß	Cranioso	ずつき
+species_category	Rampardos	Cabezazo	Coud’Boule	Kopfstoß	Cranioso	ずつき
+species_category	Shieldon	Escudo	Bouclier	Schutzschild	Schermo	シールド
+species_category	Bastiodon	Escudo	Bouclier	Schutzschild	Schermo	シールド
+species_category	Burmy	Larva	Ver Caché	Beutelwurm	Larva	みのむし
+species_category	Wormadam	Larva	Ver Caché	Beutelwurm	Larva	みのむし
+species_category	Mothim	Polilla	Phalène	Motte	Falena	ミノガ
+species_category	Combee	Abejita	Miniabeille	Kleinbienen	Apetta	はちのこ
+species_category	Vespiquen	Colmena	Ruche	Bienenstock	Alveare	はちのす
+species_category	Pachirisu	Ardillalec	Écurélec	Elektrohörnchen	Elescoiatto	でんきりす
+species_category	Buizel	Nutria Mar.	Aquabelette	Meereswiesel	Maridonnola	うみイタチ
+species_category	Floatzel	Nutria Mar.	Aquabelette	Meereswiesel	Maridonnola	うみイタチ
+species_category	Cherubi	Cereza	Cerise	Kirschen	Ciliegia	さくらんぼ
+species_category	Cherrim	Floración	Floraison	Blüten	Bocciolo	サクラ
+species_category	Shellos	Babosa	Aqualimace	Seeschnecken	Lumacomare	ウミウシ
+species_category	Gastrodon	Babosa	Aqualimace	Seeschnecken	Lumacomare	ウミウシ
+species_category	Ambipom	Cola Larga	Longqueue	Langschweif	Lungacoda	おなが
+species_category	Drifloon	Globo	Bouboule	Ballon	Pallone	ふうせん
+species_category	Drifblim	Dirigible	Ballon	Luftschiff	Dirigibile	ききゅう
+species_category	Buneary	Conejo	Lapin	Hasen	Coniglio	うさぎ
+species_category	Lopunny	Conejo	Lapin	Hasen	Coniglio	うさぎ
+species_category	Mismagius	Mágico	Magique	Magisch	Stregone	マジカル
+species_category	Honchkrow	Gran Jefe	Big Boss	Anführer	Grancapo	おおボス
+species_category	Glameow	Gastuto	Chafouin	Fies	Felide	ねこかぶり
+species_category	Purugly	Tigre Gato	Chatigre	Tigerkatze	Gattotigre	とらねこ
+species_category	Chingling	Campana	Clochette	Glöckchen	Sonaglio	すず
+species_category	Stunky	Mofeta	Moufette	Stinktier	Moffetta	スカンク
+species_category	Skuntank	Mofeta	Moufette	Stinktier	Moffetta	スカンク
+species_category	Bronzor	Bronce	Bronze	Bronze	Bronzo	せいどう
+species_category	Bronzong	Campana	Clochebronze	Bronzeglocken	Squibronzo	どうたく
+species_category	Mime Jr.	Mimo	Mime	Mimen	Mimo	マイム
+species_category	Happiny	Casita	Maisonjouet	Spielhaus	Ovettino	ままごと
+species_category	Chatot	Corchea	Note Musique	Musiknote	Musicale	おんぷ
+species_category	Spiritomb	Prohibido	Interdit	Verboten	Proibito	ふういん
+species_category	Gible	Terrascualo	Terrequin	Landhai	Squaloterra	りくザメ
+species_category	Gabite	Cueva	Caverne	Höhlen	Grotta	ほらあな
+species_category	Garchomp	Mach	Supersonic	Rasanz	Mach	マッハ
+species_category	Riolu	Emanación	Émanation	Wellenspiel	Emanazione	はもん
+species_category	Lucario	Aura	Aura	Aura	Aura	はどう
+species_category	Hippopotas	Hipo	Hippo	Flusspferd	Ippo	カバ
+species_category	Hippowdon	Peso Pesado	Poids Lourd	Schwergewichts	Grandepeso	じゅうりょう
+species_category	Skorupi	Escorpión	Scorpion	Skorpion	Scorpione	さそり
+species_category	Drapion	Escorpiogro	Scorpogre	Ogerskorpion	Scorpiaccio	ばけさそり
+species_category	Croagunk	Boca Tóxica	Toxique	Giftmund	Inveieleno	どくづき
+species_category	Toxicroak	Boca Tóxica	Toxique	Giftmund	Inveieleno	どくづき
+species_category	Carnivine	Caza Bichos	Chopinsecte	Käfertod	Insettivoro	むしとり
+species_category	Finneon	Pez Ala	Poisson Ailé	Flügelfisch	Pescealato	はねうお
+species_category	Lumineon	Neón	Néon	Neon	Neon	ネオン
+species_category	Mantyke	Milano	Cervolant	Flugrochen	Aquilone	カイト
+species_category	Snover	Árbol Nieve	Arbregelé	Frostbaum	Albergelo	じゅひょう
+species_category	Abomasnow	Árbol Nieve	Arbregelé	Frostbaum	Albergelo	じゅひょう
+species_category	Weavile	Garra Filo	Grifacérée	Stichklauen	Lamartigli	かぎづめ
+species_category	Magnezone	Magnético	Aimant	Magnetgebiets	Magnetico	じば
+species_category	Lickilicky	Lametazo	Lécheur	Schlecker	Linguaccia	なめまわし
+species_category	Rhyperior	Taladro	Perceur	Bohrer	Trapano	ドリル
+species_category	Tangrowth	Enredadera	Vigne	Ranken	Liana	ツルじょう
+species_category	Electivire	Rayo	Foudrélec	Donnerkeil	Saetta	らいでん
+species_category	Magmortar	Explosión	Explosion	Detonations	Esplosivo	ばくえん
+species_category	Togekiss	Festejo	Célébration	Jubilierer	Festa	しゅくふく
+species_category	Yanmega	Libélula	Libellogre	Agrion	Libellorco	オニトンボ
+species_category	Leafeon	Verdor	Verdoyant	Unreif	Rigoglioso	しんりょく
+species_category	Glaceon	Nieve Fresca	Poudreuse	Neuschnee	Nevefresca	しんせつ
+species_category	Gliscor	Colmicorpio	Scorpicroc	Zahnskorpi	Scorpidente	キバさそり
+species_category	Mamoswine	Doscolmillos	Deudéfenses	Doppelstoßzahn	Duezanne	２ほんキバ
+species_category	Porygon-Z	Virtual	Virtuel	Virtuell	Virtuale	バーチャル
+species_category	Gallade	Cuchilla	Lame	Klingen	Lama	やいば
+species_category	Probopass	Brújula	Boussole	Kompass	Bussola	コンパス
+species_category	Dusknoir	Grilletes	Mainpince	Greifer	Pinza	てづかみ
+species_category	Froslass	Tierra Fría	Enneigement	Schneegebiets	Suolnevoso	ゆきぐに
+species_category	Rotom	Plasma	Plasma	Plasma	Plasma	プラズマ
+species_category	Uxie	Sabiduría	Savoir	Wissens	Sapienza	ちしき
+species_category	Mesprit	Sensorio	Émotion	Emotions	Emozione	かんじょう
+species_category	Azelf	Voluntad	Volonté	Willenskraft	Volontà	いし
+species_category	Dialga	Temporal	Temps	Zeitweilig	Tempo	じかん
+species_category	Palkia	Espacial	Espace	Räumlich	Spazio	くうかん
+species_category	Heatran	Domo Lava	Caldeira	Lavadom	Cratere	かこう
+species_category	Regigigas	Colosal	Prodigieux	Kolossal	Colossale	きょだい
+species_category	Giratina	Renegado	Renégat	Rebellen	Ribelle	はんこつ
+species_category	Cresselia	Lunar	Lunaire	Lunar	Falcato	みかづき
+species_category	Phione	Marino	Dérivenmer	Seedrift	Oceanbondo	かいよう
+species_category	Manaphy	Náutico	Voyagenmer	Seefahrer	Oceandante	かいゆう
+species_category	Darkrai	Oscuridad	Noirtotal	Dunkelnacht	Neropesto	あんこく
+species_category	Shaymin	Gratitud	Gratitude	Dankbarkeit	Gratitudine	かんしゃ
+species_category	Arceus	Alfa	Alpha	Alpha	Primevo	そうぞう
+sys	Not built yet: does nothing.	Aún no creado: no hace nada.	Pas encore créé : sans effet.	Noch nicht gebaut: ohne Wirkung.	Non ancora creato: nessun effetto.	まだ　ない　こうかなし
+tm_label	TM	MT	CT	TM	MT	わざマシン
+fairy	Fairy	Hada	Fée	Fee	Folletto	フェアリー

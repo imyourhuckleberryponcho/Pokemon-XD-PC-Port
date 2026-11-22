@@ -81,22 +81,22 @@ def decode(fmt, w, h, data):
         out[..., 1] = v[:, 1, :, 0].reshape(nt, 4, 4)
         out[..., 2] = v[:, 1, :, 1].reshape(nt, 4, 4)
     elif fmt == 14:
-        sb = d[:nt * 32].reshape(nt, 4, 8)                    # tile, sub-block, 8 bytes
+        sb = d[:nt * 32].reshape(nt, 4, 8)
         c0 = sb[..., 0].astype(np.int32) << 8 | sb[..., 1]
         c1 = sb[..., 2].astype(np.int32) << 8 | sb[..., 3]
         p0, p1 = _565(c0).astype(np.int32), _565(c1).astype(np.int32)
         four = (c0 > c1)[..., None]
         p2 = np.where(four, (2 * p0 + p1) // 3, (p0 + p1) // 2)
         p3 = np.where(four, (p0 + 2 * p1) // 3, 0)
-        pal = np.stack([p0, p1, p2, p3], axis=-2)              # [nt, 4, 4 colours, 3]
+        pal = np.stack([p0, p1, p2, p3], axis=-2)
         alpha = np.ones((nt, 4, 4), dtype=np.uint8) * 255
         alpha[..., 3] = np.where(four[..., 0], 255, 0)
-        idx = np.stack([(sb[..., 4:8] >> s) & 3 for s in (6, 4, 2, 0)], axis=-1)   # [nt, 4 sub, 4 rows, 4 cols]
+        idx = np.stack([(sb[..., 4:8] >> s) & 3 for s in (6, 4, 2, 0)], axis=-1)
         ti = np.arange(nt)[:, None, None, None]
         si = np.arange(4)[None, :, None, None]
-        col = pal[ti, si, idx]                                 # [nt, 4 sub, 4 rows, 4 cols, 3]
+        col = pal[ti, si, idx]
         al = alpha[ti, si, idx]
-        sub = np.concatenate([col, al[..., None]], axis=-1).astype(np.uint8)     # [nt, 4 sub, 4, 4, 4]
+        sub = np.concatenate([col, al[..., None]], axis=-1).astype(np.uint8)
         out[:, 0:4, 0:4] = sub[:, 0]
         out[:, 0:4, 4:8] = sub[:, 1]
         out[:, 4:8, 0:4] = sub[:, 2]
@@ -114,12 +114,12 @@ def _to565(rgb):
 def encode_cmpr(img):
     """uint8 [h, w, 4] -> CMPR bytes. Pixels with alpha < 128 become see-through (three-colour blocks)."""
     h, w = img.shape[:2]
-    tiles = _tile(img, 8, 8)                                   # [nt, 8, 8, 4]
+    tiles = _tile(img, 8, 8)
     nt = tiles.shape[0]
     subs = np.stack([tiles[:, 0:4, 0:4], tiles[:, 0:4, 4:8], tiles[:, 4:8, 0:4], tiles[:, 4:8, 4:8]], axis=1)
     px = subs.reshape(nt * 4, 16, 4).astype(np.float64)
     rgb, clear = px[..., :3], px[..., 3] < 128
-    # end colours: the two pixels furthest apart along the block's main colour direction
+
     solid = ~clear
     cnt = np.maximum(solid.sum(1, keepdims=True), 1)
     mean = (rgb * solid[..., None]).sum(1, keepdims=True) / cnt[..., None]
@@ -138,7 +138,7 @@ def encode_cmpr(img):
     b = rgb[np.arange(len(px)), lo]
     c0, c1 = _to565(a), _to565(b)
     has_clear = clear.any(1)
-    # four-colour blocks need c0 > c1, three-colour (see-through) blocks c0 <= c1
+
     swap = np.where(has_clear, c0 > c1, c0 < c1)
     c0, c1 = np.where(swap, c1, c0), np.where(swap, c0, c1)
     same = (c0 == c1) & ~has_clear
@@ -147,7 +147,7 @@ def encode_cmpr(img):
     p0, p1 = _565(c0).astype(np.float64), _565(c1).astype(np.float64)
     four = (c0 > c1)[:, None]
     pal = np.stack([p0, p1, np.where(four, (2 * p0 + p1) / 3, (p0 + p1) / 2), np.where(four, (p0 + 2 * p1) / 3, 1e9)], axis=1)
-    dist = ((rgb[:, :, None, :] - pal[:, None, :, :]) ** 2).sum(-1)    # [b, 16, 4]
+    dist = ((rgb[:, :, None, :] - pal[:, None, :, :]) ** 2).sum(-1)
     idx = dist.argmin(-1)
     idx = np.where(clear, 3, idx)
     bits = idx.reshape(-1, 4, 4)
@@ -217,7 +217,7 @@ def decode_c14x2(w, h, data, pal_format):
 def _selftest():
     rng = np.random.default_rng(1)
     ok = True
-    # a smooth picture with a see-through hole, 64x40
+
     y, x = np.mgrid[0:40, 0:64]
     img = np.stack([x * 4, y * 6, 255 - x * 3, np.where((x - 32) ** 2 + (y - 20) ** 2 < 64, 0, 255)], -1).astype(np.uint8)
     back = decode(14, 64, 40, encode_cmpr(img))

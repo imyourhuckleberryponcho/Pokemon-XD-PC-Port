@@ -34,7 +34,7 @@ def parse_cflags(flags):
 
 def load_config(snap):
     src = open(os.path.join(snap, "configure.py"), encoding="utf-8").read()
-    # Cut the script off where it would generate build.ninja / progress reports.
+
     cut = src.rfind('\nif args.mode == "configure":')
     if cut < 0:
         sys.exit("configure.py layout changed: could not find the 'args.mode' block")

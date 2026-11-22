@@ -20,14 +20,14 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
-# The main checkout when this one is a git worktree (<main>/<tools folder>/worktrees/<name>): its build folder has the nod
-# library when this tree was not built itself. XD_MAIN_ROOT overrides.
+
+
 MAIN_ROOT = os.environ.get('XD_MAIN_ROOT') or (
     os.path.dirname(os.path.dirname(os.path.dirname(ROOT))) if os.path.basename(os.path.dirname(ROOT)) == 'worktrees'
     else ROOT)
 BUILD = os.path.join(ROOT, 'build')
-# WHY a suffix per system: the Windows, Linux (WSL) and Mac outputs can live in one shared build folder and must not
-# overwrite each other; the Windows names stay as they were.
+
+
 SUFFIX = '' if sys.platform == 'win32' else '_mac' if sys.platform == 'darwin' else '_linux'
 VENV = os.path.join(BUILD, 'pbr_models_venv' + SUFFIX)
 WORK = os.path.join(BUILD, 'pbr_models_work' + SUFFIX)
@@ -49,8 +49,8 @@ def find_nod():
         if sys.platform == 'win32':
             cands.append(os.path.join(base, 'build', 'release', 'bin', LIB))
         else:
-            # build.sh: build/linux/linux-release, build_mac.sh: build/mac/mac-release; Aurora unpacks the prebuilt
-            # nod package under _deps (the library itself is in lib/).
+
+
             for tree in ('linux/linux-release', 'mac/mac-release'):
                 for sub in ('_deps/nod_prebuilt-src/lib', 'bin', '_deps/nod_prebuilt-src/bin'):
                     cands.append(os.path.join(base, 'build', tree, sub, LIB))

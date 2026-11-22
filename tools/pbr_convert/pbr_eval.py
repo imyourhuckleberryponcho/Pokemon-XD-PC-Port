@@ -60,8 +60,8 @@ class Pose:
 
 
 class Eval:
-    comp_t = False   # scale compensation also divides the node's TRANSLATION by the parent's scale (Maya's segment
-                     # scale compensate; gen4.py turns it on for models whose chains of scaled bones blew up without it)
+    comp_t = False
+
 
     def __init__(self, sdr, compensate='joint8_under_joint'):
         self.sdr = sdr
@@ -83,10 +83,10 @@ class Eval:
         for i, x in enumerate(nodes):
             if x.inv_bind is not None:
                 self.inv_bind[i, :3, :] = np.array(x.inv_bind).reshape(3, 4)
-        # meshes that are drawn (kind 3)
+
         self.meshes = []
         for i, x in enumerate(nodes):
-            if x.kind != 3 or x.mesh is None or x.name.startswith('col_'):   # col_: touch boxes, never drawn
+            if x.kind != 3 or x.mesh is None or x.name.startswith('col_'):
                 continue
             me = x.mesh
             pos = np.array([v[0] for v in me['verts']], dtype=float).reshape(-1, 3)
@@ -159,12 +159,12 @@ class Eval:
         m[..., 3, 3] = 1.0
         m3 = rm * sca[:, :, None, :]
         t = pos.copy()
-        # pivots (non-joints): Tr(T + v2) * R * Tr(v1) * S * Tr(v0)
+
         v0, v1, v2 = self.piv[:, 0:3], self.piv[:, 3:6], self.piv[:, 6:9]
         t = t + v2[None] + np.einsum('fnij,nj->fni', rm, v1) + np.einsum('fnij,nj->fni', m3, v0)
-        # scale compensation (joints): 1 / the parent's own scale in front
+
         p.compensated = np.zeros(self.n, dtype=bool)
-        p.dcomp = np.ones((nf, self.n, 3))   # the compensating scale in front of the node's own: 1 / the parent's scale
+        p.dcomp = np.ones((nf, self.n, 3))
         for i in range(self.n):
             if self.comp[i] and self.parent[i] >= 0:
                 ps = sca[:, self.parent[i], :]
