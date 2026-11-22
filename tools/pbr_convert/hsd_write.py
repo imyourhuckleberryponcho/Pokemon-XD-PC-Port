@@ -441,7 +441,7 @@ class Writer:
             keys = t.keys
             if not keys:
                 continue
-            if len([k for k in keys if k[0] != OP_SLP]) < 2:
+            if len([k for k in keys if k[0] != OP_SLP]) < 2 and t.kind != 40:   # 40 = particle spawn track: one key is its normal shape
                 # never a one-key track
                 k = [k for k in keys if k[0] != OP_SLP][0]
                 keys = [(OP_CON, k[1], 0.0, int(max(a.end, 1))), (OP_CON, k[1], 0.0, 0)]
@@ -463,10 +463,56 @@ class Writer:
             o.ptr(8, fobjs[0])
         return o
 
-    def tree(self, make):
+    def tree(self, make, empty=None, share=None):
         """Blobs for a tree with the joint tree's shape; make(joint index) -> blob whose first two words are
-        child and next. Returns the root's blob."""
+        child and next. Returns the root's blob.
+        empty(joint index) -> True when the node holds nothing; with `share` (a dict kept by the caller) a node whose whole tail (itself, its subtree and the
+        siblings after it) is empty is one shared node for every tree of the model, as the game's own files do (a model with 150 animations is a third the size)."""
         m = self.m
+        if empty is not None and share is not None:
+            n = len(m.joints)
+            kids = {}
+            for i, j in enumerate(m.joints):
+                kids.setdefault(j.parent, []).append(i)
+            tail = [False] * n
+            for i in reversed(range(n)):    # (children and later siblings have larger numbers: the joint list is depth first)
+                sib = kids[m.joints[i].parent]
+                later = sib[sib.index(i) + 1] if sib.index(i) + 1 < len(sib) else None
+                tail[i] = bool(empty(i)) and all(tail[c] for c in kids.get(i, [])) and (later is None or tail[later])
+            nodes = [None] * n
+            for i in range(n):
+                if tail[i]:
+                    if i not in share:
+                        share[i] = make(i)
+                        share[i].shared = True
+                    nodes[i] = share[i]
+                else:
+                    nodes[i] = make(i)
+            last_child = {}
+            for i, j in enumerate(m.joints):
+                if j.parent >= 0:
+                    if j.parent in last_child:
+                        if not getattr(nodes[last_child[j.parent]], 'shared', False):
+                            nodes[last_child[j.parent]].ptr(self.next_off, nodes[i])
+                    elif not getattr(nodes[j.parent], 'shared', False):
+                        nodes[j.parent].ptr(self.child_off, nodes[i])
+                    last_child[j.parent] = i
+            roots = [i for i, j in enumerate(m.joints) if j.parent < 0]
+            for a, b in zip(roots, roots[1:]):
+                if not getattr(nodes[a], 'shared', False):
+                    nodes[a].ptr(self.next_off, nodes[b])
+            # the shared nodes link among themselves once (every node a shared one points to is shared too)
+            linked = share.setdefault('linked', set())
+            for i in [k for k in list(share) if k != 'linked']:
+                if i in linked:
+                    continue
+                linked.add(i)
+                if kids.get(i):
+                    share[i].ptr(self.child_off, share[kids[i][0]])
+                sib = kids[m.joints[i].parent]
+                if sib.index(i) + 1 < len(sib):
+                    share[i].ptr(self.next_off, share[sib[sib.index(i) + 1]])
+            return nodes
         nodes = [make(i) for i in range(len(m.joints))]
         last_child = {}
         for i, j in enumerate(m.joints):
@@ -520,13 +566,17 @@ class Writer:
             return 0.0005 if 1 <= kind <= 3 else 0.002
         anim_roots, mat_roots = [], []
         self.child_off, self.next_off = 0, 4
-        for an in m.animations:
+        # (a model read from a game file keeps its own shape: the list of material animation trees ends at the first animation without one; models
+        # the converters make from nothing write one for every animation, as before)
+        last_mat = max([k for k, a in enumerate(m.animations) if a.has_material_tree or a.materials] or [-1]) if getattr(m, 'prune_material_trees', False) else len(m.animations)
+        share_aj = {} if getattr(m, 'prune_material_trees', False) else None   # (a model read from a game file: share the empty tails of the animation trees)
+        for k_an, an in enumerate(m.animations):
             def make_aj(i, an=an):
                 o = self.b.new(0x14)
                 o.ptr(8, self.aobj_blob(an.joints.get(i), tol))
                 struct.pack_into('>I', o.b, 16, an.joint_flags.get(i, 0))
                 return o
-            anim_roots.append(self.tree(make_aj)[0])
+            anim_roots.append(self.tree(make_aj, empty=(lambda i, an=an: an.joints.get(i) is None and not an.joint_flags.get(i, 0)) if share_aj is not None else None, share=share_aj)[0])
 
             def make_mj(i, an=an):
                 o = self.b.new(0x0C)
@@ -566,7 +616,8 @@ class Writer:
                 if mats:
                     o.ptr(8, mats[0])
                 return o
-            mat_roots.append(self.tree(make_mj)[0])
+            if k_an <= last_mat:
+                mat_roots.append(self.tree(make_mj)[0])
 
         def ptr_list(items):
             o = self.b.new(4 * (len(items) + 1))

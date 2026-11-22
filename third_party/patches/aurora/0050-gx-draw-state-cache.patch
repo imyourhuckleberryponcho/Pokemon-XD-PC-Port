@@ -1,0 +1,134 @@
+diff --git a/lib/gfx/encoding.cpp b/lib/gfx/encoding.cpp
+--- a/lib/gfx/encoding.cpp
++++ b/lib/gfx/encoding.cpp
+@@ -113,6 +113,7 @@
+ void render_pass(const wgpu::RenderPassEncoder& pass, FramePacket& frame, RenderPass& passInfo) {
+   ZoneScoped;
+   g_currentPipeline = nullptr;
++  gx::reset_draw_state_cache();
+ #ifdef AURORA_GFX_DEBUG_GROUPS
+   std::vector<std::string> lastDebugGroupStack;
+ #endif
+@@ -166,6 +167,7 @@
+     case CommandType::CustomDraw: {
+       render_custom_draw(cmd.data.customDraw, pass, passInfo);
+       g_currentPipeline = nullptr;
++      gx::reset_draw_state_cache();
+       pass.SetBindGroup(0, resources().staticBindGroup);
+       pass.SetBindGroup(2, gx::g_emptyTextureBindGroup);
+       if (hasViewport) {
+@@ -188,6 +190,7 @@
+     pass.PopDebugGroup();
+   }
+ #endif
++  gx::reset_draw_state_cache(); // (also lets go of the pipeline / bind group it held)
+ }
+ 
+ void render(wgpu::CommandEncoder& cmd, FramePacket& frame, RenderPass& passInfo, uint32_t passIndex) {
+diff --git a/lib/gfx/recording.cpp b/lib/gfx/recording.cpp
+--- a/lib/gfx/recording.cpp
++++ b/lib/gfx/recording.cpp
+@@ -357,6 +357,9 @@
+ 
+ template <auto Renderer, InlinePayload T>
+ void encode_draw(void* payload, const wgpu::RenderPassEncoder& pass, const RenderPass& passInfo) {
++  if constexpr (!std::is_same_v<T, gx::DrawData>) {
++    gx::reset_draw_state_cache(); // another kind of draw sets its own bind groups / buffers
++  }
+   const T& data = inline_payload<T>(payload);
+   if constexpr (std::is_invocable_v<decltype(Renderer), const T&, const wgpu::RenderPassEncoder&,
+                                     const wgpu::Extent3D&>) {
+diff --git a/lib/gx/pipeline.cpp b/lib/gx/pipeline.cpp
+--- a/lib/gx/pipeline.cpp
++++ b/lib/gx/pipeline.cpp
+@@ -57,23 +57,68 @@
+   return pipeline;
+ }
+ 
++namespace {
++// What the pass's encoder was last told by a GX draw (render worker thread only). A call that would repeat what the
++// encoder already holds is left out: the commands that reach the GPU are the same ones, minus the repeats. Reset at the
++// start of every pass and whenever anything else than a GX draw ran in it (reset_draw_state_cache).
++struct DrawStateCache {
++  bool pipelineValid = false;
++  gfx::PipelineRef pipelineRef = 0;
++  gfx::CompiledPipeline pipeline;
++  bool uniformValid = false;
++  uint32_t uniformOffset = 0;
++  bool texValid = false;
++  gfx::BindGroupRef texRef = 0;
++  wgpu::BindGroup texGroup;
++  bool indexValid = false;
++  gfx::Range indexRange{};
++  bool blendValid = false;
++  uint32_t blendValue = 0;
++};
++DrawStateCache g_drawState;
++} // namespace
++
++void reset_draw_state_cache() { g_drawState = {}; }
++
+ void render(const DrawData& data, const wgpu::RenderPassEncoder& pass) {
+-  gfx::CompiledPipeline pipeline;
+-  if (!gfx::get_pipeline(data.pipeline, pipeline)) {
+-    gfx::note_skipped_draw();
+-    return;
++  auto& st = g_drawState;
++  if (!st.pipelineValid || st.pipelineRef != data.pipeline) {
++    gfx::CompiledPipeline found;
++    if (!gfx::get_pipeline(data.pipeline, found)) {
++      gfx::note_skipped_draw();
++      return;
++    }
++    st.pipeline = std::move(found);
++    st.pipelineRef = data.pipeline;
++    st.pipelineValid = true;
+   }
++  const auto& pipeline = st.pipeline;
+   const auto& resources = gfx::detail::resources();
+   pass.SetImmediates(0, &data.immediateData, sizeof(data.immediateData));
+-  const std::array offsets{data.uniformRange.offset};
+-  pass.SetBindGroup(1, resources.uniformBindGroup, offsets.size(), offsets.data());
+-  if (data.bindGroups.textureBindGroup) {
+-    pass.SetBindGroup(2, gfx::find_bind_group(data.bindGroups.textureBindGroup));
++  if (!st.uniformValid || st.uniformOffset != data.uniformRange.offset) {
++    const std::array offsets{data.uniformRange.offset};
++    pass.SetBindGroup(1, resources.uniformBindGroup, offsets.size(), offsets.data());
++    st.uniformValid = true;
++    st.uniformOffset = data.uniformRange.offset;
+   }
+-  pass.SetIndexBuffer(resources.indexBuffer, wgpu::IndexFormat::Uint16, data.idxRange.offset, data.idxRange.size);
+-  if (data.dstAlpha != UINT32_MAX) {
++  if (data.bindGroups.textureBindGroup && (!st.texValid || st.texRef != data.bindGroups.textureBindGroup)) {
++    st.texGroup = gfx::find_bind_group(data.bindGroups.textureBindGroup);
++    pass.SetBindGroup(2, st.texGroup);
++    st.texValid = true;
++    st.texRef = data.bindGroups.textureBindGroup;
++  }
++  // (a draw without indices leaves the index buffer alone: nothing reads it)
++  if (data.indexCount != 0 &&
++      (!st.indexValid || st.indexRange.offset != data.idxRange.offset || st.indexRange.size != data.idxRange.size)) {
++    pass.SetIndexBuffer(resources.indexBuffer, wgpu::IndexFormat::Uint16, data.idxRange.offset, data.idxRange.size);
++    st.indexValid = true;
++    st.indexRange = data.idxRange;
++  }
++  if (data.dstAlpha != UINT32_MAX && (!st.blendValid || st.blendValue != data.dstAlpha)) {
+     const wgpu::Color color{0.f, 0.f, 0.f, data.dstAlpha / 255.f};
+     pass.SetBlendConstant(&color);
++    st.blendValid = true;
++    st.blendValue = data.dstAlpha;
+   }
+   const auto draw = [&] {
+     if (data.indexCount == 0) {
+diff --git a/lib/gx/pipeline.hpp b/lib/gx/pipeline.hpp
+--- a/lib/gx/pipeline.hpp
++++ b/lib/gx/pipeline.hpp
+@@ -44,6 +44,8 @@
+ 
+ gfx::CompiledPipeline create_pipeline(const PipelineConfig& config, const gfx::RenderTargetLayout& layout);
+ void render(const DrawData& data, const wgpu::RenderPassEncoder& pass);
++// Forget what the pass's encoder was last given by GX draws (a pass starts, or another kind of draw ran).
++void reset_draw_state_cache();
+ 
+ void queue_surface(const u8* dlStart, uint32_t dlSize, bool bigEndian) noexcept;
+ } // namespace aurora::gx

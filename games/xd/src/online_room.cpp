@@ -10,6 +10,18 @@
 
 namespace xd::online {
 
+int ActionNumbers(const std::string& text) {
+  std::istringstream in(text);
+  std::string word;
+  if (!(in >> word) || word.size() > 3 || word.find_first_not_of("0123456789") != std::string::npos) return 0;
+  const size_t count = static_cast<size_t>(std::atoi(word.c_str()));
+  size_t numbers = 0;
+  while (in >> word) numbers++;
+  if (numbers == count * 9) return 9;
+  if (numbers == count * 8) return 8;
+  return 0;
+}
+
 uint64_t Fnv64(const void* data, size_t size, uint64_t seed) {
   const unsigned char* p = static_cast<const unsigned char*>(data);
   uint64_t h = seed;
@@ -71,6 +83,52 @@ std::string GenName(const std::string& ruleSet, const std::string& edition) {
 
 }
 
+std::string RoomRuleSetId(const RoomRules& r) { return !r.rs.empty() ? r.rs : RoomGen4Rules(r.ruleSet) ? "gen4" : "xd"; }
+std::string RoomGens(const RoomRules& r) { return !r.gens.empty() ? r.gens : RoomGen4Pokemon(r.ruleSet) ? "3,4" : "3"; }
+std::string RoomDetails(const RoomRules& r) { return !r.details.empty() || !r.rs.empty() ? r.details : r.ruleSet == "gen4mt" ? "modern_types:on" : ""; }
+std::string RoomNumbers(const RoomRules& r) {
+  const std::string rs = RoomRuleSetId(r);
+  if (rs == "gen5") return "5";
+  if (rs == "gen6") return "6f";
+  if (rs == "gen7") return "7f";
+  return "3";
+}
+int RoomMaxGen(const RoomRules& r) {
+  int best = 0;
+  for (const std::string& g : Split(RoomGens(r), ',')) best = std::max(best, std::atoi(g.c_str()));
+  return best;
+}
+void SetRuleChoice(RoomRules& r, const std::string& rs, const std::string& gens, const std::string& details) {
+  const bool pack = gens != "3";
+  if (rs == "xd" && gens == "3" && details.empty()) r.ruleSet = "classic";
+  else if (rs == "xd" && gens == "3,4" && details.empty()) r.ruleSet = "gen4pokemon";
+  else if (rs == "gen4" && gens == "3,4" && details.empty()) r.ruleSet = "gen4";
+  else if (rs == "gen4" && gens == "3,4" && details == "modern_types:on") r.ruleSet = "gen4mt";
+  else {
+    r.ruleSet = rs == "gen4" || rs == "gen5" || rs == "gen6" || rs == "gen7" ? "gen4" : pack ? "gen4pokemon" : "classic";
+    r.rs = rs;
+    r.gens = gens;
+    r.details = details;
+    return;
+  }
+  r.rs.clear();
+  r.gens.clear();
+  r.details.clear();
+}
+bool NeedsNewProtocol(const RoomRules& r) { return !r.rs.empty() || !r.gens.empty() || !r.details.empty() || !r.format.empty() || NeedsExtras(r); }
+bool NeedsExtras(const RoomRules& r) { return r.sleepClause || r.preview || r.bankSeconds > 0; }
+std::string ExtrasKeyText(const RoomRules& r) {
+  std::ostringstream o;
+  if (!r.rs.empty()) o << ";rs=" << r.rs;
+  if (!r.gens.empty()) o << ";gens=" << r.gens;
+  if (!r.details.empty()) o << ";details=" << r.details;
+  if (!r.format.empty()) o << ";format=" << r.format << ";fmthash=" << r.formatHash;
+  if (r.sleepClause) o << ";sleep_clause=on";
+  if (r.preview) o << ";preview=on;pick=" << r.pick << ";preview_timer=" << r.previewSeconds;
+  if (r.bankSeconds > 0) o << ";bank=" << r.bankSeconds;
+  return o.str();
+}
+
 bool RulesValid(const RoomRules& r, std::string* error) {
   auto fail = [&](const std::string& m) {
     if (error) *error = m;
@@ -85,6 +143,17 @@ bool RulesValid(const RoomRules& r, std::string* error) {
   if (r.draft.size() > 90 || r.draft.find_first_not_of("abcdefghijklmnopqrstuvwxyz0123456789:,") != std::string::npos) return fail("draft options: letters, digits, : and , only (up to 90 characters)");
   if (!OneOf(r.style, {"single", "double"})) return fail("style must be single or double");
   if (r.team == "free14" && r.ruleSet == "classic") return fail("a free pick of Gen 1-4 needs the Gen 4 rules");
+  const auto word = [](const std::string& v, size_t max) {
+    return v.size() <= max && v.find_first_not_of("abcdefghijklmnopqrstuvwxyz0123456789_:,") == std::string::npos;
+  };
+  if (!word(r.rs, 16)) return fail("rule set: letters, digits and _ only");
+  if (!word(r.gens, 16)) return fail("generations: digits and , only");
+  if (!word(r.details, 60)) return fail("rule set details: letters, digits, _ : and , only");
+  if (!word(r.format, 32) || !word(r.formatHash, 16)) return fail("format: letters, digits and _ only");
+  if (r.pick < 0 || r.pick > 6) return fail("pick must be 0-6");
+  if (r.previewSeconds < 0 || r.previewSeconds > 600) return fail("preview_timer must be 0-600 seconds");
+  if (r.bankSeconds < 0 || r.bankSeconds > 3600) return fail("bank must be 0-3600 seconds");
+  if (!r.preview && (r.pick != 0 || r.previewSeconds != 0)) return fail("pick and preview_timer need preview=on");
   return true;
 }
 
@@ -108,6 +177,16 @@ bool ParseRules(const std::string& text, RoomRules& out, std::string* error) {
     else if (k == "draft") r.draft = v;
     else if (k == "style") r.style = v;
     else if (k == "split") r.split = v == "on" || v == "1";
+    else if (k == "rs") r.rs = v;
+    else if (k == "gens") r.gens = v;
+    else if (k == "details") r.details = v;
+    else if (k == "format") r.format = v;
+    else if (k == "fmthash") r.formatHash = v;
+    else if (k == "sleep_clause") r.sleepClause = v == "on" || v == "1";
+    else if (k == "preview") r.preview = v == "on" || v == "1";
+    else if (k == "pick") r.pick = std::atoi(v.c_str());
+    else if (k == "preview_timer") r.previewSeconds = std::atoi(v.c_str());
+    else if (k == "bank") r.bankSeconds = std::atoi(v.c_str());
     else {
       if (error) *error = "unknown room setting '" + k + "'";
       return false;
@@ -116,6 +195,15 @@ bool ParseRules(const std::string& text, RoomRules& out, std::string* error) {
   if (!RulesValid(r, error)) return false;
   out = r;
   return true;
+}
+
+std::string RulesKeyText(const RoomRules& r) {
+  std::ostringstream o;
+  o << "rules=" << r.ruleSet << ";items=" << r.items << ";timer=" << r.timerSeconds << ";shadow=" << (r.shadowAllowed ? "on" : "off") << ";shadow_obey=" << r.shadowObey
+    << ";level=" << r.level << ";team=" << r.team << ";style=" << r.style << ";split=" << (r.split ? "on" : "off");
+  if (!r.draft.empty()) o << ";draft=" << r.draft;
+  o << ExtrasKeyText(r);
+  return o.str();
 }
 
 std::string RulesText(const RoomRules& r, const std::string& edition) {
@@ -133,6 +221,13 @@ std::string RulesText(const RoomRules& r, const std::string& edition) {
   else o << "capped at " << r.level.substr(4);
   o << "; " << (r.style == "double" ? "double" : "single") << " battle";
   o << "; physical/special split: " << (r.split ? "on" : "off");
+  if (!r.rs.empty() && r.rs != "xd" && r.rs != "gen4") o << "; rule set: " << r.rs;
+  if (!r.details.empty()) o << "; details: " << r.details;
+  if (!r.gens.empty() && r.gens != "3" && r.gens != "3,4") o << "; Pokemon generations: " << r.gens;
+  if (!r.format.empty()) o << "; format: " << r.format;
+  if (r.sleepClause) o << "; Sleep clause: on";
+  if (r.preview) o << "; team preview: bring up to 6, pick " << (r.pick > 0 ? r.pick : 6);
+  if (r.bankSeconds > 0) o << "; battle clock: " << r.bankSeconds << " s each";
   o << "; teams: " << (r.team == "preset" ? "preset teams" : r.team == "save" ? "from a save" : r.team == "free12" ? "free pick, Gen 1-3" : r.team == "draft" ? "snake draft (" + r.draft + ")" : r.team == "offer" ? "random offers (" + r.draft + ")" : "free pick, Gen 1-4");
   return o.str();
 }
@@ -141,15 +236,18 @@ std::vector<uint8_t> Encode(const Fingerprint& f) {
   auto build = [&](size_t maxModNames) {
     std::ostringstream o;
     o << "XDB1\n";
-    o << "proto=" << f.caps.protocol << "\n";
+    o << "proto=" << (NeedsExtras(f.rules) ? 3 : NeedsNewProtocol(f.rules) ? 2 : 1) << "\n";
+    o << "cap=" << f.caps.protocol << "\n";
     o << "disc=" << f.caps.disc << "\n";
     o << "edition=" << f.caps.edition << "\n";
     o << "loaded=" << f.caps.ruleSet << "\n";
     o << "pack=" << f.caps.gen4Pack << "\n";
+    if (f.caps.numbers != "3") o << "numbers=" << f.caps.numbers << "\n";
     o << "modsum=" << Hex(Fnv64(f.caps.mods.data(), f.caps.mods.size())) << "\n";
     o << "mods=" << f.caps.mods.substr(0, maxModNames) << "\n";
     o << "rando=" << f.caps.randomizer.substr(0, 90) << "\n";
     o << "tables=" << Hex(f.caps.tables) << "\n";
+    if (!f.caps.formatsDigest.empty()) o << "fmts=" << f.caps.formatsDigest << "\n";
     o << "r.rules=" << f.rules.ruleSet << "\n";
     o << "r.items=" << f.rules.items << "\n";
     o << "r.timer=" << f.rules.timerSeconds << "\n";
@@ -160,6 +258,16 @@ std::vector<uint8_t> Encode(const Fingerprint& f) {
     o << "r.split=" << (f.rules.split ? 1 : 0) << "\n";
     o << "r.draft=" << f.rules.draft << "\n";
     o << "r.style=" << f.rules.style << "\n";
+    if (NeedsNewProtocol(f.rules)) {
+      o << "r.rs=" << f.rules.rs << "\n";
+      o << "r.gens=" << f.rules.gens << "\n";
+      o << "r.det=" << f.rules.details << "\n";
+      o << "r.fmt=" << f.rules.format << ":" << f.rules.formatHash << "\n";
+      if (NeedsExtras(f.rules)) {
+        o << "r.ex=sleep:" << (f.rules.sleepClause ? 1 : 0) << ",pv:" << (f.rules.preview ? 1 : 0) << ",pick:" << f.rules.pick << ",pvt:" << f.rules.previewSeconds
+          << ",bank:" << f.rules.bankSeconds << "\n";
+      }
+    }
     return o.str();
   };
   std::string text = build(120);
@@ -179,14 +287,16 @@ bool Decode(const std::vector<uint8_t>& blob, Fingerprint& out) {
   auto get = [&](const char* k) { return kv.count(k) ? kv[k] : std::string(); };
   if (!kv.count("proto") || !kv.count("disc")) return false;
   Fingerprint f;
-  f.caps.protocol = std::atoi(get("proto").c_str());
+  f.caps.protocol = kv.count("cap") ? std::atoi(get("cap").c_str()) : std::atoi(get("proto").c_str());
   f.caps.disc = get("disc");
   f.caps.edition = kv.count("edition") ? get("edition") : std::string("xd");
   f.caps.ruleSet = get("loaded");
   f.caps.gen4Pack = get("pack");
+  f.caps.numbers = kv.count("numbers") ? get("numbers") : std::string("3");
   f.caps.mods = get("mods");
   f.caps.randomizer = get("rando");
   f.caps.tables = std::strtoull(get("tables").c_str(), nullptr, 16);
+  f.caps.formatsDigest = get("fmts");
   f.rules.ruleSet = get("r.rules");
   f.rules.items = get("r.items");
   f.rules.timerSeconds = std::atoi(get("r.timer").c_str());
@@ -197,6 +307,27 @@ bool Decode(const std::vector<uint8_t>& blob, Fingerprint& out) {
   f.rules.draft = get("r.draft");
   if (kv.count("r.style")) f.rules.style = get("r.style");
   f.rules.split = get("r.split") == "1";
+  f.rules.rs = get("r.rs");
+  f.rules.gens = get("r.gens");
+  f.rules.details = get("r.det");
+  if (const std::string fmt = get("r.fmt"); !fmt.empty()) {
+    const size_t colon = fmt.find(':');
+    f.rules.format = fmt.substr(0, colon);
+    f.rules.formatHash = colon == std::string::npos ? std::string() : fmt.substr(colon + 1);
+  }
+  if (const std::string ex = get("r.ex"); !ex.empty()) {
+    for (const std::string& part : Split(ex, ',')) {
+      const size_t colon = part.find(':');
+      if (colon == std::string::npos) continue;
+      const std::string key = part.substr(0, colon);
+      const int value = std::atoi(part.c_str() + colon + 1);
+      if (key == "sleep") f.rules.sleepClause = value != 0;
+      else if (key == "pv") f.rules.preview = value != 0;
+      else if (key == "pick") f.rules.pick = value;
+      else if (key == "pvt") f.rules.previewSeconds = value;
+      else if (key == "bank") f.rules.bankSeconds = value;
+    }
+  }
   const std::string sum = get("modsum");
   if (Hex(Fnv64(f.caps.mods.data(), f.caps.mods.size())) != sum) f.caps.mods += "\x01" + sum;
   std::string why;
@@ -227,7 +358,16 @@ Verdict Judge(const Capabilities& room, const RoomRules& rules, const Capabiliti
   Verdict v;
   const std::string they = joiner ? "The room" : "Your friend's game";
   const std::string you = joiner ? "your game" : "theirs";
-  if (room.protocol != mine.protocol) {
+  const bool newKind = NeedsNewProtocol(rules);
+  const int needed = NeedsExtras(rules) ? 3 : newKind ? 2 : 1;
+  const bool known = room.protocol >= 1 && room.protocol <= 3 && mine.protocol >= 1 && mine.protocol <= 3;
+  const bool compatible = known && mine.protocol >= needed && room.protocol >= needed;
+  if (!compatible && room.protocol != mine.protocol) {
+    if (needed == 3 && mine.protocol < 3) {
+      v.refuse.push_back(joiner ? "This room uses format rules (Sleep clause, team preview or a battle clock) that your game version does not have. Update the game to join it."
+                                : "Your friend's game version does not know this room's format rules (Sleep clause, team preview or a battle clock). Ask them to update.");
+      return v;
+    }
     v.refuse.push_back(joiner ? "The room uses another version of the online battles (room " + std::to_string(room.protocol) + ", yours " +
                                     std::to_string(mine.protocol) + "). Update the game."
                               : "Your friend's game has another version of the online battles (theirs " + std::to_string(mine.protocol) +
@@ -245,6 +385,33 @@ Verdict Judge(const Capabilities& room, const RoomRules& rules, const Capabiliti
   if (room.disc != mine.disc) {
     v.refuse.push_back(they + " uses the disc " + room.disc + "; " + you + " has " + mine.disc + ".");
   }
+  {
+    const std::string rsId = RoomRuleSetId(rules);
+    const std::set<std::string> known = ModSet(mine.knownRuleSets);
+    if (!known.count(rsId)) {
+      v.refuse.push_back(joiner ? "The room uses the rule set \"" + rsId + "\", which this version of the game does not have. Update the game."
+                                : "Your friend's game does not have the rule set \"" + rsId + "\". Ask them to update.");
+    }
+    if (RoomMaxGen(rules) > mine.knownMaxGen) {
+      v.refuse.push_back(joiner ? "The room uses Pokemon up to generation " + std::to_string(RoomMaxGen(rules)) + "; this version of the game has them up to generation " +
+                                      std::to_string(mine.knownMaxGen) + ". Update the game."
+                                : "Your friend's game does not have the Pokemon of generation " + std::to_string(RoomMaxGen(rules)) + ". Ask them to update.");
+    }
+    if (!rules.format.empty() && !joiner && mine.knownFormats.empty()) {
+      if (!room.formatsDigest.empty() && room.formatsDigest != mine.formatsDigest)
+        v.refuse.push_back("Your friend's game has another version of the format \"" + rules.format + "\". Both players should use the same game version.");
+    } else if (!rules.format.empty()) {
+      const std::string want = rules.format + ":" + rules.formatHash;
+      const std::set<std::string> formats = ModSet(mine.knownFormats);
+      if (!formats.count(want)) {
+        const bool sameId = [&] { for (const std::string& f : formats) if (f.compare(0, rules.format.size() + 1, rules.format + ":") == 0) return true; return false; }();
+        v.refuse.push_back(sameId ? std::string(joiner ? "The room's format \"" : "Your friend's game has another version of the format \"") + rules.format +
+                                        (joiner ? "\" is another version from yours. Both players should use the same game version." : "\". Both players should use the same game version.")
+                                  : std::string(joiner ? "The room's format \"" : "Your friend's game does not have the format \"") + rules.format +
+                                        (joiner ? "\" is not in this version of the game. Update the game." : "\". Ask them to update."));
+      }
+    }
+  }
   if (rules.ruleSet != "classic") {
     if (mine.gen4Pack.empty()) {
       v.refuse.push_back(joiner ? "This room plays with Gen 4 Pokemon. You need the Gen 4 pack from your Pokemon Battle Revolution disc (the launcher makes it)."
@@ -256,6 +423,13 @@ Verdict Judge(const Capabilities& room, const RoomRules& rules, const Capabiliti
     } else if (mine.ruleSet != "gen4") {
       v.restart.push_back(std::string(joiner ? "The game restarts with the Gen 4 Pokemon for this battle" : "Your friend's game restarts with the Gen 4 Pokemon") +
                           " (it comes back to your own game afterwards).");
+    }
+  }
+  {
+    const std::string want = RoomNumbers(rules);
+    if (want[0] != mine.numbers[0] || (want.size() > 1 && mine.numbers.size() < 2)) {
+      v.restart.push_back(std::string(joiner ? "The game restarts with the numbers of this room's rule set" : "Your friend's game restarts with the numbers of this room's rule set") +
+                          " (the Pokemon's stats and the moves' power, accuracy and PP of Gen " + want.substr(0, 1) + "; it comes back to your own game afterwards).");
     }
   }
   const bool roomCut = room.mods.find('\x01') != std::string::npos;

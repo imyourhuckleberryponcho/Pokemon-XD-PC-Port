@@ -1,3 +1,4 @@
+#include "labels.h"
 #include "data_mods.h"
 
 #include "i18n.h"
@@ -206,7 +207,7 @@ public:
           Problem(file, rv.line, "the new row " + Quote(rowKey) + " must be a { ... } block, like { \"copy\": \"Eevee\", ... }");
           continue;
         }
-        DeclareRow(file, *t, rowKey, rv.line);
+        DeclareRow(file, *t, rowKey, rv);
       }
     }
   }
@@ -431,7 +432,102 @@ private:
     return false;
   }
 
-  void DeclareRow(const DataModFile& file, const DataTable& t, const std::string& key, size_t line) {
+  bool MakeLabel(const DataModFile& file, const DataTable& t, const std::string& key, const Value& rv, size_t line, std::string& out) {
+    std::string ns = file.builtIn ? std::string(kBaseNamespace) : file.labelNamespace;
+    if (ns.empty()) {
+      const std::string id = Slugify(file.mod);
+      ns = "local." + (id.empty() ? std::string("mod") : id);
+    }
+    std::string slug;
+    const auto lv = rv.fields.find("label");
+    if (lv != rv.fields.end()) {
+      if (lv->second.kind != Value::Kind::String) {
+        Problem(file, lv->second.line, "\"label\" of the new row " + Quote(key) + " must be a text in quotes, like \"zorblat\"");
+        out.clear();
+        return true;
+      }
+      std::string text = lv->second.text;
+      if (LooksLikeLabel(text)) {
+        Label parsed;
+        std::string why;
+        if (!ParseLabel(text, parsed, why)) {
+          Problem(file, lv->second.line, "\"label\" of the new row " + Quote(key) + ": " + why);
+          out.clear();
+        return true;
+        }
+        if (parsed.kind != t.idList || parsed.ns != ns) {
+          Problem(file, lv->second.line, "\"label\" of the new row " + Quote(key) + " must start with " + t.idList + ":" + ns + "/ (the label namespace of this mod)");
+          out.clear();
+        return true;
+        }
+        slug = parsed.slug;
+      } else {
+        slug = text;
+        if (!ValidSlug(slug)) {
+          Problem(file, lv->second.line, "\"label\" of the new row " + Quote(key) + " is lower case letters, digits, - and _ (like \"zorb-berry\")");
+          out.clear();
+        return true;
+        }
+      }
+    } else {
+      slug = Slugify(key);
+      if (!ValidSlug(slug)) {
+        Problem(file, line, "the new row " + Quote(key) + " has no name a label can be made from; give it a \"label\": \"some-name\"");
+        out.clear();
+        return true;
+      }
+    }
+    out = Label{t.idList, ns, slug}.Text();
+    for (const Decl& d : mDecl) {
+      if (d.row.label == out) {
+        Problem(file, line, "the new row " + Quote(key) + " has the label " + out + ", which the row " + Quote(d.row.key) + " of the mod " +
+                                Quote(d.row.modName) + " (" + d.row.where + ") has already; give it another \"label\"");
+        out.clear();
+        return true;
+      }
+    }
+    return true;
+  }
+
+  const BaseLabels& BaseFor(const std::string& listName) {
+    auto it = mBase.find(listName);
+    if (it == mBase.end()) {
+      const NameList* list = mCatalog.FindList(listName);
+      std::string kind = listName;
+      if (kind.size() > 6 && kind.compare(kind.size() - 6, 6, "_entry") == 0) kind.resize(kind.size() - 6);
+      it = mBase.emplace(listName, list != nullptr ? BaseLabels(kind, list->names) : BaseLabels(kind, {})).first;
+    }
+    return it->second;
+  }
+  std::map<std::string, BaseLabels> mBase;
+
+  bool LookupLabel(const DataModFile& file, size_t line, const std::string& listName, const std::string& text, uint32_t& out) {
+    Label l;
+    std::string why;
+    if (!ParseLabel(text, l, why)) {
+      Problem(file, line, Quote(text) + " is not a label: " + why);
+      return false;
+    }
+    std::string kind = listName;
+    if (kind.size() > 6 && kind.compare(kind.size() - 6, 6, "_entry") == 0) kind.resize(kind.size() - 6);
+    if (l.kind != kind) {
+      Problem(file, line, "the label " + Quote(text) + " is a " + l.kind + ", but a " + kind + " is wanted here");
+      return false;
+    }
+    for (const Decl& d : mDecl) {
+      if (d.row.label != text) continue;
+      if (d.table->idList == listName) { out = d.row.id; return true; }
+      if (d.table->entryNames == listName) { out = d.row.row; return true; }
+    }
+    if (l.ns == kBaseNamespace && BaseFor(listName).Find(l.slug, out)) {
+      return true;
+    }
+    Problem(file, line, "no row has the label " + Quote(text) + (l.ns == kBaseNamespace ? " on this disc" : " (is the mod that adds it on, and before this one?)"));
+    return false;
+  }
+
+  void DeclareRow(const DataModFile& file, const DataTable& t, const std::string& key, const Value& rowValue) {
+    const size_t line = rowValue.line;
     const std::string nk = NameKey(key);
     if (nk.empty()) {
       Problem(file, line, "the new row " + Quote(key) + " needs a name with letters or digits in it");
@@ -455,6 +551,10 @@ private:
         return;
       }
     }
+    std::string label;
+    if (!t.idList.empty() && !MakeLabel(file, t, key, rowValue, line, label)) {
+      return;
+    }
     uint32_t& n = mAddedCount[t.name];
     if (n >= t.addMax) {
       Problem(file, line, "mods can add at most " + std::to_string(t.addMax) + " rows to " + t.name + "; " + Quote(key) + " is left out");
@@ -464,6 +564,7 @@ private:
     d.table = &t;
     d.row.table = t.name;
     d.row.key = key;
+    d.row.label = label;
     d.row.mod = file.mod;
     d.row.modName = file.modName;
     d.row.where = Where(file, line);
@@ -572,7 +673,7 @@ private:
       }
     }
     for (const std::string& k : rv.order) {
-      if (k.empty() || k[0] == '_' || k == "copy" || k == "text") {
+      if (k.empty() || k[0] == '_' || k == "copy" || k == "text" || (k == "label" && !t.idList.empty())) {
         continue;
       }
       if (const auto asset = std::find_if(t.assetKeys.begin(), t.assetKeys.end(), [&](const std::string& a) { return Lower(a) == Lower(k); });
@@ -590,6 +691,7 @@ private:
       Field(file, t, r.row, k, rv.fields.at(k));
     }
     std::map<std::string, std::string> texts;
+    std::map<std::string, std::map<std::string, std::string>> langTexts;
     const auto tx = rv.fields.find("text");
     if (tx != rv.fields.end()) {
       if (tx->second.kind != Value::Kind::Object) {
@@ -600,11 +702,21 @@ private:
             continue;
           }
           const Value& v = tx->second.fields.at(k);
-          const auto f = std::find_if(t.textFields.begin(), t.textFields.end(), [&](const std::string& n) { return Lower(n) == Lower(k); });
+          std::string base = k, langCode;
+          if (const size_t dot = k.rfind('.'); dot != std::string::npos) {
+            const std::string suffix = Lower(k.substr(dot + 1));
+            if (suffix == "sp" || suffix == "fr" || suffix == "ge" || suffix == "it" || suffix == "jp") {
+              base = k.substr(0, dot);
+              langCode = suffix;
+            }
+          }
+          const auto f = std::find_if(t.textFields.begin(), t.textFields.end(), [&](const std::string& n) { return Lower(n) == Lower(base); });
           if (f == t.textFields.end()) {
             Problem(file, v.line, t.name + " has no text field " + Quote(k));
           } else if (v.kind != Value::Kind::String) {
             Problem(file, v.line, "the text " + Quote(k) + " needs its words in quotes");
+          } else if (!langCode.empty()) {
+            langTexts[*f][langCode] = v.text;
           } else {
             texts[*f] = v.text;
           }
@@ -631,7 +743,7 @@ private:
       for (int b = 0; b < 4; b++) {
         r.bytes[f->offset + b] = static_cast<uint8_t>(key >> (8 * (3 - b)));
       }
-      mAddedTexts.push_back({key, text, file.mod, t.name + " " + r.key + " " + fieldName});
+      mAddedTexts.push_back({key, text, file.mod, t.name + " " + r.key + " " + fieldName, langTexts[fieldName]});
     }
   }
 
@@ -711,6 +823,9 @@ private:
 
   bool Lookup(const DataModFile& file, size_t line, const std::string& listName, const std::string& name, uint32_t& out,
               const std::string& what) {
+    if (LooksLikeLabel(name)) {
+      return LookupLabel(file, line, listName, name, out);
+    }
     const NameList* list = mCatalog.FindList(listName);
     if (list == nullptr) {
       Problem(file, line, what + " can only be given as a number (no names for it on this disc)");
@@ -1105,7 +1220,8 @@ std::string AddedRowsJson(const std::vector<AddedRow>& rows) {
     const AddedRow& r = rows[i];
     out += (i == 0 ? "\n    " : ",\n    ");
     out += "{\"mod\": " + JsonText(r.mod) + ", \"table\": " + JsonText(r.table) + ", \"name\": " + JsonText(r.key) +
-           ", \"id\": " + std::to_string(r.id) + ", \"row\": " + std::to_string(r.row) + ", \"copy_of\": " + std::to_string(r.copyOf) + "}";
+           ", \"id\": " + std::to_string(r.id) + ", \"row\": " + std::to_string(r.row) + ", \"copy_of\": " + std::to_string(r.copyOf) +
+           (r.label.empty() ? "" : ", \"label\": " + JsonText(r.label)) + "}";
   }
   out += rows.empty() ? "]\n}\n" : "\n  ]\n}\n";
   return out;
@@ -1114,6 +1230,7 @@ std::string AddedRowsJson(const std::vector<AddedRow>& rows) {
 std::map<std::string, uint64_t> AddedRowsDigests(const std::vector<AddedRow>& rows) {
   std::map<std::string, uint64_t> out;
   for (const AddedRow& r : rows) {
+    if (r.unbound) continue;
     uint64_t& h = out.try_emplace(r.mod, 14695981039346656037ull).first->second;
     FnvText(h, r.table);
     FnvText(h, r.key);

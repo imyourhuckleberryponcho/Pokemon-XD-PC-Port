@@ -1,4 +1,5 @@
 #include "xd_randomizer.h"
+#include "xd_spare.h"
 
 #include <algorithm>
 #include <array>
@@ -20,7 +21,7 @@ namespace {
 
 constexpr uint32_t kAbilityWonderGuard = 25, kAbilityForecast = 59;
 constexpr uint32_t kNationalLugia = 249;
-constexpr uint32_t kNationalLast = 386, kNationalLastGen4 = 493;
+constexpr uint32_t kNationalLast = 386, kNationalLastGen4 = 493, kNationalLastGen57 = 807;
 constexpr uint32_t kMoveStruggle = 165;
 constexpr uint32_t kItemKindTm = 4;
 constexpr uint32_t kMoveEffectOhko = 38;
@@ -35,7 +36,7 @@ constexpr uint32_t kLevelsByStrength = 5;
 er::Schema MakeSchema() {
   er::Schema s;
   s.prefix = "XDR";
-  s.version = 6;
+  s.version = 7;
   const std::vector<std::string> onOff = {"off", "on"};
   s.switches = {
       {"wild", "Randomize Poke Spot Pokemon", onOff},
@@ -66,6 +67,7 @@ er::Schema MakeSchema() {
       {"starter.choice", "Starter: choice", {"random", "pick 1 of 3", "Eevee family only"}, 6},
       {"starter.similar", "Starter: similar strength to Eevee", {"on", "off"}, 6},
       {"starter.moves", "Starter: moves", {"natural (by level)", "kept"}, 6},
+      {"gen57", "Include Gen 5-7 Pokemon", onOff, 7},
   };
   return s;
 }
@@ -94,7 +96,8 @@ public:
     }
     return true;
   }
-  void UseGen4(const std::vector<Gen4Species>* g) { gen4_ = g; }
+  void UseGen4(const std::vector<Gen4Species>* g, uint32_t nationalLast = kNationalLastGen4) { gen4_ = g; nationalLast_ = nationalLast; }
+  uint32_t NationalLast() const { return gen4_ != nullptr ? nationalLast_ : kNationalLast; }
   bool Gen4() const { return gen4_ != nullptr; }
   uint32_t DiscCount(const std::string& table) const {
     const em::DataTable* t = T(table);
@@ -174,6 +177,7 @@ public:
 
 private:
   const std::vector<Gen4Species>* gen4_ = nullptr;
+  uint32_t nationalLast_ = kNationalLastGen4;
   const em::DataCatalog& cat_;
   const em::EntryReader& read_;
   mutable std::map<std::pair<std::string, std::string>, std::vector<uint8_t>> cache_;
@@ -219,7 +223,7 @@ bool ReadSpecies(const Tables& t, Species& sp, std::string& error) {
     const uint32_t nat = t.Get("pokemon_data", s, "numZukan");
     sp.national[s] = nat;
     if (nat == kNationalLugia && sp.lugia == 0) sp.lugia = s;
-    if (nat == 0 || nat > (t.Gen4() ? kNationalLastGen4 : kNationalLast) || total == 0 || visitors.count(s) != 0 || !seenNational.insert(nat).second) continue;
+    if (nat == 0 || nat > t.NationalLast() || total == 0 || visitors.count(s) != 0 || !seenNational.insert(nat).second) continue;
     sp.pool.push_back(s);
   }
   auto root = [&](uint32_t x) {
@@ -1292,11 +1296,13 @@ void ApplyStyle(er::Settings& s, Style style) {
 
 namespace {
 std::vector<Gen4Species> sGen4;
+std::vector<Gen4Species> sGen57;
+std::vector<Gen4Species> sGenAll;
 }
 
 void SetGen4Species(std::vector<Gen4Species> species) { sGen4 = std::move(species); }
 
-bool LoadGen4Species(const std::filesystem::path& file, std::string& error) {
+bool LoadSpeciesFile(const std::filesystem::path& file, std::vector<Gen4Species>& outAll, size_t minCount, std::string& error) {
   std::ifstream in(file);
   if (!in) {
     error = "cannot read " + file.string();
@@ -1352,13 +1358,17 @@ bool LoadGen4Species(const std::filesystem::path& file, std::string& error) {
       }
     }
   }
-  if (all.size() < 100) {
+  if (all.size() < minCount) {
     error = file.string() + " lists too few species";
     return false;
   }
-  sGen4 = std::move(all);
+  outAll = std::move(all);
   return true;
 }
+
+bool LoadGen4Species(const std::filesystem::path& file, std::string& error) { return LoadSpeciesFile(file, sGen4, 100, error); }
+
+bool LoadGen57Species(const std::filesystem::path& file, std::string& error) { return LoadSpeciesFile(file, sGen57, 300, error); }
 
 void TranslateGen4Species(const std::function<void(Gen4Species&)>& fix) {
   for (Gen4Species& g : sGen4) fix(g);
@@ -1369,7 +1379,15 @@ bool CodeIncludesGen4(const std::string& code) {
   bool seedOnly = false;
   std::string error;
   ApplyStyle(s, Style::Classic);
-  return er::DecodeCode(GetSchema(), code, s, seedOnly, error) && s.Get(GetSchema(), "gen4") != 0;
+  return er::DecodeCode(GetSchema(), code, s, seedOnly, error) && (s.Get(GetSchema(), "gen4") != 0 || s.Get(GetSchema(), "gen57") != 0);
+}
+
+bool CodeIncludesGen57(const std::string& code) {
+  er::Settings s;
+  bool seedOnly = false;
+  std::string error;
+  ApplyStyle(s, Style::Classic);
+  return er::DecodeCode(GetSchema(), code, s, seedOnly, error) && s.Get(GetSchema(), "gen57") != 0;
 }
 
 bool Generate(const em::DataCatalog& catalog, const em::EntryReader& read, const er::Settings& s, Result& out, std::string& error,
@@ -1384,6 +1402,15 @@ bool Generate(const em::DataCatalog& catalog, const em::EntryReader& read, const
       return false;
     }
     t.UseGen4(&sGen4);
+  }
+  if (s.Get(sc, "gen57")) {
+    if (sGen57.empty() || sGen4.empty()) {
+      error = "\"Include Gen 5-7 Pokemon\" is on, but the Gen 5-7 files (and the Gen 4 ones they continue) are not made (they come from your Ultra Sun / Ultra Moon dump)";
+      return false;
+    }
+    sGenAll = sGen4;
+    sGenAll.insert(sGenAll.end(), sGen57.begin(), sGen57.end());
+    t.UseGen4(&sGenAll, kNationalLastGen57);
   }
   Species sp;
   if (!ReadSpecies(t, sp, error)) return false;
@@ -1559,6 +1586,239 @@ bool NormalizeCode(const std::string& text, std::string& code, std::string& erro
   bool seedOnly = false;
   if (!er::DecodeCode(GetSchema(), text, s, seedOnly, error)) return false;
   code = er::EncodeCode(GetSchema(), s);
+  return true;
+}
+
+uint32_t MoreShadowsRows() { return 127 + XD_PC_SPARE_SHADOWS; }
+
+bool ParseMoreShadows(const std::string& text, MoreShadowsPlan& plan) {
+  plan = MoreShadowsPlan{};
+  const size_t colon = text.find(':');
+  if (colon == std::string::npos) return false;
+  const std::string name = text.substr(0, colon), seed = text.substr(colon + 1);
+  if (name == "few") plan.amount = 1;
+  else if (name == "many") plan.amount = 2;
+  else if (name == "all") plan.amount = 3;
+  else return false;
+  if (seed.empty() || seed.size() > 19 || seed.find_first_not_of("0123456789") != std::string::npos) return false;
+  plan.seed = std::stoull(seed);
+  return true;
+}
+
+std::string MoreShadowsText(int amount, uint64_t seed) {
+  static const char* const kNames[] = {"", "few", "many", "all"};
+  if (amount < 1 || amount > 3) return {};
+  return std::string(kNames[amount]) + ":" + std::to_string(seed);
+}
+
+namespace {
+std::string AreaOf(const std::string& name) { return name.substr(0, name.find('_')); }
+std::string PersonOf(const std::string& name) {
+  const size_t a = name.find('_');
+  if (a == std::string::npos) return name;
+  const size_t b = name.find('_', a + 1);
+  return b == std::string::npos ? name : name.substr(0, b);
+}
+}
+
+bool GenerateMoreShadows(const em::DataCatalog& catalog, const em::EntryReader& read, const MoreShadowsPlan& plan, const Result* rando,
+                         bool gen4, er::ModOutput& out, std::string& error, bool gen57) {
+  out = er::ModOutput{};
+  if (plan.amount < 1) return true;
+  if (plan.amount == 3 && MoreShadowsRows() <= 127) {
+    error = "\"All\" needs more than 127 Shadow Pokemon, which this version of the game cannot hold yet";
+    return false;
+  }
+  Tables t(catalog, read);
+  if (gen4) {
+    if (sGen4.empty()) {
+      error = "More Shadow Pokemon with the Gen 4 Pokemon: the Gen 4 files are not made";
+      return false;
+    }
+    t.UseGen4(&sGen4);
+  }
+  if (gen4 && gen57) {
+    if (sGen57.empty() || sGen4.empty()) {
+      error = "More Shadow Pokemon with the Gen 5-7 Pokemon: the Gen 5-7 files (and the Gen 4 ones they continue) are not made";
+      return false;
+    }
+    sGenAll = sGen4;
+    sGenAll.insert(sGenAll.end(), sGen57.begin(), sGen57.end());
+    t.UseGen4(&sGenAll, kNationalLastGen57);
+  }
+  Species sp;
+  if (!ReadSpecies(t, sp, error)) return false;
+  if (!t.Need("story_trainers", {"darkPokemonFlags", "pokemonDataID"}, error) || !t.Need("story_pokemon", {"pokemonID", "level", "wazaID", "holdItem"}, error) ||
+      !t.Need("darkpokemon_shadow", {"deckPokemonID", "worth", "snatchRatio", "playerLevel", "scenarioPokemon", "initDarkPoint", "bonusExp", "darkWaza", "revers", "underTakerFlag"}, error) ||
+      !t.Need("darkPokemonList", {"pokemonID"}, error) || !t.Need("fight_encount_data", {"fightKind", "deckGroup", "trainerId"}, error)) {
+    return false;
+  }
+  auto now = [&](const std::string& table, uint32_t entry, const std::string& field) {
+    if (rando != nullptr) {
+      const auto ti = rando->mod.tables.find(table);
+      if (ti != rando->mod.tables.end()) {
+        const auto ei = ti->second.find(entry);
+        if (ei != ti->second.end()) {
+          const auto fi = ei->second.find(field);
+          if (fi != ei->second.end()) return fi->second;
+        }
+      }
+    }
+    return t.Get(table, entry, field);
+  };
+  const uint32_t trainerCount = t.Count("story_trainers"), entryCount = t.Count("story_pokemon"), shadowRows = t.Count("darkpokemon_shadow");
+  const uint32_t listRows = std::min(t.Count("darkPokemonList"), shadowRows);
+  std::vector<bool> isShadow(sp.bst.size(), false);
+  std::vector<uint32_t> freeRows;
+  for (uint32_t i = 1; i < listRows; i++) {
+    const uint32_t deck = t.Get("darkpokemon_shadow", i, "deckPokemonID");
+    const uint32_t species = now("darkPokemonList", i, "pokemonID");
+    if (deck != 0) {
+      if (species < isShadow.size()) isShadow[species] = true;
+      if (deck < entryCount) {
+        const uint32_t s2 = now("story_pokemon", deck, "pokemonID");
+        if (s2 < isShadow.size()) isShadow[s2] = true;
+      }
+    } else {
+      freeRows.push_back(i);
+    }
+  }
+  struct Template { uint32_t row, level; };
+  std::vector<Template> templates;
+  std::map<std::string, uint32_t> areaMinShadow;
+  std::set<std::string> shadowPeople;
+  for (uint32_t i = 1; i < shadowRows; i++) {
+    const uint32_t deck = t.Get("darkpokemon_shadow", i, "deckPokemonID");
+    if (deck == 0 || deck >= entryCount) continue;
+    if (t.Get("darkpokemon_shadow", i, "worth") != 0 && t.Get("darkpokemon_shadow", i, "underTakerFlag") == 0 &&
+        t.Get("darkpokemon_shadow", i, "scenarioPokemon") != 0 && t.Get("darkpokemon_shadow", i, "bonusExp") == 0) {
+      templates.push_back({i, t.Get("story_pokemon", deck, "level")});
+    }
+  }
+  if (templates.empty()) {
+    error = "no ordinary Shadow Pokemon rows found to copy from";
+    return false;
+  }
+  std::vector<std::string> names(trainerCount);
+  for (uint32_t i = 0; i < trainerCount; i++) names[i] = t.Name("story_trainer", i);
+  std::set<uint32_t> fought;
+  for (uint32_t b = 0; b < t.Count("fight_encount_data"); b++) {
+    for (uint32_t side = 0; side < 4; side++) {
+      const uint32_t id = t.Get("fight_encount_data", b, "trainerId", side);
+      if (t.Get("fight_encount_data", b, "deckGroup", side) == 1 && id > 0 && id < trainerCount && t.Get("fight_encount_data", b, "fightKind") == 2) fought.insert(id);
+    }
+  }
+  std::map<uint32_t, int> entryUses;
+  for (uint32_t tr = 0; tr < trainerCount; tr++) {
+    const uint32_t flags = t.Get("story_trainers", tr, "darkPokemonFlags");
+    for (uint32_t k = 0; k < 6; k++) {
+      const uint32_t id = t.Get("story_trainers", tr, "pokemonDataID", k);
+      if (id == 0) continue;
+      if (flags & (1u << k)) {
+        shadowPeople.insert(PersonOf(names[tr]));
+        const uint32_t deck = id < shadowRows ? t.Get("darkpokemon_shadow", id, "deckPokemonID") : 0;
+        if (deck < entryCount && deck != 0) {
+          const std::string area = AreaOf(names[tr]);
+          const uint32_t lv = t.Get("story_pokemon", deck, "level");
+          if (!areaMinShadow.count(area) || areaMinShadow[area] > lv) areaMinShadow[area] = lv;
+        }
+      } else {
+        entryUses[id]++;
+      }
+    }
+  }
+  struct Candidate { uint32_t trainer, slot, entry, level, teamSize; };
+  std::vector<Candidate> eligible;
+  for (uint32_t tr = 1; tr < trainerCount; tr++) {
+    const std::string& nm = names[tr];
+    if (nm.size() > 3 && nm.compare(nm.size() - 3, 3, "_00") == 0) continue;
+    if (nm.empty() || nm[0] == '#' || t.Get("story_trainers", tr, "darkPokemonFlags") != 0 || shadowPeople.count(PersonOf(nm)) != 0 || fought.count(tr) == 0) continue;
+    const auto area = areaMinShadow.find(AreaOf(nm));
+    if (area == areaMinShadow.end()) continue;
+    int bestSlot = -1;
+    uint32_t bestLevel = 0, entry = 0, teamSize = 0;
+    for (uint32_t k = 0; k < 6; k++) {
+      const uint32_t id = t.Get("story_trainers", tr, "pokemonDataID", k);
+      if (id != 0) teamSize++;
+      if (id == 0 || id >= entryCount || entryUses[id] != 1) continue;
+      const uint32_t lv = t.Get("story_pokemon", id, "level");
+      if (lv >= bestLevel) bestLevel = lv, bestSlot = static_cast<int>(k), entry = id;
+    }
+    if (bestSlot < 0 || bestLevel < area->second) continue;
+    if (bestLevel >= 50) continue;
+    eligible.push_back({tr, static_cast<uint32_t>(bestSlot), entry, bestLevel, teamSize});
+  }
+  std::stable_sort(eligible.begin(), eligible.end(), [](const Candidate& a, const Candidate& b) { return a.level < b.level; });
+  const uint32_t room = static_cast<uint32_t>(freeRows.size());
+  uint32_t want = plan.amount == 1 ? 15 : plan.amount == 2 ? 44 : static_cast<uint32_t>(eligible.size());
+  want = std::min<uint32_t>({want, room, static_cast<uint32_t>(eligible.size())});
+  er::Rng rng = er::Rng::Stream(plan.seed, "more_shadows");
+  std::vector<Candidate> chosen;
+  if (want >= eligible.size()) {
+    chosen = eligible;
+  } else {
+    for (uint32_t i = 0; i < want; i++) {
+      const uint32_t lo = static_cast<uint32_t>(static_cast<uint64_t>(eligible.size()) * i / want);
+      const uint32_t hi = static_cast<uint32_t>(static_cast<uint64_t>(eligible.size()) * (i + 1) / want);
+      chosen.push_back(eligible[lo + rng.Below(std::max<uint32_t>(1, hi - lo))]);
+    }
+  }
+  const auto pool = PoolFor(sp, false);
+  const std::vector<bool> wasShadow = isShadow;
+  std::set<uint32_t> newSpecies, newEntries;
+  size_t rowAt = 0;
+  for (const Candidate& c : chosen) {
+    const uint32_t row = freeRows[rowAt];
+    const uint32_t oldSpecies = now("story_pokemon", c.entry, "pokemonID");
+    const uint32_t target = oldSpecies < sp.bst.size() ? sp.bst[oldSpecies] : 350;
+    std::vector<uint32_t> fit;
+    for (uint32_t width = 50; fit.size() < 3 && width <= 400; width += 25) {
+      fit.clear();
+      for (uint32_t x : pool) {
+        if (isShadow[x] || x >= sp.bst.size() || sp.bst[x] == 0) continue;
+        const uint32_t d = sp.bst[x] > target ? sp.bst[x] - target : target - sp.bst[x];
+        if (d <= width) fit.push_back(x);
+      }
+    }
+    if (fit.empty()) continue;
+    const uint32_t species = fit[rng.Below(static_cast<uint32_t>(fit.size()))];
+    isShadow[species] = true;
+    if (wasShadow[species] || !newSpecies.insert(species).second || !newEntries.insert(c.entry).second) {
+      error = "More Shadow Pokemon: a species or entry was handed out twice (a bug)";
+      return false;
+    }
+    std::vector<Template> near = templates;
+    std::stable_sort(near.begin(), near.end(), [&](const Template& a, const Template& b) {
+      const uint32_t da = a.level > c.level ? a.level - c.level : c.level - a.level, db = b.level > c.level ? b.level - c.level : c.level - b.level;
+      return da < db;
+    });
+    const Template tpl = near[rng.Below(std::min<uint32_t>(3, static_cast<uint32_t>(near.size())))];
+    out.Set("darkpokemon_shadow", row, "worth", t.Get("darkpokemon_shadow", tpl.row, "worth"));
+    out.Set("darkpokemon_shadow", row, "snatchRatio", t.Get("darkpokemon_shadow", tpl.row, "snatchRatio"));
+    out.Set("darkpokemon_shadow", row, "playerLevel", c.level > 4 ? c.level - 3 : 1);
+    out.Set("darkpokemon_shadow", row, "scenarioPokemon", 0);
+    out.Set("darkpokemon_shadow", row, "deckPokemonID", c.entry);
+    out.Set("darkpokemon_shadow", row, "initDarkPoint", t.Get("darkpokemon_shadow", tpl.row, "initDarkPoint"));
+    out.Set("darkpokemon_shadow", row, "bonusExp", 0);
+    for (uint32_t k = 0; k < 4; k++) out.Set("darkpokemon_shadow", row, Field("darkWaza", k), t.Get("darkpokemon_shadow", tpl.row, "darkWaza", k));
+    out.Set("darkpokemon_shadow", row, "revers", t.Get("darkpokemon_shadow", tpl.row, "revers"));
+    out.Set("darkpokemon_shadow", row, "underTakerFlag", 0);
+    out.Set("darkPokemonList", row, "pokemonID", species);
+    out.Set("story_pokemon", c.entry, "pokemonID", species);
+    out.Set("story_pokemon", c.entry, "holdItem", 0);
+    const auto moves = NaturalMoves(t, species, c.level);
+    for (uint32_t k = 0; k < 4; k++) out.Set("story_pokemon", c.entry, Field("wazaID", k), moves[k]);
+    out.Set("story_trainers", c.trainer, "darkPokemonFlags", 1u << c.slot);
+    out.Set("story_trainers", c.trainer, Field("pokemonDataID", c.slot), row);
+    out.spoiler.push_back("Shadow #" + std::to_string(row) + " " + t.Name("species", species) + " (level " + std::to_string(c.level) + ") replaces " +
+                          t.Name("species", oldSpecies) + " of trainer " + names[c.trainer] + " (#" + std::to_string(c.trainer) + ", slot " + std::to_string(c.slot + 1) + " of " + std::to_string(c.teamSize) + ")");
+    rowAt++;
+  }
+  for (const Candidate& c : eligible) {
+    out.spoiler.push_back("eligible: #" + std::to_string(c.trainer) + " " + names[c.trainer] + " level " + std::to_string(c.level) + " slot " + std::to_string(c.slot + 1) + " of " + std::to_string(c.teamSize));
+  }
+  out.spoiler.insert(out.spoiler.begin(), "More Shadow Pokemon " + MoreShadowsText(plan.amount, plan.seed) + ": " + std::to_string(rowAt) + " of " +
+                                              std::to_string(eligible.size()) + " eligible trainers got one");
   return true;
 }
 

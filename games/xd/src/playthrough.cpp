@@ -2,16 +2,24 @@
 #include "i18n.h"
 #include "xd_added_rows.h"
 #include "xd_battles_won.h"
+#include "xd_pokedex.h"
 #include "discord_presence.h"
 #include "xd_challenges.h"
 #include "xd_shiny.h"
 #include "xd_gen4.h"
+#include "xd_gen57.h"
+#include "xd_gen_rules.h"
+#include "xd_battle_models.h"
+#include "xd_rulesets.h"
 #include "xd_modern_types.h"
 
 #include "xd_playthrough_files.h"
 #include "xd_speedrun.h"
+#include "script_ext.h"
 #include "xd_randomizer.h"
 #include "xd_save_picker.h"
+#include "xd_save_ext.h"
+#include "xd_memo_overflow.h"
 #include "xd_user_folder.h"
 #include "xd_xg.h"
 
@@ -77,12 +85,10 @@ enum class CardState { NoSave, NoFile, Setup, Unreadable };
 using engine::i18n::Tr;
 
 bool WriteSetup(const fs::path& file, const ep::Setup& setup) {
-  if (xd::xg::On() && setup.edition.empty()) {
-    ep::Setup stamped = setup;
-    stamped.edition = "xg";
-    return ep::WriteFile(file, stamped);
-  }
-  return ep::WriteFile(file, setup);
+  ep::Setup stamped = setup;
+  xd::rulesets::Stamp(stamped);
+  if (xd::xg::On() && stamped.edition.empty()) stamped.edition = "xg";
+  return ep::WriteFile(file, stamped);
 }
 std::string Fmt(const char* format, ...) {
   char buf[2048];
@@ -110,6 +116,7 @@ std::vector<std::string> sLibraryOn;
 std::vector<std::pair<std::string, em::AppliesVerdict>> sVerdicts;
 std::vector<ep::ModUse> sLoaded;
 std::string sLoadedRandomizer;
+std::string sLoadedMoreShadows;
 std::string sBootKey;
 bool sRestartNow = false;
 
@@ -128,7 +135,7 @@ bool sContinueAccepted = false;
 
 std::vector<ep::AddedRowRef> CurrentAddedRows() {
   std::vector<ep::AddedRowRef> now;
-  for (const em::AddedRow& r : xd::added::Rows()) now.push_back({r.mod, r.table, r.key, r.id});
+  for (const em::AddedRow& r : xd::added::Rows()) if (!r.unbound) now.push_back({r.mod, r.table, r.key, r.id, r.label});
   return now;
 }
 ep::Engine sPlayersEngine = ep::Engine::Faithful;
@@ -268,8 +275,13 @@ void RecordSetupChanged(const std::string& what) {
 extern "C" void PortXD_PlaythroughSaveWritten(const uint8_t* file, size_t size);
 extern "C" void PortXD_SetSaveWrittenHook(void (*hook)(const uint8_t* file, size_t size));
 
+extern "C" void PortXD_SetSaveExtHooks(int (*before)(const uint8_t*, size_t), void (*after)(int),
+                                       int (*onRead)(const uint8_t*, size_t, size_t, char*, size_t));
+
 extern "C" void PortXD_PlaythroughBoot(void) {
   PortXD_SetSaveWrittenHook(PortXD_PlaythroughSaveWritten);
+  xd::memo::RegisterSaveExt();
+  PortXD_SetSaveExtHooks(PortXD_SaveExtBeforeWrite, PortXD_SaveExtAfterWrite, PortXD_SaveExtOnRead);
   sCardId = xp::SaveIdOnCard();
   if (sCardId.found) sBootKey = sCardId.key;
   if (sCardId.found) {
@@ -281,6 +293,7 @@ extern "C" void PortXD_PlaythroughBoot(void) {
       sCardState = CardState::NoFile;
     } else if (ep::ReadFile(file, sCardSetup, error)) {
       sCardState = CardState::Setup;
+      xd::rulesets::Resolve(sCardSetup);
     } else {
       sCardState = CardState::Unreadable;
       std::fprintf(stderr, "[playthrough] the save's setup file %ls %s: treated as a save without one\n", file.wstring().c_str(),
@@ -293,8 +306,13 @@ extern "C" void PortXD_PlaythroughBoot(void) {
   if (!xd::shiny::TestSwitch().empty()) xd::shiny::SetActive(xd::shiny::TestSwitch(), "XD_SHINY");
   if (sCardState == CardState::NoSave) {
     xd::battles::Set({}, true, "start-up: no save on the card");
+    xd::pokedex::SetLists("", "", true);
+    xd::pokedex::SetLookPins({});
   } else if (sCardState == CardState::Setup) {
+    xd::pokedex::SetLookPins(xd::rulesets::ChoiceOf(sCardSetup).looks.overrides);
     xd::battles::Set(sCardSetup.battlesWon, sCardSetup.battlesWonKept, "start-up: the save on the card");
+    xd::pokedex::SetLists(sCardSetup.dexCaught, sCardSetup.dexShiny, sCardSetup.dexKept);
+    xd::scriptext::LoadValues(sCardSetup.modData, "start-up: the save on the card");
   } else {
     xd::battles::Set({}, false, "start-up: a save without a setup file");
   }
@@ -302,6 +320,7 @@ extern "C" void PortXD_PlaythroughBoot(void) {
   if (const wchar_t* next = _wgetenv(L"XD_NEWGAME_SETUP"); next != nullptr && next[0] != L'\0') {
     std::string error;
     if (ep::ReadFile(next, sRestartSetup, error)) {
+      xd::rulesets::Resolve(sRestartSetup);
       sRestarted = true;
       sRestartFile = next;
       std::fprintf(stderr, "[playthrough] started again for a New Game setup: %s\n", ep::Label(sRestartSetup).c_str());
@@ -364,6 +383,7 @@ extern "C" void PortXD_PlaythroughBoot(void) {
 namespace xd::pt {
 
 std::string RandomizerOf(const ep::Setup& s);
+std::string MoreShadowsOf(const ep::Setup& s);
 
 bool BootWorldMods(std::vector<std::string>& ids) {
   if (sRestarted) {
@@ -476,12 +496,17 @@ void RestartNow(const char* why) {
   sRestartNow = true;
 }
 
-bool RestartForRoom(bool gen4, bool gen4Rules) {
+bool RestartForRoom(bool gen4, bool gen4Rules, const std::string& ruleSet) {
   ep::Setup setup;
   setup.engine = ep::DefaultEngine(es::Global());
   setup.mods = sLoaded;
   if (gen4) setup.challenges.push_back("gen4_pokemon");
   if (gen4 && gen4Rules) setup.challenges.push_back("gen4_rules");
+  if (gen4 && (ruleSet == "gen5" || ruleSet == "gen6" || ruleSet == "gen7")) {
+    setup.challenges.push_back("gen_numbers");
+    setup.challenges.push_back(ruleSet + "_rules");
+    if (ruleSet != "gen5") setup.challenges.push_back("modern_types");
+  }
   const fs::path file = xd::CardRoot() / L"playthroughs" / L"next_new_game.json";
   if (!WriteSetup(file, setup)) {
     std::fprintf(stderr, "[playthrough] could not write %ls: no restart for the room\n", file.wstring().c_str());
@@ -500,8 +525,10 @@ Defaults NewGameDefaults() {
   d.restarted = sRestarted;
   d.engine = sRestarted ? sRestartSetup.engine : ep::DefaultEngine(es::Global());
   if (sRestarted) d.randomizer = RandomizerOf(sRestartSetup);
+  if (sRestarted) d.moreShadows = MoreShadowsOf(sRestartSetup);
   if (sRestarted) d.challenges = sRestartSetup.challenges;
   d.options = sRestarted ? sRestartSetup.options : xd::shiny::TestSwitch();
+  d.rules = sRestarted ? xd::rulesets::ChoiceOf(sRestartSetup) : xd::rulesets::LauncherDefaults(xd::gen4::PackPresent());
   std::vector<std::string> ids = sLibraryOn;
   for (const ep::ModUse& l : sLoaded) {
     if (std::none_of(ids.begin(), ids.end(), [&](const std::string& i) { return Lower(i) == Lower(l.id); })) ids.push_back(l.id);
@@ -587,12 +614,42 @@ std::string BootRandomizer() {
 
 void RandomizerMade(const std::string& code) { sLoadedRandomizer = code; }
 
+std::string MoreShadowsOf(const ep::Setup& s) { return xd::xg::Off(xd::xg::Feature::Randomizer) != nullptr ? std::string() : s.moreShadows; }
+
+std::string BootMoreShadows() {
+  const char* env = std::getenv("XD_MORE_SHADOWS");
+  if (EnvIs("XD_REQUIRE_ORIGINAL", "1")) return {};
+  if (env != nullptr && std::strcmp(env, "0") == 0) {
+    std::fprintf(stderr, "[more shadows] XD_MORE_SHADOWS=0: off this run\n");
+    return {};
+  }
+  std::string text;
+  if (sRestarted) {
+    text = MoreShadowsOf(sRestartSetup);
+  } else if (sCardState == CardState::Setup) {
+    text = MoreShadowsOf(sCardSetup);
+  } else if (env != nullptr && env[0] != '\0') {
+    xd::randomizer::MoreShadowsPlan plan;
+    if (xd::randomizer::ParseMoreShadows(env, plan)) {
+      text = env;
+    } else {
+      std::fprintf(stderr, "[more shadows] XD_MORE_SHADOWS=%s: expected few|many|all:<seed number>; off\n", env);
+    }
+  }
+  return text;
+}
+
+void MoreShadowsMade(const std::string& text) { sLoadedMoreShadows = text; }
+const std::string& LoadedMoreShadows() { return sLoadedMoreShadows; }
+
 namespace {
 bool HasRule(const std::vector<std::string>& rules, const char* id) {
   return xd::xg::OffForRule(id) == nullptr && std::find(rules.begin(), rules.end(), id) != rules.end();
 }
+bool RandoGen57(const std::string& code) { return xd::xg::Off(xd::xg::Feature::Gen4Pokemon) == nullptr && xd::randomizer::CodeIncludesGen57(code); }
 bool RandoGen4(const std::string& code) { return xd::xg::Off(xd::xg::Feature::Gen4Pokemon) == nullptr && xd::randomizer::CodeIncludesGen4(code); }
-bool HasGen4(const std::vector<std::string>& rules) { return HasRule(rules, "gen4_pokemon") || HasRule(rules, "gen4_rules"); }
+bool HasGen57(const std::vector<std::string>& rules) { return HasRule(rules, "gen57_pokemon"); }
+bool HasGen4(const std::vector<std::string>& rules) { return HasRule(rules, "gen4_pokemon") || HasRule(rules, "gen4_rules") || HasGen57(rules); }
 bool HasGen4Spots(const std::vector<std::string>& rules) { return HasGen4(rules) && HasRule(rules, "gen4_spots"); }
 }
 
@@ -603,6 +660,23 @@ bool BootGen4() {
   if (sRestarted) return HasGen4(sRestartSetup.challenges);
   if (sCardState == CardState::Setup) return HasGen4(sCardSetup.challenges);
   return false;
+}
+
+bool BootGen57() {
+  if (EnvIs("XD_REQUIRE_ORIGINAL", "1")) return false;
+  if (HasGen57(xd::challenges::TestSwitch())) return true;
+  if (RandoGen57(BootRandomizer())) return true;
+  if (sRestarted) return HasGen57(sRestartSetup.challenges);
+  if (sCardState == CardState::Setup) return HasGen57(sCardSetup.challenges);
+  return false;
+}
+
+int BootRuleGen() {
+  if (EnvIs("XD_REQUIRE_ORIGINAL", "1") || xd::xg::On()) return 3;
+  int g = xd::rulegen::NumbersOfIds(xd::challenges::TestSwitch());
+  if (sRestarted) g = std::max(g, xd::rulegen::NumbersOfIds(sRestartSetup.challenges));
+  else if (sCardState == CardState::Setup) g = std::max(g, xd::rulegen::NumbersOfIds(sCardSetup.challenges));
+  return g;
 }
 
 bool BootGen4Spots() {
@@ -621,15 +695,64 @@ bool BootModernTypes() {
   return false;
 }
 
+bool BootLooks(engine::rulesets::Looks& out) {
+  out = {};
+  if (EnvIs("XD_REQUIRE_ORIGINAL", "1")) {
+    out.sources = {"xd"};
+    return true;
+  }
+  const xd::rulesets::TestChoice t = xd::rulesets::Test();
+  if (t.hasLooks) { out = t.choice.looks; return true; }
+  {
+    const engine::rulesets::Looks legacy = xd::rulesets::FromLegacy(xd::challenges::TestSwitch(), "").looks;
+    if (legacy.Says()) { out = legacy; return true; }
+  }
+  if (sRestarted) out = xd::rulesets::ChoiceOf(sRestartSetup).looks;
+  else if (sCardState == CardState::Setup) out = xd::rulesets::ChoiceOf(sCardSetup).looks;
+  return out.Says();
+}
+static std::string sLoadedLooks = "?";
+static std::string sLooksMissing;
+void LooksMissing(const std::string& names) { sLooksMissing = names; }
+void LooksLoaded(const std::string& key) { sLoadedLooks = key; }
+static std::string LooksKey(const engine::rulesets::Looks& looks) {
+  const es::BoolSetting b = es::Global().Bool(xd::battle_models::kSetting);
+  std::string key;
+  for (const std::string& l : xd::rulesets::LayerOrderOf(looks, b.Valid() && b.Get())) key += (key.empty() ? "" : ",") + l;
+  for (const auto& p : looks.overrides) key += ";" + std::to_string(p.first) + ":" + p.second;
+  return key;
+}
+std::string LooksKeyOfBoot() {
+  engine::rulesets::Looks l;
+  BootLooks(l);
+  return LooksKey(l);
+}
+
 bool NeedsRestart(const ep::Setup& setup) {
+  if (sLoadedLooks != "?" && !EnvIs("XD_MODS", "0")) {
+    engine::rulesets::Looks want = xd::rulesets::ChoiceOf(setup).looks;
+    const xd::rulesets::TestChoice t = xd::rulesets::Test();
+    if (t.hasLooks) want = t.choice.looks;
+    else if (const engine::rulesets::Looks legacy = xd::rulesets::FromLegacy(xd::challenges::TestSwitch(), "").looks; legacy.Says()) want = legacy;
+    if (LooksKey(want) != sLoadedLooks) return true;
+  }
   if ((HasRule(setup.challenges, "modern_types") || HasRule(xd::challenges::TestSwitch(), "modern_types")) != xd::modern::Loaded() &&
       !EnvIs("XD_MODS", "0")) {
     return true;
   }
   if (RandomizerOf(setup) != sLoadedRandomizer) return true;
+  if (!EnvIs("XD_MODS", "0") && xd::gen4::Loaded() &&
+      std::max(xd::rulegen::NumbersOfIds(setup.challenges), xd::rulegen::NumbersOfIds(xd::challenges::TestSwitch())) != xd::rulegen::NumbersLoaded()) {
+    return true;
+  }
+  if (MoreShadowsOf(setup) != sLoadedMoreShadows) return true;
   if ((HasGen4(setup.challenges) || HasGen4(xd::challenges::TestSwitch())) && xd::gen4::PackPresent() != xd::gen4::Loaded()) return true;
   if (!HasGen4(setup.challenges) && !HasGen4(xd::challenges::TestSwitch()) && !RandoGen4(RandomizerOf(setup)) &&
       xd::gen4::Loaded()) {
+    return true;
+  }
+  if (xd::gen4::Loaded() && (HasGen57(setup.challenges) || HasGen57(xd::challenges::TestSwitch()) || RandoGen57(RandomizerOf(setup))) != xd::gen57::Loaded() &&
+      xd::gen57::PackPresent() && !EnvIs("XD_MODS", "0")) {
     return true;
   }
   if (xd::gen4::Loaded() && (HasGen4Spots(setup.challenges) || HasGen4Spots(xd::challenges::TestSwitch())) != xd::gen4::SpotsLoaded()) return true;
@@ -663,7 +786,28 @@ void Begin(const ep::Setup& setup, const std::string& settingsChanged) {
   sPendingSetup.mods = sLoaded;
   sPendingSetup.addedRows = CurrentAddedRows();
   SetRandomizer(sPendingSetup, sLoadedRandomizer);
+  sPendingSetup.moreShadows = sLoadedMoreShadows;
   sPendingSetup.chosenBy = sScreen ? "screen" : "run";
+  {
+    const xd::rulesets::TestChoice t = xd::rulesets::Test();
+    engine::rulesets::Choice c = xd::rulesets::ChoiceOf(sPendingSetup);
+    if (sRestarted && sRestartSetup.rules.present) {
+      std::vector<std::string> a = xd::rulesets::LegacyIds(sRestartSetup.rules), b = xd::rulesets::LegacyIds(c);
+      std::sort(a.begin(), a.end());
+      std::sort(b.begin(), b.end());
+      if (a == b) c = sRestartSetup.rules;
+    } else if (sPendingSetup.rules.present) {
+      c = sPendingSetup.rules;
+    }
+    if (t.hasRuleSet && !t.choice.ruleSet.empty()) { c.ruleSet = t.choice.ruleSet; c.mechanics = t.choice.mechanics; }
+    if (t.hasPokemon) {
+      if (!t.choice.gens.empty()) c.gens = t.choice.gens;
+      if (!t.choice.pokemonOptions.empty()) c.pokemonOptions = t.choice.pokemonOptions;
+    }
+    if (t.hasLooks) c.looks = t.choice.looks;
+    c.present = true;
+    xd::rulesets::Apply(sPendingSetup, c);
+  }
   if (sPendingSetup.split.empty()) sPendingSetup.split = SplitNow(sPendingSetup.engine);
   sKeyAtNewGame = sCardId.found ? sCardId.key : std::string();
   sChosen = Chosen::NewGame;
@@ -675,6 +819,8 @@ void Begin(const ep::Setup& setup, const std::string& settingsChanged) {
   ApplySplit("new game");
   xd::challenges::SetState({}, "new game");
   xd::battles::Set({}, true, "new game");
+  xd::pokedex::SetLookPins(xd::rulesets::ChoiceOf(sCurrent).looks.overrides);
+  xd::scriptext::ClearValues("new game");
   xd::speedrun::NewGame(sCurrent.speedrun);
   Note("new game: " + ep::Label(sCurrent));
   if (sNewGameHeld) {
@@ -861,12 +1007,24 @@ bool TitleInputImpl(PADStatus* status, int select, u16 newButtons) {
       ep::Setup s = SetupOf(EngineNow(), {}, sLoadedRandomizer,
                             sRestarted ? sRestartSetup.challenges : xd::challenges::TestSwitch(),
                             sRestarted ? sRestartSetup.options : xd::shiny::TestSwitch());
+      s.moreShadows = sLoadedMoreShadows;
       s.mods = sLoaded;
+      if (sRestarted && sRestartSetup.rules.present) s.rules = sRestartSetup.rules;
       Begin(s, "");
     }
     return false;
   }
   if (select == 1) {
+    if (sScreen && sCardState == CardState::Setup && HasGen4(sCardSetup.challenges) && !xd::gen4::PackPresent()) {
+      for (int i = 0; i < PAD_MAX_CONTROLLERS; i++) {
+        if (status[i].err == PAD_ERR_NONE) status[i].button &= static_cast<u16>(~PAD_BUTTON_A);
+      }
+      PortInput_LatchHeld();
+      std::fprintf(stderr, "[playthrough] CONTINUE refused: the save has Gen 4 Pokemon and the Gen 4 pack is not there (the save is not touched)\n");
+      if (PortXD_OpenContinueRefusal(Tr("This playthrough has Gen 4 Pokemon."), Tr("Add your Battle Revolution disc or your Ultra Sun / Ultra Moon dump in the launcher (Extra assets) to continue it."),
+                                     Tr("Your save is safe and unchanged. It needs the Gen 4 pack because the Pokemon in it come from there."), std::string())) return true;
+      return false;
+    }
     const bool again = sChosen == Chosen::Continue;
     sPending = false;
     sChosen = Chosen::Continue;
@@ -881,8 +1039,13 @@ bool TitleInputImpl(PADStatus* status, int select, u16 newButtons) {
     xd::challenges::SetState(sCardState == CardState::Setup ? sCurrent.challengeState : std::vector<std::string>(), "continue");
     if (sCardState == CardState::Setup) {
       xd::battles::Set(sCurrent.battlesWon, sCurrent.battlesWonKept, "continue");
+      xd::pokedex::SetLists(sCurrent.dexCaught, sCurrent.dexShiny, sCurrent.dexKept);
+      xd::pokedex::SetLookPins(xd::rulesets::ChoiceOf(sCurrent).looks.overrides);
+      xd::scriptext::LoadValues(sCurrent.modData, "continue");
     } else {
       xd::battles::Set({}, false, "continue");
+      xd::pokedex::SetLists("", "", false);
+      xd::scriptext::ClearValues("continue: a save without a setup file");
     }
     if (sCardState == CardState::Setup && !sContinueProblems.empty() && !sContinueAccepted && sScreen) {
       for (int i = 0; i < PAD_MAX_CONTROLLERS; i++) {
@@ -905,6 +1068,10 @@ bool TitleInputImpl(PADStatus* status, int select, u16 newButtons) {
       for (size_t i = 0; i < sContinueNotes.size(); i++) list += (i > 0 ? "; " : "") + sContinueNotes[i];
       PortXD_ShowNote(Fmt(Tr("This save's setup had: %s. The game carries on without it."), list.c_str()), 6.f);
     }
+    if (!sLooksMissing.empty() && sScreen && !again) {
+      PortXD_ShowNote(Fmt(Tr("%s not found: the next source in this playthrough's list shows instead."), sLooksMissing.c_str()), 5.f);
+      sLooksMissing.clear();
+    }
     if (!again) {
       xd::speedrun::Continue(sCardState == CardState::Setup ? sCardSetup : ep::Setup{}, sCardId.key, sCardState == CardState::Setup);
       Note(std::string("continue: ") + (sCurrentUnknown ? ep::UnknownLabel() : ep::Label(sCurrent)));
@@ -919,10 +1086,32 @@ extern "C" {
 
 int PortXD_SaveBoundToOtherRows(char* text, size_t size) {
   if (sCardState != CardState::Setup || sCardSetup.addedRows.empty()) return 0;
-  const std::vector<std::string> bound = ep::BoundProblems(sCardSetup, CurrentAddedRows());
-  if (bound.empty()) return 0;
+  const std::vector<ep::AddedRowRef> now = CurrentAddedRows();
+  const ep::BoundCheck check = ep::CheckBound(sCardSetup, now);
   std::string list;
-  for (size_t i = 0; i < bound.size() && i < 3; i++) list += (i > 0 ? "; " : "") + bound[i];
+  if (check.plan.Refused()) {
+    for (size_t i = 0; i < check.plan.problems.size() && i < 3; i++) list += (i > 0 ? "; " : "") + check.plan.problems[i];
+  } else if (check.plan.Needed()) {
+    xd::save::IdRemap map;
+    for (const em::RemapStep& st : check.plan.steps) {
+      auto& target = st.kind == "species" ? map.species : st.kind == "move" ? map.moves : map.items;
+      target[static_cast<uint16_t>(st.from)] = static_cast<uint16_t>(st.to);
+      std::fprintf(stderr, "[playthrough] labels: %s was number %u in the save, is number %u now\n", st.label.c_str(), st.from, st.to);
+    }
+    size_t changed = 0;
+    std::string error;
+    if (xp::RemapCardSave(sCardId, map, changed, error)) {
+      std::fprintf(stderr, "[playthrough] labels: the save's numbers were changed to the numbers the mods give now (%zu values; the old file is in the save backups)\n", changed);
+      sCardSetup.addedRows = now;
+      if (!WriteSetup(xp::SetupFileFor(sCardId), sCardSetup)) {
+        std::fprintf(stderr, "[playthrough] could not write %ls\n", xp::SetupFileFor(sCardId).wstring().c_str());
+      }
+      return 0;
+    }
+    list = Fmt(Tr("the numbers of the mods' rows are not what they were when it was saved, and the save could not be adjusted (%s)"), error.c_str());
+  } else {
+    return 0;
+  }
   const std::string out = Fmt(Tr("The save on the memory card holds Pokemon, moves or items that mods added, and their numbers would "
                                  "mean other things without the same mods: %s. Nothing on the card is read or changed."),
                               list.c_str());
@@ -961,8 +1150,16 @@ void PortXD_PlaythroughSaveWritten(const uint8_t* file, size_t size) {
     sPendingSetup.trainerId = id.trainerId;
     sPendingSetup.secretId = id.secretId;
     const fs::path f = xp::SetupFileFor(id);
+    sPendingSetup.extRequired = xd::saveext::RequiredNow();
     sPendingSetup.battlesWonKept = xd::battles::Complete();
     sPendingSetup.battlesWon = xd::battles::List();
+    if (xd::pokedex::Enabled()) {
+      xd::pokedex::RefreshPlayer();
+      sPendingSetup.dexKept = true;
+      sPendingSetup.dexCaught = xd::pokedex::CaughtText();
+      sPendingSetup.dexShiny = xd::pokedex::ShinyText();
+    }
+    sPendingSetup.modData = xd::scriptext::ExportValues();
     sPendingSetup.speedrun = xd::speedrun::TimerState();
     sPendingSetup.stats = xd::speedrun::StatsState();
     if (WriteSetup(f, sPendingSetup)) {
@@ -984,6 +1181,7 @@ void PortXD_PlaythroughSaveWritten(const uint8_t* file, size_t size) {
     std::error_code ec;
     if (!fs::exists(f, ec)) {
       ep::Setup s = xd::pt::SetupOf(EngineNow(), {}, sLoadedRandomizer, xd::challenges::TestSwitch(), xd::shiny::Active());
+      s.moreShadows = sLoadedMoreShadows;
       s.mods = sLoaded;
       s.addedRows = CurrentAddedRows();
       s.trainer = id.trainer;
@@ -993,6 +1191,13 @@ void PortXD_PlaythroughSaveWritten(const uint8_t* file, size_t size) {
       xd::battles::Set(xd::battles::SinceStart(), true, "a new game's first save");
       s.battlesWonKept = true;
       s.battlesWon = xd::battles::List();
+      if (xd::pokedex::Enabled()) {
+        xd::pokedex::RefreshPlayer();
+        s.dexKept = true;
+        s.dexCaught = xd::pokedex::CaughtText();
+        s.dexShiny = xd::pokedex::ShinyText();
+      }
+      s.modData = xd::scriptext::ExportValues();
       s.speedrun = xd::speedrun::TimerState();
       s.stats = xd::speedrun::StatsState();
       if (WriteSetup(f, s)) {
@@ -1008,6 +1213,12 @@ void PortXD_PlaythroughSaveWritten(const uint8_t* file, size_t size) {
       } else {
         std::fprintf(stderr, "[playthrough] could not write %ls\n", f.wstring().c_str());
       }
+    }
+  }
+  if (sCardState == CardState::Setup && xd::saveext::RequiredNow() != sCardSetup.extRequired) {
+    sCardSetup.extRequired = xd::saveext::RequiredNow();
+    if (!WriteSetup(xp::SetupFileFor(id), sCardSetup)) {
+      std::fprintf(stderr, "[playthrough] could not write %ls\n", xp::SetupFileFor(id).wstring().c_str());
     }
   }
   if (sCardState == CardState::Setup) {
@@ -1035,6 +1246,46 @@ void PortXD_PlaythroughSaveWritten(const uint8_t* file, size_t size) {
     }
     if (sChosen != Chosen::None && !sCurrentUnknown) sCurrent.battlesWon = sCardSetup.battlesWon;
     std::fprintf(stderr, "[playthrough] battles won kept with the save: %zu\n", sCardSetup.battlesWon.size());
+  }
+  if (sCardState == CardState::Setup && xd::pokedex::Enabled()) {
+    xd::pokedex::RefreshPlayer();
+    if (!sCardSetup.dexKept || xd::pokedex::CaughtText() != sCardSetup.dexCaught || xd::pokedex::ShinyText() != sCardSetup.dexShiny) {
+      sCardSetup.dexKept = true;
+      sCardSetup.dexCaught = xd::pokedex::CaughtText();
+      sCardSetup.dexShiny = xd::pokedex::ShinyText();
+      if (!WriteSetup(xp::SetupFileFor(id), sCardSetup)) {
+        std::fprintf(stderr, "[playthrough] could not write %ls\n", xp::SetupFileFor(id).wstring().c_str());
+      }
+      if (sChosen != Chosen::None && !sCurrentUnknown) {
+        sCurrent.dexKept = true;
+        sCurrent.dexCaught = sCardSetup.dexCaught;
+        sCurrent.dexShiny = sCardSetup.dexShiny;
+      }
+    }
+  }
+  if (sCardState == CardState::Setup && xd::pokedex::Enabled() && xd::pokedex::LookPinsChanged()) {
+    {
+      engine::rulesets::Choice c = xd::rulesets::ChoiceOf(sCardSetup);
+      c.looks.overrides = xd::pokedex::LookPins();
+      c.present = true;
+      sCardSetup.rules = c;
+    }
+    xd::pokedex::ClearLookPinsChanged();
+    std::fprintf(stderr, "[playthrough] Looks pins kept with this save: %zu\n", sCardSetup.rules.looks.overrides.size());
+    if (!WriteSetup(xp::SetupFileFor(id), sCardSetup)) {
+      std::fprintf(stderr, "[playthrough] could not write %ls\n", xp::SetupFileFor(id).wstring().c_str());
+    }
+    if (sChosen != Chosen::None && !sCurrentUnknown) sCurrent.rules = sCardSetup.rules;
+  }
+  if (sCardState == CardState::Setup && xd::scriptext::ValuesChanged(sCardSetup.modData)) {
+    sCardSetup.modData = xd::scriptext::ExportValues();
+    if (!WriteSetup(xp::SetupFileFor(id), sCardSetup)) {
+      std::fprintf(stderr, "[playthrough] could not write %ls\n", xp::SetupFileFor(id).wstring().c_str());
+    } else {
+      xd::scriptext::Values().MarkSaved();
+      std::fprintf(stderr, "[playthrough] the numbers script mods keep were written next to the save: %zu mod(s)\n", sCardSetup.modData.size());
+    }
+    if (sChosen != Chosen::None && !sCurrentUnknown) sCurrent.modData = sCardSetup.modData;
   }
   if (sCardState == CardState::Setup && xd::speedrun::PlaythroughChosen()) {
     sCardSetup.speedrun = xd::speedrun::TimerState();

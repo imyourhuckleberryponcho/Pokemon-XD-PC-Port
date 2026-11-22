@@ -5,6 +5,7 @@
 
 #include <mods.h>
 #include <playthrough.h>
+#include <rulesets.h>
 
 #include <dolphin/pad.h>
 
@@ -25,8 +26,10 @@ struct Defaults {
   std::vector<ModChoice> mods;
   bool restarted = false;
   std::string randomizer;
+  std::string moreShadows;
   std::vector<std::string> challenges;
   std::vector<std::string> options;
+  engine::rulesets::Choice rules;
 };
 
 Defaults NewGameDefaults();
@@ -36,6 +39,9 @@ engine::playthrough::Setup SetupOf(engine::playthrough::Engine engine, const std
 const std::string& LoadedRandomizer();
 std::string BootRandomizer();
 void RandomizerMade(const std::string& code);
+std::string BootMoreShadows();
+void MoreShadowsMade(const std::string& text);
+const std::string& LoadedMoreShadows();
 bool NeedsRestart(const engine::playthrough::Setup& setup);
 void Begin(const engine::playthrough::Setup& setup, const std::string& settingsChanged);
 void NewGameBack();
@@ -49,7 +55,7 @@ void RestartToTitle();
 bool PickerPossible();
 void PickerAnswer(const xd::picker::Row* row);
 
-bool RestartForRoom(bool gen4, bool gen4Rules);
+bool RestartForRoom(bool gen4, bool gen4Rules, const std::string& ruleSet = "");
 
 const std::vector<std::string>& ContinueProblems();
 void ContinueAnswer(bool carryOn);
@@ -74,6 +80,7 @@ void RuleNote(const std::string& what);
 bool PortXD_OpenNewGameSetup();
 bool PortXD_OpenSavePicker();
 bool PortXD_OpenContinueQuestion();
+bool PortXD_OpenContinueRefusal(const std::string& head, const std::string& red, const std::string& soft, const std::string& who);
 bool PortXD_OpenEngineQuestion();
 bool PortXD_ShowRuleMessage(const std::string& text);
 void PortXD_ShowNote(const std::string& text, float seconds);

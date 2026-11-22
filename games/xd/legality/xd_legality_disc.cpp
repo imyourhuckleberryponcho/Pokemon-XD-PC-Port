@@ -147,6 +147,7 @@ bool Fill(const XDCommonTables& tables, DiscRules& out, std::string& error, cons
     const PokemonData& d = tables.pokemon_data[i];
     SpeciesRules& s = r.species[i];
     s.exists = d.numPokemon != 0;
+    s.national = d.numPokemon;
     s.growth = d.growDataId;
     s.abilities[0] = d.tokuseiDataId[0];
     s.abilities[1] = d.tokuseiDataId[1];

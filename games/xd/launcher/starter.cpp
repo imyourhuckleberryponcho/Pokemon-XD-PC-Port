@@ -98,6 +98,16 @@ std::vector<std::string> PointedFolders(const std::wstring& own) {
 
 std::wstring Widen(const std::string& ascii) { return std::wstring(ascii.begin(), ascii.end()); }
 
+bool ArgsWantWait(const std::wstring& args) {
+  for (const wchar_t* option : {L"--no-launcher", L"--help", L"--version"}) {
+    if (args.find(option) != std::wstring::npos) {
+      return true;
+    }
+  }
+  return args == L"-h" || args == L"/?" || args.find(L" -h") != std::wstring::npos ||
+         args.find(L" /?") != std::wstring::npos || args.rfind(L"-h ", 0) == 0 || args.rfind(L"/? ", 0) == 0;
+}
+
 }
 
 int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
@@ -109,8 +119,8 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
   folders.push_back(own + L"\\game");
   folders.push_back(own);
   const char* waitVar = std::getenv("XD_STARTER_WAIT");
-  const bool wait = waitVar != nullptr && waitVar[0] == '1';
   const std::wstring args = Arguments();
+  const bool wait = (waitVar != nullptr && waitVar[0] == '1') || ArgsWantWait(args);
   DWORD lastError = 0;
   std::wstring lastProgram;
   for (const std::wstring& folder : folders) {

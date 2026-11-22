@@ -30,7 +30,7 @@ std::string ArchiveReason(const std::string& path, const uint8_t* data, size_t s
 std::string UnsafePathReason(const std::string& path);
 std::string TraversalReason(const std::string& path);
 
-enum class Kind { ModJson, Json, Lua, StoryText, Text, Png, Dds, DiscEntry, DiscFile, Unknown };
+enum class Kind { ModJson, Json, Lua, StoryText, Text, Png, Dds, Sound, DiscEntry, DiscFile, Unknown };
 Kind KindOf(const std::string& path, const std::vector<GameRules::ExtraFolder>* extras = nullptr);
 const char* KindName(Kind kind);
 

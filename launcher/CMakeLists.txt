@@ -12,7 +12,7 @@ add_library(launcher_imgui STATIC
 target_include_directories(launcher_imgui PUBLIC ${_imgui_dir})
 target_link_libraries(launcher_imgui PUBLIC ${AURORA_SDL3_TARGET})
 
-add_library(launcher_ui STATIC launcher_app.cpp launcher_modupdate.cpp launcher_icon.cpp launcher_reports.cpp launcher_extra.cpp launcher_pad.cpp)
+add_library(launcher_ui STATIC launcher_app.cpp launcher_data.cpp launcher_modupdate.cpp launcher_modtools.cpp launcher_icon.cpp launcher_reports.cpp launcher_extra.cpp launcher_pad.cpp)
 if (WIN32)
   target_sources(launcher_ui PRIVATE launcher_sys_win.cpp)
 else ()
@@ -40,12 +40,20 @@ function(launcher_copy_fonts target)
     VERBATIM)
 endfunction()
 
+add_executable(launcher_data_test tests/data_test.cpp launcher_data.cpp)
+target_include_directories(launcher_data_test PRIVATE include)
+target_compile_options(launcher_data_test PRIVATE ${XD_FLAG_UTF8})
+
 add_executable(launcher_reports_test tests/reports_test.cpp launcher_reports.cpp)
 target_include_directories(launcher_reports_test PRIVATE include)
 target_link_libraries(launcher_reports_test PRIVATE platform_os engine_i18n ZLIB::ZLIB)
 target_compile_options(launcher_reports_test PRIVATE ${XD_FLAG_UTF8})
 
 add_executable(pbr_models_standin tests/pbr_models_standin.cpp)
+add_executable(launcher_modtools_test tests/modtools_test.cpp)
+target_link_libraries(launcher_modtools_test PRIVATE launcher_ui)
+aurora_copy_runtime_dlls(launcher_modtools_test)
+
 add_executable(launcher_extra_test tests/extra_test.cpp)
 add_dependencies(launcher_extra_test pbr_models_standin)
 target_link_libraries(launcher_extra_test PRIVATE launcher_ui)

@@ -1,7 +1,9 @@
 #ifndef ENGINE_PLAYTHROUGH_H
 #define ENGINE_PLAYTHROUGH_H
 
+#include <mod_values.h>
 #include <mods.h>
+#include <rulesets.h>
 #include <settings.h>
 
 #include <cstdint>
@@ -25,7 +27,8 @@ struct ModUse {
 struct AddedRowRef {
   std::string mod, table, name;
   uint32_t id = 0;
-  bool operator==(const AddedRowRef& o) const { return mod == o.mod && table == o.table && name == o.name && id == o.id; }
+  std::string label;
+  bool operator==(const AddedRowRef& o) const { return mod == o.mod && table == o.table && name == o.name && id == o.id && label == o.label; }
 };
 
 struct SpeedSplit {
@@ -68,7 +71,11 @@ struct Setup {
   std::vector<std::string> challenges;
   std::vector<std::string> options;
   std::string split;
+  std::string moreShadows;
   std::string edition;
+  rulesets::Choice rules;
+  std::string ruleSetStarted;
+  std::vector<std::string> ruleSetChanged;
   std::string started;
   std::string portVersion;
   std::string chosenBy;
@@ -79,14 +86,18 @@ struct Setup {
   std::vector<std::string> setupChanged;
   std::vector<std::string> challengeLog;
   std::vector<std::string> challengeState;
+  std::vector<mods::ModValueSet> modData;
   bool battlesWonKept = false;
   std::vector<uint32_t> battlesWon;
+  bool dexKept = false;
+  std::string dexCaught, dexShiny;
+  std::vector<std::string> extRequired;
   bool Failed() const;
   std::string trainer;
   uint32_t trainerId = 0, secretId = 0;
 
   std::vector<const ModUse*> WorldMods() const;
-  bool Vanilla() const { return WorldMods().empty() && randomizer.empty() && challenges.empty() && options.empty(); }
+  bool Vanilla() const { return WorldMods().empty() && randomizer.empty() && challenges.empty() && options.empty() && moreShadows.empty(); }
 };
 
 std::string Label(const Setup& setup);
@@ -108,6 +119,11 @@ struct Check {
 Check Compare(const Setup& setup, const std::vector<mods::ModFolder>& found);
 
 std::vector<std::string> BoundProblems(const Setup& setup, const std::vector<AddedRowRef>& now);
+
+struct BoundCheck {
+  mods::RemapPlan plan;
+};
+BoundCheck CheckBound(const Setup& setup, const std::vector<AddedRowRef>& now);
 
 std::vector<std::string> WorldModIds(const Setup& setup);
 

@@ -1,11 +1,13 @@
 #include "../src/data/xd_data_mods.h"
 #include "../src/dol_tables.h"
 #include "../src/xd_user_folder.h"
+#include "../src/xd_xg.h"
 
 #include <aurora/dvd.h>
 #include <dolphin/dvd.h>
 #include <gs_formats.h>
 #include <mods.h>
+#include <mod_layout.h>
 #include <mods_disc.h>
 #include <port_disc.h>
 #include <port_user_folder.h>
@@ -80,6 +82,7 @@ int main(int argc, char** argv) {
     std::fprintf(stderr, "FAILED: %s\n", error);
     return 1;
   }
+  options.disc.gameId = em::MakeTarget(options.disc.gameId, xd::xg::Edition());
   std::printf("disc %s, mods in %s, list %s\n", options.disc.gameId.c_str(), options.modsFolder.string().c_str(),
               options.listFile.string().c_str());
 

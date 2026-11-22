@@ -2,6 +2,7 @@
 #define ENGINE_MODS_H
 
 #include "data_mods.h"
+#include "labels.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -42,6 +43,7 @@ struct Manifest {
   std::string updates;
   std::map<std::string, std::string> links;
   std::string authorKey;
+  std::string labelNamespace;
   int priority = 0;
   Applies applies = Applies::NewPlaythrough;
   bool appliesGiven = false;
@@ -144,8 +146,10 @@ struct LoadOptions {
     std::string id;
     std::string name;
     std::filesystem::path folder;
+    std::set<std::string> onlyArchives, skipArchives;
   };
   std::vector<ExtraLayer> extraLayers;
+  std::map<std::string, std::filesystem::path> builtInFolders;
 };
 
 struct ScriptFile {
@@ -191,7 +195,7 @@ struct ModFolder {
   bool looseFiles = false;
 };
 
-void SetTexturePackSource(const std::filesystem::path& root, std::string_view gameId);
+void SetTexturePackSource(const std::filesystem::path& root, std::string_view gameId, const std::vector<std::string>& alsoTargets = {});
 std::vector<ModFolder> FindTexturePacks();
 
 std::vector<ModFolder> FindMods(const std::filesystem::path& modsFolder, std::vector<Message>& messages);

@@ -305,11 +305,12 @@ const char* KindName(Kind kind) {
   switch (kind) {
   case Kind::ModJson: return "mod.json";
   case Kind::Json: return "JSON data";
-  case Kind::Lua: return "Lua script";
+  case Kind::Lua: return "Luau script";
   case Kind::StoryText: return "story script text";
   case Kind::Text: return "text";
   case Kind::Png: return "PNG picture";
   case Kind::Dds: return "DDS picture";
+  case Kind::Sound: return "sound";
   case Kind::DiscEntry: return "game-format file";
   case Kind::DiscFile: return "game-format file";
   default: return "unknown";
@@ -343,7 +344,8 @@ Kind KindOf(const std::string& path, const std::vector<GameRules::ExtraFolder>* 
   if (top == "files") return Kind::DiscFile;
   if (top == "fsys") return Kind::DiscEntry;
   if (top == "data") return ext == "json" ? Kind::Json : Kind::Unknown;
-  if (top == "scripts") return ext == "lua" && segs.size() == 2 ? Kind::Lua : Kind::Unknown;
+  if (top == "scripts") return (ext == "luau" || ext == "lua") && segs.size() == 2 ? Kind::Lua : Kind::Unknown;
+  if (top == "sounds") return ext == "json" ? Kind::Json : (ext == "wav" || ext == "ogg") ? Kind::Sound : Kind::Unknown;
   if (top == "textures") return ext == "png" ? Kind::Png : ext == "dds" ? Kind::Dds : Kind::Unknown;
   if (extras != nullptr) {
     for (const GameRules::ExtraFolder& f : *extras) {

@@ -103,7 +103,7 @@ void WalkTree(const fs::path& root, Tree& tree, Report& report, const SafetyLimi
 
 void CheckManifest(const Options& o, Report& report, const std::string& text) {
   static const std::vector<std::string> kKnown = {"id", "name", "version", "author", "description", "game", "requires", "conflicts",
-                                                  "after", "before", "works_with", "recommends", "only_with", "links", "author_key", "priority", "applies", "scripts", "script_api", "format", "updates",
+                                                  "after", "before", "works_with", "recommends", "only_with", "links", "author_key", "label_namespace", "priority", "applies", "scripts", "script_api", "format", "updates",
                                                   "homepage", "license", "tags"};
   const std::string file = "mod.json";
   const size_t before = report.Count(Severity::Problem);
@@ -228,6 +228,11 @@ void CheckManifest(const Options& o, Report& report, const std::string& text) {
     bool hex = key->text.size() == 64;
     for (char c : key->text) hex = hex && ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'));
     if (!hex) report.Problem("manifest-author-key", file, key->line, "\"author_key\" must be 64 lower case hex digits (your public signing key)");
+  }
+  if (const Value* ns = text_field("label_namespace", false)) {
+    if (!em::ValidNamespace(ns->text) || ns->text == em::kBaseNamespace) {
+      report.Problem("manifest-label-namespace", file, ns->line, "\"label_namespace\" must be <author>.<pack>: lower case letters, digits, - and _, one dot between the two (\"base\" is for the game's own rows)");
+    }
   }
   number_field("priority");
   number_field("format");
@@ -524,7 +529,7 @@ std::vector<LuaToken> LuaTokens(const std::string& s) {
       while (i < s.size() && s[i] != '\n') i++;
       continue;
     }
-    if (c == '"' || c == '\'') {
+    if (c == '"' || c == '\'' || c == '`') {
       LuaToken t;
       t.isString = true;
       t.line = line;
@@ -578,11 +583,15 @@ void CheckLuaFile(const GameRules* rules, Report& report, const std::string& fil
       const size_t colon = error.find(": ", prefix.size());
       if (colon != std::string::npos) what = error.substr(colon + 2);
     }
-    report.Problem("lua-syntax", file, line, "this script does not compile: " + what);
+    std::string hint;
+    if (file.size() > 4 && file.compare(file.size() - 4, 4, ".lua") == 0) {
+      hint = " (scripts are Luau now: Lua 5.4-only syntax such as goto, <const> and the & | ~ << >> operators is not understood; see docs/modding/luau.md)";
+    }
+    report.Problem("lua-syntax", file, line, "this script does not compile: " + what + hint);
     return;
   }
   static const std::set<std::string> kMissing = {"io", "os", "debug", "package", "coroutine", "require", "dofile", "loadfile", "load",
-                                                 "loadstring", "pcall", "xpcall", "collectgarbage", "module", "utf8"};
+                                                 "loadstring", "pcall", "xpcall", "collectgarbage", "module", "utf8", "getfenv", "setfenv", "newproxy", "gcinfo", "buffer", "vector"};
   const std::vector<LuaToken> tokens = LuaTokens(text);
   std::set<std::string> reported;
   for (size_t i = 0; i < tokens.size(); i++) {
@@ -595,7 +604,7 @@ void CheckLuaFile(const GameRules* rules, Report& report, const std::string& fil
     }
     if (warnGameOnly && !member && rules != nullptr && i + 1 < tokens.size() &&
         std::find(rules->gameOnlyLua.begin(), rules->gameOnlyLua.end(), t.text) != rules->gameOnlyLua.end() &&
-        (tokens[i + 1].text == "(" || tokens[i + 1].text == "." || tokens[i + 1].text == "[") && reported.insert("game-only " + t.text).second) {
+        (tokens[i + 1].text == "(" || tokens[i + 1].text == "." || tokens[i + 1].text == "[" || tokens[i + 1].text == "{") && reported.insert("game-only " + t.text).second) {
       report.Warn("lua-game-only", file, t.line,
                   "\"" + t.text + "\" only exists in " + rules->gameName + "; this script is in the shared part of a mod that also names another game, which will fail here. "
                   "Move it to games/<id>/scripts of " + rules->gameName + ", or leave it out");
@@ -669,7 +678,10 @@ std::string Report::Format() const {
     return list;
   };
   out += "Mod check: " + PathText(folder) + "\n";
-  if (manifestOk) out += "  " + manifest.name + " (" + manifest.id + (manifest.version.empty() ? "" : " " + manifest.version) + ")\n";
+  if (manifestOk) {
+    const std::string tag = engine::mods::GameTag(manifest);
+    out += "  " + manifest.name + " (" + manifest.id + (manifest.version.empty() ? "" : " " + manifest.version) + ")" + (tag.empty() ? "" : "  [" + tag + "]") + "\n";
+  }
   if (!support.empty()) {
     out += "  works with: " + engine::mods::SupportText(support, false) + "\n";
     for (const engine::mods::GameSupport& g : support) {
@@ -789,7 +801,7 @@ Report CheckMod(const Options& o) {
   std::vector<GameRules::ExtraFolder> extras;
   if (o.rules != nullptr) extras = o.rules->extraFolders;
   uint64_t totalBytes = 0;
-  size_t fileCount = 0, replaced = 0, entries = 0, textures = 0, storyFiles = 0, dataFiles = 0;
+  size_t fileCount = 0, replaced = 0, entries = 0, textures = 0, storyFiles = 0, dataFiles = 0, soundFiles = 0;
   std::map<std::string, std::string> lowerSeen;
   std::map<std::string, std::set<std::string>> scopes;
   const bool otherGames = report.manifestOk && o.rules != nullptr && !o.rules->gameIds.empty() &&
@@ -874,7 +886,8 @@ Report CheckMod(const Options& o) {
           const int line = SplitReaderError(reader.Error(), what);
           report.Problem("json-invalid", f.rel, line, "this is not valid JSON: " + what);
         }
-        if (LowerAscii(top) != "mod.json" && f.rel.find('/') != std::string::npos) { storyFiles++; used("story"); }
+        if (LowerAscii(top) == "sounds") { soundFiles++; used("sounds"); }
+        else if (LowerAscii(top) != "mod.json" && f.rel.find('/') != std::string::npos) { storyFiles++; used("story"); }
       }
       break;
     }
@@ -886,6 +899,9 @@ Report CheckMod(const Options& o) {
       }
       bool compiles = true;
       used("scripts");
+      if (f.rel.size() > 4 && LowerAscii(f.rel).compare(f.rel.size() - 4, 4, ".lua") == 0) {
+        report.Note("lua-old-name", f.rel, 0, "the older .lua name: it still runs, as Luau (not Lua 5.4). Rename it to .luau");
+      }
       CheckLuaFile(o.rules, report, f.rel, std::string(bytes.begin(), bytes.end()), compiles, scope.empty() && otherGames);
       luaCompiled += compiles ? 1 : 0;
       break;
@@ -899,6 +915,10 @@ Report CheckMod(const Options& o) {
     case Kind::Png:
       CheckPng(f.rel, bytes, limits, report);
       if (LowerAscii(top) == "textures") { textures++; used("textures"); }
+      break;
+    case Kind::Sound:
+      soundFiles++;
+      used("sounds");
       break;
     case Kind::Dds:
       CheckDds(f.rel, bytes, limits, report);
@@ -929,11 +949,38 @@ Report CheckMod(const Options& o) {
   if (report.manifestOk) {
     const em::Manifest& m = report.manifest;
     if (hasScriptsFolder && !m.scripts) report.Warn("scripts-not-enabled", "mod.json", 0, "the mod has a \"scripts\" folder but mod.json does not say \"scripts\": true; the scripts are not used");
-    if (m.scripts && luaCount == 0) report.Warn("scripts-none", "mod.json", 0, "mod.json says \"scripts\": true but there are no scripts/*.lua");
-    if (fileCount == 0 || (replaced + entries + dataFiles + luaCount + textures + storyFiles == 0)) {
-      report.Warn("empty-mod", "", 0, "the mod has no files in \"files\", \"fsys\", \"data\", \"scripts\" or \"textures\": it changes nothing");
+    if (m.scripts && luaCount == 0) report.Warn("scripts-none", "mod.json", 0, "mod.json says \"scripts\": true but there are no scripts/*.luau");
+    if (fileCount == 0 || (replaced + entries + dataFiles + luaCount + textures + storyFiles + soundFiles == 0)) {
+      report.Warn("empty-mod", "", 0, "the mod has no files in \"files\", \"fsys\", \"data\", \"scripts\", \"sounds\" or \"textures\": it changes nothing");
     }
     report.support = em::SupportOf(o.folder, m);
+    if (em::GameFolderNames(o.folder).empty() && em::HasSharedContent(o.folder)) {
+      report.Note("flat-layout", "", 0, "this mod uses the older flat layout (data/, scripts/, ... at the top). It still loads, for the games mod.json names; a flat mod that names only \"xd\" is XD-only "
+                  "(it is not loaded on XG). New layout: shared files at the top, a game's own files in games/xd/ (and games/xg/, games/colosseum/); see docs/modding/two-games.md");
+    }
+    {
+      const auto names = [&](const char* alias) {
+        return std::any_of(m.games.begin(), m.games.end(), [&](const std::string& g) { return em::GameCodeMatches(g, alias); });
+      };
+      const bool forXD = names("GXXE01"), forXG = names("GXXE01#xg");
+      const std::vector<std::string> folders = em::GameFolderNames(o.folder);
+      const bool hasXgFolder = std::find(folders.begin(), folders.end(), "XG") != folders.end();
+      if (forXD && !forXG) {
+        report.Note("xd-only", "mod.json", 0, "this mod is made for XD only (\"game\" does not name \"xg\"): the launcher and the game show it as \"made for XD, not XG\" and never load it on XG. "
+                    "XG renumbers moves and changes data; add \"xg\" to \"game\" only if the mod is safe there, or give XG its own games/xg/ folder");
+      }
+      if (forXG && !hasXgFolder) {
+        std::string first;
+        for (const em::LayoutFile& f : em::LayoutFiles(o.folder, "GXXE01#xg", "data", false)) { first = f.rel; break; }
+        const bool both = forXD;
+        report.Note("xg-folder", "mod.json", 0, both ? "mod.json names \"xd\" and \"xg\" and there is no games/xg/ folder: XG reads the same files as XD (games/xd/ and the shared parts). You are saying that is safe on XG"
+                                                       : "mod.json names \"xg\" only and there is no games/xg/ folder: XG reads the shared parts only");
+        if (!first.empty() && both) {
+          report.Warn("xg-xd-data", "data/" + first, 0, "the mod names \"xg\" but its data files (here data/" + first + ") are written for XD: XG numbers moves, items and Pokemon differently. "
+                      "Check them on XG, or put XG's own version in games/xg/data/");
+        }
+      }
+    }
     for (const std::string& name : em::GameFolderNames(o.folder)) {
       if (!std::any_of(m.games.begin(), m.games.end(), [&](const std::string& g) { return em::GameCodeMatches(name, g) || em::GameCodeMatches(g, name); })) {
         report.Warn("games-folder-unlisted", "games/" + name, 0, "no game in mod.json \"game\" matches this folder, so no game reads it: add the game's ID to \"game\"");
@@ -947,9 +994,9 @@ Report CheckMod(const Options& o) {
         std::string upper = name;
         for (char& c : upper) c = c >= 'a' && c <= 'z' ? static_cast<char>(c - 'a' + 'A') : c;
         if (it->is_directory(e2) && !em::ValidGameFolderName(upper)) {
-          report.Warn("games-folder-name", "games/" + name, 0, "a folder under games/ is named by the start of a game ID: 3, 4 or 6 letters and digits (GXX, GXXE, GXXE01); this one is not read");
+          report.Warn("games-folder-name", "games/" + name, 0, "a folder under games/ is named xd or colosseum (or by the start of a game ID: GXX, GXXE, GXXE01); this one is not read");
         } else if (!it->is_directory(e2)) {
-          report.Warn("games-folder-name", "games/" + name, 0, "only folders belong in games/ (games/GXXE01/...); this file is not read");
+          report.Warn("games-folder-name", "games/" + name, 0, "only folders belong in games/ (games/xd/...); this file is not read");
         }
       }
     }
@@ -962,7 +1009,7 @@ Report CheckMod(const Options& o) {
     mf.manifest = m;
     mf.folder = o.folder;
     mf.folderName = PathText(o.folder.filename());
-    const em::AppliesVerdict verdict = em::CheckApplies(mf, em::LooksOrSound());
+    const em::AppliesVerdict verdict = em::CheckApplies(mf, o.rules != nullptr ? o.rules->looksOrSound : em::LooksOrSound(), o.deep != nullptr ? &o.deep->disc : nullptr);
     if (verdict.Downgraded()) {
       report.Warn("applies-claim", "mod.json", 0, std::string("mod.json says \"") + em::AppliesId(verdict.claimed) + "\" but the port will treat it as \"" +
                                                    em::AppliesId(verdict.effective) + "\": " + verdict.reason);
@@ -999,7 +1046,7 @@ Report CheckMod(const Options& o) {
       for (const std::string& n : all) names += (names.empty() ? "" : ", ") + n;
       return " [only for " + names + "]";
     };
-    if (m.scripts && luaCount > 0) report.permissions.push_back({"scripts", "Runs Lua scripts in the game's sandbox (" + std::to_string(luaCount) + " file(s)); scripts can read and change what the game offers them, nothing else" + only({"scripts"})});
+    if (m.scripts && luaCount > 0) report.permissions.push_back({"scripts", "Runs Luau scripts in the game's sandbox (" + std::to_string(luaCount) + " file(s)); scripts can read and change what the game offers them, nothing else" + only({"scripts"})});
     if (replaced > 0) report.permissions.push_back({"replaces-files", "Replaces whole game files (" + std::to_string(replaced) + ")" + only({"files"})});
     if (entries > 0) report.permissions.push_back({"replaces-files", "Replaces files inside the game's archives (" + std::to_string(entries) + ")" + only({"entries"})});
     if (data.changesTables) report.permissions.push_back({"changes-tables", "Changes numbers in the game's tables (stats, moves, trainers, shops...)" + only({"data"})});

@@ -155,6 +155,16 @@ void dvd_done(s32 result, DVDFileInfo* fileInfo) {
   sDvdWorkerCv.notify_all();
 }
 
+void WaitWorkerIdleImpl() {
+  std::unique_lock<std::mutex> guard(sLock);
+  sDvdWorkerCv.wait_for(guard, std::chrono::seconds(2), [] {
+    for (const auto& op : sDvdPending) {
+      if (!op.second.workerDone) return false;
+    }
+    return true;
+  });
+}
+
 uint64_t disc_ticks(s32 length) {
   if (sDiscFast < 0) {
     sDiscFast = disc_mode() == DiscMode::Fast ? 1 : 0;
@@ -569,6 +579,8 @@ void arq_interrupt(void*, void*) {
 }
 
 }
+
+extern "C" void PortDVD_WaitWorkerIdle(void) { WaitWorkerIdleImpl(); }
 
 extern "C" {
 

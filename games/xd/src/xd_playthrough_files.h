@@ -1,6 +1,8 @@
 #ifndef XD_PLAYTHROUGH_FILES_H
 #define XD_PLAYTHROUGH_FILES_H
 
+#include <xd_save.h>
+
 #include <cstdint>
 #include <filesystem>
 #include <string>
@@ -22,6 +24,7 @@ struct SaveId {
 
 SaveId SaveIdOf(const std::vector<uint8_t>& saveFile);
 SaveId SaveIdOnCard();
+bool RemapCardSave(const SaveId& id, const xd::save::IdRemap& map, size_t& changed, std::string& error);
 std::filesystem::path SetupFileFor(const SaveId& id);
 
 bool LooksOrSound(const std::string& path, int fsysType);

@@ -6,6 +6,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -31,6 +33,7 @@ struct LobbyHandOver {
   std::string saveFile;
   std::vector<Pick> picks;
   std::vector<uint16_t> freeSpecies;
+  std::vector<uint16_t> friendPreview;
   int mineCount = 3, friendCount = 3;
 };
 void SetLobbyRoom(LobbyHandOver& h);
@@ -60,6 +63,37 @@ void LobbyRematchReset();
 void LobbyLeave();
 void LobbyBattleOver();
 
+void CosmeticSeedReset();
+uint64_t BattleDigest(uint32_t turn);
+bool TrainerIsAi(void* trainer);
+int TrainerSide(void* trainer);
+std::string DescribeActions(void* trainer);
+bool ApplyActions(void* trainer, const std::string& text);
+
+struct SpectatorFeed {
+  std::string rulesKey;
+  std::vector<std::string> hostTeam, guestTeam;
+  uint32_t seed = 0;
+  int partyHost = 0, partyGuest = 0;
+  bool haveStart = false;
+  bool needParty = false, haveParty = false;
+  std::map<uint32_t, std::string> choices;
+  std::map<uint32_t, int> switches;
+  std::map<uint32_t, uint32_t> choiceSeeds, switchSeeds;
+  std::map<uint32_t, uint64_t> digests;
+  bool complete = false;
+  unsigned result = 0;
+  bool lost = false;
+  std::function<void(SpectatorFeed&)> poll;
+  unsigned turnsMatched = 0, turnsDifferent = 0, turnsSeen = 0;
+  bool ended = false;
+  unsigned endResult = 0;
+  std::function<void(SpectatorFeed&)> onEnd;
+};
+bool SpectatorStart(SpectatorFeed* feed, std::string* why);
+bool Spectating();
+void SpectatorDriveVsMenus();
+bool SpectatorJoin(SpectatorFeed* feed, const std::string& roomCode, std::string* why);
 }
 
 #endif

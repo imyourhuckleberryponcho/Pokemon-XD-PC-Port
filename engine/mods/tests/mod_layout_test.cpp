@@ -227,7 +227,7 @@ int main(int argc, char** argv) {
   {
     LoadOptions o{mods, root / "list.ini", disc.View("GXXP01")};
     const LoadResult r = Load(o);
-    check(has_message(r, Message::Level::Problem, "another game") && r.active.empty(), "a game the mod does not name: not used");
+    check(has_message(r, Message::Level::Problem, "Made for") && r.active.empty(), "a game the mod does not name: not used");
   }
 
   write_file(mods / "legacy" / "mod.json", manifest("legacy", "\"GXXE01\""));
@@ -243,6 +243,89 @@ int main(int argc, char** argv) {
     const LoadResult rj = Load(p);
     check(find(rj, "short.bin") != nullptr && find(rj, "both.bin") == nullptr && has_message(rj, Message::Level::Problem, "legacy"),
           "\"GXX\" works for Japan too, \"GXXE01\" only for the USA disc");
+  }
+
+  check(ValidGameFolderName("XD") && ValidGameFolderName("COLOSSEUM") && !ValidGameFolderName("XDXXX"), "folder names: xd and colosseum are names too");
+  check(GameCodeMatches("xd", "GXXE01") && GameCodeMatches("XD", "GXXJ01") && GameCodeMatches("colosseum", "GC6E01") && !GameCodeMatches("xd", "GC6E01") &&
+            !GameCodeMatches("colosseum", "GXXE01"),
+        "game codes: xd = every XD disc, colosseum = every Colosseum disc");
+  {
+    std::string folder, rest;
+    check(SplitGameFolder("games/xd/scripts/a.luau", folder, rest) && folder == "XD" && rest == "scripts/a.luau", "split: games/xd/...");
+  }
+  const fs::path nm = mods / "named";
+  write_file(nm / "mod.json", manifest("named", "[\"xd\", \"colosseum\"]", "\"scripts\": true"));
+  write_file(nm / "files" / "both.bin", "shared both");
+  write_file(nm / "games" / "xd" / "files" / "xd.bin", "xd only");
+  write_file(nm / "games" / "xd" / "files" / "both.bin", "xd both");
+  write_file(nm / "games" / "colosseum" / "files" / "colo.bin", "colo only");
+  write_file(nm / "scripts" / "shared.luau", "-- shared\n");
+  write_file(nm / "games" / "xd" / "scripts" / "own.luau", "-- xd own\n");
+  write_file(root / "list3.ini", "[profile default]\nnamed = on\n");
+  {
+    check(ContentRoots(nm, "GXXE01").size() == 2 && ContentRoots(nm, "GXXE01")[1].filename() == "xd" && ContentRoots(nm, "GC6E01").size() == 2, "roots: games/xd for XD discs, games/colosseum for Colosseum discs");
+    LoadOptions o{mods, root / "list3.ini", disc.View("GXXE01")};
+    const LoadResult r = Load(o);
+    check(!r.HasWarnings() && contents(find(r, "xd.bin")) == "xd only" && find(r, "colo.bin") == nullptr && contents(find(r, "both.bin")) == "xd both",
+          "load XD with games/xd: its folder's files, the shared ones, nothing of games/colosseum");
+    check(script_names(r) == std::vector<std::string>{"named:scripts/shared.luau=-- shared\n", "named:scripts/own.luau=-- xd own\n"}, "load XD: .luau scripts, shared first then games/xd's");
+    LoadOptions c{mods, root / "list3.ini", disc.View("GC6E01")};
+    const LoadResult rc = Load(c);
+    check(contents(find(rc, "colo.bin")) == "colo only" && find(rc, "xd.bin") == nullptr && contents(find(rc, "both.bin")) == "shared both" && script_names(rc).size() == 1,
+          "load Colosseum with the same mod: its folder, the shared parts, nothing of games/xd");
+    Manifest nmM;
+    std::string nmErr;
+    ParseManifest(read_file(nm / "mod.json"), nmM, nmErr);
+    const std::vector<GameSupport> sup = SupportOf(nm, nmM);
+    check(sup.size() == 2 && sup[0].level == GameSupport::Level::Full && sup[1].level == GameSupport::Level::Full && SupportText(sup, false) == "XD; Colosseum",
+          "support: XD and Colosseum both have their folders: " + SupportText(sup, false));
+  }
+
+  {
+    check(MakeTarget("GXXE01", "") == "GXXE01" && MakeTarget("GXXE01", "xd") == "GXXE01" && MakeTarget("GXXE01", "xg") == "GXXE01#xg", "target: XD stays the bare ID, XG gets the edition");
+    check(GameCodeMatches("xg", "GXXE01#xg") && !GameCodeMatches("xg", "GXXE01") && !GameCodeMatches("xd", "GXXE01#xg") && !GameCodeMatches("GXXE01", "GXXE01#xg") && GameCodeMatches("GXX", "GXXP01"),
+          "codes: xg only matches XG; xd, GXX and a bare ID only match the plain game");
+    check(ValidGameFolderName("XG") && TargetName("GXXE01#xg") == "XG" && TargetName("GXXE01") == "XD" && GameNameOf("xg", true) == "XG", "names: XD and XG");
+    const fs::path xo = mods / "xdonly", both = mods / "bothxg", bothSame = mods / "bothxd", xgo = mods / "xgonly";
+    write_file(xo / "mod.json", manifest("xdonly", "[\"xd\"]"));
+    write_file(xo / "games" / "xd" / "files" / "a.bin", "xdonly a");
+    write_file(both / "mod.json", manifest("bothxg", "[\"xd\", \"xg\"]"));
+    write_file(both / "games" / "xd" / "files" / "x.bin", "xd x");
+    write_file(both / "games" / "xg" / "files" / "y.bin", "xg y");
+    write_file(bothSame / "mod.json", manifest("bothxd", "[\"xd\", \"xg\"]"));
+    write_file(bothSame / "games" / "xd" / "files" / "z.bin", "xd z");
+    write_file(xgo / "mod.json", manifest("xgonly", "[\"xg\"]"));
+    write_file(xgo / "games" / "xd" / "files" / "q.bin", "xd q");
+    write_file(xgo / "games" / "xg" / "files" / "r.bin", "xg r");
+    write_file(root / "list4.ini", "[profile default]\nxdonly = on\nbothxg = on\nbothxd = on\nxgonly = on\n");
+    LoadOptions xd{mods, root / "list4.ini", disc.View("GXXE01")};
+    const LoadResult rxd = Load(xd);
+    check(contents(find(rxd, "a.bin")) == "xdonly a" && contents(find(rxd, "x.bin")) == "xd x" && find(rxd, "y.bin") == nullptr && contents(find(rxd, "z.bin")) == "xd z" &&
+              find(rxd, "q.bin") == nullptr && find(rxd, "r.bin") == nullptr,
+          "load XD: the XD-only mod and the two-edition mods read games/xd, the XG-only mod is refused");
+    LoadOptions xg{mods, root / "list4.ini", disc.View("GXXE01#xg")};
+    const LoadResult rxg = Load(xg);
+    check(find(rxg, "a.bin") == nullptr, "load XG: an XD-only mod is not loaded");
+    bool said = false;
+    for (const Message& m : rxg.messages) said = said || (m.level == Message::Level::Problem && m.text.find("Made for XD, not XG") != std::string::npos && m.text.find("Mod xdonly") != std::string::npos);
+    check(said, "load XG: the refusal says \"Made for XD, not XG\"");
+    check(find(rxg, "y.bin") != nullptr && contents(find(rxg, "y.bin")) == "xg y" && find(rxg, "x.bin") == nullptr, "load XG: a mod with both folders reads games/xg, not games/xd");
+    check(contents(find(rxg, "z.bin")) == "xd z", "load XG: [xd, xg] with no games/xg reads games/xd (the author says it is safe)");
+    check(contents(find(rxg, "r.bin")) == "xg r" && find(rxg, "q.bin") == nullptr, "load XG: an xg-only mod reads games/xg and never games/xd");
+    Manifest mx;
+    std::string er;
+    ParseManifest(read_file(xo / "mod.json"), mx, er);
+    check(GameTag(mx) == "XD" && !SupportsGame(mx, "GXXE01#xg") && SupportsGame(mx, "GXXE01"), "tag XD; an XD mod does not support the XG target");
+    ParseManifest(read_file(both / "mod.json"), mx, er);
+    check(GameTag(mx) == "XD + XG" && SupportsGame(mx, "GXXE01#xg"), "tag XD + XG");
+    ParseManifest(read_file(xgo / "mod.json"), mx, er);
+    check(GameTag(mx) == "XG" && !SupportsGame(mx, "GXXE01"), "tag XG; an XG mod does not load on XD");
+    const std::vector<GameSupport> sx = SupportOf(bothSame, mx = [&] { Manifest t; ParseManifest(read_file(bothSame / "mod.json"), t, er); return t; }());
+    check(sx.size() == 2 && sx[1].level == GameSupport::Level::Full && sx[1].folders.size() == 1 && sx[1].folders[0] == "XD", "support: xg without its folder uses the xd folder");
+    Manifest flat;
+    ParseManifest(manifest("flatx", "[\"xd\"]"), flat, er);
+    write_file(mods / "flatx" / "mod.json", manifest("flatx", "[\"xd\"]"));
+    check(!SupportsGame(flat, "GXXE01#xg"), "a flat XD-only mod is not for XG");
   }
 
   {

@@ -19,6 +19,10 @@ float PortVideo_WideScale(void);
 
 void PortVideo_ApplySettings(void);
 
+float PortVideo_MonitorHz(void);
+
+void PortVideo_PresentsComing(unsigned count, bool firstPaced);
+
 void PortVideo_SetSettingsSaver(void (*save)(void));
 
 void PortVideo_Start(void);

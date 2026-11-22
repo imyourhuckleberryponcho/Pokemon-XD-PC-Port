@@ -17,7 +17,7 @@ namespace launcher::extra {
 using Source = GameInfo::ExtraSource;
 
 struct Line {
-  enum class Kind { None, Progress, Done, Error } kind = Kind::None;
+  enum class Kind { None, Progress, Done, Error, Stage } kind = Kind::None;
   uint64_t done = 0, total = 0;
   std::string name;
   uint64_t converted = 0, keptOriginal = 0, totalBytes = 0;
@@ -31,7 +31,16 @@ const Source* FindSource(const std::vector<Source>& sources, std::string_view id
 bool AcceptsGameId(const Source& source, std::string_view gameId);
 std::filesystem::path ConverterPath(const Source& source, const std::filesystem::path& programFolder);
 std::vector<std::string> ConverterArguments(const Source& source, const std::string& disc, const std::string& gameDisc,
-                                            const std::filesystem::path& out, const std::filesystem::path& out2 = {});
+                                            const std::filesystem::path& out, const std::filesystem::path& out2 = {},
+                                            const std::filesystem::path& out3 = {}, const std::string& gameProgram = {},
+                                            const std::filesystem::path& dataFolder = {});
+
+struct GameDiscChoice {
+  std::string disc;
+  std::string message;
+};
+GameDiscChoice ChooseGameDisc(const Source& source, const std::string& chosenDisc, const std::string& chosenEdition,
+                              const std::string& rememberedPlain, const std::function<bool(const std::string&)>& exists);
 
 struct Status {
   enum class Kind { NotSetUp, Ready, OutOfDate, ConverterMissing } kind = Kind::NotSetUp;
@@ -79,6 +88,7 @@ struct MakeRequest {
   std::vector<std::string> arguments;
   std::filesystem::path outFolder;
   std::filesystem::path outFolder2;
+  std::filesystem::path outFolder3;
   std::filesystem::path logFile;
 };
 
@@ -89,6 +99,8 @@ class MakeJob {
     Phase phase = Phase::Idle;
     uint64_t done = 0, total = 0;
     std::string current;
+    std::string stage;
+    uint64_t stageFrom = 0, stageTo = 100;
     uint64_t converted = 0, keptOriginal = 0, totalBytes = 0;
     std::string message;
   };
@@ -105,6 +117,8 @@ class MakeJob {
   mutable std::mutex mutex_;
   Snapshot snap_;
 };
+
+bool HasUnfinishedWork(const std::filesystem::path& outFolder);
 
 void RemoveLeftovers(const std::filesystem::path& outFolder);
 

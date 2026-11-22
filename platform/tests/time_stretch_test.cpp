@@ -35,7 +35,7 @@ int main() {
     in[i * 2] = static_cast<int16_t>(v);
     in[i * 2 + 1] = static_cast<int16_t>(v * 0.5);
   }
-  for (int factor : {2, 4, 8, 16}) {
+  for (double factor : {0.25, 0.5, 2.0, 4.0, 8.0, 16.0}) {
     port_audio::TimeStretch ts;
     std::vector<int16_t> out;
     for (size_t at = 0; at < frames; at += 160) {
@@ -45,10 +45,11 @@ int main() {
     }
     const size_t before = out.size();
     ts.Flush(out);
-    std::printf("-- %dx: %zu frames in, %zu out\n", factor, frames, out.size() / 2);
+    std::printf("-- %gx: %zu frames in, %zu out\n", factor, frames, out.size() / 2);
     const double want = static_cast<double>(frames) / factor;
     const double got = static_cast<double>(out.size() / 2);
-    Check(std::fabs(got - want) < port_audio::TimeStretch::kFrame * 2, "length is the input's / factor", got);
+    const double slack = port_audio::TimeStretch::kFrame * 2 + (factor < 1.0 ? (port_audio::TimeStretch::kFrame + port_audio::TimeStretch::kSearch) / factor : 0.0);
+    Check(std::fabs(got - want) < slack, "length is the input's / factor", got);
     std::vector<int16_t> mid(out.begin() + 4096, out.begin() + static_cast<std::ptrdiff_t>(before) - 4096);
     const double f = Frequency(mid);
     Check(std::fabs(f - tone) < tone * 0.02, "same pitch as the input", f);

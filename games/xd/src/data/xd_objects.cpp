@@ -263,10 +263,18 @@ bool Parse(const std::string& text, Room& out, std::vector<std::string>& problem
       Fields f(*m, c, "the music");
       if (f.Ok()) {
         f.Text("like", out.music.like);
-        f.Whole("bgm", out.music.bgm, 0, 0xFFFF), f.Whole("volume", out.music.volume, 0, 127), f.Whole("fade", out.music.fade, 0, 0xFFFF);
+        const auto bgmIt = m->fields.find("bgm");
+        const js::Value* bgmV = bgmIt == m->fields.end() ? nullptr : &bgmIt->second;
+        if (bgmV != nullptr && bgmV->kind == js::Value::Kind::String) {
+          out.music.bgmName = bgmV->text;
+          f.Text("bgm", out.music.bgmName);
+        } else {
+          f.Whole("bgm", out.music.bgm, 0, 0xFFFF);
+        }
+        f.Whole("volume", out.music.volume, 0, 127), f.Whole("fade", out.music.fade, 0, 0xFFFF);
         f.Whole("env_fade", out.music.envFade, 0, 0xFFFF), f.Text("flag", out.music.flag);
         f.Finish();
-        if (out.music.like.empty() && out.music.bgm < 0) {
+        if (out.music.like.empty() && out.music.bgm < 0 && out.music.bgmName.empty()) {
           c.Say(*m, "\"music\" needs \"like\" (a room of the disc) or \"bgm\" (a sound number)");
           out.music.given = false;
         }
@@ -402,13 +410,19 @@ void Build(const Room& room, const Lookups& ask, Built& out, std::vector<std::st
     } else {
       std::vector<uint8_t> r(0xC, 0);
       uint32_t flag = 0;
-      if (!room.music.flag.empty() && (!ask.flag || !ask.flag(room.music.flag, flag) || flag > 0xFFFF)) {
+      long bgm = room.music.bgm;
+      if (!room.music.bgmName.empty()) {
+        bgm = ask.song ? ask.song(room.music.bgmName) : -1;
+        if (bgm < 0) problems.push_back("the music: the song \"" + room.music.bgmName + "\" is not one a mod adds (sounds/songs.json); the room keeps the disc room's music");
+      }
+      if (bgm < 0) {
+      } else if (!room.music.flag.empty() && (!ask.flag || !ask.flag(room.music.flag, flag) || flag > 0xFFFF)) {
         problems.push_back("the music: the mod has no story flag \"" + room.music.flag + "\"");
       } else {
         r[0] = 1;
         r[1] = static_cast<uint8_t>(room.music.volume);
         PutBe16(r.data() + 2, ask.floorId);
-        PutBe16(r.data() + 4, static_cast<uint32_t>(room.music.bgm));
+        PutBe16(r.data() + 4, static_cast<uint32_t>(bgm));
         PutBe16(r.data() + 6, static_cast<uint32_t>(room.music.fade));
         PutBe16(r.data() + 8, static_cast<uint32_t>(room.music.envFade));
         PutBe16(r.data() + 10, flag);

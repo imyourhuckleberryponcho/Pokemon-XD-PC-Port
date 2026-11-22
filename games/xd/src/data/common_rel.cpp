@@ -1020,7 +1020,7 @@ bool apply_added_rows(Loaded* l, XDCommonTables* out, const RelPrologStore* stor
     std::fprintf(stderr, "[mods] %s grown: %u -> %u rows\n", name, oldCount, newCount);
     return true;
   };
-  uint32_t faceRows = 0, species = 0, moves = 0, itemRows = 0, itemIds = 0, flags = 0, firstFlag = 0xFFFFFFFFu, floors = 0, doorRows = 0, chestRows = 0, eventRows = 0, soundRows = 0, battleRows = 0;
+  uint32_t sndFileRows = 0, sndDataRows = 0, faceRows = 0, species = 0, moves = 0, itemRows = 0, itemIds = 0, flags = 0, firstFlag = 0xFFFFFFFFu, floors = 0, doorRows = 0, chestRows = 0, eventRows = 0, soundRows = 0, battleRows = 0;
   for (const AddedRowCopy& r : sAddedRows) {
     if (r.table == "flag_data") {
       flags = std::max(flags, r.row + 1);
@@ -1032,6 +1032,9 @@ bool apply_added_rows(Loaded* l, XDCommonTables* out, const RelPrologStore* stor
     else if (r.table == "floorsoundTbl") soundRows = std::max(soundRows, r.row + 1);
     else if (r.table == "fight_encount_data") battleRows = std::max(battleRows, r.row + 1);
     else if (r.table == "floor_chars" || r.table == "floor_zone") continue;
+    else if (r.table == "pokemon_pkx_data" || r.table == "pokemon_nakigoe_data" || r.table == "waza_wzx_data") continue;
+    else if (r.table == "snd_file") sndFileRows = std::max(sndFileRows, r.row + 1);
+    else if (r.table == "snd_data") sndDataRows = std::max(sndDataRows, r.row + 1);
     else if (r.table == "poke_face") faceRows = std::max(faceRows, r.row + 1);
     else if (r.table == "pokemon_data") species = std::max(species, r.row + 1);
     else if (r.table == "waza_data") moves = std::max(moves, r.row + 1);
@@ -1057,6 +1060,20 @@ bool apply_added_rows(Loaded* l, XDCommonTables* out, const RelPrologStore* stor
   if (chestRows != 0 && !grow("floor_tresure_list", chestRows, "floor_tresure_list", &AddedRowCopy::row)) return false;
   if (eventRows != 0 && !grow("floor_event_list", eventRows, "floor_event_list", &AddedRowCopy::row)) return false;
   if (soundRows != 0 && !grow("floorsoundTbl", soundRows, "floorsoundTbl", &AddedRowCopy::row)) return false;
+  for (const AddedRowCopy& r : sAddedRows) {
+    if (r.table != "snd_file" && r.table != "snd_data") continue;
+    XDRelGlobalValue* number = global_named(out, (r.table + "_number").c_str());
+    uint32_t first = 0xFFFFFFFFu;
+    for (const AddedRowCopy& o : sAddedRows) {
+      if (o.table == r.table) first = std::min(first, o.row);
+    }
+    if (number == nullptr || *static_cast<uint32_t*>(number->value) != first) {
+      problem = "the cries of added species start at row " + std::to_string(first) + " of " + r.table + ", but the game's table has " + std::to_string(number != nullptr ? *static_cast<uint32_t*>(number->value) : 0) + " rows";
+      return false;
+    }
+  }
+  if (sndFileRows != 0 && !grow("snd_file", sndFileRows, "snd_file", &AddedRowCopy::row)) return false;
+  if (sndDataRows != 0 && !grow("snd_data", sndDataRows, "snd_data", &AddedRowCopy::row)) return false;
   if (faceRows != 0 && !grow("poke_face", faceRows, "poke_face", &AddedRowCopy::row)) return false;
   if (battleRows != 0 && !grow("fight_encount_data", battleRows, "fight_encount_data", &AddedRowCopy::row)) return false;
   if (species != 0 && !grow("pokemon_data", species, "pokemon_data", &AddedRowCopy::row)) return false;

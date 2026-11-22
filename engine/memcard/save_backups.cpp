@@ -1,6 +1,7 @@
 #include "save_backups.h"
 
 #include "gc_memcard.h"
+#include "saveext.h"
 
 #include <algorithm>
 #include <cctype>
@@ -128,6 +129,12 @@ std::vector<Backup> List(const fs::path& backupsFolder) {
         if (!e.is_regular_file(ec)) continue;
         File f;
         f.name = Utf8(e.path().filename());
+        if (f.name.size() > 4 && f.name.compare(f.name.size() - 4, 4, ".ext") == 0) {
+          f.size = e.file_size(ec);
+          b.size += f.size;
+          b.companions.push_back(std::move(f));
+          continue;
+        }
         f.size = e.file_size(ec);
         std::vector<uint8_t> bytes;
         if (ReadAll(e.path(), bytes)) Describe(bytes, f);
@@ -155,6 +162,12 @@ void Prune(const fs::path& cardBackups, size_t keep) {
 
 fs::path Add(const fs::path& backupsFolder, const std::string& card, const std::string& fileName,
              const std::vector<uint8_t>& bytes, std::time_t now, size_t keep, std::string* error) {
+  return AddWith(backupsFolder, card, fileName, bytes, {}, now, keep, error);
+}
+
+fs::path AddWith(const fs::path& backupsFolder, const std::string& card, const std::string& fileName,
+                 const std::vector<uint8_t>& bytes, const std::vector<Companion>& companions, std::time_t now, size_t keep,
+                 std::string* error) {
   const fs::path cardBackups = backupsFolder / PathOf(card);
   const fs::path file = PathOf(fileName);
   std::error_code ec;
@@ -162,7 +175,19 @@ fs::path Add(const fs::path& backupsFolder, const std::string& card, const std::
   for (auto it = folders.rbegin(); it != folders.rend(); ++it) {
     if (fs::is_regular_file(*it / file, ec)) {
       std::vector<uint8_t> newest;
-      if (ReadAll(*it / file, newest) && newest == bytes) return {};
+      if (ReadAll(*it / file, newest) && newest == bytes) {
+        size_t there = 0;
+        for (const auto& e : fs::directory_iterator(*it, ec)) {
+          const std::string n = Utf8(e.path().filename());
+          if (n.size() > 4 && n.compare(n.size() - 4, 4, ".ext") == 0) there++;
+        }
+        bool same = there == companions.size();
+        for (const Companion& comp : companions) {
+          std::vector<uint8_t> old;
+          if (!same || !ReadAll(*it / PathOf(comp.name), old) || old != comp.bytes) same = false;
+        }
+        if (same) return {};
+      }
       break;
     }
   }
@@ -172,7 +197,9 @@ fs::path Add(const fs::path& backupsFolder, const std::string& card, const std::
     folder = cardBackups / PathOf(base + "_" + std::to_string(n));
   }
   fs::create_directories(folder, ec);
-  if (ec || !WriteAll(folder / file, bytes)) {
+  bool wrote = !ec && WriteAll(folder / file, bytes);
+  for (const Companion& comp : companions) wrote = wrote && WriteAll(folder / PathOf(comp.name), comp.bytes);
+  if (!wrote) {
     if (error != nullptr) *error = "can't write " + Utf8(folder / file);
     fs::remove_all(folder, ec);
     return {};
@@ -182,12 +209,24 @@ fs::path Add(const fs::path& backupsFolder, const std::string& card, const std::
 }
 
 bool Restore(const Backup& backup, const std::string& fileName, const fs::path& cardFolder,
-             const fs::path& backupsFolder, size_t keep, std::string& error) {
+             const fs::path& backupsFolder, size_t keep, std::string& error, const fs::path& companionFolder) {
   const fs::path file = PathOf(fileName);
   std::vector<uint8_t> bytes;
   if (!ReadAll(backup.folder / file, bytes)) {
     error = "The backup's file can't be read: " + Utf8(backup.folder / file);
     return false;
+  }
+  std::vector<Companion> back;
+  if (!companionFolder.empty()) {
+    for (const File& c : backup.companions) {
+      Companion comp;
+      comp.name = c.name;
+      if (!ReadAll(backup.folder / PathOf(c.name), comp.bytes)) {
+        error = "The backup's extension file can't be read: " + Utf8(backup.folder / PathOf(c.name));
+        return false;
+      }
+      back.push_back(std::move(comp));
+    }
   }
   std::error_code ec;
   const fs::path target = cardFolder / file;
@@ -197,8 +236,19 @@ bool Restore(const Backup& backup, const std::string& fileName, const fs::path& 
       error = "The current save can't be read, so it can't be backed up first: nothing was changed.";
       return false;
     }
+    std::vector<Companion> now;
+    if (!companionFolder.empty()) {
+      for (const auto& e : fs::directory_iterator(companionFolder, ec)) {
+        const std::string n = Utf8(e.path().filename());
+        std::vector<uint8_t> ext;
+        if (n.size() > 4 && n.compare(n.size() - 4, 4, ".ext") == 0 && ReadAll(e.path(), ext) &&
+            engine::saveext::PairsWithGci(ext, current)) {
+          now.push_back({n, std::move(ext)});
+        }
+      }
+    }
     std::string why;
-    if (Add(backupsFolder, backup.card, fileName, current, std::time(nullptr), keep, &why).empty() && !why.empty()) {
+    if (AddWith(backupsFolder, backup.card, fileName, current, now, std::time(nullptr), keep, &why).empty() && !why.empty()) {
       error = "The current save couldn't be backed up (" + why + "): nothing was changed.";
       return false;
     }
@@ -215,6 +265,22 @@ bool Restore(const Backup& backup, const std::string& fileName, const fs::path& 
     fs::remove(temp, ec);
     error = "Can't replace the save (" + ec.message() + "): nothing was changed.";
     return false;
+  }
+  for (const Companion& comp : back) {
+    const fs::path at = companionFolder / PathOf(comp.name);
+    fs::create_directories(companionFolder, ec);
+    const fs::path tmp = companionFolder / PathOf(comp.name + ".restoring");
+    if (!WriteAll(tmp, comp.bytes)) {
+      fs::remove(tmp, ec);
+      error = "The save was put back, but its extension file could not be written into " + Utf8(companionFolder) + ".";
+      return false;
+    }
+    fs::remove(companionFolder / PathOf(comp.name + ".new"), ec);
+    fs::rename(tmp, at, ec);
+    if (ec) {
+      fs::remove(at, ec);
+      fs::rename(tmp, at, ec);
+    }
   }
   return true;
 }

@@ -74,6 +74,12 @@ Choose your disc, how you want to play, your controls and mods, then press **Pla
   unless chosen. "Save this list to a file..." / "Use a list from a file..." share "these mods, these versions, this
   order". Code: launcher_modupdate.cpp, engine/modupdate; docs/modding/sharing.md, docs/UPDATER.md "0.6.0". Test:
   `python tools/test_modupdate.py --build <bin>`.
+  0.7.0: under each mod, **Check this mod** (the checker library in the launcher: a report window in plain words with safety, permissions,
+  problems, warnings, notes, the XD / XG tags and, with the disc chosen, what the game's own loader found) and **Pack for sharing...**
+  (a save window, then the packer; refuses game data and anything unsafe); the first switch-on of a mod in a session is checked first (a window
+  only for a problem, a warning or a safety finding: "Keep it off" is the default, B too). Controller: each finding is a focus row, so a long
+  report scrolls by D-pad. Code: launcher_modtools.cpp (engine/modcheck); steps `modcheck:<id>`, `modpack:<id>=<zip>`, `modon:<id>`,
+  `modtools:on|close`, `wait:modtools`. Tests: `launcher_modtools_test.exe` (no window), `python tools/test_launcher_pad.py --only modtools`.
 - **Save**: **Saves**: the list of your saves (README section "Several saves" below). The circle at the left of
   a row marks the save the game loads. A click on a row opens that save right under it: trainer, play time,
   money, party (only shown), its playthrough setup, and **Backups**: one line ("4 kept, newest <when>") with
@@ -163,6 +169,8 @@ there is no upload, no email and no network code. To share one, the player expor
 
 ## Extra assets
 
+The page is in tabs, like Settings: **Models** (Ultra Sun / Ultra Moon first, then Battle Revolution, then Colosseum), **Languages** (the European and Japanese packs) and **Other** (HD texture packs; the tab only exists when there is something for it). A line above the tabs says what is installed. With a controller LT / RT switch tabs. A source says which tab it is on with `ExtraSource::tab` and `tabOrder`. Script: `extratab:<models|languages|other>`.
+
 A page for the discs of other games (not the game the port plays) whose pictures or models the port can use. The list
 of sources is a small table (`GameInfo::ExtraSource`, XD's rows in `games/xd/launcher/xd_extra_sources.cpp`): id, the
 disc's name, the game IDs it accepts, what it provides, how it is made, the setting that remembers the disc's path, the
@@ -182,6 +190,25 @@ mod list.
   it needs only the Colosseum disc (`ExtraSource::needsGameDisc = false`), the status counts `models\` (`modelsFolder`), and the
   page lists the names in `characters.json` (`contentsFile`). No switch: nothing in the game reads it yet (the online battle's
   trainer card will). Script: `extradisc:colosseum=<disc>`, `extramake:colosseum`; `tools/colo_models/proof_launcher.py`.
+- **Pokemon Ultra Sun / Ultra Moon** (2026-11-18, `usum` row; docs/USUM_MODELS.md): the one row whose input is a FILE, not a disc image
+  (`ExtraSource::dump = true`, `identify` = `xd::IdentifyN3dsDump` in games/xd/launcher/xd_n3ds_dump.cpp: reads the NCSD / NCCH headers
+  only). Accepted: a DECRYPTED cartridge dump, `.3ds` or `.cci`, of Ultra Sun or Ultra Moon (product code CTR-P-A2A / A2B, any region).
+  Refused with a plain sentence: an encrypted dump, a `.cia`, a folder, another file, a cut-short file, another 3DS game (Sun / Moon / X / Y
+  are named but not taken: untested / not supported). Make runs `usum_models --rom <dump> --xd-disc <your XD disc> --out extra_assets\usum`
+  (progress per model, `done` line, exit 2 + `error` line for a wrong dump; `--version` feeds "Out of date: make again"). The result's
+  mod.json carries `count` so the page says "Ready: 385 models". No switch: the model source is chosen per playthrough in the New Game setup
+  (rule "Models: Ultra Sun / Ultra Moon"). The converter is the Python one FROZEN with PyInstaller (`tools/n3ds/package_usum_models.py`, the
+  same recipe as the old pbr_models; there is no C++ port), shipped as `game\usum_models\usum_models(.exe)` by package_release.py,
+  package_linux.py and package_mac.sh (+ a workflow step in mac.yml). Setting `system.extra_disc.usum` remembers the path.
+  Script: `extradisc:usum=<dump>`, `extramake:usum`.
+- **The Gen 5-7 pack from the same Make** (0.7.0; the `usum` row's third output `thirdFolder` = extra_assets\usum_gen57, docs/GEN57.md section 15): before it starts the page asks
+  "This takes a while" (`thirdWarning`, Start making / Not now); the bar then names the stage ("Converting models 120/314", "Rendering faces"; the converter's `stage <id> <from %> <to %>`
+  lines, `StageText`) and fills one bar for the whole run. The job keeps running while the player uses the launcher; Play starts the game but the launcher stays open until the job is done
+  (`ExtraRunning`). Cancel (or closing the window) keeps `usum_gen57.work`; the card says "It was started and stopped" and the button says "Continue". Script: `extraconfirm:<id>`
+  (Make with the question answered Yes; `extramake` opens the question only), `wait:extrastage=<stage>`. Controller: the question is a modal with `BackPressed()` and the focus on "Not now"
+  (`test_launcher_pad.py --only extragen57`).
+- **Remove what was made** (every row, 2026-11-18): a small button under the card when a result exists, a question window (Remove it / Keep it;
+  B = keep) and then `extra_assets\<id>` (and the second output, and any `.tmp` / `.old`) is deleted; the status goes back to "Not set up".
 - Per source: **Choose disc...** (the Disc page's file picker; .iso .rvz .wbfs .ciso .gcz), a quick check that the file
   really is that game (its header, through the same disc reader as the Disc page; a wrong game says which game it is
   and which one is needed), the path remembered in settings.ini as `system.extra_disc.pbr` (hidden from the Settings
@@ -514,6 +541,46 @@ folder is unchanged: `%APPDATA%\Pokemon XD`, or portable mode with Borealis's `d
 (`{"version": 1, "mode": "portable"}`). That file works in either place: next to `Pokemon XD Launcher.exe` (data in
 `Pokemon XD PC\portable`) or in `game\` next to the programs (data in `game\portable`); the one in `game\` wins
 when both exist (platform/os/user_folder.cpp). Read me.txt tells players the first.
+
+## Where your data is kept, and the command-line options
+
+Player guide: `docs/COMMAND_LINE.md`. The launcher takes the same options as `xd.exe` (`--disc`, `--fullscreen`, `--windowed`,
+`--data-folder`, `--preset`, `--save`, `--no-launcher`, `--help`, `--version`; parsed by `games/xd/src/cli_options.h`, which has no
+dependencies and is tested by `xd_cli_options_test.exe`). `main` in `games/xd/launcher/xd_launcher.cpp` applies them before
+anything looks for the data folder: they become the run-only environment switches the programs already read (`XD_PRESET`,
+`XD_SETTINGS=video.fullscreen=...`, `XD_DATA_FOLDER`, `XD_SAVE_NAME`), so the game the launcher starts inherits them. `--disc` is
+`GameInfo::discOverride` (the disc setting at start; remembered like a chosen disc). `--no-launcher` starts `xd` with the same
+command line and waits for it (`RunGameNow`; on a Mac the old `XD_NO_LAUNCHER=1` exec path is the same thing); the Windows
+starter (`starter.cpp`) waits too for `--no-launcher`, `--help` and `--version`, the Linux start script `exec`s the game.
+
+**The Save page's card "Where your data is kept"** (`DrawDataCard`, windows in `DrawDataWindows`; the careful work is in
+`launcher_data.cpp`, tested by `launcher_data_test.exe`):
+
+- *Open data folder*.
+- *Move my data next to the game... / to my user folder...*: the question (from, to, size), then on a thread of its own: copy
+  (`datafolder::Copy`: the target must be empty or missing, never mixes), check (`Verify`: every file, same size; `.gci`,
+  `.ini`, `.json` byte for byte), switch (`PortUser_SwitchLocation` writes or removes `data_location.json`), and on the main thread
+  the old folder goes to the recycle bin (`BinFolder`: `XD_SAVE_BIN_DIR` in tests). A failure before the switch removes the copy
+  and changes nothing else. The launcher then starts again (`RestartLauncher`; a scripted launcher only ends).
+- *Remove all game data...*: names the folder and the number of saves, *Export my saves first...* (every save as `<name>.gci` in a
+  folder; XG's too, prefixed `XG - `), *Delete everything* (contents only; the launcher then closes). Safe button focused
+  (`SetItemDefaultFocus`), B = keep. Not offered for `--data-folder` or a hand-written custom path.
+- Disabled with the reason while the game runs, for `--data-folder` runs, and when portable is impossible (a folder that can't be
+  written; a Mac app still in its read-only "translocated" copy).
+
+**The first-start question** ("Where should your data be kept?", `MaybeAskDataFolder`): only a player with a new, empty data folder
+and only where the choice is possible; it comes before the preset question; the answer is remembered in `launcher.ini`
+(`data_asked=yes`, also written into the new portable folder). Scripted runs only with `XD_LAUNCHER_ASK_DATA=1`.
+
+Script steps (`launcher.h`): `data:first[=user|portable]`, `data:move[=yes]`, `data:remove[=yes]`, `data:export=<folder>`,
+`data:open`, `data:restart`, `data:close`, `wait:data`. Tests: `python tools/test_data_folder.py --build <bin>` (scratch APPDATA with
+`XD_LOCATION_FILE=1` so the location file counts there; a copy of the programs laid out like the player's folder), and the pad test
+scenario `datafolder` in `tools/test_launcher_pad.py`.
+
+How the folder is found (`platform/os/user_folder.cpp`): `--data-folder` (`XD_DATA_FOLDER`), else (a test) the APPDATA of its
+own, else a `data_location.json` next to the program, in the folder above it (Windows, Linux) or next to the Mac app, else the
+system's per-user folder. A run whose data is not in the per-user folder also keeps the shader cache in `<data>\cache`
+(`XD_CACHE_DIR`, set there unless already set).
 
 ## Updates
 

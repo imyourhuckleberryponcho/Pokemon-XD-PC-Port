@@ -61,7 +61,8 @@ int LinesOf(const std::string& t, float w, float scale, uint16_t font = 0) {
   return static_cast<int>(Wrap(t, w / scale).size());
 }
 
-bool Nine(ImDrawList* dl, const Screen& sc, s32 menu, int first, int last, float x0, float y0, float x1, float y1, uint8_t alpha = 255) {
+bool Nine(ImDrawList* dl, const Screen& sc, s32 menu, int first, int last, float x0, float y0, float x1, float y1, uint8_t alpha = 255,
+          uint8_t midAlpha = 255) {
   std::vector<ItemPic> pics;
   std::vector<int> xs, ys;
   for (int i = first; i <= last; i++) {
@@ -98,8 +99,20 @@ bool Nine(ImDrawList* dl, const Screen& sc, s32 menu, int first, int last, float
     if (sp.w < 0) std::swap(s0, s1);
     if (sp.h < 0) std::swap(t0, t1);
     dl->AddImage(pic.id, sc.At(px, py), sc.At(px + pw, py + ph), ImVec2(s0, t0), ImVec2(s1, t1),
-                 IM_COL32(sp.color[0], sp.color[1], sp.color[2], sp.color[3] * alpha / 255));
+                 IM_COL32(sp.color[0], sp.color[1], sp.color[2], sp.color[3] * alpha / 255 * (c == 1 && r == 1 ? midAlpha : 255) / 255));
   }
+  return true;
+}
+
+bool Spr(ImDrawList* dl, const Screen& sc, uint32_t tex, int u, int v, int w, int h, float x, float y, float dw, float dh,
+         uint8_t alpha = 255) {
+  const Picture pic = PictureById(tex << 16 | 0x1200);
+  if (!pic.ok || alpha == 0) return false;
+  float s0 = (static_cast<float>(u) + 0.5f) / pic.w, s1 = (static_cast<float>(u + w) - 0.5f) / pic.w;
+  float t0 = (static_cast<float>(v) + 0.5f) / pic.h, t1 = (static_cast<float>(v + h) - 0.5f) / pic.h;
+  if (dw < 0.f) std::swap(s0, s1), dw = -dw;
+  if (dh < 0.f) std::swap(t0, t1), dh = -dh;
+  dl->AddImage(pic.id, sc.At(x, y), sc.At(x + dw, y + dh), ImVec2(s0, t0), ImVec2(s1, t1), IM_COL32(255, 255, 255, alpha));
   return true;
 }
 
@@ -358,6 +371,12 @@ void Hints(ImDrawList* dl, const Screen& sc, float x, float y, const std::string
     cx += ww + 18.f * k;
   }
 }
+float Prompt(ImDrawList* dl, const Screen& sc, float x, float cy, std::initializer_list<const char*> keys, const std::string& word) {
+  float cx = x;
+  for (const char* k : keys) cx += Key(dl, sc, cx + 11.f, cy, k, 1.f) + 2.f;
+  Text(dl, sc, cx + 3.f, cy - 11.f, word, kText, 0.85f, 0.f, 1);
+  return cx + 6.f + Width(word, 0.85f, 1);
+}
 void HintBar(ImDrawList* dl, const Screen& sc, const std::string& text) {
   Band(dl, sc, 444.f, 32.f);
   Hints(dl, sc, 40.f, 452.f, text, 560.f);
@@ -429,14 +448,12 @@ bool Notice(const char* text) {
   std::vector<std::string> lines;
   {
     const UseFont f(0);
-    lines = Wrap(text, 540.f / 0.8f);
+    lines = Wrap(text, 540.f);
   }
-  if (lines.size() > 3) lines.resize(3);
-  float w = 0.f;
-  for (const std::string& l : lines) w = std::max(w, Width(l, 0.8f));
-  w = std::min(w, 540.f);
-  Window(dl, sc, 20.f, 46.f, 20.f + w + 2.f * kInset + 6.f, 46.f + 22.f + 20.f * static_cast<float>(lines.size()));
-  for (size_t i = 0; i < lines.size(); i++) Text(dl, sc, 20.f + kInset + 3.f, 56.f + 20.f * static_cast<float>(i), lines[i], kText, 0.8f, 540.f);
+  if (lines.size() > 5) lines.resize(5);
+  const float h = 22.f + 28.f * static_cast<float>(lines.size());
+  MessageWindow(dl, sc, 28.f, 20.f, 612.f, 20.f + h);
+  for (size_t i = 0; i < lines.size(); i++) Text(dl, sc, 52.f, 32.f + 28.f * static_cast<float>(i), lines[i], kText, 1.f, 0.f, 0);
   return true;
 }
 
@@ -451,5 +468,178 @@ struct Age {
     return age;
   }
 };
+
+void ListPill(ImDrawList* dl, const Screen& sc, float x0, float x1, float y, bool big = false) {
+  const int u = big ? 20 : 47, um = big ? 37 : 62, h = big ? 32 : 28, cap = big ? 16 : 14;
+  Spr(dl, sc, 0x16C1, u, 2, cap, h, x0, y, static_cast<float>(cap), static_cast<float>(h));
+  Spr(dl, sc, 0x16C1, um, 2, 8, h, x0 + static_cast<float>(cap), y, x1 - x0 - 2.f * static_cast<float>(cap), static_cast<float>(h));
+  Spr(dl, sc, 0x16C1, u, 2, cap, h, x1 - static_cast<float>(cap), y, -static_cast<float>(cap), static_cast<float>(h));
+  const float by = y + (static_cast<float>(h) - 18.f) / 2.f;
+  Spr(dl, sc, 0x16C1, 1, 1, 18, 18, x0 + 3.f, by, 18, 18);
+  Spr(dl, sc, 0x16C1, 101, 1, 18, 18, x0 + 3.f, by, 18, 18);
+}
+
+constexpr float kNpcX0 = 27.f, kNpcY0 = 290.f, kNpcX1 = 613.f, kNpcY1 = 440.f;
+void NpcWindow(ImDrawList* dl, const Screen& sc) {
+  if (!Nine(dl, sc, kMsgMenu, kMsgFirst, kMsgLast, kNpcX0, kNpcY0, kNpcX1, kNpcY1, 255, 171)) Window(dl, sc, kNpcX0, kNpcY0, kNpcX1, kNpcY1);
+}
+std::vector<std::string> NpcLines(const std::string& title, const std::string& text) {
+  const UseFont f(0);
+  std::vector<std::string> lines;
+  if (!title.empty()) lines.push_back(title);
+  for (const std::string& l : Wrap(text, 506.f)) lines.push_back(l);
+  return lines;
+}
+int NpcPages(const std::string& title, const std::string& text) {
+  const int n = static_cast<int>(NpcLines(title, text).size());
+  return std::max(1, (n + 1) / 2);
+}
+bool NpcMessage(ImDrawList* dl, const Screen& sc, const std::string& title, const std::string& text, int page) {
+  NpcWindow(dl, sc);
+  const std::vector<std::string> lines = NpcLines(title, text);
+  const int pages = std::max(1, (static_cast<int>(lines.size()) + 1) / 2);
+  page = std::clamp(page, 0, pages - 1);
+  for (int k = 0; k < 2; k++) {
+    const size_t li = static_cast<size_t>(page * 2 + k);
+    if (li < lines.size()) Text(dl, sc, 59.f, 312.f + 33.f * static_cast<float>(k), lines[li], kText, 1.f, 0.f, 0);
+  }
+  if (page + 1 < pages) {
+    const float bob = 2.f * std::sin(Time() * 6.28f);
+    DrawTriangle(dl, sc, 580.f, 420.f + bob, 12.f, 1, IM_COL32(0xF0, 0xF0, 0xF0, 0xE0));
+  }
+  return page + 1 >= pages;
+}
+int ChoiceRowsFit() { return 6; }
+void ChoiceBox(ImDrawList* dl, const Screen& sc, const std::vector<std::string>& rows, int cursor, int top) {
+  float w = 0.f;
+  for (const std::string& r : rows) w = std::max(w, Width(r, 1.f, 1));
+  const int shown = std::min<int>(static_cast<int>(rows.size()), ChoiceRowsFit());
+  const float bw = std::clamp(w + 100.f, 150.f, 400.f), bh = 23.f + 34.f * static_cast<float>(shown);
+  const float x1 = 604.f, x0 = x1 - bw, y1 = kNpcY0 - 9.f, y0 = y1 - bh;
+  if (!Nine(dl, sc, kYesNoMenu, kYesNoFirst, kYesNoLast, x0, y0, x1, y1)) Window(dl, sc, x0, y0, x1, y1);
+  for (int i = top; i < top + shown && i < static_cast<int>(rows.size()); i++) {
+    const float y = y0 + 12.f + 34.f * static_cast<float>(i - top);
+    if (i == cursor) ListPill(dl, sc, x0 + 22.f, x1 - 22.f, y, true);
+    Text(dl, sc, x0 + 22.f + 34.f, y + 4.f, rows[static_cast<size_t>(i)], kText, 1.f, 0.f, 1);
+  }
+  if (top > 0) Arrow(dl, sc, x1 - 40.f, y0 + 8.f, true);
+  if (top + shown < static_cast<int>(rows.size())) Arrow(dl, sc, x1 - 40.f, y1 - 8.f, false);
+}
+
+struct Hero {
+  ImTextureID id{};
+  float w = 0.f, h = 0.f;
+  bool tried = false;
+};
+const Hero& HeroPicture() {
+  static Hero hero;
+  if (hero.tried) return hero;
+  hero.tried = true;
+  std::string path;
+  if (const char* e = std::getenv("XD_HERO_PNG")) path = e;
+  if (path.empty()) path = std::string(PortUser_FolderUtf8("Pokemon XD")) + "/icons/rendered/michael.png";
+  if (SDL_Surface* raw = SDL_LoadPNG(path.c_str())) {
+    if (SDL_Surface* rgba = SDL_ConvertSurface(raw, SDL_PIXELFORMAT_RGBA32)) {
+      hero.id = aurora_imgui_add_texture(static_cast<uint32_t>(rgba->w), static_cast<uint32_t>(rgba->h), rgba->pixels);
+      hero.w = static_cast<float>(rgba->w), hero.h = static_cast<float>(rgba->h);
+      SDL_DestroySurface(rgba);
+    }
+    SDL_DestroySurface(raw);
+  }
+  return hero;
+}
+void Stage(ImDrawList* dl, const Screen& sc) {
+  FillWindow(dl, IM_COL32(0, 0, 0, 255));
+  Backdrop(dl, sc);
+  dl->AddEllipseFilled(sc.At(150.f, 330.f), ImVec2(215.f * sc.s, 175.f * sc.s), IM_COL32(0, 0, 0, 255));
+  const Hero& h = HeroPicture();
+  if (h.id) dl->AddImage(h.id, sc.At(-55.f, 105.f), sc.At(305.f, 465.f));
+}
+
+void BallMark(ImDrawList* dl, const Screen& sc, float cx, float cy, float size = 16.f, uint8_t alpha = 255) {
+  const xd::kit2::Image& b = xd::kit2::Texture(3772);
+  if (b.ok) {
+    dl->AddImage(b.id, sc.At(cx - size / 2.f, cy - size / 2.f), sc.At(cx + size / 2.f, cy + size / 2.f), ImVec2(0, 0), ImVec2(1, 1),
+                 IM_COL32(255, 255, 255, alpha));
+  } else {
+    dl->AddCircleFilled(sc.At(cx, cy), size / 2.f * sc.s, IM_COL32(0xD8, 0x20, 0x28, alpha), 20);
+  }
+}
+
+struct NRow {
+  std::string label, value, shortValue;
+  bool grey = false;
+  bool mark = false;
+  bool arrows = false;
+  bool action = false;
+  float indent = 0.f;
+};
+
+constexpr float kStageX0 = 232.f, kStageX1 = 628.f, kStageRowH = 38.f;
+void StageRow(ImDrawList* dl, const Screen& sc, const NRow& r, float y, bool sel, bool marks) {
+  const uint8_t* ink = r.grey ? kDim : kText;
+  if (sel) ListPill(dl, sc, kStageX0 + 22.f, kStageX1 - 22.f, y + 3.f, true);
+  const float ty = y + 7.f;
+  float lx = kStageX0 + (marks ? 84.f : 60.f) + r.indent;
+  if (r.mark) BallMark(dl, sc, kStageX0 + 68.f, y + 19.f);
+  if (r.action) {
+    TextC(dl, sc, kStageX0, ty, kStageX1 - kStageX0, r.label, ink, 1.f, 1);
+    return;
+  }
+  const float vr = kStageX1 - 44.f - (sel && r.arrows ? 22.f : 0.f);
+  UseFont rowFont(1);
+  const RowLay L = FitRow(r.label.c_str(), r.value, r.shortValue, kStageX1 - 44.f - (r.arrows ? 22.f : 0.f) - lx, r.arrows ? 26.f : 10.f);
+  const float vw = L.valueCut ? L.valueRoom : static_cast<float>(TextWidth(L.value.c_str())) * L.valueS * L.scale;
+  const float ty2 = ty + (1.f - L.scale) * static_cast<float>(sFontW) / 2.f;
+  DrawFitText(dl, sc, lx, ty2, L.labelRoom, L.label, ink, L.labelS, L.scale, L.labelCut, sel, false);
+  if (!L.value.empty()) DrawFitText(dl, sc, vr - L.valueRoom, ty2, L.valueRoom, L.value, ink, L.valueS, L.scale, L.valueCut, sel, true);
+  if (sel && r.arrows && !L.value.empty()) {
+    fit::Art(vr - vw - 16.f, y + 10.f, 10, 17, "left arrow");
+    fit::Art(vr + 6.f, y + 10.f, 10, 17, "right arrow");
+    Spr(dl, sc, 0x16BE, 2, 15, 10, 17, vr - vw - 16.f, y + 10.f, 10, 17);
+    Spr(dl, sc, 0x16BE, 2, 15, 10, 17, vr + 6.f, y + 10.f, -10, 17);
+  }
+}
+
+void StageDesc(ImDrawList* dl, const Screen& sc, const std::string& desc, float descAge, int forcePage = -1) {
+  MessageWindow(dl, sc, 27.f, 372.f, 613.f, 462.f);
+  std::vector<std::string> lines;
+  {
+    const UseFont f(0);
+    lines = WrapPaged(desc, 530.f, 500.f, 2);
+  }
+  fit::Region(52.f, 380.f, 584.f, 440.f, "description box");
+  const int pages = std::max(1, (static_cast<int>(lines.size()) + 1) / 2);
+  const int page = forcePage >= 0 ? std::min(forcePage, pages - 1) : pages > 1 ? static_cast<int>(descAge / 3.4f) % pages : 0;
+  for (int k = 0; k < 2; k++) {
+    const size_t li = static_cast<size_t>(page * 2 + k);
+    if (li < lines.size()) Text(dl, sc, 52.f, 384.f + 33.f * static_cast<float>(k), lines[li], kText, 1.f, 0.f, 0);
+  }
+  if (pages > 1) {
+    fit::Art(580.f, 440.f, 12.f, 12.f, "more arrow");
+    DrawTriangle(dl, sc, 586.f, 446.f + 2.f * std::sin(Time() * 6.28f), 12.f, 1, IM_COL32(0xF0, 0xF0, 0xF0, 0xE0));
+  }
+}
+
+void StageList(ImDrawList* dl, const Screen& sc, const std::string& title, const std::vector<NRow>& rows, int cursor, int& first,
+               const std::string& desc, float& descAge, float dt, int maxRows = 6) {
+  Stage(dl, sc);
+  Window(dl, sc, kStageX0, 18.f, kStageX1, 66.f);
+  TextC(dl, sc, kStageX0, 28.f, kStageX1 - kStageX0, title, kText, 1.f, 1);
+  const int n = static_cast<int>(rows.size()), shown = std::min(n, maxRows);
+  first = std::clamp(first, std::max(0, cursor - shown + 1), cursor);
+  first = std::clamp(first, 0, std::max(0, n - shown));
+  const float top = 76.f, h = 22.f + kStageRowH * static_cast<float>(shown);
+  Window(dl, sc, kStageX0, top, kStageX1, top + h);
+  bool marks = false;
+  for (const NRow& r : rows) marks = marks || r.mark;
+  for (int i = first; i < first + shown; i++) {
+    StageRow(dl, sc, rows[static_cast<size_t>(i)], top + 11.f + kStageRowH * static_cast<float>(i - first), i == cursor, marks);
+  }
+  if (first > 0) Arrow(dl, sc, kStageX1 - 36.f, top + 8.f, true);
+  if (first + shown < n) Arrow(dl, sc, kStageX1 - 36.f, top + h - 8.f, false);
+  descAge += dt;
+  StageDesc(dl, sc, desc, descAge);
+}
 
 }

@@ -393,6 +393,16 @@ std::vector<uint8_t> encode_c8(const FImage& im, const std::vector<uint8_t>& tpl
 }
 
 std::vector<FaceOut> gen4_faces(const DiscSource& pbr, const DiscSource& xd) {
+  if (pbr.game_id() == "GEN4SRC") {
+    std::vector<FaceOut> out;
+    std::set<std::string> have;
+    for (const auto& f : pbr.files()) have.insert(f.first);
+    for (int dex = 387; dex <= 493; dex++) {
+      const std::string n = "faces/" + std::to_string(dex) + ".face";
+      if (have.count(n)) out.push_back({dex, pbr.read(n)});
+    }
+    return out;
+  }
   std::vector<uint8_t> tpl;
   {
     const std::vector<uint8_t> pf = xd.read("poke_face.fsys");
@@ -443,6 +453,16 @@ std::vector<FaceOut> gen4_faces(const DiscSource& pbr, const DiscSource& xd) {
 }
 
 std::vector<IconOut> gen4_icons(const DiscSource& pbr, const DiscSource& xd) {
+  if (pbr.game_id() == "GEN4SRC") {
+    std::vector<IconOut> out;
+    std::set<std::string> have;
+    for (const auto& f : pbr.files()) have.insert(f.first);
+    for (int dex = 387; dex <= 493; dex++) {
+      const std::string b = "icons/" + std::to_string(dex);
+      if (have.count(b + "_n.bin") && have.count(b + "_s.bin")) out.push_back({dex, pbr.read(b + "_n.bin"), pbr.read(b + "_s.bin")});
+    }
+    return out;
+  }
   constexpr size_t kTexOff = 0xA0;
   constexpr int kCell = 64, kPic = 54;
   constexpr int kTops[3] = {10, 8, 6};

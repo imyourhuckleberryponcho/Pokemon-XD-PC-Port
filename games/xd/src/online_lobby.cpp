@@ -66,11 +66,19 @@ std::vector<Row> SettingRows(const RoomRules& r, const PcInfo& pc) {
   std::vector<Row> rows;
   const bool g4 = r.ruleSet != "classic";
   const std::string noPack = pc.gen4Off.empty() ? std::string(kNoPack) : pc.gen4Off;
+  if (!pc.formats.empty()) {
+    std::vector<Option> fo = {Opt("", "Custom")};
+    for (const PcInfo::FormatChoice& f : pc.formats) fo.push_back(Opt(f.id, f.name, f.enabled, f.why));
+    rows.push_back(MakeRow("format", "Format", fo, r.format));
+  }
   rows.push_back(MakeRow("rules", "Rules",
                          {Opt("classic", pc.edition == "xg" ? "Classic XG" : "Classic XD"), Opt("gen4pokemon", pc.edition == "xg" ? "Gen 4 Pokemon, XG rules" : "Gen 4 Pokemon, XD rules", pc.gen4PackPresent, noPack),
                           Opt("gen4", "Gen 4", pc.gen4PackPresent && pc.gen4RulesOff.empty(), pc.gen4RulesOff.empty() ? noPack : pc.gen4RulesOff),
-                          Opt("gen4mt", "Gen 4 + modern types", pc.gen4PackPresent && pc.gen4RulesOff.empty(), pc.gen4RulesOff.empty() ? noPack : pc.gen4RulesOff)},
-                         r.ruleSet));
+                          Opt("gen4mt", "Gen 4 + modern types", pc.gen4PackPresent && pc.gen4RulesOff.empty(), pc.gen4RulesOff.empty() ? noPack : pc.gen4RulesOff),
+                          Opt("gen5", "Gen 5 rules and numbers", pc.gen4PackPresent && pc.gen4RulesOff.empty(), pc.gen4RulesOff.empty() ? noPack : pc.gen4RulesOff),
+                          Opt("gen6", "Gen 6 rules and numbers", pc.gen4PackPresent && pc.gen4RulesOff.empty(), pc.gen4RulesOff.empty() ? noPack : pc.gen4RulesOff),
+                          Opt("gen7", "Gen 7 rules and numbers", pc.gen4PackPresent && pc.gen4RulesOff.empty(), pc.gen4RulesOff.empty() ? noPack : pc.gen4RulesOff)},
+                         (r.rs == "gen5" || r.rs == "gen6" || r.rs == "gen7") ? r.rs : r.ruleSet));
   rows.push_back(MakeRow("split", "Physical / special split", {Opt("off", pc.edition == "xg" ? "Off (as in XG)" : "Off (as in XD)"), Opt("on", "On (as in Gen 4)")}, r.split ? "on" : "off"));
   rows.push_back(MakeRow("style", "Battle style", {Opt("single", "Single battle"), Opt("double", "Double battle")}, r.style));
   rows.push_back(MakeRow("team", "Teams",
@@ -95,6 +103,12 @@ std::vector<Row> SettingRows(const RoomRules& r, const PcInfo& pc) {
   rows.push_back(MakeRow("level", "Levels",
                          {Opt("asis", "As they are"), Opt("all", "All the same level"), Opt("cap", "Capped at a level")}, LevelKind(r.level)));
   if (r.level != "asis") rows.push_back(NumberRow("levelN", "Level", LevelN(r.level)));
+  if (!pc.formats.empty() && pc.formatLine != nullptr && !r.format.empty()) {
+    for (const char* what : {"clauses", "bans", "preview", "timers"}) {
+      const char* title = std::string(what) == "clauses" ? "Clauses" : std::string(what) == "bans" ? "Bans" : std::string(what) == "preview" ? "Team preview" : "Timers";
+      rows.push_back(MakeRow(what, title, {Opt("line", pc.formatLine(r, what))}, "line"));
+    }
+  }
   rows.push_back(MakeRow("items", "Items",
                          {Opt("none", "None"), Opt("bag", "Own bag items (never used up in the save)", r.team == "save", "Only with teams from a save."),
                           Opt("kit", "Standard kit (Max Potion, Full Heal, Revive)")},
@@ -152,7 +166,16 @@ bool Cycle(RoomRules& r, const std::string& id, int dir, const PcInfo& pc) {
     if (!row->options[static_cast<size_t>(i)].enabled) return false;
     value = row->options[static_cast<size_t>(i)].value;
   }
-  if (id == "rules") r.ruleSet = value;
+  if (id == "format") {
+    r.format = value;
+    r.formatHash.clear();
+    r.sleepClause = r.preview = false, r.pick = r.previewSeconds = r.bankSeconds = 0;
+    std::string err;
+    if (!value.empty() && pc.applyFormat != nullptr && !pc.applyFormat(r)) { r = before; return false; }
+  } else if (id == "rules") {
+    if (value == "gen5" || value == "gen6" || value == "gen7") SetRuleChoice(r, value, "3,4", "");
+    else { r.ruleSet = value; r.rs.clear(); r.gens.clear(); r.details.clear(); }
+  }
   else if (id == "split") r.split = value == "on";
   else if (id == "style") r.style = value;
   else if (id == "team") {
@@ -201,12 +224,32 @@ bool Cycle(RoomRules& r, const std::string& id, int dir, const PcInfo& pc) {
     r = before;
     return false;
   }
+  if (id != "format" && !r.format.empty() && RulesToText(r) != RulesToText(before)) r.format.clear(), r.formatHash.clear(), r.sleepClause = r.preview = false, r.pick = r.previewSeconds = r.bankSeconds = 0;
   return RulesToText(r) != RulesToText(before);
+}
+
+bool SelectFormat(RoomRules& r, const std::string& id, const PcInfo& pc) {
+  const RoomRules before = r;
+  r.format = id;
+  r.formatHash.clear();
+  r.sleepClause = r.preview = false, r.pick = r.previewSeconds = r.bankSeconds = 0;
+  if (!id.empty()) {
+    bool known = false, enabled = true;
+    for (const PcInfo::FormatChoice& c : pc.formats) if (c.id == id) known = true, enabled = c.enabled;
+    if (!known || !enabled || (pc.applyFormat != nullptr && !pc.applyFormat(r))) { r = before; return false; }
+  }
+  std::string why;
+  if (!RulesValid(r, &why)) { r = before; return false; }
+  return true;
 }
 
 std::vector<std::string> RoomLines(const RoomRules& r, const std::string& edition) {
   std::vector<std::string> l;
   l.push_back(std::string("Rules: ") + (r.ruleSet == "gen4pokemon" ? (edition == "xg" ? "Gen 4 Pokemon with the classic XG rules" : "Gen 4 Pokemon with the classic XD rules") : r.ruleSet == "gen4" ? "Gen 4 Pokemon and moves" : r.ruleSet == "gen4mt" ? "Gen 4 Pokemon and moves with the modern types" : (edition == "xg" ? "Classic XG" : "Classic XD")));
+  if (!r.format.empty()) l.push_back("Format: " + r.format);
+  if (!r.rs.empty() || !r.gens.empty() || !r.details.empty()) {
+    l.push_back("Rule set: " + RoomRuleSetId(r) + ", Pokemon generations " + RoomGens(r) + (RoomDetails(r).empty() ? "" : ", details " + RoomDetails(r)));
+  }
   l.push_back(std::string("Battle: ") + (r.style == "double" ? "double" : "single") + ", physical/special split " + (r.split ? "on" : "off"));
   std::string team = r.team == "preset"   ? "preset teams"
                      : r.team == "save"   ? "you bring a team from one of your saves"
@@ -220,6 +263,10 @@ std::vector<std::string> RoomLines(const RoomRules& r, const std::string& editio
   l.push_back("Levels: " + lv);
   l.push_back(std::string("Items: ") + (r.items == "none" ? "none" : r.items == "bag" ? "your own bag items (not used up in your save)" : "standard kit (Max Potion, Full Heal, Revive)"));
   l.push_back("Time per choice: " + (r.timerSeconds == 0 ? std::string("no limit") : std::to_string(r.timerSeconds) + " seconds"));
+  if (r.sleepClause) l.push_back("Sleep clause: a second foe cannot be put to sleep while one of that team is asleep.");
+  if (r.preview) l.push_back("Team preview: you see your friend's team, then each of you picks " + std::to_string(r.pick > 0 ? r.pick : 6) + " Pokemon in the order you lead" +
+                             (r.previewSeconds > 0 ? " (" + std::to_string(r.previewSeconds) + " seconds)." : "."));
+  if (r.bankSeconds > 0) l.push_back("Battle clock: each player has " + std::to_string(r.bankSeconds / 60) + " minutes in all for their choices.");
   l.push_back(std::string("Shadow Pokemon: ") + (!r.shadowAllowed ? "not allowed" : r.shadowObey == "story" ? "allowed, they may refuse orders as in the story" : "allowed, they obey like purified ones"));
   return l;
 }
@@ -229,6 +276,13 @@ std::string RulesToText(const RoomRules& r) {
   o << "rules=" << r.ruleSet << ";items=" << r.items << ";timer=" << r.timerSeconds << ";shadow=" << (r.shadowAllowed ? "on" : "off")
     << ";shadow_obey=" << r.shadowObey << ";level=" << r.level << ";team=" << r.team << ";split=" << (r.split ? "on" : "off") << ";style=" << r.style;
   if (!r.draft.empty()) o << ";draft=" << r.draft;
+  if (!r.rs.empty()) o << ";rs=" << r.rs;
+  if (!r.gens.empty()) o << ";gens=" << r.gens;
+  if (!r.details.empty()) o << ";details=" << r.details;
+  if (!r.format.empty()) o << ";format=" << r.format << ";fmthash=" << r.formatHash;
+  if (r.sleepClause) o << ";sleep_clause=on";
+  if (r.preview) o << ";preview=on;pick=" << r.pick << ";preview_timer=" << r.previewSeconds;
+  if (r.bankSeconds > 0) o << ";bank=" << r.bankSeconds;
   return o.str();
 }
 
@@ -247,7 +301,44 @@ bool Apply(Peer& p, const std::string& line) {
   else if (verb == "UNREADY") p.ready = false;
   else if (verb == "REMATCH") p.rematch = true, p.nonce = static_cast<uint32_t>(std::strtoul(arg.c_str(), nullptr, 16));
   else if (verb == "LEAVE") p.left = true;
+  else if (verb == "PV") p.pvTeam = true, p.pvIds = SplitInts(arg);
+  else if (verb == "PVC") p.pvCommit = true, p.pvCommitHex = arg;
+  else if (verb == "PVR") {
+    const size_t sp2 = arg.find(' ');
+    p.pvReveal = true;
+    p.pvNonce = arg.substr(0, sp2);
+    p.pvList = sp2 == std::string::npos ? std::string() : arg.substr(sp2 + 1);
+  }
   return true;
+}
+
+std::string JoinInts(const std::vector<int>& v) {
+  std::string out;
+  for (int n : v) out += (out.empty() ? "" : ",") + std::to_string(n);
+  return out;
+}
+std::vector<int> SplitInts(const std::string& text) {
+  std::vector<int> out;
+  std::string cur;
+  for (char c : text + ",") {
+    if (c == ',') { if (!cur.empty()) out.push_back(std::atoi(cur.c_str())); cur.clear(); }
+    else if (c >= '0' && c <= '9') cur += c;
+  }
+  return out;
+}
+bool PickValid(const std::vector<int>& pick, int teamSize, int want) {
+  if (static_cast<int>(pick.size()) != want || want < 1) return false;
+  for (size_t i = 0; i < pick.size(); i++) {
+    if (pick[i] < 0 || pick[i] >= teamSize) return false;
+    for (size_t j = 0; j < i; j++) if (pick[j] == pick[i]) return false;
+  }
+  return true;
+}
+std::vector<int> TimeoutPick(const std::vector<int>& chosen, int teamSize, int want) {
+  std::vector<int> out;
+  for (int c : chosen) if (static_cast<int>(out.size()) < want && c >= 0 && c < teamSize && std::find(out.begin(), out.end(), c) == out.end()) out.push_back(c);
+  for (int i = 0; i < teamSize && static_cast<int>(out.size()) < want; i++) if (std::find(out.begin(), out.end(), i) == out.end()) out.push_back(i);
+  return out;
 }
 
 Outcome OutcomeOf(unsigned result, bool host, bool desync) {

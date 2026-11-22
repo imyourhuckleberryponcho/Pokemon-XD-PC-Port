@@ -93,7 +93,7 @@ void Tap(const void* data, u32 size, GXBool displayCopy) {
   if (displayCopy) {
     sLast.swap(sCurrent);
     sCurrent.clear();
-    sLastLists = std::move(sCurrentLists);
+    std::swap(sLastLists, sCurrentLists);
     sCurrentLists.clear();
     sPictures++;
   }

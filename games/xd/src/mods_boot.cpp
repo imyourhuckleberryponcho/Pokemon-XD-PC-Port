@@ -1,6 +1,10 @@
 #include "data/xd_data_mods.h"
+#include "data/xd_faces.h"
+#include "data/xd_species.h"
+#include "data/xd_sounds.h"
 #include "i18n.h"
 #include "xd_battle_models.h"
+#include "xd_rulesets.h"
 #include "xd_user_folder.h"
 #include "xd_xg.h"
 #include "xd_playthrough_files.h"
@@ -8,10 +12,15 @@
 #include "xd_starter.h"
 #include "xd_added_rows.h"
 #include "xd_gen4.h"
+#include "xd_gen57.h"
+#include "xd_gen_rules.h"
 #include "xd_gen4_xg.h"
 #include "xd_modern_types.h"
 #include "xd_languages.h"
 #include "xd_scripts.h"
+#include "battle_replay.h"
+#include "common_script.h"
+#include "xd_mod_battle.h"
 
 #include <mods.h>
 #include <mod_layout.h>
@@ -25,6 +34,8 @@
 #include <cctype>
 #include <cstdarg>
 #include <cstdio>
+#include <map>
+#include <set>
 #include <string>
 
 namespace {
@@ -49,28 +60,86 @@ std::string TrFmt(const char* format, ...) {
 #include <string>
 #include <vector>
 
-namespace xd::hd {
-struct Pack {
-  std::filesystem::path folder;
-  std::string name;
-  bool loose = false;
-};
-void SetPacks(std::vector<Pack> packs);
+extern "C" {
+struct XdPinPkx { uint32_t a, b; };
+extern XdPinPkx pokemon_pkx_data[];
+extern uint32_t pokemon_pkx_data_number;
 }
+
+#include "xd_hd_packs.h"
+#include "xd_mods_reload.h"
 
 namespace xd::pt {
 bool BootWorldMods(std::vector<std::string>& ids);
 std::string BootRandomizer();
 bool BootGen4();
 bool BootGen4Spots();
+bool BootGen57();
+int BootRuleGen();
 bool BootModernTypes();
+bool BootLooks(engine::rulesets::Looks& out);
+void LooksMissing(const std::string& names);
+void LooksLoaded(const std::string& key);
+std::string LooksKeyOfBoot();
 void RandomizerMade(const std::string& code);
+std::string BootMoreShadows();
+void MoreShadowsMade(const std::string& text);
 void AfterModsLoaded(const engine::mods::LoadResult& result, const std::filesystem::path& modsFolder,
                      const std::filesystem::path& listFile, const engine::mods::DiscView& disc);
 }
 
 namespace {
+bool MakeMoreShadows(const engine::mods::DataCatalog& catalog, const engine::mods::EntryReader& read, const std::string& text, const xd::randomizer::Result* rando,
+                     std::vector<engine::mods::DataModFile>& out, std::string& error) {
+  if (text.empty()) return true;
+  namespace xr = xd::randomizer;
+  xr::MoreShadowsPlan plan;
+  if (!xr::ParseMoreShadows(text, plan)) {
+    error = "More Shadow Pokemon: \"" + text + "\" is not an amount and a seed";
+    return false;
+  }
+  const bool gen4 = xd::xg::Off(xd::xg::Feature::Gen4Pokemon) == nullptr && xd::gen4::Loaded();
+  if (gen4 && !xr::LoadGen4Species(xd::gen4::PackFolder() / L"randomizer.txt", error)) return false;
+  const bool gen57 = gen4 && xd::gen57::Loaded();
+  if (gen57 && !xr::LoadGen57Species(xd::gen57::PackFolder() / L"randomizer.txt", error)) return false;
+  engine::randomizer::ModOutput mod;
+  if (!xr::GenerateMoreShadows(catalog, read, plan, rando, gen4, mod, error, gen57)) return false;
+  out.push_back({"more_shadows", "More Shadow Pokemon", "data/more_shadows.json", mod.ToJson("more shadows " + text), true});
+  const std::filesystem::path folder = xd::CardRoot() / L"playthroughs" / L"more_shadows" / std::filesystem::path(text);
+  std::error_code ec;
+  if (!std::filesystem::exists(folder / "spoiler.txt", ec)) {
+    std::filesystem::create_directories(folder, ec);
+    std::string spoiler = "More Shadow Pokemon spoiler log\n\n";
+    for (const std::string& line : mod.spoiler) spoiler += line + "\n";
+    std::FILE* f = std::fopen((folder / "spoiler.txt").string().c_str(), "wb");
+    if (f != nullptr) {
+      std::fwrite(spoiler.data(), 1, spoiler.size(), f);
+      std::fclose(f);
+    }
+  }
+  std::fprintf(stderr, "[more shadows] %s: %zu number(s) changed (%s)\n", text.c_str(), mod.Count(), mod.spoiler.empty() ? "" : mod.spoiler.front().c_str());
+  xd::pt::MoreShadowsMade(text);
+  return true;
+}
+}
+
+namespace {
 std::string sActive;
+std::string sBattleMods;
+std::string sBattleModsWhy;
+
+bool BlocksReplay(const engine::mods::Manifest& m, const engine::mods::AppliesVerdict& v, std::string* why) {
+  if (m.scripts) {
+    if (why) *why = "its scripts run in battles";
+    return true;
+  }
+  if (v.effective != engine::mods::Applies::AnyTime) {
+    if (why) *why = v.reason.empty() ? std::string("it changes game data a battle reads (tables, rules, added rows)") : v.reason;
+    return true;
+  }
+  return false;
+}
+std::string sActiveBase;
 std::string sExtraText;
 
 bool ApplyProgramChanges(const std::vector<uint8_t>& program) {
@@ -194,13 +263,82 @@ extern "C" bool PortXD_LoadMods(void) {
   const bool playerFilesReadOnly = xd::PlayerFilesReadOnly();
   options.listReadOnly = playerFilesReadOnly;
   options.disc = em::OpenDiscView();
+  options.disc.gameId = em::MakeTarget(options.disc.gameId, xd::xg::Edition());
   const std::filesystem::path modelsFolder = user / L"extra_assets" / xd::battle_models::kLayerId;
   bool modelsOn = false;
+  std::vector<std::string> modelSources;
   {
     const engine::settings::BoolSetting models = engine::settings::Global().Bool(xd::battle_models::kSetting);
-    modelsOn = models.Valid() && models.Get();
-    if (modelsOn) {
-      options.extraLayers.push_back({xd::battle_models::kLayerId, "Battle Revolution models", modelsFolder});
+    engine::rulesets::Looks looks;
+    const bool says = xd::pt::BootLooks(looks);
+    modelSources = xd::rulesets::LayerOrderOf(looks, models.Valid() && models.Get());
+    xd::pt::LooksLoaded(xd::pt::LooksKeyOfBoot());
+    std::fprintf(stderr, "[looks] %s: %s%s\n", says ? "this playthrough" : "the player's setting", xd::rulesets::RankedText(looks, models.Valid() && models.Get()).c_str(),
+                 looks.overrides.empty() ? "" : " (with pins for some species)");
+    modelsOn = !modelSources.empty();
+    {
+      std::map<std::string, std::string> winner;
+      std::map<std::string, size_t> perSource;
+      for (const std::string& id : modelSources) {
+        const xd::rulesets::SourceFolder* f = xd::rulesets::SourceLayer(id);
+        if (f == nullptr) continue;
+        std::error_code ec;
+        for (const auto& e : std::filesystem::directory_iterator(user / L"extra_assets" / f->layerId / L"fsys", ec)) {
+          if (e.is_directory(ec)) winner[e.path().filename().string()] = id;
+        }
+      }
+      for (const auto& w : winner) perSource[w.second]++;
+      std::string counts;
+      for (const std::string& id : modelSources) counts += (counts.empty() ? "" : ", ") + id + " " + std::to_string(perSource[id]);
+      if (!modelSources.empty()) std::fprintf(stderr, "[looks] model archives by source: %s (every other model: xd's own)\n", counts.c_str());
+      if (std::getenv("XD_LOOKS_LOG") != nullptr) {
+        for (const auto& w : winner) std::fprintf(stderr, "[looks] %s -> %s\n", w.first.c_str(), w.second.c_str());
+      }
+    }
+    std::set<std::string> pinned;
+    std::map<std::string, std::set<std::string>> pinBySource;
+    if (!looks.overrides.empty()) {
+      std::map<uint32_t, std::string> toc;
+      size_t tocSize = 0;
+      if (uint8_t* data = PortDisc_ReadOriginalFile("GSfsys.toc", &tocSize)) {
+        auto be32 = [&](size_t o) { return o + 4 <= tocSize ? (uint32_t(data[o]) << 24 | uint32_t(data[o + 1]) << 16 | uint32_t(data[o + 2]) << 8 | data[o + 3]) : 0u; };
+        const uint32_t n = be32(8), go = be32(0x10);
+        for (uint32_t k = 0; k < n && go + 16 * (k + 1) <= tocSize; k++) {
+          const uint32_t no = be32(go + 16 * k + 4);
+          if (no < tocSize) toc[be32(go + 16 * k)] = std::string(reinterpret_cast<const char*>(data + no), strnlen(reinterpret_cast<const char*>(data + no), tocSize - no));
+        }
+        PortDisc_Free(data);
+      }
+      size_t dolSize = 0;
+      const uint8_t* dol = PortDisc_Dol(&dolSize);
+      for (const auto& pin : looks.overrides) {
+        const int nat = pin.first;
+        std::string archive;
+        uint32_t group = 0;
+        uint8_t row[8] = {};
+        if (nat >= 1 && nat <= 386 && dol != nullptr && PortDol_Read(dol, dolSize, 0x8040D0A8u + 8u * static_cast<uint32_t>(nat), row, 8)) {
+          group = uint32_t(row[0]) << 24 | uint32_t(row[1]) << 16 | uint32_t(row[2]) << 8 | row[3];
+          const auto it = toc.find(group);
+          if (it != toc.end()) { archive = it->second; for (char& c : archive) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c))); if (archive.size() < 5 || archive.compare(archive.size() - 5, 5, ".fsys") != 0) archive += ".fsys"; }
+        }
+        if (archive.empty()) { std::fprintf(stderr, "[looks] pin for species %d: no model archive known (group %u, toc entries %zu); not applied\n", nat, group, toc.size()); continue; }
+        pinned.insert(archive);
+        if (pin.second != "xd") pinBySource[pin.second].insert(archive);
+        std::fprintf(stderr, "[looks] pin: species %d -> %s from %s\n", nat, archive.c_str(), pin.second.c_str());
+      }
+    }
+    for (const std::string& id : modelSources) {
+      const xd::rulesets::SourceFolder* f = xd::rulesets::SourceLayer(id);
+      if (f == nullptr) continue;
+      em::LoadOptions::ExtraLayer layer{f->layerId, f->name, user / L"extra_assets" / f->layerId, {}, pinned};
+      options.extraLayers.push_back(layer);
+    }
+    for (const auto& pb : pinBySource) {
+      const xd::rulesets::SourceFolder* f = xd::rulesets::SourceLayer(pb.first);
+      if (f == nullptr) continue;
+      em::LoadOptions::ExtraLayer layer{std::string("pins-") + f->layerId, std::string(f->name) + " (pinned species)", user / L"extra_assets" / f->layerId, pb.second, {}};
+      options.extraLayers.push_back(layer);
+      modelsOn = true;
     }
   }
   if (std::strcmp(xd::languages::Active()->id, "us") != 0) {
@@ -222,34 +360,55 @@ extern "C" bool PortXD_LoadMods(void) {
     if (!xd::data::BuildDataCatalog(read, out, error)) return false;
     if (const char* why = xd::xg::Off(xd::xg::Feature::DataAddRows)) {
       for (em::DataTable& t : out.tables) {
-        t.addableBuiltIn = t.addable && (t.name == "pokemon_data" || t.name == "waza_data" || t.name == "item_data_prime");
-        t.addable = false;
+        if (t.name == "pokemon_data" || t.name == "waza_data" || t.name == "item_data_prime") {
+          t.addableBuiltIn = t.addable;
+          t.assetKeys.clear();
+        } else {
+          t.addableBuiltIn = false;
+          t.addable = false;
+        }
       }
-      std::fprintf(stderr, "[mods] data mods: no added rows from user mods in this edition (%s); the Gen 4 pack's rows are allowed\n", why);
+      std::fprintf(stderr, "[mods] data mods: in this edition only new Pokemon, moves and items can be added (%s)\n", why);
     }
     return true;
   };
   options.looksOrSound = xd::playthrough::LooksOrSound;
   options.usePlaythroughMods = xd::pt::BootWorldMods(options.playthroughMods);
   const std::string randomizerCode = xd::pt::BootRandomizer();
+  const std::string moreShadowsText = xd::pt::BootMoreShadows();
   xd::starter::SetPlan({});
   std::vector<em::DataModFile> gen4Files;
   xd::gen4::Prepare(xd::pt::BootGen4(), xd::pt::BootGen4Spots(), options, gen4Files);
-  xd::data::SetFlagRowsTaken(xd::gen4::ExtraRowCount("flag_data"));
+  xd::gen57::Prepare(xd::pt::BootGen57(), xd::pt::BootGen4Spots(), options, gen4Files);
+  xd::faces::SetFaceRowsTaken(xd::gen4::ExtraRowCount("poke_face") + xd::gen57::ExtraRowCount("poke_face"));
+  xd::data::SetFlagRowsTaken(xd::gen4::ExtraRowCount("flag_data") + xd::gen57::ExtraRowCount("flag_data"));
+  {
+    xd::species::Taken taken;
+    taken.models = xd::gen4::ModelRowsTaken() + xd::gen57::ModelRowsTaken(), taken.waves = xd::gen4::WaveRowsTaken() + xd::gen57::WaveRowsTaken();
+    taken.sndFiles = xd::gen4::ExtraRowCount("snd_file") + xd::gen57::ExtraRowCount("snd_file"), taken.sndData = xd::gen4::ExtraRowCount("snd_data") + xd::gen57::ExtraRowCount("snd_data");
+    taken.flags = xd::gen4::ExtraRowCount("flag_data") + xd::gen57::ExtraRowCount("flag_data");
+    xd::species::SetTaken(taken);
+    xd::sound::SetTaken(taken.sndFiles, taken.sndData);
+  }
   xd::modern::Prepare(xd::pt::BootModernTypes(), xd::gen4::Loaded(), gen4Files);
+  xd::rulegen::PrepareNumbers(xd::gen4::Loaded() ? xd::pt::BootRuleGen() : 3, gen4Files);
   {
     std::string layers = "base disc";
-    if (modelsOn) layers += " > Battle Revolution models";
+    for (const std::string& id : modelSources) {
+      if (const xd::rulesets::SourceFolder* f = xd::rulesets::SourceLayer(id)) layers += std::string(" > ") + f->name;
+    }
     if (std::strcmp(xd::languages::Active()->id, "us") != 0) layers += std::string(" > Languages (") + xd::languages::Active()->name + ")";
     if (xd::gen4::Loaded()) layers += " > Gen 4 pack";
     if (xd::gen4::SpotsLoaded()) layers += " > Gen 4 Poke Spots";
+    if (xd::gen57::SpotsLoaded()) layers += " > Gen 5-7 Poke Spots";
+    if (xd::gen57::Loaded()) layers += " > Gen 5-7 pack";
     if (xd::modern::Loaded()) layers += " > Modern types (Fairy)";
     if (!randomizerCode.empty()) layers += " > Randomizer " + randomizerCode;
     std::fprintf(stderr, "[mods] built-in layers: %s (user mods are applied before them; conflicts are reported only for user mods)\n",
                  layers.c_str());
   }
-  if (!randomizerCode.empty() || !gen4Files.empty()) {
-    options.generateData = [randomizerCode, gen4Files](const em::DataCatalog& catalog, const em::EntryReader& read,
+  if (!randomizerCode.empty() || !gen4Files.empty() || !moreShadowsText.empty()) {
+    options.generateData = [randomizerCode, gen4Files, moreShadowsText](const em::DataCatalog& catalog, const em::EntryReader& read,
                                                        std::vector<em::DataModFile>& out, std::string& error) {
       namespace xr = xd::randomizer;
       if (xd::xg::On() && xd::gen4::Loaded()) {
@@ -262,12 +421,12 @@ extern "C" bool PortXD_LoadMods(void) {
       } else {
         for (const em::DataModFile& f : gen4Files) out.push_back(f);
       }
-      if (randomizerCode.empty()) return true;
+      if (randomizerCode.empty()) return MakeMoreShadows(catalog, read, moreShadowsText, nullptr, out, error);
       engine::randomizer::Settings s;
       xr::ApplyStyle(s, xr::Style::Classic);
       bool seedOnly = false;
       if (!engine::randomizer::DecodeCode(xr::GetSchema(), randomizerCode, s, seedOnly, error)) return false;
-      if (xd::xg::Off(xd::xg::Feature::Gen4Pokemon) != nullptr) s.Set(xr::GetSchema(), "gen4", 0);
+      if (xd::xg::Off(xd::xg::Feature::Gen4Pokemon) != nullptr) { s.Set(xr::GetSchema(), "gen4", 0); s.Set(xr::GetSchema(), "gen57", 0); }
       if (xr::CodeIncludesGen4(randomizerCode) && xd::xg::Off(xd::xg::Feature::Gen4Pokemon) == nullptr) {
         if (!xd::gen4::Loaded()) {
           error = "this randomizer code includes the Gen 4 Pokemon, but their files are not available (made from your Pokemon "
@@ -280,6 +439,14 @@ extern "C" bool PortXD_LoadMods(void) {
           for (uint32_t& a : g.abilities) a = tr->MapAbility(a);
           tr->MapTypes(g.name, g.types);
         });
+      }
+      if (xr::CodeIncludesGen57(randomizerCode) && xd::xg::Off(xd::xg::Feature::Gen4Pokemon) == nullptr) {
+        if (!xd::gen57::Loaded()) {
+          error = "this randomizer code includes the Gen 5-7 Pokemon, but their files are not available (made from your Ultra Sun / Ultra "
+                  "Moon dump on the launcher's Extra assets page)";
+          return false;
+        }
+        if (!xr::LoadGen57Species(xd::gen57::PackFolder() / L"randomizer.txt", error)) return false;
       }
       xr::Result r;
       if (!xr::Generate(catalog, read, s, r, error, xd::xg::On() ? &xr::kXGStarterBase : nullptr)) return false;
@@ -294,7 +461,7 @@ extern "C" bool PortXD_LoadMods(void) {
       std::fprintf(stderr, "[randomizer] %s: %zu number(s) changed (spoiler log: %ls)\n", r.code.c_str(), r.mod.Count(),
                    (folder / "spoiler.txt").wstring().c_str());
       xd::pt::RandomizerMade(randomizerCode);
-      return true;
+      return MakeMoreShadows(catalog, read, moreShadowsText, &r, out, error);
     };
   }
   std::error_code ec;
@@ -342,38 +509,51 @@ extern "C" bool PortXD_LoadMods(void) {
     return false;
   }
   sActive = result.ActiveText();
+  sBattleMods.clear();
+  sBattleModsWhy.clear();
+  for (size_t i = 0; i < result.active.size(); i++) {
+    std::string why;
+    const em::AppliesVerdict v = i < result.activeApplies.size() ? result.activeApplies[i] : em::AppliesVerdict{};
+    if (!BlocksReplay(result.active[i], v, &why)) continue;
+    const std::string id = result.active[i].id + (result.active[i].version.empty() ? "" : " " + result.active[i].version);
+    sBattleMods += (sBattleMods.empty() ? "" : ", ") + id;
+    sBattleModsWhy += (sBattleModsWhy.empty() ? "" : "; ") + id + " (" + why + ")";
+  }
+  xd::hd::SetPacks(xd::modreload::TexturePacksOf(result, options));
   {
     std::vector<em::Message> ignored;
-    const std::vector<em::ModFolder> found = em::FindMods(options.modsFolder, ignored);
-    std::vector<xd::hd::Pack> packs;
-    for (const em::Manifest& m : result.active) {
-      for (const em::ModFolder& f : found) {
-        if (f.manifest.id != m.id) continue;
-        std::error_code tec;
-        if (f.texturePack) {
-          packs.push_back({f.folder, f.manifest.name, f.looseFiles});
-        } else {
-          for (const std::filesystem::path& t : em::LayoutFolders(f.folder, options.disc.gameId, "textures")) {
-            packs.push_back({t, f.manifest.name + " (textures)", false});
-          }
-        }
-      }
-    }
-    xd::hd::SetPacks(std::move(packs));
+    std::vector<std::string> notes;
+    xd::common_script::Install(result, em::FindMods(options.modsFolder, ignored), options.disc.gameId, notes);
+    for (const std::string& n : notes) std::fprintf(stderr, "[mods] warning: %s\n", n.c_str());
   }
   std::fprintf(stderr, "[mods] in use: %s\n", sActive.empty() ? "none" : sActive.c_str());
-  const em::LoadResult::LayerResult* modelsLayer = nullptr;
-  for (const auto& layer : result.extraLayers) {
-    if (layer.id == xd::battle_models::kLayerId) modelsLayer = &layer;
-  }
   if (!modelsOn) {
     sExtraText = "Battle Revolution models: off";
-  } else if (modelsLayer == nullptr || !modelsLayer->found) {
-    sExtraText = "Battle Revolution models: on, but not made yet (no folder " + modelsFolder.string() + ")";
-  } else if (modelsLayer->files == 0) {
-    sExtraText = "Battle Revolution models: on, but its folder has no files";
   } else {
-    sExtraText = "Battle Revolution models: on, " + std::to_string(modelsLayer->files) + " files";
+    sExtraText.clear();
+    std::string missing;
+    for (auto it = modelSources.rbegin(); it != modelSources.rend(); ++it) {
+      const xd::rulesets::SourceFolder* f = xd::rulesets::SourceLayer(*it);
+      if (f == nullptr) continue;
+      const em::LoadResult::LayerResult* layer = nullptr;
+      for (const auto& l : result.extraLayers) if (l.id == f->layerId) layer = &l;
+      const std::string name = f->name;
+      std::string one;
+      if (layer == nullptr || !layer->found) {
+        one = name + ": on, but not made yet (no folder " + (user / L"extra_assets" / f->layerId).string() + ")";
+        missing += (missing.empty() ? "" : ", ") + name;
+      } else if (layer->files == 0) {
+        one = name + ": on, but its folder has no files";
+        missing += (missing.empty() ? "" : ", ") + name;
+      } else {
+        one = name + ": on, " + std::to_string(layer->files) + " files";
+      }
+      sExtraText += (sExtraText.empty() ? "" : "; ") + one;
+    }
+    if (!missing.empty()) {
+      std::fprintf(stderr, "[looks] not found, skipped: %s (the next source in this playthrough's list shows instead)\n", missing.c_str());
+      xd::pt::LooksMissing(missing);
+    }
   }
   sExtraText += std::string("; ") + PortXD_LanguageText();
   for (const auto& layer : result.extraLayers) {
@@ -381,12 +561,56 @@ extern "C" bool PortXD_LoadMods(void) {
   }
   std::fprintf(stderr, "[extra assets] %s\n", sExtraText.c_str());
   xd::gen4::AfterLoad(result);
+  xd::gen57::AfterLoad(result);
   xd::added::Install(result);
+  {
+    std::vector<em::Message> ignored;
+    std::vector<std::string> notes;
+    xd::modbattle::Load(result, em::FindMods(options.modsFolder, ignored), options.disc.gameId, notes);
+    for (const std::string& n : notes) std::fprintf(stderr, "[mods] problem: battle effects: %s\n", n.c_str());
+  }
   xd::scripts::Install(result);
+  xd::replay::HookBattles();
+  sActiveBase = sActive;
   if (const std::string scripts = xd::scripts::ActiveText(); !scripts.empty()) {
     sActive += (sActive.empty() ? "" : "; ") + scripts;
+    sBattleMods += (sBattleMods.empty() ? "" : "; ") + scripts;
   }
+  if (const std::string battle = xd::modbattle::ActiveText(); !battle.empty()) {
+    sActive += (sActive.empty() ? "" : "; ") + battle;
+    sActiveBase += (sActiveBase.empty() ? "" : "; ") + battle;
+    sBattleMods += (sBattleMods.empty() ? "" : "; ") + battle;
+    sBattleModsWhy += (sBattleModsWhy.empty() ? "" : "; ") + std::string("battle effects (") + battle + ": their files change what a battle computes)";
+  }
+  xd::modreload::Remember(options, result);
   return true;
+}
+
+namespace xd::modreload {
+std::vector<xd::hd::Pack> TexturePacksOf(const engine::mods::LoadResult& result, const engine::mods::LoadOptions& options) {
+  namespace em = engine::mods;
+  std::vector<em::Message> ignored;
+  const std::vector<em::ModFolder> found = em::FindMods(options.modsFolder, ignored);
+  std::vector<xd::hd::Pack> packs;
+  for (const em::Manifest& m : result.active) {
+    for (const em::ModFolder& f : found) {
+      if (f.manifest.id != m.id) continue;
+      if (f.texturePack) {
+        packs.push_back({f.folder, f.manifest.name, f.looseFiles});
+      } else {
+        for (const std::filesystem::path& t : em::LayoutFolders(f.folder, options.disc.gameId, "textures")) {
+          packs.push_back({t, f.manifest.name + " (textures)", false});
+        }
+      }
+    }
+  }
+  return packs;
+}
+}
+
+extern "C" void PortXD_SetActiveMods(const char* scriptsText) {
+  sActive = sActiveBase;
+  if (scriptsText != nullptr && scriptsText[0] != '\0') sActive += (sActive.empty() ? "" : "; ") + std::string(scriptsText);
 }
 
 extern "C" bool PortXD_BattleModelsFound(void) {
@@ -401,3 +625,5 @@ extern "C" bool PortXD_BattleModelsFound(void) {
 extern "C" const char* PortXD_ExtraAssetsText(void) { return sExtraText.c_str(); }
 
 extern "C" const char* PortXD_ActiveMods(void) { return sActive.c_str(); }
+extern "C" const char* PortXD_BattleMods(void) { return sBattleMods.c_str(); }
+extern "C" const char* PortXD_BattleModsWhy(void) { return sBattleModsWhy.c_str(); }

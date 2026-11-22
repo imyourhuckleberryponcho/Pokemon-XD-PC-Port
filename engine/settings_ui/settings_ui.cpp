@@ -203,6 +203,32 @@ std::string ValueForPeople(const es::Registry& registry, size_t index, const es:
   }
 }
 
+int ApplyLookPreset(es::Registry& registry, LookPreset preset) {
+  const bool best = preset == LookPreset::BestLooks;
+  int changed = 0;
+  const auto count = [&](bool ok, std::string_view id) { changed += ok ? 1 : 0; (void)id; };
+  const auto setInt = [&](const char* id, int32_t v) {
+    const size_t i = registry.Find(id);
+    if (i == es::kNoSetting || registry.ValueOf(i).i == v) return;
+    count(registry.SetInt(id, v), id);
+  };
+  const auto setEnum = [&](const char* id, const char* choice) {
+    const size_t i = registry.Find(id);
+    if (i == es::kNoSetting || registry.ValueOf(i).i == registry.ChoiceIndex(id, choice)) return;
+    count(registry.SetEnum(id, choice), id);
+  };
+  const auto setBool = [&](const char* id, bool v) {
+    const size_t i = registry.Find(id);
+    if (i == es::kNoSetting || (registry.ValueOf(i).i != 0) == v) return;
+    count(registry.SetBool(id, v), id);
+  };
+  setInt("video.resolution_scale", best ? 3 : 1);
+  setEnum("video.frame_rate", best ? "monitor" : "original");
+  setEnum("video.anti_aliasing", best ? "msaa4_fxaa" : "off");
+  setEnum("video.texture_filtering", best ? "16x" : "original");
+  return changed;
+}
+
 bool DrawPresetChooser(es::Registry& registry, const Options& options) {
   bool changed = false;
   static es::Preset sPending = es::Preset::Original;
@@ -244,6 +270,18 @@ bool DrawPresetChooser(es::Registry& registry, const Options& options) {
     ImGui::Spacing();
     ImGui::PopID();
   }
+  ImGui::Spacing();
+  Wrapped(options.colors.dim,
+          Tr("Look presets: set resolution, frame rate, anti-aliasing and texture filtering "
+             "together. Only how the picture is drawn changes, never the game."));
+  if (ImGui::Button(Lbl(Tr("Best looks (fast PC)"), "Best looks (fast PC)").c_str())) {
+    changed |= ApplyLookPreset(registry, LookPreset::BestLooks) > 0;
+  }
+  ImGui::SameLine();
+  if (ImGui::Button(Lbl(Tr("Smooth on a weak PC"), "Smooth on a weak PC").c_str())) {
+    changed |= ApplyLookPreset(registry, LookPreset::SmoothOnWeakPC) > 0;
+  }
+  ImGui::Spacing();
   if (ask) {
     ImGui::OpenPopup(Lbl(Tr("Switch preset"), "Switch preset").c_str());
   }

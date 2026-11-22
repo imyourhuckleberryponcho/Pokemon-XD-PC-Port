@@ -439,3 +439,22 @@ void PortXD_PcTradeFrame(void) {
 }
 
 bool PortXD_PcTradeSwallowInput() { return sAfterWanted; }
+
+std::vector<PortXD_Owned> PortXD_OwnedOf(uint16_t species) {
+  std::vector<PortXD_Owned> out;
+  if (species == 0) return out;
+  auto take = [&](int box, int slot, const uint8_t* live) {
+    if (IsEmptyRec(live)) return;
+    const xd::save::Pokemon p = xd::save::ParsePokemon(live, xd::save::ByteOrder::PC);
+    if (p.species != species || p.IsEgg()) return;
+    PortXD_Owned o;
+    o.nickname = xd::save::ToUtf8(p.nickname);
+    o.level = p.level, o.box = box, o.slot = slot, o.nature = p.Nature(), o.stats = p.stats, o.evs = p.evs, o.ivs = p.ivs;
+    out.push_back(std::move(o));
+  };
+  if (savedataGetStatus(nullptr, 2) == 0) return out;
+  for (int i = 0; i < kPartySlots; i++) take(-1, i, PartyPtr(i));
+  for (int b = 0; b < kBoxes; b++)
+    for (int s = 0; s < kBoxSlots; s++) take(b, s, BoxPtr(b, s));
+  return out;
+}

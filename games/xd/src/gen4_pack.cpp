@@ -1,3 +1,4 @@
+#include "xd_spare.h"
 #include "i18n.h"
 #include "xd_gen4.h"
 #include "xd_challenges.h"
@@ -6,7 +7,9 @@
 #include "xd_gen4_xg.h"
 #include "xd_gen4_abilities.h"
 #include "xd_xg.h"
+#include "xd_gen57.h"
 
+#include "pack_tables.h"
 #include "data/common_rel.h"
 #include "xd_user_folder.h"
 
@@ -53,126 +56,47 @@ extern uint32_t pokemon_nakigoe_data_number;
 namespace {
 
 constexpr int kPackVersion = 2;
-constexpr uint32_t kPkxSpare = 1024;
-constexpr uint32_t kWaveOld = 389, kWaveSpare = 1024;
+constexpr uint32_t kPkxSpare = XD_PC_SPARE_SPECIES;
+constexpr uint32_t kWaveOld = 389, kWaveSpare = XD_PC_SPARE_SPECIES;
 
 bool sLoaded = false;
 bool sSpots = false;
 
-struct PkxRow {
-  uint32_t row, group, res;
-};
+using xd::pack::PkxRow;
+using xd::pack::RowSpec;
+using xd::pack::SpeciesRef;
+using xd::pack::GoodsRow;
+using xd::pack::PackTables;
+using xd::pack::ReadText;
 std::vector<PkxRow> sPkx;
 std::vector<std::vector<uint8_t>> sWaves;
 uint32_t sPkxExpect = 0;
-struct RowSpec {
-  std::string table;
-  uint32_t row = 0, count = 1;
-  int32_t copyOf = -1;
-  std::vector<uint32_t> sets;
-};
 std::vector<RowSpec> sRows;
-struct SpeciesRef {
-  uint32_t dex = 0, id = 0;
-  std::string key;
-};
 std::vector<SpeciesRef> sSpecies;
-struct GoodsRow {
-  int32_t copyOf = -1;
-  std::string item;
-};
 std::vector<GoodsRow> sGoods;
 std::string sEvoText;
-
-struct ParsedTables {
-  std::vector<RowSpec> rows;
-};
 
 std::string Norm(std::string k) {
   for (char& c : k) c = c == ' ' ? '_' : c;
   return k;
 }
 
+std::vector<RowSpec> sMoreRows;
+
 void Register() {
   std::vector<XDExtraRow> rows;
-  rows.reserve(sRows.size());
+  rows.reserve(sRows.size() + sMoreRows.size());
   for (const RowSpec& r : sRows) rows.push_back({r.table.c_str(), r.row, r.count, r.copyOf, r.sets.data(), r.sets.size() / 3});
+  for (const RowSpec& r : sMoreRows) rows.push_back({r.table.c_str(), r.row, r.count, r.copyOf, r.sets.data(), r.sets.size() / 3});
   PortXD_SetExtraRows(rows.data(), rows.size());
 }
 
-bool ReadText(const std::filesystem::path& p, std::string& out) {
-  std::ifstream f(p, std::ios::binary);
-  if (!f) return false;
-  std::stringstream ss;
-  ss << f.rdbuf();
-  out = ss.str();
-  return true;
-}
-
-bool ParseTables(const std::string& text, ParsedTables& out, std::string& error) {
-  std::istringstream in(text);
-  std::string line;
-  while (std::getline(in, line)) {
-    if (line.empty() || line[0] == '#') continue;
-    std::istringstream ls(line);
-    std::string key;
-    ls >> key;
-    if (key == "format") {
-      int v = 0;
-      ls >> v;
-      if (v != 1) {
-        error = "tables.txt has format " + std::to_string(v) + ", this game reads 1";
-        return false;
-      }
-    } else if (key == "pkx") {
-      PkxRow r{};
-      ls >> r.row >> r.group >> r.res;
-      sPkx.push_back(r);
-    } else if (key == "pkxcount") {
-      ls >> sPkxExpect;
-    } else if (key == "row") {
-      RowSpec r;
-      ls >> r.table >> r.row >> r.count >> r.copyOf;
-      std::string s;
-      while (ls >> s) {
-        unsigned a = 0, b = 0, c = 0;
-        if (std::sscanf(s.c_str(), "%u:%u:%u", &a, &b, &c) != 3) {
-          error = "tables.txt: \"" + s + "\" is not offset:size:value";
-          return false;
-        }
-        r.sets.push_back(a), r.sets.push_back(b), r.sets.push_back(c);
-      }
-      out.rows.push_back(std::move(r));
-    } else if (key == "wave") {
-      std::string hex;
-      unsigned dex = 0;
-      ls >> dex >> hex;
-      std::vector<uint8_t> w;
-      for (size_t k = 0; k + 1 < hex.size(); k += 2) w.push_back(static_cast<uint8_t>(std::strtoul(hex.substr(k, 2).c_str(), nullptr, 16)));
-      if (w.empty() || w.size() != static_cast<size_t>(w[0]) + 1) {
-        error = "tables.txt: the wave of species " + std::to_string(dex) + " has the wrong length";
-        return false;
-      }
-      sWaves.push_back(std::move(w));
-    } else if (key == "face") {
-    } else if (key == "goods") {
-      GoodsRow g;
-      ls >> g.item;
-      sGoods.push_back(std::move(g));
-    } else if (key == "goodscopy") {
-      GoodsRow g;
-      ls >> g.copyOf;
-      sGoods.push_back(std::move(g));
-    } else if (key == "species") {
-      SpeciesRef r;
-      ls >> r.dex >> r.id >> r.key;
-      sSpecies.push_back(r);
-    } else {
-      error = "tables.txt: unknown line \"" + key + "\"";
-      return false;
-    }
-  }
-  return true;
+void Absorb(PackTables& t) {
+  for (auto& p : t.pkx) sPkx.push_back(p);
+  if (t.pkxExpect != 0) sPkxExpect = t.pkxExpect;
+  for (auto& w : t.waves) sWaves.push_back(std::move(w));
+  for (auto& r : t.species) sSpecies.push_back(r);
+  for (auto& g : t.goods) sGoods.push_back(std::move(g));
 }
 
 bool Number(const std::string& s, uint32_t& out) {
@@ -247,7 +171,12 @@ void ResolveEvolutions(const engine::mods::LoadResult& result, const std::map<st
 
 namespace xd::gen4 {
 
-std::filesystem::path PackFolder() { return xd::SettingsFolder() / L"extra_assets" / L"pbr_gen4"; }
+std::filesystem::path PackFolder() {
+  const std::filesystem::path base = xd::SettingsFolder() / L"extra_assets";
+  std::error_code ec;
+  if (!std::filesystem::exists(base / L"pbr_gen4" / L"gen4.json", ec) && std::filesystem::exists(base / L"usum_gen4" / L"gen4.json", ec)) return base / L"usum_gen4";
+  return base / L"pbr_gen4";
+}
 
 bool PackPresent(std::string* why) {
   std::string text;
@@ -276,6 +205,18 @@ uint32_t ExtraRowCount(const char* table) {
   return n;
 }
 bool SpotsLoaded() { return sLoaded && sSpots; }
+void SetMoreRows(const std::vector<xd::pack::RowSpec>& rows) {
+  sMoreRows = rows;
+  Register();
+}
+uint32_t ModelRowsTaken() {
+  uint32_t last = 0;
+  if (sLoaded) {
+    for (const PkxRow& r : sPkx) last = std::max(last, r.row + 1);
+  }
+  return last > 419 ? last - 419 : 0;
+}
+uint32_t WaveRowsTaken() { return sLoaded ? static_cast<uint32_t>(sWaves.size()) : 0; }
 
 void Prepare(bool wanted, bool spots, engine::mods::LoadOptions& options, std::vector<engine::mods::DataModFile>& dataFiles) {
   sLoaded = false;
@@ -283,6 +224,7 @@ void Prepare(bool wanted, bool spots, engine::mods::LoadOptions& options, std::v
   sPkx.clear();
   sWaves.clear();
   sRows.clear();
+  sMoreRows.clear();
   sSpecies.clear();
   sGoods.clear();
   machines::Clear();
@@ -301,9 +243,9 @@ void Prepare(bool wanted, bool spots, engine::mods::LoadOptions& options, std::v
     return;
   }
   const std::filesystem::path pack = PackFolder();
-  ParsedTables tables;
+  PackTables tables;
   std::string text, error;
-  if (!ReadText(pack / L"tables.txt", text) || !ParseTables(text, tables, error)) {
+  if (!ReadText(pack / L"tables.txt", text) || !xd::pack::ParseTables(text, tables, error)) {
     std::fprintf(stderr, "[gen4] the pack's tables.txt can't be used (%s): the game starts without the Gen 4 Pokemon\n",
                  error.empty() ? "unreadable" : error.c_str());
     return;
@@ -334,9 +276,9 @@ void Prepare(bool wanted, bool spots, engine::mods::LoadOptions& options, std::v
     d.modName = "Gen 4 Pokemon and moves";
     d.label = "gen4/optional/spots.json";
     std::string spotText;
-    ParsedTables spotTables;
+    PackTables spotTables;
     if (ReadText(pack / L"optional" / L"spots.json", d.text) && ReadText(pack / L"optional" / L"spots_tables.txt", spotText) &&
-        ParseTables(spotText, spotTables, error)) {
+        xd::pack::ParseTables(spotText, spotTables, error)) {
       for (auto& r : spotTables.rows) tables.rows.push_back(std::move(r));
       dataFiles.push_back(std::move(d));
       sSpots = true;
@@ -348,7 +290,8 @@ void Prepare(bool wanted, bool spots, engine::mods::LoadOptions& options, std::v
   if (xd::xg::On()) sGoods.clear();
   ReadText(pack / L"evolutions.txt", sEvoText);
   options.extraLayers.push_back({"pbr_gen4", "Gen 4 Pokemon", pack});
-  sRows = tables.rows;
+  Absorb(tables);
+  sRows = std::move(tables.rows);
   Register();
   sLoaded = true;
   std::fprintf(stderr, "[gen4] pack %s: %zu data file(s), %zu table row group(s), %zu model rows\n", pack.string().c_str(),
@@ -555,4 +498,7 @@ static void SpeciesRows(void* rows, uint32_t count) {
 extern "C" void PortXD_SetSpeciesRowsHook(void (*f)(void*, uint32_t));
 namespace { const bool sHooked = (PortXD_SetSpeciesRowsHook(&SpeciesRows), true); }
 
-extern "C" void PortXD_Gen4MainTables(void) { xd::gen4::ApplyMainTables(); }
+extern "C" void PortXD_Gen4MainTables(void) {
+  xd::gen4::ApplyMainTables();
+  xd::gen57::ApplyMainTables();
+}

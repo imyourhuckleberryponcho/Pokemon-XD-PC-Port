@@ -98,6 +98,11 @@ std::string gen4_move_name_text(const std::string& name);
 std::string gen4_move_doc(const std::string& name);
 std::string gen4_item_doc(const std::string& name);
 
+constexpr int kGen4Langs = 5;
+const char* const* gen4_lang_row(const char* kind, const std::string& key);
+void gen4_add_lang_fields(Json& text, const std::vector<std::pair<std::string, const char* const*>>& fields);
+std::string gen4_tm_name(int lang, int number);
+
 struct MachinesOut {
   std::vector<std::pair<std::string, Json>> items;
   std::vector<std::string> coupon;
@@ -124,7 +129,7 @@ constexpr int kWaveOld = 389;
 
 std::vector<uint8_t> gen4_wave(const CryOut& cry);
 
-struct PackModel { int dex = 0; std::string name, standin; std::vector<uint8_t> data; };
+struct PackModel { int dex = 0; std::string name, standin; std::vector<uint8_t> data; int standin_nat = 0; };
 void make_gen4_pack(const std::string& out_folder, const DiscSource& pbr, const DiscSource& xd, XdTables& xdt,
                     const std::vector<PackModel>& models, const std::vector<PairRow>& pairs,
                     const std::function<void(const std::string&)>& say);

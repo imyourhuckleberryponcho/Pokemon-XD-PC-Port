@@ -262,6 +262,45 @@ void testOrder(ByteOrder order) {
   check(ReadSave(makeFile(older, headerChanged), save, report, error) && save.slot == 0 &&
             report.slots[1].checksumOk && !report.slots[1].headerSumOk,
         "a slot whose header no longer matches its game data is skipped" + tag);
+
+  {
+    IdRemap map;
+    map.species = {{25, 150}, {150, 25}, {1, 416}};
+    map.moves = {{34, 380}};
+    map.items = {{13, 600}, {20, 601}};
+    std::vector<uint8_t> file = makeFile(older, newer);
+    const std::vector<uint8_t> before = file;
+    size_t changedCount = 0;
+    check(RemapIds(file, map, changedCount, error) && changedCount > 0, "RemapIds: changes numbers" + tag);
+    Save r;
+    ReadReport rr;
+    check(ReadSave(file, r, rr, error) && r.slot == 1 && r.saveCount == 6 && rr.slots[0].checksumOk && rr.slots[1].checksumOk &&
+              rr.slots[0].headerSumOk && rr.slots[1].headerSumOk,
+          "RemapIds: both slots still pass their checks, the counters stay" + tag);
+    check(r.party[0].species == 416 && r.party[1].species == 150 && r.boxes[2].slots[4].species == 25 &&
+              r.dayCare.species == 133 && r.chambers[2][4].species == 251,
+          "RemapIds: species (a swap works, unlisted ones stay)" + tag);
+    check(r.party[0].heldItem == 600 && r.party[0].moves[1].id == 380 && r.party[0].moves[0].id == 33 && r.party[0].moves[1].pp == 21,
+          "RemapIds: held item and moves, PP stays" + tag);
+    check(r.items[0].item == 600 && r.balls[0].item == 4 && r.pcItems[0].item == 601 && r.items[0].count == 4, "RemapIds: bag and PC items" + tag);
+    check(r.shadows[7].species == 150 && r.shadows[9].species == 251, "RemapIds: the Shadow list" + tag);
+    check(ToUtf8(r.trainerName) == "MICHAEL" && r.money == 98765 && r.party[1].level == 50 && r.party[1].pid == (0xBEEF3039u ^ 0x00010002u), "RemapIds: other data stays" + tag);
+    Save r0;
+    std::vector<uint8_t> asOld = file;
+    std::memset(asOld.data() + SlotOffset(1), 0, 8);
+    check(ReadSave(asOld, r0, rr, error) && r0.slot == 0 && r0.party[0].species == 416, "RemapIds: the older slot was changed too" + tag);
+    std::vector<uint8_t> same = before;
+    IdRemap none;
+    none.species = {{300, 301}};
+    check(RemapIds(same, none, changedCount, error) && changedCount == 0 && same == before, "RemapIds: no matching numbers: not a byte changed" + tag);
+    IdRemap back;
+    back.species = {{150, 25}, {25, 150}, {416, 1}};
+    back.moves = {{380, 34}};
+    back.items = {{600, 13}, {601, 20}};
+    check(RemapIds(file, back, changedCount, error) && file == before, "RemapIds: the reverse map gives the original file back" + tag);
+    std::vector<uint8_t> small(10);
+    check(!RemapIds(small, map, changedCount, error), "RemapIds: a wrong size is refused" + tag);
+  }
 }
 
 }

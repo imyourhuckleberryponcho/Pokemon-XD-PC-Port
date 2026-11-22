@@ -2,6 +2,7 @@
 #include <dolphin/card.h>
 
 #include <save_backups.h>
+#include <saveext.h>
 
 #include <condition_variable>
 #include <cstdio>
@@ -29,6 +30,7 @@ constexpr uint32_t kOneSave = 600;
 struct Job {
   std::string card, fileName;
   std::vector<uint8_t> bytes;
+  std::vector<bk::Companion> companions;
   std::time_t when = 0;
 };
 
@@ -57,7 +59,7 @@ void Work() {
       sJobs.pop_front();
     }
     std::string error;
-    const fs::path made = bk::Add(sFolder, job.card, job.fileName, job.bytes, job.when, bk::kKeep, &error);
+    const fs::path made = bk::AddWith(sFolder, job.card, job.fileName, job.bytes, job.companions, job.when, bk::kKeep, &error);
     if (!made.empty()) {
       std::fprintf(stderr, "[card backup] %s backed up to %s\n", job.fileName.c_str(), Utf8(made).c_str());
     } else if (!error.empty()) {
@@ -128,9 +130,22 @@ void PortCardBackup_BeforeWrite(s32 chan, s32 fileNo) {
   bool empty = true;
   for (size_t i = 0x40; i < bytes.size() && empty; i++) empty = bytes[i] == 0;
   if (empty) return;
+  std::vector<bk::Companion> companions;
+  {
+    std::error_code ec;
+    const fs::path playthroughs = sFolder.parent_path() / "playthroughs" / cardFolder.filename();
+    for (const auto& e : fs::directory_iterator(playthroughs, ec)) {
+      const std::string n = Utf8(e.path().filename());
+      std::vector<uint8_t> ext;
+      if (n.size() > 4 && n.compare(n.size() - 4, 4, ".ext") == 0 && engine::saveext::ReadAll(e.path(), ext) &&
+          engine::saveext::PairsWithGci(ext, bytes)) {
+        companions.push_back({n, std::move(ext)});
+      }
+    }
+  }
   {
     std::lock_guard<std::mutex> lock(sLock);
-    sJobs.push_back(Job{Utf8(cardFolder.filename()), gci, std::move(bytes), std::time(nullptr)});
+    sJobs.push_back(Job{Utf8(cardFolder.filename()), gci, std::move(bytes), std::move(companions), std::time(nullptr)});
   }
   sWake.notify_one();
 }

@@ -220,15 +220,33 @@ TrustVerdict EvaluateTrust(const mc::UpdateFile& file, const std::string& expect
     v.text = "The update file's signature is wrong: it was changed after the author signed it, or it was signed by someone else. Refused.";
     return v;
   }
-  if (!pinned.empty() && pinned != file.publicKey) {
-    v.text = "This update is signed with a DIFFERENT key than the one this mod was first installed with (the author's key was " +
-             mc::KeyFingerprint(pinned) + ", this one is " + mc::KeyFingerprint(file.publicKey) +
-             "). That can mean the mod changed hands, or that someone is pretending to be the author. Refused.";
+  bool changed = false, unknown = false;
+  std::string oldKey;
+  for (const std::string* known : {&pinned, &authorKey}) {
+    if (known->empty() || *known == file.publicKey) continue;
+    if (mc::KeyChainReaches(file.keyChanges, *known, file.publicKey)) {
+      changed = true;
+    } else {
+      unknown = true;
+    }
+    if (oldKey.empty()) oldKey = *known;
+  }
+  if (unknown) {
+    v.trust = Trust::NeedsConfirm;
+    v.oldKey = oldKey;
+    v.newKey = file.publicKey;
+    v.text = "This update is signed with a DIFFERENT key (" + mc::KeyFingerprint(file.publicKey) + ") than the one the mod's author used before (" +
+             mc::KeyFingerprint(oldKey) + "), and the old key did not announce the change. That can mean the author lost the old key, or that the mod "
+             "changed hands, or that someone is pretending to be the author. Only go on if the author told you, by a way you trust, that the new "
+             "key is " + mc::KeyFingerprint(file.publicKey) + ". Nothing is installed until you confirm.";
     return v;
   }
-  if (!authorKey.empty() && authorKey != file.publicKey) {
-    v.text = "The mod says its author's key is " + mc::KeyFingerprint(authorKey) + ", but this update is signed with " +
-             mc::KeyFingerprint(file.publicKey) + ". Refused.";
+  if (changed) {
+    v.trust = Trust::KeyChanged;
+    v.oldKey = oldKey;
+    v.newKey = file.publicKey;
+    v.text = "The author changed their signing key as planned: the old key " + mc::KeyFingerprint(oldKey) + " signed \"the new key is " +
+             mc::KeyFingerprint(file.publicKey) + "\". This update is signed with the new key, which will be kept from now on.";
     return v;
   }
   if (pinned.empty()) {
@@ -243,7 +261,7 @@ TrustVerdict EvaluateTrust(const mc::UpdateFile& file, const std::string& expect
 }
 
 std::string PermissionText(const std::string& code) {
-  if (code == "scripts") return "Runs Lua scripts in the game's sandbox (they can read and change what the game offers them, nothing else)";
+  if (code == "scripts") return "Runs Luau scripts in the game's sandbox (they can read and change what the game offers them, nothing else)";
   if (code == "replaces-files") return "Replaces game files (whole files, or files inside the game's archives)";
   if (code == "changes-tables") return "Changes numbers in the game's tables (stats, moves, trainers, shops...)";
   if (code == "adds-rows") return "Adds new entries to the game's tables (new Pokemon, moves, items)";
@@ -425,6 +443,14 @@ std::map<std::string, std::string> HashesUnder(const fs::path& folder, const cha
   return out;
 }
 
+std::string LabelKindOfTable(const std::string& table) {
+  const std::string t = Lower(table);
+  if (t == "pokemon" || t == "pokemon_data" || t == "species") return "species";
+  if (t == "moves" || t == "move" || t == "waza_data") return "move";
+  if (t == "items" || t == "item" || t == "item_data_prime") return "item";
+  return "";
+}
+
 std::vector<std::string> AddedRowSequence(const fs::path& folder) {
   std::vector<std::string> out;
   std::error_code ec;
@@ -449,7 +475,25 @@ std::vector<std::string> AddedRowSequence(const fs::path& folder) {
     if (add == root.fields.end() || add->second.kind != em::json::Value::Kind::Object) continue;
     for (const std::string& table : add->second.order) {
       const em::json::Value& rows = add->second.fields.at(table);
-      for (const std::string& name : rows.order) out.push_back(table + ":" + name);
+      const std::string kind = LabelKindOfTable(table);
+      for (const std::string& name : rows.order) {
+        if (kind.empty()) {
+          out.push_back(table + ":" + name);
+          continue;
+        }
+        std::string slug;
+        const em::json::Value& row = rows.fields.at(name);
+        if (row.kind == em::json::Value::Kind::Object) {
+          const auto lv = row.fields.find("label");
+          if (lv != row.fields.end() && lv->second.kind == em::json::Value::Kind::String) {
+            slug = lv->second.text;
+            const size_t slash = slug.find('/');
+            if (slash != std::string::npos) slug = slug.substr(slash + 1);
+          }
+        }
+        if (slug.empty()) slug = em::Slugify(name);
+        out.push_back("@" + kind + "/" + slug);
+      }
     }
   }
   return out;
@@ -471,11 +515,26 @@ Change Analyse(const fs::path& oldFolder, const fs::path& newFolder) {
     }
   }
   const std::vector<std::string> before = AddedRowSequence(oldFolder), now = AddedRowSequence(newFolder);
-  if (before.size() > now.size() || !std::equal(before.begin(), before.end(), now.begin())) {
+  std::vector<std::string> oldLabelled, newLabelled, oldOrdered, newOrdered;
+  for (const std::string& r : before) (r[0] == '@' ? oldLabelled : oldOrdered).push_back(r);
+  for (const std::string& r : now) (r[0] == '@' ? newLabelled : newOrdered).push_back(r);
+  const auto nameSpace = [](const fs::path& folder) {
+    em::Manifest m;
+    std::string err;
+    return em::ParseManifest(ReadText(folder / "mod.json", 1u << 20), m, err) ? m.labelNamespace : std::string();
+  };
+  bool lost = oldOrdered.size() > newOrdered.size() || !std::equal(oldOrdered.begin(), oldOrdered.end(), newOrdered.begin());
+  for (const std::string& r : oldLabelled) lost = lost || std::find(newLabelled.begin(), newLabelled.end(), r) == newLabelled.end();
+  if (!oldLabelled.empty() && nameSpace(oldFolder) != nameSpace(newFolder)) lost = true;
+  if (lost) {
     c.addedRowsBreak = true;
     c.worldChanged = true;
-    c.reasons.push_back("Rows the old version added (new Pokemon, moves, items) are removed, renamed or reordered: a save that holds them gets other "
-                        "things in their place, so it can't be continued with this version.");
+    c.reasons.push_back("Rows the old version added (new Pokemon, moves, items) are removed or renamed (or their label namespace changed): a save that holds "
+                        "them gets other things in their place, so it can't be continued with this version.");
+  } else if (!oldLabelled.empty() && oldLabelled != std::vector<std::string>(newLabelled.begin(), newLabelled.begin() + static_cast<std::ptrdiff_t>(std::min(oldLabelled.size(), newLabelled.size())))) {
+    c.worldChanged = true;
+    c.reasons.push_back("New Pokemon, moves or items of the old version changed places: their numbers change, but saves are matched by label and are "
+                        "adjusted when they are continued.");
   }
   return c;
 }
@@ -491,12 +550,26 @@ std::vector<Playthrough> PlaythroughsUsing(const std::vector<std::pair<std::stri
       engine::playthrough::Setup setup;
       std::string err;
       if (!engine::playthrough::ReadFile(it->path(), setup, err)) continue;
+      bool listed = false;
       for (const auto& use : setup.mods) {
         if (Lower(use.id) == Lower(id) && use.applies == em::Applies::NewPlaythrough) {
           Playthrough p;
           p.save = saveName;
           p.label = setup.trainer.empty() ? it->path().stem().string() : setup.trainer;
           p.version = use.version;
+          for (const auto& d : setup.modData) p.keepsNumbers = p.keepsNumbers || Lower(d.mod) == Lower(id);
+          out.push_back(std::move(p));
+          listed = true;
+        }
+      }
+      if (!listed) {
+        for (const auto& d : setup.modData) {
+          if (Lower(d.mod) != Lower(id)) continue;
+          Playthrough p;
+          p.save = saveName;
+          p.label = setup.trainer.empty() ? it->path().stem().string() : setup.trainer;
+          p.version = d.version;
+          p.keepsNumbers = true;
           out.push_back(std::move(p));
         }
       }
@@ -660,7 +733,7 @@ bool ParseList(const std::string& text, SharedList& out, std::string& error) {
 ImportPlan PlanImport(const SharedList& list, const std::vector<em::ModFolder>& found, const std::string& gameId) {
   ImportPlan plan;
   if (!gameId.empty() && !list.game.empty() && Lower(list.game) != Lower(gameId)) {
-    plan.gameNote = "This list was made for another game or game version (" + list.game + "); this disc is " + gameId + ".";
+    plan.gameNote = "This list was made for " + em::TargetName(list.game) + "; this disc is " + em::TargetName(gameId) + ".";
   }
   for (const SharedMod& m : list.mods) {
     ImportRow row;

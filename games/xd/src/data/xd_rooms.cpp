@@ -1,5 +1,8 @@
 #include "xd_data_mods.h"
 #include "xd_faces.h"
+#include "xd_species.h"
+#include "xd_sounds.h"
+#include "xd_toc.h"
 #include "xd_objects.h"
 #include "json.h"
 
@@ -24,71 +27,18 @@ namespace fs = std::filesystem;
 
 namespace {
 
-uint32_t Be32(const uint8_t* p) {
-  return static_cast<uint32_t>(p[0]) << 24 | static_cast<uint32_t>(p[1]) << 16 | static_cast<uint32_t>(p[2]) << 8 | p[3];
-}
-void PutBe32(uint8_t* p, uint32_t v) {
-  p[0] = static_cast<uint8_t>(v >> 24), p[1] = static_cast<uint8_t>(v >> 16), p[2] = static_cast<uint8_t>(v >> 8), p[3] = static_cast<uint8_t>(v);
-}
+uint32_t Be32(const uint8_t* p) { return xd::toc::Be32(p); }
+void PutBe32(uint8_t* p, uint32_t v) { xd::toc::PutBe32(p, v); }
 std::string Lower(std::string s) {
   for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
   return s;
 }
 
-struct Toc {
-  std::vector<uint8_t> header;
-  std::vector<uint8_t> names;
-  std::vector<uint8_t> groups;
-  std::vector<uint8_t> trailer;
-  uint32_t count = 0;
-};
-bool ReadToc(const std::vector<uint8_t>& d, Toc& t) {
-  if (d.size() < 0x20) return false;
-  t.count = Be32(d.data() + 8);
-  const uint32_t go = Be32(d.data() + 0x10);
-  if (go < 0x20 || go > d.size() || static_cast<uint64_t>(go) + 16ull * t.count > d.size()) return false;
-  t.header.assign(d.begin(), d.begin() + 0x20);
-  t.names.assign(d.begin() + 0x20, d.begin() + go);
-  t.groups.assign(d.begin() + go, d.begin() + go + 16 * t.count);
-  t.trailer.assign(d.begin() + go + 16 * t.count, d.end());
-  return true;
-}
-std::string TocName(const std::vector<uint8_t>& d, const Toc& t, uint32_t id, uint32_t* row = nullptr) {
-  for (uint32_t i = 0; i < t.count; i++) {
-    const uint8_t* g = t.groups.data() + i * 16;
-    if (Be32(g) != id) continue;
-    const uint32_t at = Be32(g + 4);
-    if (at >= d.size()) return "";
-    if (row != nullptr) *row = i;
-    return std::string(reinterpret_cast<const char*>(d.data() + at));
-  }
-  return "";
-}
-uint32_t TocTopId(const Toc& t) {
-  uint32_t top = 0;
-  for (uint32_t i = 0; i < t.count; i++) top = std::max(top, Be32(t.groups.data() + i * 16));
-  return top;
-}
-std::vector<uint8_t> AddToc(const Toc& t, const std::vector<std::pair<uint32_t, std::string>>& rows) {
-  std::vector<uint8_t> names = t.names, newRows;
-  for (const auto& [id, name] : rows) {
-    uint8_t g[16] = {0};
-    PutBe32(g, id);
-    PutBe32(g + 4, static_cast<uint32_t>(0x20 + names.size()));
-    names.insert(names.end(), name.begin(), name.end());
-    names.push_back(0);
-    newRows.insert(newRows.end(), g, g + 16);
-  }
-  while (names.size() % 16 != 0) names.push_back(0);
-  std::vector<uint8_t> out = t.header;
-  PutBe32(out.data() + 8, t.count + static_cast<uint32_t>(rows.size()));
-  PutBe32(out.data() + 0x10, static_cast<uint32_t>(0x20 + names.size()));
-  out.insert(out.end(), names.begin(), names.end());
-  out.insert(out.end(), t.groups.begin(), t.groups.end());
-  out.insert(out.end(), newRows.begin(), newRows.end());
-  out.insert(out.end(), t.trailer.begin(), t.trailer.end());
-  return out;
-}
+using Toc = xd::toc::Toc;
+inline bool ReadToc(const std::vector<uint8_t>& d, Toc& t) { return xd::toc::Read(d, t); }
+inline std::string TocName(const std::vector<uint8_t>& d, const Toc& t, uint32_t id, uint32_t* row = nullptr) { return xd::toc::Name(d, t, id, row); }
+inline uint32_t TocTopId(const Toc& t) { return xd::toc::TopId(t); }
+inline std::vector<uint8_t> AddToc(const Toc& t, const std::vector<std::pair<uint32_t, std::string>>& rows) { return xd::toc::Add(t, rows); }
 
 std::string Sanitize(const std::string& key) {
   std::string out;
@@ -443,6 +393,7 @@ void BuildObjects(em::RowsJob& job) {
         out.assign(doorBytes.begin() + at, doorBytes.begin() + at + doorTable->entrySize);
         return true;
       };
+      ask.song = [](const std::string& name) { return xd::sound::SongNumber(name); };
       ask.musicOf = [&](const std::string& like, std::vector<std::vector<uint8_t>>& out) {
         if (floorNames == nullptr || floorTable == nullptr || soundTable == nullptr || floorBytes.empty() || soundBytes.empty()) return false;
         for (const auto& [name, number] : floorNames->names) {
@@ -771,8 +722,10 @@ void BuildRoomTexts(em::RowsJob& job) {
 
 void BuildRooms(em::RowsJob& job) {
   BuildNewRooms(job);
-  BuildObjects(job);
   xd::faces::BuildFaces(job);
+  xd::species::BuildSpecies(job);
+  xd::sound::BuildSounds(job);
+  BuildObjects(job);
   BuildRoomTexts(job);
 }
 

@@ -119,6 +119,14 @@ int main() {
   }
 
   {
+    const std::string line = FormatMods(77, 150, "reload key F6 scripts=yes textures=no restart=no");
+    check(line == "MODS frame 77 field 150 reload key F6 scripts=yes textures=no restart=no", "mod reload line text");
+    Recording m;
+    check(ParseLine(line, m) && m.modReloads.size() == 1 && m.modReloads[0] == 77 && m.changes.empty() && m.devMenu.empty() && m.settings.empty(),
+          "mod reload line reads back as a note");
+  }
+
+  {
     Player player(rec);
     check(player.Current(0) == Pad(0) && player.Current(1) == NoPad(),
           "plugged-in controllers known before the first read");

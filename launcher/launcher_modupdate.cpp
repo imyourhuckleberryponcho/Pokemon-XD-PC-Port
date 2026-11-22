@@ -1,6 +1,7 @@
 #include "launcher_modupdate.h"
 
 #include <i18n.h>
+#include <modsign.h>
 
 #include <algorithm>
 #include <cstdarg>
@@ -12,6 +13,7 @@ namespace launcher::modupd {
 
 namespace em = engine::mods;
 namespace mu = engine::modupdate;
+namespace mc = engine::modcheck;
 namespace fs = std::filesystem;
 using engine::i18n::Tr;
 
@@ -44,6 +46,11 @@ const em::ModFolder* FindMod(const std::vector<em::ModFolder>* found, const std:
     if (Lower(m.manifest.id) == Lower(id)) return &m;
   }
   return nullptr;
+}
+
+std::string TagText(const std::vector<std::string>& games) {
+  const std::string tag = em::GameTag(games);
+  return tag.empty() ? std::string() : " [" + tag + "]";
 }
 
 std::string Mega(uint64_t bytes) {
@@ -265,7 +272,12 @@ void Updater::FinishInstall(bool) {
     staged = staged_;
     phase_ = Phase::Idle;
   }
-  const bool pin = item.offer.trust.trust != mu::Trust::Refused;
+  const bool pin = mu::PinsKey(item.offer.trust.trust) || (item.offer.trust.trust == mu::Trust::NeedsConfirm && item.keyConfirmed);
+  if (item.offer.trust.trust == mu::Trust::NeedsConfirm && !item.keyConfirmed) {
+    if (host_.say) host_.say(Tr("The new signing key was not confirmed, so nothing was installed."));
+    mu::DropStaged(staged);
+    return;
+  }
   const mu::InstallResult r = mu::Install(Folders(), staged, item.id, item.isNew ? fs::path() : item.folder, pin ? item.offer.file.publicKey : std::string());
   if (!r.ok) {
     if (host_.say) host_.say(Fmt(Tr("Couldn't install %s: %s. Nothing was changed."), item.name.c_str(), r.error.c_str()));
@@ -274,6 +286,10 @@ void Updater::FinishInstall(bool) {
     return;
   }
   keys_ = mu::LoadKeys(Folders());
+  if (item.offer.trust.trust == mu::Trust::KeyChanged || item.offer.trust.trust == mu::Trust::NeedsConfirm) {
+    Log("signing key of " + item.id + " changed from " + mc::KeyFingerprint(item.offer.trust.oldKey) + " to " + mc::KeyFingerprint(item.offer.trust.newKey) +
+        (item.offer.trust.trust == mu::Trust::KeyChanged ? " (announced by the old key)" : " (confirmed by the player)"));
+  }
   Log("installed " + item.id + " " + item.offer.file.version + (r.replaced ? " (version " + item.installedVersion + " kept for roll back)" : ""));
   if (host_.say) {
     host_.say(r.replaced ? Fmt(Tr("%s is now version %s. The old version (%s) is kept: use \"Roll back\" to go back to it."), item.name.c_str(),
@@ -420,7 +436,7 @@ void Updater::DoStep(const std::string& verb, const std::string& arg, bool& ok) 
       std::lock_guard<std::mutex> lock(mutex_);
       size_t first = items_.size();
       for (size_t i = 0; i < items_.size(); i++) {
-        if (items_[i].offer.error.empty() && items_[i].offer.newer && items_[i].offer.trust.trust != mu::Trust::Refused) {
+        if (items_[i].offer.error.empty() && items_[i].offer.newer && Allowed(items_[i])) {
           first = i;
           break;
         }
@@ -435,6 +451,12 @@ void Updater::DoStep(const std::string& verb, const std::string& arg, bool& ok) 
       installAnswer_ = what == "install" ? 1 : 2;
     } else if (what == "skip") {
       skipAnswer_ = true;
+    } else if (what == "confirmkey") {
+      std::lock_guard<std::mutex> lock(mutex_);
+      for (Item& it : items_) {
+        if (it.offer.trust.trust == mu::Trust::NeedsConfirm) it.keyConfirmed = true;
+      }
+      Log("new signing key confirmed (script)");
     } else if (what == "close") {
       closeAll_ = true;
     } else if (what == "rollbackyes") {
@@ -574,7 +596,7 @@ void Updater::Draw(const Ui& ui) {
         const Item& it = items[i];
         ImGui::PushID(static_cast<int>(i));
         ImGui::Separator();
-        const std::string title = it.name.empty() ? it.id : it.name;
+        const std::string title = (it.name.empty() ? it.id : it.name) + TagText(it.offer.file.games);
         if (!it.offer.error.empty()) {
           Wrapped(ui.warn, Fmt(Tr("%s: %s"), title.c_str(), it.offer.error.c_str()));
         } else if (!it.offer.newer) {
@@ -582,6 +604,7 @@ void Updater::Draw(const Ui& ui) {
         } else {
           anything = true;
           const bool refused = it.offer.trust.trust == mu::Trust::Refused;
+          const bool needsKey = it.offer.trust.trust == mu::Trust::NeedsConfirm && !it.keyConfirmed;
           ui.heading((it.isNew ? Fmt(Tr("%s %s (not installed yet)"), title.c_str(), it.offer.file.version.c_str())
                                : Fmt(Tr("%s: %s to %s"), title.c_str(), it.installedVersion.c_str(), it.offer.file.version.c_str()))
                          .c_str());
@@ -611,8 +634,25 @@ void Updater::Draw(const Ui& ui) {
             for (const std::string& c : it.offer.addedPermissions) names += (names.empty() ? "" : "; ") + mu::PermissionText(c);
             Wrapped(ui.warn, Fmt(Tr("This update asks for something the version you have did not: %s. Only go on if you are happy with that."), names.c_str()));
           }
-          Wrapped(refused ? ui.bad : it.offer.trust.trust == mu::Trust::FirstUse ? ui.warn : ui.good, it.offer.trust.text);
-          if (!refused) {
+          Wrapped(refused ? ui.bad : it.offer.trust.trust == mu::Trust::FirstUse || it.offer.trust.trust == mu::Trust::NeedsConfirm ? ui.warn : ui.good,
+                  it.offer.trust.text);
+          if (it.offer.trust.trust == mu::Trust::NeedsConfirm) {
+            Wrapped(ui.bad, Fmt(Tr("Key you had: %s    New key: %s"), mc::KeyFingerprint(it.offer.trust.oldKey).c_str(),
+                                mc::KeyFingerprint(it.offer.trust.newKey).c_str()));
+          }
+          if (needsKey) {
+            if (ImGui::Button(Tr("I checked this fingerprint with the author: trust the new key"))) {
+              std::lock_guard<std::mutex> lock(mutex_);
+              if (i < items_.size()) items_[i].keyConfirmed = true;
+              Log("new signing key of " + it.id + " confirmed by the player: " + mc::KeyFingerprint(it.offer.trust.newKey));
+            }
+            ImGui::SameLine();
+            if (ImGui::Button(Tr("Skip this version"))) {
+              choices_.skipped[it.id] = it.offer.file.version;
+              SaveChoices();
+              Log("skip " + it.id + " " + it.offer.file.version);
+            }
+          } else if (!refused) {
             const bool getThis = ui.primary(Tr("Download and check")) || getIndex == static_cast<int>(i);
             ImGui::SameLine();
             if (ImGui::Button(Tr("Skip this version")) || skipAnswer_) {
@@ -669,9 +709,12 @@ void Updater::Draw(const Ui& ui) {
       change = change_;
       users = users_;
     }
+    bool keepsNumbers = false;
+    for (const mu::Playthrough& p : users) keepsNumbers = keepsNumbers || p.keepsNumbers;
     const bool protect = change.worldChanged && !users.empty();
     ImGui::PushTextWrapPos(wrap);
-    ui.heading(Fmt(Tr("%s %s"), item.name.c_str(), item.offer.file.version.c_str()).c_str());
+    ui.heading(Fmt(Tr("%s %s"), (item.name + TagText(staged.report.manifestOk ? staged.report.manifest.games : item.offer.file.games)).c_str(),
+                   item.offer.file.version.c_str()).c_str());
     Wrapped(ui.good, Tr("The download matches the signed update file (size and fingerprint) and passed the safety scan and the checker."));
     ui.dimText(Fmt(Tr("Virus scan: %s."), staged.antivirus.c_str()));
     if (!staged.findings.empty()) {
@@ -694,9 +737,15 @@ void Updater::Draw(const Ui& ui) {
       ImGui::Separator();
       ui.heading(Tr("Your saves use this mod"));
       std::string saves;
-      for (const mu::Playthrough& p : users) saves += "\n  - " + p.save + " (" + p.label + (p.version.empty() ? "" : ", version " + p.version) + ")";
+      for (const mu::Playthrough& p : users) {
+        saves += "\n  - " + p.save + " (" + p.label + (p.version.empty() ? "" : ", version " + p.version) + (p.keepsNumbers ? std::string(", ") + Tr("keeps its saved numbers") : std::string()) + ")";
+      }
       Wrapped(ui.warn, Fmt(Tr("This update changes what a playthrough depends on. Playthroughs that were started with %s:%s"), item.name.c_str(), saves.c_str()));
       for (const std::string& r : change.reasons) Wrapped(ui.warn, "  " + r);
+      if (keepsNumbers) {
+        Wrapped(ui.warn, Tr("Some of these saves keep numbers this mod's scripts saved (streaks, points). A new version reads them as they are: if it counts them another way, "
+                            "a streak or a point total can come out wrong. Keep the current version for those saves unless the notes say the numbers carry over."));
+      }
       Wrapped(ui.warn, change.addedRowsBreak
                            ? Tr("If you install it, the game will refuse to CONTINUE those saves (it never loads a save whose rows moved), until you roll back to the old version. "
                                 "Your save files are not touched either way.")
@@ -788,7 +837,7 @@ void Updater::Draw(const Ui& ui) {
       ImGui::TextUnformatted(Tr("There is no earlier version of this mod to go back to."));
       if (ImGui::Button(Tr("OK")) || ui.back()) ImGui::CloseCurrentPopup();
     } else {
-      ui.heading(mod->manifest.name.c_str());
+      ui.heading((mod->manifest.name + TagText(mod->manifest.games)).c_str());
       ImGui::TextUnformatted(Fmt(Tr("You have version %s. The launcher kept version %s%s. Going back swaps them: the version you have now is kept, so you can go forward again."),
                                  mod->manifest.version.c_str(), prev.version.c_str(), prev.date.empty() ? "" : (" (from " + prev.date + ")").c_str())
                                  .c_str());
@@ -892,7 +941,8 @@ void Updater::Draw(const Ui& ui) {
     int missing = 0, downloadable = 0;
     for (size_t i = 0; i < plan_.rows.size(); i++) {
       const mu::ImportRow& r = plan_.rows[i];
-      const std::string name = r.mod.name.empty() ? r.mod.id : r.mod.name;
+      const em::ModFolder* haveMod = FindMod(host_.found, r.mod.id);
+      const std::string name = (r.mod.name.empty() ? r.mod.id : r.mod.name) + (haveMod != nullptr ? TagText(haveMod->manifest.games) : std::string());
       if (r.state == mu::ImportRow::State::Have) {
         Wrapped(ui.good, Fmt(Tr("%d. %s %s: you have it"), static_cast<int>(i) + 1, name.c_str(), r.mod.version.c_str()));
       } else if (r.state == mu::ImportRow::State::OtherVersion) {

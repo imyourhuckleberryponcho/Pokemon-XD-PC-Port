@@ -64,6 +64,18 @@ extern "C" void PortXD_SaveSettings(void) {
   }
 }
 
+extern "C" void PortXD_SaveReplayBarSetting(void) {
+  namespace es = engine::settings;
+  const auto get = [](const char* n) { return static_cast<const char*>(std::getenv(n)); };
+  if (xd::PlayerFilesReadOnly() && xd::TestRunSwitchSet(get) == nullptr) {
+    if (es::Global().Save(xd::SettingsFolder())) {
+      std::fprintf(stderr, "[settings] replay bar kept in %ls\n", (xd::SettingsFolder() / es::Registry::kFileName).wstring().c_str());
+    }
+    return;
+  }
+  PortXD_SaveSettings();
+}
+
 xd::SettingsSave xd::SaveSettings(const engine::settings::Registry& registry) {
   if (xd::PlayerFilesReadOnly()) {
     std::fprintf(stderr, "[settings] %s\n", xd::kPlayerFilesReadOnlyNote);

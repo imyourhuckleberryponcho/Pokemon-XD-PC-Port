@@ -3,9 +3,11 @@
 #include "xd_user_folder.h"
 
 #include <gc_memcard.h>
+#include <save_backups.h>
 #include <xd_save.h>
 
 #include <algorithm>
+#include <ctime>
 #include <cstdio>
 #include <fstream>
 #include <iterator>
@@ -86,6 +88,59 @@ SaveId SaveIdOnCard() {
   }
   none.error = "no Pokemon XD save on the memory card";
   return none;
+}
+
+bool RemapCardSave(const SaveId& id, const xd::save::IdRemap& map, size_t& changed, std::string& error) {
+  namespace mc = engine::memcard;
+  changed = 0;
+  if (!id.found || id.file.empty()) {
+    error = "no save on the card";
+    return false;
+  }
+  std::vector<uint8_t> bytes;
+  if (!mc::ReadWholeFile(id.file.string(), bytes)) {
+    error = "the save file can't be read";
+    return false;
+  }
+  mc::CardFile gci;
+  if (!mc::ReadGci(bytes, gci, error)) {
+    error = "the save is not a .gci file (a card image can't be adjusted: " + error + ")";
+    return false;
+  }
+  if (!xd::save::RemapIds(gci.data, map, changed, error)) return false;
+  if (changed == 0) return true;
+  const std::vector<uint8_t> out = mc::MakeGci(gci);
+  std::string backupError;
+  const fs::path backups = mc::backups::FolderFor(xd::CardRoot());
+  if (mc::backups::Add(backups, "Card A", id.file.filename().string(), bytes, std::time(nullptr), 10, &backupError).empty() && !backupError.empty()) {
+    error = "no backup could be made first (" + backupError + "); the card was not changed";
+    changed = 0;
+    return false;
+  }
+  const fs::path tmp = id.file.wstring() + L".remap.tmp";
+  {
+    std::ofstream f(tmp, std::ios::binary | std::ios::trunc);
+    f.write(reinterpret_cast<const char*>(out.data()), static_cast<std::streamsize>(out.size()));
+    if (!f) {
+      error = "the new save file could not be written; the card was not changed";
+      changed = 0;
+      std::error_code ec;
+      fs::remove(tmp, ec);
+      return false;
+    }
+  }
+  std::error_code ec;
+  fs::rename(tmp, id.file, ec);
+  if (ec) {
+    fs::remove(id.file, ec);
+    fs::rename(tmp, id.file, ec);
+  }
+  if (ec) {
+    error = "the new save file could not be put in place: " + ec.message();
+    changed = 0;
+    return false;
+  }
+  return true;
 }
 
 fs::path SetupFileFor(const SaveId& id) { return SetupFolder() / (id.key + ".json"); }

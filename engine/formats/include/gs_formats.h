@@ -64,6 +64,7 @@ uint32_t Tiga_FloorPlaceholder(const char* name);
 uint32_t Tiga_BattlePlaceholder(const char* name);
 uint32_t Tiga_ItemPlaceholder(const char* name);
 uint32_t Tiga_SpeciesPlaceholder(const char* name);
+uint32_t Tiga_SongPlaceholder(const char* name);
 size_t Tiga_ReplaceInts(uint8_t* data, size_t size, const uint32_t* from, const uint32_t* to, size_t n);
 
 #define TIGA_THIS_ROOM 0x7C000000u

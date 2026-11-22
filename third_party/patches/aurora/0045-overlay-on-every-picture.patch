@@ -1,0 +1,170 @@
+diff --git a/include/aurora/aurora.h b/include/aurora/aurora.h
+--- a/include/aurora/aurora.h
++++ b/include/aurora/aurora.h
+@@ -197,6 +197,13 @@
+ const AuroraEvent* aurora_update();
+ bool aurora_begin_frame();
+ void aurora_end_frame();
++/* While on, a frame whose own ImGui overlay is empty shows the overlay of the last frame that had one: a game that draws
++ * its overlay once per video field (frame counter, timer) and hands over several pictures in that field (frame rate above
++ * 60: aurora_end_frame called in the middle of the field) has it on every picture, not only the first. Off clears it. */
++void aurora_hold_overlay(bool on);
++/* Testing: pictures handed to the window so far, and how many of them carried the ImGui overlay (the frame rate counter,
++ * the speedrun timer). With the overlay on they must be equal. */
++void aurora_overlay_counts(uint32_t* all, uint32_t* withOverlay);
+ 
+ void aurora_set_log_level(AuroraLogLevel level);
+ void aurora_set_pause_on_focus_lost(bool value);
+diff --git a/lib/aurora.cpp b/lib/aurora.cpp
+--- a/lib/aurora.cpp
++++ b/lib/aurora.cpp
+@@ -98,6 +98,7 @@
+ bool g_gamepadInitialized = false;
+ #ifdef AURORA_ENABLE_GX
+ bool g_imguiFrame = false;
++imgui::DrawData g_heldOverlay;   // the last non-empty overlay while it is held
+ 
+ void initialize_ui(const AuroraWindowSize& size) {
+   if (gfx::xfb_target() == gfx::InvalidPresentTarget) {
+@@ -302,6 +303,13 @@
+   if (g_imguiFrame) {
+     drawData = imgui::freeze();
+     g_imguiFrame = false;
++    if (imgui::overlay_hold()) {
++      if (!imgui::is_empty(drawData)) {
++        g_heldOverlay = drawData;
++      } else {
++        drawData = g_heldOverlay;
++      }
++    }
+   }
+   const auto efb = gfx::efb::applied_state();
+   wgpu::BindGroup rmlBindGroup;
+@@ -361,6 +369,23 @@
+ const AuroraEvent* aurora_update() { return aurora::update(); }
+ bool aurora_begin_frame() { return aurora::begin_frame(); }
+ void aurora_end_frame() { aurora::end_frame(); }
++void aurora_overlay_counts(uint32_t* all, uint32_t* withOverlay) {
++#ifdef AURORA_ENABLE_GX
++  aurora::gfx::present::overlay_counts(all, withOverlay);
++#else
++  *all = *withOverlay = 0;
++#endif
++}
++void aurora_hold_overlay(bool on) {
++#ifdef AURORA_ENABLE_GX
++  aurora::imgui::set_overlay_hold(on);
++  if (!on) {
++    aurora::g_heldOverlay = {};
++  }
++#else
++  (void)on;
++#endif
++}
+ SDL_Window* aurora_get_window() { return aurora::window::get_sdl_window(); }
+ AuroraWindowSize aurora_get_window_size() { return aurora::window::get_window_size(); }
+ 
+diff --git a/lib/imgui.hpp b/lib/imgui.hpp
+--- a/lib/imgui.hpp
++++ b/lib/imgui.hpp
+@@ -28,9 +28,13 @@
+   std::shared_ptr<Impl> m_impl;
+ 
+   friend DrawData freeze() noexcept;
++  friend bool is_empty(const DrawData& drawData) noexcept;
+   friend void render(const wgpu::RenderPassEncoder& pass, const DrawData& drawData) noexcept;
+ };
+ 
++bool is_empty(const DrawData& drawData) noexcept; // nothing to draw (no draw lists)
++void set_overlay_hold(bool on) noexcept;          // aurora_hold_overlay
++bool overlay_hold() noexcept;
+ bool is_initialized() noexcept;
+ void create_context() noexcept;
+ void initialize() noexcept;
+diff --git a/lib/imgui.cpp b/lib/imgui.cpp
+--- a/lib/imgui.cpp
++++ b/lib/imgui.cpp
+@@ -244,6 +244,16 @@
+   return DrawData{std::move(frozen)};
+ }
+ 
++namespace {
++bool g_overlayHold = false;
++} // namespace
++void set_overlay_hold(bool on) noexcept { g_overlayHold = on; }
++bool overlay_hold() noexcept { return g_overlayHold; }
++
++bool is_empty(const DrawData& drawData) noexcept {
++  return !drawData.m_impl || drawData.m_impl->drawData.CmdListsCount == 0;
++}
++
+ void render(const wgpu::RenderPassEncoder& pass, const DrawData& drawData) noexcept {
+   ZoneScoped;
+ 
+diff --git a/lib/gfx/recording.cpp b/lib/gfx/recording.cpp
+--- a/lib/gfx/recording.cpp
++++ b/lib/gfx/recording.cpp
+@@ -744,6 +744,15 @@
+   const bool resample = !rmlBindGroup || rmlOverlay;
+   auto request = record_present(efb.xfb, xfb_present_source(), resample);
+   request.primary = true;
++  // The extra pictures handed over earlier in this frame (present_extra_picture) show the overlay too: it is drawn once
++  // per frame, and with several pictures per frame it would otherwise be on the last one only (flicker).
++  if (drawData && imgui::overlay_hold()) {
++    for (auto& earlier : frame.presents) {
++      if (earlier.primary && !earlier.imguiDrawData) {
++        earlier.imguiDrawData = drawData;
++      }
++    }
++  }
+   request.imguiDrawData = std::move(drawData);
+   request.rmlBindGroup = std::move(rmlBindGroup);
+   request.rmlOverlay = rmlOverlay;
+diff --git a/lib/gfx/present_target.cpp b/lib/gfx/present_target.cpp
+--- a/lib/gfx/present_target.cpp
++++ b/lib/gfx/present_target.cpp
+@@ -50,6 +50,8 @@
+ namespace {
+ 
+ constexpr Module Log{"aurora::gfx::present"};
++std::atomic<uint32_t> g_primaryPresents{0}; // pictures handed to the window, and how many of them had the ImGui overlay
++std::atomic<uint32_t> g_overlayPresents{0};
+ std::mutex g_targetsMutex;
+ std::unordered_map<PresentTargetId, std::shared_ptr<present::TargetState>> g_targets;
+ PresentTargetId g_nextId = 1;
+@@ -239,6 +241,11 @@
+ PresentTargetId xfb_target() noexcept { return g_xfbTarget.load(std::memory_order_acquire); }
+ 
+ namespace present {
++
++void overlay_counts(uint32_t* all, uint32_t* withOverlay) noexcept {
++  *all = g_primaryPresents.load(std::memory_order_relaxed);
++  *withOverlay = g_overlayPresents.load(std::memory_order_relaxed);
++}
+ 
+ bool is_sdl_xfb() noexcept {
+   const auto target = find_target(xfb_target());
+@@ -376,6 +383,12 @@
+   }
+   pass.End();
+ 
++  if (request.primary) {
++    g_primaryPresents.fetch_add(1, std::memory_order_relaxed);
++    if (!imgui::is_empty(request.imguiDrawData)) {
++      g_overlayPresents.fetch_add(1, std::memory_order_relaxed);
++    }
++  }
+   if (request.primary && request.imguiDrawData) {
+     const wgpu::RenderPassColorAttachment imguiAttachment{
+         .view = view,
+diff --git a/lib/gfx/present_target.hpp b/lib/gfx/present_target.hpp
+--- a/lib/gfx/present_target.hpp
++++ b/lib/gfx/present_target.hpp
+@@ -42,6 +42,7 @@
+ bool replace_xfb_surface(const AuroraSurfaceDesc& desc);
+ 
+ bool is_sdl_xfb() noexcept;
++void overlay_counts(uint32_t* all, uint32_t* withOverlay) noexcept; // aurora_overlay_counts
+ bool ensure_sdl_target();
+ void retire_sdl_targets();
+ void resize_sdl_target(PresentTargetId id, uint32_t width, uint32_t height, uint32_t nativeWidth,

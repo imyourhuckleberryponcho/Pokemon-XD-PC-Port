@@ -14,6 +14,7 @@ namespace {
 std::mutex sMutex;
 fs::path sRoot;
 std::string sGameId;
+std::vector<std::string> sAlso;
 
 std::string Utf8(const fs::path& p) {
   const auto u = p.u8string();
@@ -52,19 +53,22 @@ std::string Describe(const hdtex::PackInfo& info, bool loose) {
 }
 }
 
-void SetTexturePackSource(const fs::path& root, std::string_view gameId) {
+void SetTexturePackSource(const fs::path& root, std::string_view gameId, const std::vector<std::string>& alsoTargets) {
   std::lock_guard lk(sMutex);
   sRoot = root;
   sGameId = std::string(gameId);
+  sAlso = alsoTargets;
 }
 
 std::vector<ModFolder> FindTexturePacks() {
   fs::path root;
   std::string gameId;
+  std::vector<std::string> also;
   {
     std::lock_guard lk(sMutex);
     root = sRoot;
     gameId = sGameId;
+    also = sAlso;
   }
   std::vector<ModFolder> packs;
   if (root.empty() || gameId.empty()) return packs;
@@ -77,6 +81,7 @@ std::vector<ModFolder> FindTexturePacks() {
     m.manifest.name = "Textures: " + name;
     m.manifest.description = Describe(info, loose);
     m.manifest.games = {gameId};
+    m.manifest.games.insert(m.manifest.games.end(), also.begin(), also.end());
     m.manifest.applies = Applies::AnyTime;
     m.manifest.appliesGiven = true;
     m.folder = folder;

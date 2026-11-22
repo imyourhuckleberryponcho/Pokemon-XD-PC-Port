@@ -265,15 +265,9 @@ private:
                                          Utf8(mOpt.listFile.filename()).c_str(), id.c_str()));
         continue;
       }
-      const auto& games = mod->manifest.games;
       if (!SupportsGame(mod->manifest, mOpt.disc.gameId)) {
-        std::string gameList;
-        for (const std::string& g : games) {
-          gameList += (gameList.empty() ? "" : ", ") + g;
-        }
         Say(Message::Level::Problem,
-            Fmt(Tr("The mod \"%s\" is made for another game or game version (%s); this disc is %s. It is not used."),
-                mod->manifest.name.c_str(), gameList.c_str(), mOpt.disc.gameId.c_str()));
+            Fmt(Tr("The mod \"%s\" is not used: %s"), mod->manifest.name.c_str(), NotForTargetText(mod->manifest, mOpt.disc.gameId).c_str()));
         continue;
       }
       on.push_back(mod);
@@ -376,6 +370,12 @@ private:
 
   static constexpr const char* kLayerPrefix = "extra-assets:";
   static bool IsLayerId(const std::string& id) { return id.rfind(kLayerPrefix, 0) == 0; }
+  const LoadOptions::ExtraLayer* mLayerFilter = nullptr;
+  bool LayerSkips(const std::string& archiveLower) const {
+    if (mLayerFilter == nullptr) return false;
+    if (!mLayerFilter->onlyArchives.empty() && mLayerFilter->onlyArchives.count(archiveLower) == 0) return true;
+    return mLayerFilter->skipArchives.count(archiveLower) > 0;
+  }
   void CollectExtraLayers() {
     for (const LoadOptions::ExtraLayer& layer : mOpt.extraLayers) {
       LoadResult::LayerResult r;
@@ -387,7 +387,9 @@ private:
         mod.folder = layer.folder;
         mod.manifest.id = kLayerPrefix + layer.id;
         mod.manifest.name = layer.name;
+        mLayerFilter = &layer;
         r.files = CollectFiles(mod, true);
+        mLayerFilter = nullptr;
       }
       mResult.extraLayers.push_back(std::move(r));
     }
@@ -449,8 +451,9 @@ private:
     }
     std::vector<std::pair<std::string, fs::path>> found;
     for (LayoutFile& f : LayoutFiles(mod.folder, mOpt.disc.gameId, "scripts", false)) {
-      if (Lower(Utf8(fs::path(f.rel).extension())) != ".lua") {
-        Say(Message::Level::Warning, Fmt(Tr("The mod \"%s\" has \"scripts/%s\": only .lua files are read; ignored."),
+      const std::string scriptExt = Lower(Utf8(fs::path(f.rel).extension()));
+      if (scriptExt != ".luau" && scriptExt != ".lua") {
+        Say(Message::Level::Warning, Fmt(Tr("The mod \"%s\" has \"scripts/%s\": only .luau (or older .lua) files are read; ignored."),
                                          mod.manifest.name.c_str(), f.rel.c_str()));
         continue;
       }
@@ -458,7 +461,7 @@ private:
     }
     if (found.empty()) {
       Say(Message::Level::Warning,
-          Fmt(Tr("The mod \"%s\" says \"scripts\": true but has no scripts/*.lua."), mod.manifest.name.c_str()));
+          Fmt(Tr("The mod \"%s\" says \"scripts\": true but has no scripts/*.luau."), mod.manifest.name.c_str()));
       return;
     }
     if (found.size() > kMaxScriptFiles) {
@@ -487,13 +490,14 @@ private:
     const std::string& id = mod.manifest.id;
     const auto whole = FilesIn(mod, "files");
     const auto entries = FilesIn(mod, "fsys");
-    if (!quiet && whole.empty() && entries.empty() && !HasLayoutFolder(mod.folder, mOpt.disc.gameId, "data") &&
+    if (!quiet && whole.empty() && entries.empty() && !HasLayoutFolder(mod.folder, mOpt.disc.gameId, "data") && !HasObjects(mod) &&
         !(mod.manifest.scripts && HasLayoutFolder(mod.folder, mOpt.disc.gameId, "scripts"))) {
       Say(Message::Level::Warning, Fmt(Tr("The mod \"%s\" is on but has no files in \"files\", \"fsys\" or \"data\"."),
                                        mod.manifest.name.c_str()));
     }
     CollectScripts(mod);
     for (const auto& [rel, path] : whole) {
+      if (LayerSkips(Lower(rel))) continue;
       if (mDiscFiles.find(Lower(rel)) == mDiscFiles.end() && IsSystemName(rel)) {
         Say(Message::Level::Warning, Fmt(Tr("The mod \"%s\" has \"files/%s\": the game's program and disc header can't be "
                                            "replaced by mods; ignored."),
@@ -532,6 +536,7 @@ private:
         continue;
       }
       const std::string archive = rel.substr(0, slash), entryName = rel.substr(slash + 1);
+      if (LayerSkips(Lower(archive))) continue;
       bool isNew = false;
       Layer& layer = LayerFor(archive, isNew);
       if (!layer.onDisc && layer.wholeFrom.empty()) {
@@ -607,7 +612,7 @@ private:
   }
 
   bool HasObjects(const FoundMod& mod) const {
-    return !mod.texturePack && (HasLayoutFolder(mod.folder, mOpt.disc.gameId, "objects") || HasLayoutFolder(mod.folder, mOpt.disc.gameId, "texts"));
+    return !mod.texturePack && (HasLayoutFolder(mod.folder, mOpt.disc.gameId, "objects") || HasLayoutFolder(mod.folder, mOpt.disc.gameId, "texts") || HasLayoutFolder(mod.folder, mOpt.disc.gameId, "sounds"));
   }
   bool AnyHasObjects(const std::vector<const FoundMod*>& on) const {
     return std::any_of(on.begin(), on.end(), [&](const FoundMod* m) { return HasObjects(*m); });
@@ -625,6 +630,7 @@ private:
           continue;
         }
         DataModFile f{mod->manifest.id, mod->manifest.name, label, {}};
+        f.labelNamespace = mod->manifest.labelNamespace;
         if (!ReadAll(path, f.text)) {
           Say(Message::Level::Problem, Fmt(Tr("Could not read %s; its changes are not used."), Utf8(path).c_str()));
           continue;
@@ -745,6 +751,7 @@ private:
     job.rows = &mResult.addedRows;
     job.gameId = mOpt.disc.gameId;
     for (const FoundMod* m : on) job.modFolders[m->manifest.id] = m->folder;
+    for (const auto& [id, folder] : mOpt.builtInFolders) job.modFolders[id] = folder;
     job.discFiles = mOpt.disc.files;
     job.catalog = mResult.catalog.get();
     job.checkEntry = mOpt.checkEntry;
@@ -1106,6 +1113,9 @@ AppliesVerdict CheckApplies(const ModFolder& mod, const LooksOrSound& looks, con
   }
   if (!filesIn("texts").empty()) {
     return downgrade(Tr("it adds text to rooms (texts/)"));
+  }
+  if (!filesIn("common_script").empty()) {
+    return downgrade(Tr("it changes the common script (common_script/)"));
   }
   for (const std::string& f : filesIn("files")) {
     if (!looks || !looks(f, -1)) {

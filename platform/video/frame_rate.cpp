@@ -1,9 +1,11 @@
 #include <port_frame_rate.h>
 
 #include <port_freeze.h>
+#include <port_video.h>
 
 #include <settings.h>
 
+#include <aurora/gfx.h>
 #include <aurora/time.hpp>
 #include <dolphin/gx.h>
 #include <dolphin/gx/GXAurora.h>
@@ -13,13 +15,22 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
+#include <cmath>
+#include <string>
 
 namespace {
 
 bool sOn = false;
 bool sStarted = false;
 size_t sSetting = engine::settings::kNoSetting;
-int32_t sChoice60 = -1;
+int32_t sChoiceOriginal = 0;
+void (*sPresentAndBegin)(void) = nullptr;
+constexpr double kGameHz = 60000.0 / 1001.0;
+double sPerField = 1.0;
+double sCarry = 0.0;
+int sHighHz = 0;
+bool sExactNext = false;
 uint32_t (*sField)(void) = nullptr;
 float sBlend = 0.5f;
 uint32_t sLogFields = 0;
@@ -32,6 +43,7 @@ bool sBetweenShown = false;
 bool sLastHadBetween = false;
 uint32_t sBetweenTotal = 0;
 double sBetweenStart = 0.0;
+uint32_t sBetweenDraws = 1;
 constexpr double kSlowMs = 8.0;
 constexpr uint32_t kPausePictures = 150;
 constexpr uint32_t kStrikePictures = 60;
@@ -46,7 +58,7 @@ bool Strike() {
 }
 struct Switch {
   uint32_t field;
-  bool on;
+  int hz;
 };
 Switch sSwitches[8];
 int sSwitchCount = 0;
@@ -98,12 +110,52 @@ void Log(uint32_t field) {
 
 extern "C" {
 
+static int WantedHz() {
+  const engine::settings::Registry& r = engine::settings::Global();
+  const engine::settings::Value v = r.ValueOf(sSetting);
+  int hz = 0;
+  if (v.i != sChoiceOriginal) {
+    const std::string& id = r.Get(sSetting).choices[static_cast<size_t>(v.i)].id;
+    hz = id == "monitor" ? -1 : std::atoi(id.c_str());
+  }
+  if (r.Bool("video.performance").Get()) hz = 0;
+  for (int i = 0; i < sSwitchCount; i++) {
+    if (sField() >= sSwitches[i].field) hz = sSwitches[i].hz;
+  }
+  return hz;
+}
+
+static double PerFieldFor(int hz) {
+  if (hz > 0 && hz <= 61) return 1.0;
+  const float monitor = PortVideo_MonitorHz();
+  double target = hz < 0 ? static_cast<double>(monitor) : static_cast<double>(hz);
+  if (monitor > 0.f && target > monitor * 1.01) target = monitor;
+  return std::max(1.0, target / kGameHz);
+}
+
+static uint32_t TakeSlots() {
+  sCarry += sPerField;
+  const uint32_t whole = static_cast<uint32_t>(std::floor(sCarry + 1e-6));
+  sCarry -= whole;
+  return std::max<uint32_t>(whole, 1);
+}
+
 static void FollowSetting() {
   if (!sStarted || sSetting == engine::settings::kNoSetting) return;
-  bool want = engine::settings::Global().ValueOf(sSetting).i == sChoice60 &&
-              !engine::settings::Global().Bool("video.performance").Get();
-  for (int i = 0; i < sSwitchCount; i++) {
-    if (sField() >= sSwitches[i].field) want = sSwitches[i].on;
+  const int hz = WantedHz();
+  const bool want = hz != 0;
+  if (want) {
+    const double now = PerFieldFor(hz);
+    if (now != sPerField || hz != sHighHz) {
+      sPerField = now;
+      sHighHz = hz;
+      if (sOn) {
+        aurora_set_frame_slots(sPerField > 1.0 ? 3 : 2);
+        sCarry = 0.0;
+        std::fprintf(stderr, "[frame rate] now %.2f pictures per game field (%d: %s)\n", sPerField, hz,
+                     hz < 0 ? "the monitor's rate" : "chosen");
+      }
+    }
   }
   if (want == sOn) return;
   AuroraInterpInfo info{};
@@ -115,21 +167,35 @@ static void FollowSetting() {
   sStrikeAge = kStrikePictures;
   if (sOn) {
     PortFreeze_Capture();
+    aurora_set_frame_slots(sPerField > 1.0 ? 3 : 2);
     AuroraInterpSetMode(AURORA_INTERP_RECORD, 1.f);
     size_t partial = 0;
     sPictures = PortFreeze_PictureCount(&partial);
-    std::fprintf(stderr, "[frame rate] 60: an in-between picture between the game's own 30 a second (video.frame_rate; "
-                         "the game itself still runs at its own speed)\n");
+    sCarry = 0.0;
+    sExactNext = false;
+    if (sPerField <= 1.0) {
+      std::fprintf(stderr, "[frame rate] 60: an in-between picture between the game's own 30 a second (video.frame_rate; "
+                           "the game itself still runs at its own speed)\n");
+    } else {
+      std::fprintf(stderr,
+                   "[frame rate] %s: %.2f pictures per video field, %.1f in-between pictures between the game's own 30 "
+                   "a second (video.frame_rate; monitor %.2f Hz; the game itself still runs at its own speed)\n",
+                   sHighHz < 0 ? "monitor" : std::to_string(sHighHz).c_str(), sPerField, 2.0 * sPerField - 1.0,
+                   static_cast<double>(PortVideo_MonitorHz()));
+    }
   } else {
+    aurora_set_frame_slots(2);
     AuroraInterpSetMode(AURORA_INTERP_OFF, 1.f);
     std::fprintf(stderr, "[frame rate] original: the game's own pictures only\n");
   }
 }
 
+void PortFrameRate_SetPresenter(void (*presentAndBegin)(void)) { sPresentAndBegin = presentAndBegin; }
+
 bool PortFrameRate_Init(uint32_t (*field)(void)) {
   const engine::settings::Registry& r = engine::settings::Global();
   sSetting = r.Find("video.frame_rate");
-  sChoice60 = static_cast<int32_t>(r.ChoiceIndex("video.frame_rate", "60"));
+  sChoiceOriginal = static_cast<int32_t>(r.ChoiceIndex("video.frame_rate", "original"));
   sField = field;
   if (field == nullptr || sSetting == engine::settings::kNoSetting) return false;
   if (const char* blend = std::getenv("XD_FRAME_RATE_BLEND"); blend != nullptr && blend[0] != '\0') {
@@ -145,7 +211,9 @@ bool PortFrameRate_Init(uint32_t (*field)(void)) {
       char* end = nullptr;
       const unsigned long f = std::strtoul(q, &end, 10);
       if (end == q || *end != ':') break;
-      sSwitches[sSwitchCount++] = Switch{static_cast<uint32_t>(f), end[1] == '6'};
+      const char* value = end + 1;
+      sSwitches[sSwitchCount++] =
+          Switch{static_cast<uint32_t>(f), std::strncmp(value, "mon", 3) == 0 ? -1 : std::atoi(value)};
       q = end + 1;
       while (*q != '\0' && *q != ',') q++;
       if (*q == ',') q++;
@@ -179,7 +247,12 @@ void PortFrameRate_BeforePresent(void) {
   const uint32_t pictures = PortFreeze_PictureCount(&partial);
   const uint32_t fresh = pictures - sPictures;
   sPictures = pictures;
-  if (fresh == 0) return;
+  if (fresh == 0) {
+    if (sExactNext && sPerField > 1.0) PortVideo_PresentsComing(1, false);
+    sExactNext = false;
+    return;
+  }
+  sExactNext = false;
   sCounts.pictures += fresh;
   const uint32_t gap = field - sPictureField;
   sStrikeAge = sStrikeAge > kStrikePictures ? sStrikeAge : sStrikeAge + fresh;
@@ -225,21 +298,38 @@ void PortFrameRate_BeforePresent(void) {
     Why("no room", field, fresh, gap, info);
     return;
   }
-  const double start = NowMs();
+  const bool high = sPerField > 1.0 && sPresentAndBegin != nullptr;
+  const uint32_t total = high ? TakeSlots() + TakeSlots() : 2;
+  const uint32_t count = total - 1;
   if (!PortFreeze_RedrawBegin()) {
     sCounts.busy++;
     return;
   }
   if (sLogPictures >= 2) Why(nullptr, field, fresh, gap, info);
-  AuroraInterpSetMode(AURORA_INTERP_REPLAY, sBlend);
-  PortFreeze_DrawPicture();
+  if (high) PortVideo_PresentsComing(count, true);
+  double spent = 0.0;
+  float perPicture = 0.f;
+  for (uint32_t j = 1; j <= count; j++) {
+    const double start = NowMs();
+    const float before = high ? AuroraGetFrameBufferUse() : 0.f;
+    AuroraInterpSetMode(AURORA_INTERP_REPLAY, high ? static_cast<float>(j) / static_cast<float>(total) : sBlend);
+    PortFreeze_DrawPicture();
+    sBetweenTotal++;
+    sCounts.between++;
+    if (j < count) {
+      const float after = AuroraGetFrameBufferUse();
+      perPicture = std::max(perPicture, after - before);
+      if (after + perPicture * 1.2f > 0.85f || !AuroraPresentPicture()) sPresentAndBegin();
+    }
+    spent += NowMs() - start;
+  }
   sBetween = true;
   sBetweenShown = true;
   sLastHadBetween = true;
-  sBetweenTotal++;
-  sCounts.between++;
-  sBetweenStart = NowMs() - start;
-  sCounts.ms += sBetweenStart;
+  sBetweenStart = spent;
+  sBetweenDraws = count;
+  sCounts.ms += spent;
+  sExactNext = high;
 }
 
 void PortFrameRate_AfterBegin(void) {
@@ -254,7 +344,8 @@ void PortFrameRate_AfterBegin(void) {
   PortFreeze_RedrawEnd();
   const double took = NowMs() - start;
   sCounts.ms += took;
-  if (sBetweenStart + took > kSlowMs && !sFastToo) Strike();
+  if (sLogPictures >= 1) std::fprintf(stderr, "[frame rate] cost: %.2f ms for %u in-between drawings, %.2f ms for the exact one\n", sBetweenStart, sBetweenDraws, took);
+  if (sBetweenStart + took > kSlowMs * 0.5 * static_cast<double>(sBetweenDraws + 1) && !sFastToo) Strike();
   sCounts.blended += blended;
   sCounts.plain += plain;
 }

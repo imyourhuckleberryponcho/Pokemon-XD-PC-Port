@@ -1,0 +1,57 @@
+diff --git a/lib/gx/gx.hpp b/lib/gx/gx.hpp
+--- a/lib/gx/gx.hpp
++++ b/lib/gx/gx.hpp
+@@ -466,6 +466,13 @@
+   float map_x(float x) const noexcept {
+     return std::floor((targetWidth - logicalWidth * scaleY) * 0.5f) + x * scaleY;
+   }
++  // A full-width (stretched) viewport centres the 4:3 area exactly, which is half a pixel off a whole pixel when the picture's
++  // width and the 4:3 area's width differ by an odd number (1707 against 1280): two sprites that touch (the move menu's
++  // pieces) then leave a thin line. This moves such a draw's x (in clip units) to the whole pixel map_x() also uses.
++  float edge_shift_ndc() const noexcept {
++    const float offset = (targetWidth - logicalWidth * scaleY) * 0.5f;
++    return -(offset - std::floor(offset)) * 2.f / targetWidth;
++  }
+   bool full_width(float left, float width) const noexcept {
+     return left <= 0.5f && left + width >= logicalWidth - 0.5f;
+   }
+@@ -473,6 +480,8 @@
+ WideMap wide_map() noexcept;
+ // The x scale for the current draw's projection (1 unless widescreen is on and the viewport is full width).
+ float wide_projection_scale() noexcept;
++// The matching x shift (clip units, times the clip w) for the same draws: 0 unless widescreen is on and the viewport is full width.
++float wide_projection_shift() noexcept;
+ // Set by the command processor for each draw: an orthographic full-width draw covering the whole logical
+ // width that is untextured or only samples EFB copies (fades, colour filters, a captured screen drawn back:
+ // command_processor.cpp) is stretched over the wide EFB instead of kept 4:3 (wide_projection_scale is 1).
+diff --git a/lib/gx/gx.cpp b/lib/gx/gx.cpp
+--- a/lib/gx/gx.cpp
++++ b/lib/gx/gx.cpp
+@@ -259,6 +259,14 @@
+ 
+ bool g_wideStretchDraw = false;
+ 
++float wide_projection_shift() noexcept {
++  const auto map = wide_map();
++  if (!map.on || g_wideStretchDraw || !map.full_width(g_gxState.logicalViewport.left, g_gxState.logicalViewport.width)) {
++    return 0.f;
++  }
++  return map.edge_shift_ndc();
++}
++
+ float wide_projection_scale() noexcept {
+   const auto map = wide_map();
+   if (!map.on || g_wideStretchDraw || !map.full_width(g_gxState.logicalViewport.left, g_gxState.logicalViewport.width)) {
+diff --git a/lib/gx/shader_info.cpp b/lib/gx/shader_info.cpp
+--- a/lib/gx/shader_info.cpp
++++ b/lib/gx/shader_info.cpp
+@@ -541,6 +541,9 @@
+   // Widescreen: a full-width viewport's x row is scaled (gx.hpp, WideMap). 1 when off.
+   if (const float wideScale = wide_projection_scale(); wideScale != 1.f) {
+     proj.m0 = proj.m0 * Vec4{wideScale, wideScale, wideScale, wideScale};
++    if (const float shift = wide_projection_shift(); shift != 0.f) {
++      proj.m0 = proj.m0 + proj.m3 * Vec4{shift, shift, shift, shift}; // (x' = x + shift * w)
++    }
+   }
+   if constexpr (UseReversedZ) {
+     proj.m2 = proj.m2 * Vec4{-1.f, -1.f, -1.f, -1.f};

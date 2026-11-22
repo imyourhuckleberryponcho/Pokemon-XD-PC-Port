@@ -38,6 +38,15 @@ class PortSource : public pbr::DiscSource {
   }
   std::string game_id() const override { return id_; }
   void activate() const override { ensure_open(); }
+  std::string main_dol_sha1() const override {
+    ensure_open();
+    size_t n = 0;
+    const uint8_t* dol = PortDisc_Dol(&n);
+    if (!dol || !n) return std::string();
+    char hex[41];
+    PortSha1Hex(dol, n, hex);
+    return hex;
+  }
   std::vector<std::pair<std::string, uint32_t>> files() const override { return list_; }
   std::vector<uint8_t> read(const std::string& path) const override {
     ensure_open();

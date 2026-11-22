@@ -1,5 +1,6 @@
 #include "xd_battles_won.h"
 #include "xd_challenges.h"
+#include "xd_rulesets.h"
 #include "xd_gen4_abilities.h"
 #include "xd_playthrough.h"
 #include "xd_xg.h"
@@ -497,6 +498,12 @@ bool BattleOver() {
 
 const std::vector<Rule>& Rules() {
   static const std::vector<Rule> rules = {
+      {"models_br", [] { return Tr("Models: Battle Revolution"); },
+       [] { return Tr("Pokemon Battle Revolution's models for the Pokemon of this playthrough, from the models you made with your own "
+       "Battle Revolution disc. Only how they look changes."); }},
+      {"models_usum", [] { return Tr("Models: Ultra Sun / Ultra Moon"); },
+       [] { return Tr("The Pokemon models of Ultra Sun / Ultra Moon for the Pokemon of this playthrough, from the models you made with "
+       "your own 3DS dump. Only how they look changes."); }},
       {"no_battle_items", [] { return Tr("No items in battle"); },
        [] { return Tr("In battles the bag only gives Poke Balls: no potions, no status healers, no X items. Snagging stays possible."); }},
       {"nuzlocke_faint", [] { return Tr("Nuzlocke: fainted is lost"); },
@@ -509,9 +516,22 @@ const std::vector<Rule>& Rules() {
        [] { return Tr("The 107 Diamond/Pearl Pokemon (their models, cries and names), 113 moves and the new items, TMs and evolutions, made from "
        "your own Pokemon Battle Revolution disc. The battles keep the GameCube rules: the new moves that need Gen 4 rules do a plain hit "
        "or fail, and a Pokemon whose ability is new uses a Gen 3 ability instead, or has none."); }},
+      {"gen57_pokemon", [] { return Tr("Gen 5-7 Pokemon"); },
+       [] { return Tr("Pokemon of the Gen 5 to 7 games (so far Lillipup, Herdier, Stoutland, Tepig and Bouffalant), with their models, names, "
+       "cries and moves, made from your own Ultra Sun / Ultra Moon dump. The battles keep the GameCube rules: abilities and moves that "
+       "need later rules do a plain hit or nothing."); }},
+      {"mega_evolution", [] { return Tr("Mega Evolution"); },
+       [] { return Tr("Pokemon that hold their Mega Stone can Mega Evolve once per battle for each side (press the Z button in the move "
+       "menu, then pick the move). The trainers' Pokemon with a Mega Stone do it too. Groudon and Kyogre "
+       "go Primal when they come in holding their Orb."); }},
       {"gen4_rules", [] { return Tr("Gen 4 rules"); },
        [] { return Tr("The Diamond/Pearl rules for battles (needs the Gen 4 Pokemon): abilities (Technician, Adaptability, Iron Fist, "
        "Scrappy...) and the new effects of moves such as U-turn and Trick Room."); }},
+      {"gen_numbers", [] { return Tr("The rule set's own numbers"); },
+       [] { return Tr("Base stats, move power, accuracy and PP and the types are the ones of the rule set's generation."); }},
+      {"gen5_rules", [] { return Tr("Gen 5 rules"); }, [] { return Tr("The Black / White rules for battles, on top of the Gen 4 rules."); }},
+      {"gen6_rules", [] { return Tr("Gen 6 rules"); }, [] { return Tr("The X / Y rules for battles, on top of the Gen 4 rules: critical hits and the Fairy type chart."); }},
+      {"gen7_rules", [] { return Tr("Gen 7 rules"); }, [] { return Tr("The Sun / Moon rules for battles, on top of the Gen 6 rules: paralysis and burn are milder."); }},
       {"modern_types", [] { return Tr("Modern types (Fairy)"); },
        [] { return Tr("The Fairy type from the later games: its place in the type chart (strong against Fighting, Dragon and Dark; weak to Poison "
        "and Steel; Dragon moves do nothing to it), its name and picture, the Pokemon that became Fairy (Clefairy, Jigglypuff, Togepi, "
@@ -535,12 +555,15 @@ const Rule* Find(const std::string& id) {
 }
 
 const char* Requires(const std::string& id) {
-  if (id == "gen4_rules" || id == "gen4_spots") return "gen4_pokemon";
+  if (id == "gen4_rules" || id == "gen4_spots" || id == "gen57_pokemon") return "gen4_pokemon";
+  if (id == "mega_evolution") return "gen57_pokemon";
+  if (id == "gen5_rules" || id == "gen6_rules" || id == "gen7_rules" || id == "gen_numbers") return "gen4_rules";
   return nullptr;
 }
 
 std::vector<std::string> TestSwitch() {
   std::vector<std::string> ids;
+  for (const std::string& id : xd::rulesets::TestLegacyIds()) ids.push_back(id);
   const char* env = std::getenv("XD_CHALLENGES");
   if (env == nullptr || env[0] == '\0') return ids;
   if (const char* o = std::getenv("XD_REQUIRE_ORIGINAL"); o != nullptr && std::strcmp(o, "1") == 0) return ids;

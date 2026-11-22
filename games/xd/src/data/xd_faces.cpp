@@ -199,6 +199,9 @@ bool DecodeTexture(const std::vector<uint8_t>& file, engine::memcard::thumbnail:
   return true;
 }
 
+namespace { uint32_t sFaceRowsTaken = 0; }
+void SetFaceRowsTaken(uint32_t count) { sFaceRowsTaken = count; }
+
 void BuildFaces(em::RowsJob& job) {
   if (job.rows == nullptr) return;
   std::vector<em::AddedRow>& rows = *job.rows;
@@ -262,7 +265,7 @@ void BuildFaces(em::RowsJob& job) {
     return !archive.empty() && templateFile.size() >= kFileSize;
   };
 
-  uint32_t nextFaceRow = faceTable->count;
+  uint32_t nextFaceRow = faceTable->count + sFaceRowsTaken;
   for (const em::AddedRow& r : rows) {
     if (r.table == "poke_face") nextFaceRow = std::max(nextFaceRow, r.row + 1);
   }

@@ -220,6 +220,10 @@ std::unique_ptr<DiscSource> open_checked(const DiscOpener& open_disc, const std:
     throw Fail(std::string("The ") + what + " disc image is " + d->game_id() + ", but this needs " + want + " (" +
                    (std::string(want) == PBR_ID ? "Pokemon Battle Revolution, USA" : "Pokemon XD, USA") + ").",
                2);
+  if (std::string(want) == XD_ID && d->main_dol_sha1() == XG_MAIN_DOL_SHA1)
+    throw Fail("The disc given as the XD disc is Pokemon XG (a romhack of XD), not plain Pokemon XD. Making the Battle "
+               "Revolution models and the Gen 4 pack needs the plain Pokemon XD disc (USA, game ID GXXE01); "
+               "you can play XG afterwards.", 2);
   return d;
 }
 
@@ -232,8 +236,74 @@ void write_file(const fs::path& p, const void* data, size_t n) {
 
 }
 
+namespace {
+class SourceFolder : public DiscSource {
+ public:
+  explicit SourceFolder(const fs::path& dir) : dir_(dir) {
+    std::error_code ec;
+    for (auto& e : fs::recursive_directory_iterator(dir_, ec)) {
+      if (!e.is_regular_file(ec)) continue;
+      files_.emplace_back(fs::relative(e.path(), dir_).generic_string(), (uint32_t)e.file_size(ec));
+    }
+  }
+  std::string game_id() const override { return "GEN4SRC"; }
+  std::vector<std::pair<std::string, uint32_t>> files() const override { return files_; }
+  std::vector<uint8_t> read(const std::string& path) const override {
+    std::ifstream f(dir_ / fs::u8path(path), std::ios::binary);
+    if (!f) throw std::runtime_error("read " + path);
+    return std::vector<uint8_t>((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+  }
+ private:
+  fs::path dir_;
+  std::vector<std::pair<std::string, uint32_t>> files_;
+};
+
+void run_gen4_source(const RunArgs& a, const DiscOpener& open_disc, const std::function<void(const std::string&)>& say,
+                     const XdTablesFactory& xd_tables) {
+  if (!xd_tables) throw Fail("This program cannot make the Gen 4 pack (no reader for XD's tables).");
+  std::error_code ec;
+  const fs::path dir = fs::absolute(fs::u8path(a.gen4_source));
+  if (!fs::is_regular_file(dir / "gen4src.txt", ec)) throw Fail("Not a Gen 4 source folder: " + a.gen4_source, 2);
+  SourceFolder src(dir);
+  std::unique_ptr<DiscSource> xd_disc = open_checked(open_disc, a.xd_disc, XD_ID, "XD");
+  std::vector<PackModel> models;
+  {
+    const std::vector<uint8_t> raw = src.read("plan.tsv");
+    std::string text(raw.begin(), raw.end());
+    size_t pos = 0;
+    while (pos < text.size()) {
+      size_t e = text.find('\n', pos);
+      if (e == std::string::npos) e = text.size();
+      std::string line = text.substr(pos, e - pos);
+      pos = e + 1;
+      while (!line.empty() && (line.back() == '\r')) line.pop_back();
+      if (line.empty() || line[0] == '#') continue;
+      const size_t t1 = line.find('\t'), t2 = t1 == std::string::npos ? t1 : line.find('\t', t1 + 1);
+      if (t2 == std::string::npos) throw Fail("plan.tsv: bad line: " + line);
+      PackModel m;
+      m.dex = std::atoi(line.c_str());
+      m.name = line.substr(t1 + 1, t2 - t1 - 1);
+      m.standin_nat = std::atoi(line.c_str() + t2 + 1);
+      try {
+        m.data = src.read("models/" + m.name + ".pkx");
+      } catch (const std::exception&) {
+        continue;
+      }
+      models.push_back(std::move(m));
+    }
+  }
+  std::unique_ptr<XdTables> xdt = xd_tables(*xd_disc);
+  xd_disc->activate();
+  say("progress 0 1 pack");
+  make_gen4_pack(a.gen4_pack, src, *xd_disc, *xdt, models, {}, say);
+  say("progress 1 1 pack");
+  say("done " + std::to_string(models.size()) + " 0 0");
+}
+}
+
 void run_models(const RunArgs& a, const DiscOpener& open_disc, const std::function<void(const std::string&)>& say,
                 const XdTablesFactory& xd_tables) {
+  if (!a.gen4_source.empty()) return run_gen4_source(a, open_disc, say, xd_tables);
   if (!a.gen4_pack.empty() && !xd_tables) throw Fail("This program cannot make the Gen 4 pack (no reader for XD's tables).");
   fs::path out = fs::absolute(fs::u8path(a.out));
   fs::path tmp = out;
@@ -444,6 +514,7 @@ int pbr_models_main(const std::vector<std::string>& args, const DiscOpener& open
     else if (k == "--xd-disc") take(a.xd_disc, have_xd);
     else if (k == "--out") take(a.out, have_out);
     else if (k == "--gen4-out") { bool f = false; take(a.gen4_out, f); }
+    else if (k == "--gen4-source") { bool f = false; take(a.gen4_source, f); }
     else if (k == "--gen4-pack") { bool f = false; take(a.gen4_pack, f); }
     else if (k == "--jobs") {
       std::string js;
@@ -458,6 +529,9 @@ int pbr_models_main(const std::vector<std::string>& args, const DiscOpener& open
     } else bad = true;
   }
   if (help && !bad) return 0;
+  if (!a.gen4_source.empty() && !bad && have_xd && !a.gen4_pack.empty()) {
+    have_pbr = have_out = true;
+  }
   if (bad || !have_pbr || !have_xd || !have_out) {
     say("error Wrong command line: use --pbr-disc, --xd-disc and --out.");
     return 1;

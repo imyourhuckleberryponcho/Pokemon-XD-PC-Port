@@ -195,6 +195,8 @@ extern "C" {
 
 void PortMenuMusic_SetEngine(const PortMenuMusicEngine* engine) { sEngine = engine; }
 
+const PortMenuMusicEngine* PortMenuMusic_Engine(void) { return sEngine; }
+
 void PortMenuMusic_SetNext(int mode) { sNext = mode; }
 
 int PortMenuMusic_TakeNext(void) {
@@ -211,8 +213,11 @@ int PortMenuMusic_ModeFromName(const char* name, int fallback) {
   return fallback;
 }
 
+void PortFfMusic_Abort(void);
+
 void PortMenuMusic_Begin(int mode) {
   if (sState != State::Off) return;
+  PortFfMusic_Abort();
   if (const char* force = std::getenv("XD_MENU_MUSIC")) mode = PortMenuMusic_ModeFromName(force, mode);
   sMode = mode;
   if (mode == PORT_MENU_MUSIC_STOP) {

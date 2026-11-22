@@ -36,6 +36,8 @@ u32 VIGetRetraceCount(void);
 void OSSetPeriodicAlarm(void* alarm, int64_t start, int64_t period, void (*handler)(void*, void*));
 void PortOS_InterruptCost(int64_t ticks);
 void PortDsp_Join(void);
+void PortFfMusic_Mix(int16_t* samples, size_t frames);
+bool PortFfMusic_TapeEffects(void);
 void OSCancelAlarm(void* alarm);
 }
 
@@ -214,6 +216,8 @@ void dump_block(const int16_t* samples, uint32_t bytes) {
 
 struct OutDump {
   FILE* file = nullptr;
+  FILE* frames = nullptr;
+  uint32_t lastFrame = ~0u;
   uint32_t bytes = 0;
   bool tried = false;
 } sOut;
@@ -226,10 +230,21 @@ void out_dump(const void* samples, uint32_t bytes) {
       sOut.file = std::fopen(path, "wb");
       if (sOut.file == nullptr) std::fprintf(stderr, "[platform/audio] can't write %s\n", path);
       uint8_t header[44] = {};
-      if (sOut.file != nullptr) std::fwrite(header, 1, sizeof(header), sOut.file);
+      if (sOut.file != nullptr) {
+        std::fwrite(header, 1, sizeof(header), sOut.file);
+        sOut.frames = std::fopen((std::string(path) + ".frames.txt").c_str(), "w");
+      }
     }
   }
   if (sOut.file == nullptr || bytes == 0) return;
+  if (sOut.frames != nullptr) {
+    const uint32_t frame = PortVI_GetFlipCount();
+    if (frame != sOut.lastFrame) {
+      sOut.lastFrame = frame;
+      std::fprintf(sOut.frames, "sample %u frame %u field %u\n", sOut.bytes / 4, frame, VIGetRetraceCount());
+      std::fflush(sOut.frames);
+    }
+  }
   std::fwrite(samples, 1, bytes, sOut.file);
   sOut.bytes += bytes;
   uint8_t h[44] = {'R', 'I', 'F', 'F', 0, 0, 0, 0, 'W', 'A', 'V', 'E', 'f', 'm', 't', ' ', 16, 0, 0, 0, 1, 0, 2, 0,
@@ -242,6 +257,11 @@ void out_dump(const void* samples, uint32_t bytes) {
   std::fwrite(h, 1, sizeof(h), sOut.file);
   std::fseek(sOut.file, 0, SEEK_END);
   std::fflush(sOut.file);
+}
+
+bool out_dump_on() {
+  out_dump(nullptr, 0);
+  return sOut.file != nullptr;
 }
 
 void put_out(const void* samples, int bytes) {
@@ -406,6 +426,7 @@ void steer_rate(int queuedBytes) {
 }
 
 std::atomic<int> sSpeedFactor{1};
+std::atomic<float> sSlowMotion{1.0f};
 port_audio::TimeStretch sStretch;
 std::vector<int16_t> sStretched;
 bool fold_wanted() {
@@ -451,7 +472,7 @@ void take_block(void*, void*) {
     sNonSilent += sound ? 1 : 0;
     dump_open();
     dump_block(sConvert.data(), length);
-    if (sSpeedFactor.load(std::memory_order_relaxed) <= 1 && sStretch.Active()) {
+    if (sSpeedFactor.load(std::memory_order_relaxed) <= 1 && sSlowMotion.load(std::memory_order_relaxed) >= 1.0f && sStretch.Active()) {
       sStretched.clear();
       sStretch.Flush(sStretched);
       if (sStream != nullptr && !sStretched.empty()) {
@@ -470,24 +491,32 @@ void take_block(void*, void*) {
       if (pad > 0) {
         static std::vector<int16_t> silence;
         silence.assign(static_cast<size_t>(pad) / 2, 0);
-        put_out(silence.data(), pad);
+        SDL_PutAudioStreamData(sStream, silence.data(), pad);
         queued += pad;
       }
       const int maxQueued = reserve_max_queued_bytes();
       const int factor = sSpeedFactor.load(std::memory_order_relaxed);
-      if (factor > 1 && !fold_wanted()) {
+      const float slow = sSlowMotion.load(std::memory_order_relaxed);
+      if (((factor > 1 && !PortFfMusic_TapeEffects()) || slow < 1.0f) && !fold_wanted()) {
         sStretched.clear();
-        sStretch.Push(sConvert.data(), sConvert.size() / 2, factor, sStretched);
-        if (!sStretched.empty() && queued < maxQueued) {
-          put_out(sStretched.data(), static_cast<int>(sStretched.size() * sizeof(int16_t)));
+        sStretch.Push(sConvert.data(), sConvert.size() / 2, factor > 1 ? static_cast<double>(factor) : static_cast<double>(slow), sStretched);
+        if (!sStretched.empty() && (queued < maxQueued || out_dump_on())) {
+          if (factor > 1) PortFfMusic_Mix(sStretched.data(), sStretched.size() / 2);
+          const int bytes = static_cast<int>(sStretched.size() * sizeof(int16_t));
+          if (queued < maxQueued) put_out(sStretched.data(), bytes);
+          else out_dump(sStretched.data(), static_cast<uint32_t>(bytes));
         }
       } else if (factor > 1) {
         const size_t bytes = fold_block(factor);
-        if (bytes > 0 && queued < maxQueued) {
-          put_out(sFolded.data(), static_cast<int>(bytes));
+        if (bytes > 0 && (queued < maxQueued || out_dump_on())) {
+          PortFfMusic_Mix(sFolded.data(), bytes / 4);
+          if (queued < maxQueued) put_out(sFolded.data(), static_cast<int>(bytes));
+          else out_dump(sFolded.data(), static_cast<uint32_t>(bytes));
         }
       } else if (queued < maxQueued) {
         put_out(sConvert.data(), static_cast<int>(length));
+      } else if (out_dump_on()) {
+        out_dump(sConvert.data(), length);
       } else {
         sDropped++;
       }
@@ -577,6 +606,10 @@ void PortAudio_GetStats(PortAudioStats* out) {
   out->longestWaitMs = sReserve.longestWait.load();
 }
 
+void PortAudio_SetSlowMotion(float speed) {
+  sSlowMotion.store(speed < 0.25f ? 0.25f : speed > 1.0f ? 1.0f : speed, std::memory_order_relaxed);
+}
+
 void PortAudio_SetFastForward(int factor) {
   sSpeedFactor.store(factor < 1 ? 1 : factor > 16 ? 16 : factor, std::memory_order_relaxed);
 }
@@ -604,6 +637,17 @@ void PortAI_GhostRestore(void) {
   sNextAddr = sSavedAi.nextAddr;
   sNextLength = sSavedAi.nextLength;
   sMusyxClock = sSavedAi.clock;
+}
+
+size_t PortAI_StateSize(void) { return sizeof(SavedAi); }
+
+void PortAI_StateGet(void* out) { *static_cast<SavedAi*>(out) = {sNextAddr, sNextLength, sMusyxClock}; }
+
+void PortAI_StateSet(const void* in) {
+  const SavedAi& a = *static_cast<const SavedAi*>(in);
+  sNextAddr = a.nextAddr;
+  sNextLength = a.nextLength;
+  sMusyxClock = a.clock;
 }
 
 uint32_t PortAI_GhostTake(int16_t* out, uint32_t maxBytes) {

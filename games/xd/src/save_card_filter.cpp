@@ -80,6 +80,22 @@ void GuardUnknownIds(const std::vector<uint8_t>& stored) {
   sGuardChecked = true;
 }
 
+struct SaveExtHooks {
+  int (*beforeWrite)(const uint8_t*, size_t) = nullptr;
+  void (*afterWrite)(int) = nullptr;
+  int (*onRead)(const uint8_t*, size_t, size_t, char*, size_t) = nullptr;
+};
+SaveExtHooks sExt;
+
+void RefuseSave(const char* text) {
+  std::fprintf(stderr, "[save guard] STOP: %s\n", text);
+  std::fflush(stderr);
+  PortMessage_Show(PORT_MESSAGE_ERROR, Tr("Pokemon XD - this save needs its extra data"), text);
+  std::fprintf(stderr, "[save guard] exit code 6\n");
+  std::fflush(stderr);
+  std::_Exit(6);
+}
+
 uint32_t sSaveWrites = 0;
 
 }
@@ -90,6 +106,11 @@ uint32_t PortXD_SaveWriteCount(void) { return sSaveWrites; }
 
 static void (*sSaveWritten)(const uint8_t* file, size_t size) = nullptr;
 void PortXD_SetSaveWrittenHook(void (*hook)(const uint8_t* file, size_t size)) { sSaveWritten = hook; }
+void PortXD_SetSaveExtHooks(int (*before)(const uint8_t*, size_t), void (*after)(int), int (*onRead)(const uint8_t*, size_t, size_t, char*, size_t)) {
+  sExt.beforeWrite = before;
+  sExt.afterWrite = after;
+  sExt.onRead = onRead;
+}
 
 int PortXD_SaveCardRead(const CARDFileInfo* fi, void* addr, s32 length, s32 offset, s32* result) {
   if (!IsXdSave(fi) || offset < 0 || length < 0 || static_cast<size_t>(offset) + length > xd::save::kFileSize) {
@@ -100,6 +121,10 @@ int PortXD_SaveCardRead(const CARDFileInfo* fi, void* addr, s32 length, s32 offs
     return 1;
   }
   GuardUnknownIds(stored);
+  if (sExt.onRead != nullptr) {
+    char text[1536] = {};
+    if (sExt.onRead(stored.data(), stored.size(), static_cast<size_t>(length), text, sizeof text) != 0) RefuseSave(text);
+  }
   const std::vector<uint8_t> view = xd::save::GameViewOf(stored);
   std::memcpy(addr, view.data() + offset, static_cast<size_t>(length));
   return 1;
@@ -118,12 +143,16 @@ int PortXD_SaveCardWrite(const CARDFileInfo* fi, const void* addr, s32 length, s
   xd::save::ApplyGameWrite(stored, static_cast<size_t>(offset), static_cast<const uint8_t*>(addr),
                            static_cast<size_t>(length), changed);
   *result = CARD_RESULT_READY;
+  const bool hooked = sExt.beforeWrite != nullptr && !changed.empty();
+  const bool staged = hooked && sExt.beforeWrite(stored.data(), stored.size()) != 0;
   for (const auto& [at, size] : changed) {
     *result = CARDWrite(fi, stored.data() + at, static_cast<s32>(size), static_cast<s32>(at));
     if (*result != CARD_RESULT_READY) {
       break;
     }
   }
+  if (hooked && sExt.afterWrite != nullptr) sExt.afterWrite(*result == CARD_RESULT_READY ? 1 : 0);
+  (void)staged;
   if (*result == CARD_RESULT_READY && sSaveWritten != nullptr) sSaveWritten(stored.data(), stored.size());
   return 1;
 }

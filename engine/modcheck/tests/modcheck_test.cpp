@@ -311,6 +311,26 @@ void TestBadData(const mc::GameRules& rules) {
   check(r.ExitCode(false) == 1, "bad-data: exit code 1");
 }
 
+void TestLooksOrSoundRule(const mc::GameRules& rules) {
+  const fs::path mod = Fresh("sound-mod");
+  write_file(mod / "mod.json", "{\"id\": \"sound-mod\", \"name\": \"Sound\", \"version\": \"1.0\", \"game\": \"MADE01\", \"applies\": \"any_time\"}");
+  write_file(mod / "files" / "sound" / "x.samp", "own sound, not the game's");
+  mc::GameRules withRule = rules;
+  withRule.looksOrSound = [](const std::string& path, int type) { return type == -1 && path.size() > 5 && path.substr(path.size() - 5) == ".samp"; };
+  mc::GameRules without = rules;
+  without.looksOrSound = nullptr;
+  check(!Check(mod, &withRule).Has("applies-claim"), "any_time with only sound files: believed when the game's rule says they are sound");
+  check(Check(mod, &without).Has("applies-claim"), "any_time with sound files: called out when the game gives no rule");
+
+  const fs::path sounds = Fresh("sounds-folder-mod");
+  write_file(sounds / "mod.json", "{\"id\": \"sounds-mod\", \"name\": \"Sounds\", \"version\": \"1.0\", \"game\": \"MADE01\"}");
+  write_file(sounds / "sounds" / "effects.json", "{\"effects\": []}");
+  write_file(sounds / "sounds" / "a.wav", "RIFF....WAVEfmt ");
+  write_file(sounds / "sounds" / "b.ogg", "OggS....");
+  const mc::Report sr = Check(sounds, &rules);
+  check(!sr.Has("unknown-kind") && !sr.Has("empty-mod") && !sr.HasPermission("adds-story"), "a mod of only sounds/ files: the files are a known kind, the mod is not empty, and it is not called a story mod");
+}
+
 void TestBadLua(const mc::GameRules& rules) {
   const mc::Report r = Check(kFixtures / "bad-lua", &rules);
   const mc::Finding* syn = Find(r, "lua-syntax", "scripts/syntax.lua");
@@ -646,7 +666,7 @@ void TestDeepPass(const mc::GameRules& rules) {
   const mc::Report r = mc::CheckMod(o);
   check(r.deepDone, "deep: the loader pass ran");
   const mc::Finding* wrong = Find(r, "game-loader");
-  check(wrong != nullptr && wrong->text.find("another game or game version") != std::string::npos, "deep: the loader's own message about the wrong disc comes through (" + Codes(r) + ")");
+  check(wrong != nullptr && wrong->text.find("Made for") != std::string::npos, "deep: the loader's own message about the wrong disc comes through (" + Codes(r) + ")");
   mc::Options plain = o;
   plain.deep = nullptr;
   const mc::Report without = mc::CheckMod(plain);
@@ -656,12 +676,13 @@ void TestDeepPass(const mc::GameRules& rules) {
 void TestLayout(const mc::GameRules& base) {
   mc::GameRules rules = base;
   rules.gameIds = {"GXXE01", "GXXJ01"};
-  rules.gameOnlyLua = {"story_function", "FLAG"};
+  rules.gameOnlyLua = {"story_function", "FLAG", "battle_tables"};
   const fs::path dir = sTemp / "layout";
   const std::string manifest = "{\"id\": \"two\", \"name\": \"Two games\", \"version\": \"1.0\", \"game\": [\"GXXE01\", \"GC6E01\"], \"scripts\": true}";
   write_file(dir / "mod.json", manifest);
   write_file(dir / "scripts" / "shared.lua", "on(\"battle.damage\", function(e) return e.damage end)\n");
   write_file(dir / "scripts" / "uses.lua", "story_function(\"x\", function() return 1 end)\n");
+  write_file(dir / "scripts" / "tables.lua", "battle_tables{ moves = { [1] = { power = 90 } } }\n");
   write_bytes(dir / "textures" / "a.png", Png(8, 8));
   write_file(dir / "games" / "GXXE01" / "data" / "a.json", "{ \"pokemon\": { \"#1\": { \"basisStatus[0].maxHp\": 5 } } }");
   write_file(dir / "games" / "GXXE01" / "scripts" / "own.lua", "story_function(\"y\", function() return 1 end)\n");
@@ -674,6 +695,7 @@ void TestLayout(const mc::GameRules& base) {
   check(Find(r, "unknown-kind") == nullptr, "layout: files under games/<id>/ are read as the same kinds as at the top");
   const mc::Finding* only = Find(r, "lua-game-only", "scripts/uses.lua");
   check(only != nullptr && only->severity == mc::Severity::Warning, "layout: shared Lua using a name only this game has is a warning when the mod names another game");
+  check(Find(r, "lua-game-only", "scripts/tables.lua") != nullptr, "layout: a call written with a table (name{...}) is found too");
   check(Find(r, "lua-game-only", "scripts/shared.lua") == nullptr && Find(r, "lua-game-only", "games/GXXE01/scripts/own.lua") == nullptr,
         "layout: neutral Lua, and game-only Lua inside the game's own folder, are fine");
   bool tablesOnlyXd = false;
@@ -718,6 +740,62 @@ void TestLayout(const mc::GameRules& base) {
 
 }
 
+void TestLuau(const mc::GameRules& base) {
+  mc::GameRules rules = base;
+  rules.gameIds = {"GXXE01", "GXXJ01"};
+  const fs::path dir = sTemp / "luau_new";
+  write_file(dir / "mod.json", "{\"id\": \"typed\", \"name\": \"Typed\", \"version\": \"1.0\", \"game\": [\"xd\"], \"scripts\": true}");
+  write_file(dir / "games" / "xd" / "scripts" / "typed.luau",
+             "--!strict\ntype Hit = {damage: number}\nlocal n = 0\nfor i = 1, 4 do if i == 2 then continue end n += i end\n"
+             "on(\"battle.damage\", function(e: Hit): number return math.floor(e.damage / 2) + n end)\n");
+  mc::Report r = Check(dir, &rules);
+  check(r.manifestOk && Find(r, "lua-syntax") == nullptr && Find(r, "manifest-game") == nullptr, "luau: typed Luau in games/xd/scripts compiles, \"xd\" is a fine game");
+  check(Find(r, "unknown-kind") == nullptr && Find(r, "games-folder-unlisted") == nullptr && Find(r, "games-folder-name") == nullptr, "luau: games/xd is a known folder for \"game\": [\"xd\"]");
+  check(r.Format().find("works with: XD") != std::string::npos, "luau: the report says it works with XD");
+  bool scripts = false;
+  for (const mc::Permission& p : r.permissions) scripts |= p.code == "scripts" && p.text.find("Luau") != std::string::npos;
+  check(scripts, "luau: the permission text says Luau scripts");
+  const fs::path flat = sTemp / "luau_flat";
+  write_file(flat / "mod.json", "{\"id\": \"flat\", \"name\": \"Flat\", \"version\": \"1.0\", \"game\": \"GXXE01\", \"scripts\": true}");
+  write_file(flat / "scripts" / "old.lua", "on(\"battle.damage\", function(e) return e.damage * 2 end)\n");
+  r = Check(flat, &rules);
+  const mc::Finding* oldName = Find(r, "lua-old-name", "scripts/old.lua");
+  const mc::Finding* flatNote = Find(r, "flat-layout");
+  check(oldName != nullptr && oldName->severity == mc::Severity::Note, "luau: an older .lua name is only a note");
+  check(flatNote != nullptr && flatNote->severity == mc::Severity::Note && flatNote->text.find("games/xd") != std::string::npos, "luau: the flat layout gets a gentle note that names games/xd");
+  check(Find(r, "lua-syntax") == nullptr && r.ExitCode(false) == 0, "luau: the old mod passes the check (exit 0)");
+  const fs::path bad = sTemp / "luau_bad";
+  write_file(bad / "mod.json", "{\"id\": \"bad54\", \"name\": \"Bad\", \"version\": \"1.0\", \"game\": \"GXXE01\", \"scripts\": true}");
+  write_file(bad / "scripts" / "int.lua", "local a = 1\nlocal b = a & 2\non(\"battle.damage\", function(e) return b end)\n");
+  r = Check(bad, &rules);
+  const mc::Finding* syn = Find(r, "lua-syntax", "scripts/int.lua");
+  check(syn != nullptr && syn->line == 2 && syn->text.find("luau.md") != std::string::npos, "luau: Lua 5.4's & is a syntax error at its line, with a pointer to luau.md");
+}
+
+void TestXg(const mc::GameRules& base) {
+  mc::GameRules rules = base;
+  rules.gameIds = {"GXXE01", "GXXJ01"};
+  const fs::path xd = sTemp / "xg_xdonly";
+  write_file(xd / "mod.json", "{\"id\": \"xdonly\", \"name\": \"XD only\", \"version\": \"1.0\", \"game\": [\"xd\"]}");
+  write_file(xd / "games" / "xd" / "data" / "pokemon.json", "{}");
+  mc::Report r = Check(xd, &rules);
+  const mc::Finding* only = Find(r, "xd-only");
+  check(only != nullptr && only->severity == mc::Severity::Note && only->text.find("never load") != std::string::npos, "xg: an XD-only mod gets the xd-only note");
+  check(Find(r, "manifest-game") == nullptr, "xg: \"xd\" and \"xg\" are known game names");
+  const fs::path both = sTemp / "xg_both";
+  write_file(both / "mod.json", "{\"id\": \"both\", \"name\": \"Both\", \"version\": \"1.0\", \"game\": [\"xd\", \"xg\"]}");
+  write_file(both / "games" / "xd" / "data" / "pokemon.json", "{}");
+  r = Check(both, &rules);
+  check(Find(r, "xd-only") == nullptr && Find(r, "xg-folder") != nullptr && Find(r, "xg-xd-data") != nullptr, "xg: [xd, xg] with XD's data and no games/xg: folder note and the data warning");
+  check(r.Format().find("XG") != std::string::npos, "xg: the report says it works with XG");
+  write_file(both / "games" / "xg" / "data" / "pokemon.json", "{}");
+  r = Check(both, &rules);
+  check(Find(r, "xg-folder") == nullptr && Find(r, "xg-xd-data") == nullptr && Find(r, "games-folder-unlisted") == nullptr, "xg: with games/xg there is nothing to warn about");
+  write_file(xd / "games" / "xg" / "data" / "pokemon.json", "{}");
+  r = Check(xd, &rules);
+  check(Find(r, "games-folder-unlisted", "games/XG") != nullptr, "xg: games/xg without \"xg\" in \"game\" is warned");
+}
+
 int main() {
   sTemp = fs::temp_directory_path() / ("modcheck_test_" + std::to_string(std::rand() % 100000));
   fs::remove_all(sTemp);
@@ -729,6 +807,8 @@ int main() {
   TestUpdates();
   TestBadData(rules);
   TestBadLua(rules);
+  TestLooksOrSoundRule(rules);
+  TestXg(rules);
   TestRequires(rules);
   TestUnsafeFolder(rules);
   TestFormats(rules);
@@ -738,6 +818,7 @@ int main() {
   TestPackerRefusals(rules);
   TestPackerDisc(rules);
   TestLayout(rules);
+  TestLuau(rules);
   TestDeepPass(rules);
   std::error_code ec;
   fs::remove_all(sTemp, ec);

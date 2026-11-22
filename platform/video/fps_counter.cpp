@@ -2,6 +2,7 @@
 
 #include <port_frame_rate.h>
 
+#include <aurora/aurora.h>
 #include <settings.h>
 
 #include <imgui.h>
@@ -73,6 +74,9 @@ extern "C" void PortVideo_Notice(const char* text, double seconds) {
   sNoticeUntil = SDL_GetPerformanceCounter() + static_cast<uint64_t>(seconds * static_cast<double>(SDL_GetPerformanceFrequency()));
 }
 
+namespace { void (*sFrameDrawers[4])() = {}; }
+extern "C" void PortVideo_SetFrameDrawer(void (*draw)()) { for (auto& d : sFrameDrawers) { if (d == draw) return; if (d == nullptr) { d = draw; return; } } }
+
 extern "C" void PortVideo_SetNoticeDrawer(bool (*draw)(const char* text)) {
   std::lock_guard<std::mutex> lock(sNoticeLock);
   sNoticeDrawer = draw;
@@ -80,6 +84,7 @@ extern "C" void PortVideo_SetNoticeDrawer(bool (*draw)(const char* text)) {
 
 extern "C" void PortFps_Frame(uint32_t gamePictures, uint32_t fields) {
   draw_notice();
+  if (ImGui::GetCurrentContext() != nullptr) for (auto d : sFrameDrawers) if (d != nullptr) d();
   if (!SettingOn()) {
     sHave = false;
     sShown = false;
@@ -112,6 +117,11 @@ extern "C" void PortFps_Frame(uint32_t gamePictures, uint32_t fields) {
       if (sLog < 0) {
         const char* v = std::getenv("XD_FPS_LOG");
         sLog = v != nullptr && v[0] == '1' ? 1 : 0;
+      }
+      if (sLog == 1) {
+        uint32_t all = 0, withOverlay = 0;
+        aurora_overlay_counts(&all, &withOverlay);
+        std::fprintf(stderr, "[overlay] %u pictures shown, %u with the overlay\n", all, withOverlay);
       }
       if (sLog == 1 && sShownFps > 0.0) {
         std::fprintf(stderr, "[fps] %.1f fps (%.1f shown) %.0f%%\n", sFps, sShownFps, sSpeed);

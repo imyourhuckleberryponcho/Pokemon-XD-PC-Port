@@ -8,6 +8,8 @@
 
 namespace xd::gen4 {
 
+const char* LangText(const char* kind, const char* key);
+
 void AppendAbilityTexts(std::vector<std::pair<uint32_t, std::string>>& texts);
 void InstallAbilityRows();
 void SyncAbilityDescriptions();

@@ -7,6 +7,10 @@
 #   XD_KEEP_GOING=1 ./build_mac.sh    go on after errors and list all of them (first builds on a new system)
 #   XD_COMPILER_CACHE=1         compile through ccache when it is installed: a later build only compiles again
 #                               what changed (GitHub's Mac minutes: .github/workflows/mac.yml keeps the cache)
+#   XD_EXTRA_CMAKE="-DX=Y ..."  more arguments for the configure (the workflow gives -DXD_BUILD_AVF_ENCODER=ON: the replay video encoder)
+#   XD_ALL_TARGETS=1            after the list below, build EVERY other target too (all the tests and tools; stage "all" of the
+#                               workflow). A failing one does not stop the run: its name goes into the log ("build_mac.sh: other
+#                               targets: ...") and the unit-test step lists it as NOT BUILT
 #   XD_GAME_FIRST=1             compile the port's and the game's own files for xd before the libraries: the
 #                               code that has never met Apple's compiler shows its errors in the first minutes
 #
@@ -28,12 +32,14 @@ MAC_TARGETS="settings_test controls_test memcard_test save_backups_test gen3_sav
   xd_settings xd_data_mods xd_save_convert xd_mods_check modcheck_test modupdate_test xd_mod_check xd_mod_pack xd_mod_rules_test
   os_threads_test gc_memory_test gx_fifo_test card_timing_test input_record_test game_clock_test
   keyboard_defaults_test controls_apply_test button_art_test low_arena_test dsp_equiv_test low_alloc_ordinary_test
+  xd_audio_tool xd_mod_extract
   xd_launcher pbr_models colo_models xd_languages xd"
 EXTRA_ARGS=""
 [ -n "${XD_SNAPSHOT_OVERRIDE:-}" ] && EXTRA_ARGS="$EXTRA_ARGS -DXD_SNAPSHOT_OVERRIDE=$XD_SNAPSHOT_OVERRIDE"
 [ "${XD_BUILD_GAME:-1}" = 0 ] && EXTRA_ARGS="$EXTRA_ARGS -DXD_BUILD_GAME=OFF"
 # (the Python that has the libclang package, when it is not the first one CMake finds)
 [ -n "${XD_PYTHON:-}" ] && EXTRA_ARGS="$EXTRA_ARGS -DPython3_EXECUTABLE=$XD_PYTHON"
+[ -n "${XD_EXTRA_CMAKE:-}" ] && EXTRA_ARGS="$EXTRA_ARGS $XD_EXTRA_CMAKE"
 if [ "${XD_COMPILER_CACHE:-0}" = 1 ]; then
   if command -v ccache >/dev/null 2>&1; then
     EXTRA_ARGS="$EXTRA_ARGS -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
@@ -69,5 +75,17 @@ if [ "${XD_GAME_FIRST:-0}" = 1 ] && [ "${XD_BUILD_GAME:-1}" != 0 ]; then
 fi
 # shellcheck disable=SC2086
 cmake --build "build/mac/$PRESET" -j "${XD_BUILD_JOBS:-4}" --target $TARGETS $KEEP || { echo "build_mac.sh: the build failed"; exit 1; }
+if [ "${XD_ALL_TARGETS:-0}" = 1 ]; then
+  # Every target the list above does not name (the other tests and tools, the launcher's test programs, the encoder), all of
+  # them tried; the ones that fail are listed and the run goes on (a missing test shows up again as NOT BUILT in run_all_tests.sh).
+  echo "build_mac.sh: every other target (a failure here does not stop the run)"
+  if cmake --build "build/mac/$PRESET" -j "${XD_BUILD_JOBS:-4}" -- -k 0 > "build/mac/$PRESET/other_targets.log" 2>&1; then
+    echo "build_mac.sh: other targets: all built"
+  else
+    echo "build_mac.sh: other targets: FAILED (listed below; the whole output is in other_targets.log)"
+    grep -E "^FAILED:|error:" "build/mac/$PRESET/other_targets.log" | head -n 100 | sed 's/^/build_mac.sh:   /'
+  fi
+  tail -n 5 "build/mac/$PRESET/other_targets.log"
+fi
 echo
 echo "Build finished: build/mac/$PRESET/bin"

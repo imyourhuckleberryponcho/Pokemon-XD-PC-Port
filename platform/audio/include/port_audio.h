@@ -32,6 +32,7 @@ typedef struct {
 void PortAudio_GetStats(PortAudioStats* out);
 
 void PortAudio_SetFastForward(int factor);
+void PortAudio_SetSlowMotion(float speed);
 
 void PortAudio_SetVolume(float gain);
 

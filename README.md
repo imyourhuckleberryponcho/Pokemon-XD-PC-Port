@@ -13,7 +13,7 @@ This repository contains **no game assets, ROMs, ISOs or executables**, and none
 You need your own legally obtained copy of the game (USA, `GXXE01`); the port reads everything from your disc
 image while it runs.
 
-## Status: public beta — version 0.6.1
+## Status: public beta — version 0.7.0
 
 **Playable from New Game into the story, with known bugs.** It is not finished: expect crashes, stalls and
 graphics differences, and keep backups of saves you care about. Downloads are on the [Releases](../../releases)
@@ -22,8 +22,8 @@ page, one per system:
 | System | State |
 |---|---|
 | **Windows** 10 / 11 (64-bit) | The main build: what is developed and tested every day. |
-| **Linux** (x86_64) | Test build. Checked against the Windows build in automatic runs (same random numbers, same saves, same sound), but so far only with software graphics: it has **not been played on a real Linux PC or a Steam Deck** yet. |
-| **Mac** | Test build. Players have run it on Apple M2 Macs (macOS 15 and 27, through Rosetta 2): picture, sound, controllers, settings and saving work. It is an Intel (x86_64) program: Apple-silicon Macs run it through Rosetta 2. The app opens the launcher. The newest parts (Pokémon XG, the Japanese pack, save import, Discord) have not been tried on a Mac yet. More testers wanted. |
+| **Linux** (x86_64) | Test build. Players run it on Linux PCs, and it is checked against the Windows build in automatic runs (same random numbers, same saves, same sound). More testers wanted. |
+| **Mac** | Test build. Players have run it on Apple M2 Macs (macOS 15 and 27, through Rosetta 2): picture, sound, controllers, settings and saving work. It is an Intel (x86_64) program: Apple-silicon Macs run it through Rosetta 2. The app opens the launcher. More testers wanted. |
 
 **Found a bug, or want to help test?** Join the [Discord](https://discord.gg/XVbDVXH4Pn) — see
 *Reporting a bug* below.
@@ -132,6 +132,50 @@ Do these with the game closed. Nothing is ever replaced: you always get a NEW sa
   "Story mode", "In a battle", "Online battle") and for how long, next to your name in Discord. It is on by default,
   talks only to the Discord app on this same PC, and shows no save name, trainer name or place.
 - To turn it off: Settings page of the launcher, or SETTINGS in the game, "Discord presence".
+
+### Start options (for other launchers, Steam shortcuts, scripts)
+Another launcher (RecompLauncher, a Steam shortcut, Steam Deck / Bazzite) can start the game with options written after
+the program's name. The launcher takes the same options and hands them to the game. Every option is for that one
+start only and is never saved (a disc that loads is remembered, as always).
+- `--disc <file>`: use this disc image. Just the file after the program's name still works too.
+- `--fullscreen`, or `--windowed` for a window.
+- `--data-folder <folder>`: keep saves, settings, logs, cache and mods in that folder for this start. A new folder starts
+  empty, so your normal saves are not touched.
+- `--preset original` or `--preset enhanced`: play with that preset (Original is exactly the GameCube game).
+- `--save <name>`: load the save with that name (the names on the launcher's Save page). A name that does not exist is
+  reported and the game does not start.
+- `--no-launcher`: go straight into the game with the remembered disc (or `--disc`); the program you started stays open
+  until the game ends, so a Steam shortcut follows the game itself.
+- `--help` and `--version`.
+
+Windows: `"Pokemon XD Launcher.exe" --no-launcher --fullscreen --preset enhanced`. Linux: `./"Pokemon XD Launcher.sh" --no-launcher --fullscreen`.
+Mac: `open -a "Pokemon XD" --args --fullscreen`. More in `docs/COMMAND_LINE.md`.
+
+### Where your data is kept
+Saves, settings, mods, logs and bug reports live in one data folder (`%APPDATA%\Pokemon XD`, `~/.local/share/Pokemon XD`,
+`~/Library/Application Support/Pokemon XD`).
+- The first time the launcher starts it asks once where it should be: your user folder (recommended: it survives deleting or
+  updating the game folder) or next to the game (portable: for a USB stick or one folder).
+- Launcher, Save page, "Where your data is kept": "Open data folder"; "Move my data..." (user folder <-> portable: it
+  copies everything, checks the copy, switches, and puts the old folder in the recycle bin / trash so nothing is lost; the
+  launcher then starts again); "Remove all game data..." (asks first, names the folder, offers to export your saves first).
+
+### New in 0.7.0
+
+The big one. Parts marked "needs" use a disc or dump you made yourself; nothing from them is included.
+
+- **Gen 5, 6 and 7 Pokémon** (314, Victini to Zeraora): species, 261 new moves, about 110 new abilities, cries, models and round face pictures, made from your own Pokémon Ultra Sun / Ultra Moon (3DS) dump (needs). Alolan forms, **Mega Evolution** (a Z-button row in the move menu; Mega Stones at the Poké Coupon desk) and Primal Groudon / Kyogre. Battle forms change in battle (Aegislash, Mimikyu, Wishiwashi, Minior, Darmanitan, Meloetta, Greninja). Not complete: some new abilities and moves say "no effect in this game yet", and Z-moves only do damage.
+- **Ultra Sun / Ultra Moon models** for the Gen 1-4 Pokémon too, and the **Gen 4 Pokémon can be made from that dump alone** (no Battle Revolution disc needed). Gen 4 moves, abilities and items now show in French, German, Italian, Spanish and Japanese.
+- **Rule sets**: XD, Gen 4, Gen 5, Gen 6 and Gen 7, the Pokémon generations you want, and **Looks** (which model source to show, in your order, with a pick per Pokémon), on the New Game screen and in online rooms (Enhanced).
+- **Pokédex** (Enhanced): the PDA's Strategy Memo opens a Pokédex for all 807 Pokémon, with details, stats, moves, evolutions, where to find each one and Ultra Sun / Moon entry texts (needs the dump). Original keeps the game's own Memo.
+- **Native-looking menus**: SETTINGS in the field menu and the title, the EXTRAS box, the New Game window and the MODS page are drawn in the game's own style.
+- **Battle replays**: keep your battles, play them back with pause, speed control, a replay bar and a free camera. Online battles save a file on both PCs.
+- **Online formats**: Sleep clause, team preview, a battle clock and plain refusal screens. 0.6.1 players can still join a classic room.
+- **More Shadow Pokémon** (New Game option, Enhanced): Off / A few / Many.
+- **Modding** is much bigger (battle effects, sounds, textures, scripts in Luau, stories, bigger lists, a check-and-pack page, "Reload mods" without restarting). The [Modding Guide](docs/modding/README.md) and a [guide for AI helpers](docs/modding-ai/README.md) are in this repository.
+- **Speed and looks**: cheaper graphics work, lighter fast-forward (music can stay at normal speed), frame rates above 60, optional FXAA / MSAA / texture filtering (off by default).
+- Start options and a clear choice of where your data is kept; Japanese text for the port's own screens (machine-made).
+- Fixed: the thin grey line down the battle menu in widescreen; a rare crash while taking a save picture; the icon maker no longer stops on a model that loads late.
 
 ### New in 0.6.1
 

@@ -43,6 +43,8 @@ using engine::i18n::Tr;
 
 constexpr size_t kFastForward = static_cast<size_t>(ec::Action::FastForward);
 constexpr size_t kBreakAction = static_cast<size_t>(ec::Action::SpeedrunBreak);
+constexpr size_t kBarAction = static_cast<size_t>(ec::Action::ReplayBar);
+uint32_t sBarKeyPresses = 0;
 uint32_t sBreakKeyPresses = 0;
 
 std::vector<uint16_t> sKeysDown;
@@ -58,6 +60,9 @@ struct Handles {
   es::EnumSetting mode;
   int32_t toggle = -1;
   es::FloatSetting base;
+  es::EnumSetting ffMusic, ffEffects;
+  es::IntSetting ffFade;
+  int32_t ffRealtime = -1, ffMuted = -1, ffTape = -1;
 } sH;
 
 bool sToggled = false;
@@ -71,6 +76,7 @@ constexpr auto kStallTime = std::chrono::milliseconds(1000);
 std::atomic<bool> sFastNow{false};
 std::atomic<bool> sStalled{false};
 std::atomic<float> sBaseNow{1.0f};
+std::atomic<float> sReplayFactor{1.0f};
 uint32_t sLastFlip = 0;
 std::chrono::steady_clock::time_point sLastFlipTime = std::chrono::steady_clock::now();
 uint32_t sLastStallFlip = 0; float sLastStallSpeed = 0.f;
@@ -178,6 +184,7 @@ void PortSpeedups_HandleEvent(const void* sdlEvent) {
         sKeyPresses++;
       }
       if (!e->key.repeat && IsActionKey(code, kBreakAction)) sBreakKeyPresses++;
+      if (!e->key.repeat && IsActionKey(code, kBarAction)) sBarKeyPresses++;
     }
   } else if (e->type == SDL_EVENT_KEY_UP) {
     sKeysDown.erase(std::remove(sKeysDown.begin(), sKeysDown.end(), static_cast<uint16_t>(e->key.scancode)),
@@ -185,6 +192,16 @@ void PortSpeedups_HandleEvent(const void* sdlEvent) {
   } else if (e->type == SDL_EVENT_WINDOW_FOCUS_LOST) {
     sKeysDown.clear();
   }
+}
+
+uint32_t PortSpeedups_ReplayBarPresses(void) {
+  static bool padWas = false;
+  uint32_t n = sBarKeyPresses;
+  sBarKeyPresses = 0;
+  const bool held = PadHeldFor(kBarAction);
+  if (held && !padWas) n++;
+  padWas = held;
+  return n;
 }
 
 uint32_t PortSpeedups_BreakPresses(void) {
@@ -197,6 +214,8 @@ uint32_t PortSpeedups_BreakPresses(void) {
   return n;
 }
 
+extern "C" void PortFfMusic_Frame(int factor, int musicMode, int effectsMode, int fadeMs);
+
 void PortSpeedups_Frame(bool gameWants) {
   es::Registry& r = es::Global();
   if (!sH.ready) {
@@ -206,6 +225,12 @@ void PortSpeedups_Frame(bool gameWants) {
     sH.mode = r.Enum("gameplay.fast_forward_mode");
     sH.toggle = r.ChoiceIndex("gameplay.fast_forward_mode", "toggle");
     sH.base = r.Float("system.game_speed");
+    sH.ffMusic = r.Enum("audio.ff_music");
+    sH.ffEffects = r.Enum("audio.ff_effects");
+    sH.ffFade = r.Int("audio.ff_music_fade");
+    sH.ffRealtime = r.ChoiceIndex("audio.ff_music", "realtime");
+    sH.ffMuted = r.ChoiceIndex("audio.ff_effects", "muted");
+    sH.ffTape = r.ChoiceIndex("audio.ff_effects", "tape");
     sAppliedSpeed = aurora::time::scale();
   }
   bool byKey = false;
@@ -315,10 +340,19 @@ void PortSpeedups_Frame(bool gameWants) {
     }
   }
   want = want && !sRecovering && !sGaveUp;
+  const float replayFactor = sReplayFactor.load();
   const float base = sH.base.Valid() && sH.base.Get() > 1.0f ? sH.base.Get() : 1.0f;
   sBaseNow.store(base);
   const float fast = static_cast<float>(std::clamp(sH.speed.Valid() ? sH.speed.Get() : 4, 2, 16));
-  const float target = want ? std::max(base, std::min(fast, sSpeedCap)) : base;
+  float target = want ? std::max(base, std::min(fast, sSpeedCap)) : base;
+  PortAudio_SetSlowMotion(replayFactor < 1.0f ? replayFactor : 1.0f);
+  if (replayFactor != 1.0f) {
+    target = std::min(16.0f, base * replayFactor);
+    if (replayFactor > 1.0f && !want) {
+      want = true;
+      byKey = true;
+    }
+  }
   if (want != sFast || (want && byKey != sFastByKey)) {
     if (want) {
       PortSpeedups_Used(byKey ? "fast-forward" : "fast battle animations");
@@ -340,9 +374,16 @@ void PortSpeedups_Frame(bool gameWants) {
     sAppliedSpeed = target;
     if (sFast) PortAudio_SetFastForward(static_cast<int>(target / base + 0.5f));
   }
+  {
+    const int music = sH.ffMusic.Valid() && sH.ffMusic.Get() == sH.ffRealtime ? 1 : 0;
+    const int fx = !sH.ffEffects.Valid() ? 0 : sH.ffEffects.Get() == sH.ffMuted ? 1 : sH.ffEffects.Get() == sH.ffTape ? 2 : 0;
+    PortFfMusic_Frame(sFast ? static_cast<int>(target / base + 0.5f) : 1, music, fx, sH.ffFade.Valid() ? sH.ffFade.Get() : 400);
+  }
 }
 
 bool PortSpeedups_FastForwarding(void) { return sFast; }
+
+void PortSpeedups_SetReplayFactor(float factor) { sReplayFactor.store(std::clamp(factor, 0.25f, 16.0f)); }
 
 void PortSpeedups_Field(uint32_t field) {
   (void)field;

@@ -4,6 +4,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -174,6 +175,12 @@ struct TableCounts {
   uint32_t species = 0, moves = 0, items = 0;
 };
 std::vector<std::string> UnknownIds(const Save& save, const TableCounts& counts);
+
+struct IdRemap {
+  std::map<uint16_t, uint16_t> species, moves, items;
+  bool Empty() const { return species.empty() && moves.empty() && items.empty(); }
+};
+bool RemapIds(std::vector<uint8_t>& file, const IdRemap& map, size_t& changed, std::string& error);
 
 }
 

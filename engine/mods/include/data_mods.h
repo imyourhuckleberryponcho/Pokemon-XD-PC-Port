@@ -68,6 +68,7 @@ struct NameList {
   std::string name;
   std::vector<std::pair<std::string, uint32_t>> names;
   uint32_t limit = 0;
+  std::vector<std::string> notes;
 };
 
 struct TextStore {
@@ -109,6 +110,7 @@ struct DataModFile {
   std::string label;
   std::string text;
   bool builtIn = false;
+  std::string labelNamespace;
 };
 
 struct TextChange {
@@ -127,12 +129,15 @@ struct AddedRow {
   std::string where;
   std::vector<uint8_t> bytes;
   std::map<std::string, std::string> assets;
+  bool unbound = false;
   bool inFile = false;
+  std::string label;
 };
 struct AddedText {
   uint32_t key = 0;
   std::string text;
   std::string mod, label;
+  std::map<std::string, std::string> lang;
 };
 
 struct DataApplyResult {

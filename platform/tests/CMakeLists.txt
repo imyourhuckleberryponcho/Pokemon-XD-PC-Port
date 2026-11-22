@@ -96,6 +96,9 @@ add_executable(game_clock_test game_clock_test.cpp ../sdk/game_clock.cpp)
 add_executable(log_zip_test log_zip_test.cpp)
 target_link_libraries(log_zip_test PRIVATE platform_os ZLIB::ZLIB)
 
+add_executable(battle_replay_file_test battle_replay_file_test.cpp)
+target_link_libraries(battle_replay_file_test PRIVATE platform_os)
+
 add_executable(folder_claim_test folder_claim_test.cpp)
 target_link_libraries(folder_claim_test PRIVATE platform_os)
 
@@ -114,6 +117,14 @@ target_include_directories(gc_fused_test PRIVATE "${_gc_fused_dir}")
 add_executable(button_art_test button_art_test.cpp)
 target_link_libraries(button_art_test PRIVATE platform_video)
 aurora_copy_runtime_dlls(button_art_test)
+
+add_executable(xxh_dispatch_test xxh_dispatch_test.cpp)
+target_include_directories(xxh_dispatch_test PRIVATE ${XD_AURORA_DIR}/lib)
+target_link_libraries(xxh_dispatch_test PRIVATE aurora::gx)
+aurora_copy_runtime_dlls(xxh_dispatch_test)
+if (APPLE)
+  target_link_options(xxh_dispatch_test PRIVATE "-Wl,-U,_MEM1Start")
+endif ()
 
 add_executable(dawn_bind_group_race_test dawn_bind_group_race_test.cpp
   ${XD_AURORA_DIR}/lib/webgpu/sampler_keeper.cpp)

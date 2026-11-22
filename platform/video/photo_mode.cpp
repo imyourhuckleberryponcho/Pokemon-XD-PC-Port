@@ -130,8 +130,14 @@ void Turn(Camera& c, float yaw, float pitch, float roll) {
 float sMouseDx = 0.f, sMouseDy = 0.f, sWheel = 0.f;
 bool sLooking = false;
 bool sWantShot = false, sWantReset = false, sWantExit = false;
+bool sPadAResumes = false;
 bool sRequested = false;
 bool sActive = false;
+bool sLive = false;
+bool sLiveShown = false;
+AuroraViewOverride sLiveOverride{};
+bool sLivePick = false;
+uint64_t sLiveLast = 0;
 
 float Axis(SDL_Gamepad* pad, SDL_GamepadAxis axis) {
   const float v = SDL_GetGamepadAxis(pad, axis) / 32767.f;
@@ -508,7 +514,7 @@ void Run(void (*pump)(void)) {
   const uint32_t frame = sProgress != nullptr ? sProgress() : 0;
   PortInput_PhotoNote("on");
   std::fprintf(stderr, "[photo] paused at game frame %u (picture of %zu bytes of commands)\n", frame, sFrame.size());
-  sCam = Camera{};
+  if (!sLive) sCam = Camera{};
   sHaveScene = false;
   std::memset(sSceneProj, 0, sizeof sSceneProj);
   sWantShot = sWantReset = sWantExit = false;
@@ -614,19 +620,19 @@ void PortPhoto_HandleEvent(const void* sdlEvent) {
       }
       return;
     }
-    if (!sActive) return;
+    if (!sActive && !sLive) return;
     switch (e->key.scancode) {
-    case SDL_SCANCODE_ESCAPE: sWantExit = true; break;
-    case SDL_SCANCODE_P: sWantShot = true; break;
+    case SDL_SCANCODE_ESCAPE: if (sActive) sWantExit = true; break;
+    case SDL_SCANCODE_P: if (sActive) sWantShot = true; break;
     case SDL_SCANCODE_R: sWantReset = true; break;
-    case SDL_SCANCODE_H: sOverlay = !sOverlay; break;
+    case SDL_SCANCODE_H: if (sActive) sOverlay = !sOverlay; else sHide2D = !sHide2D; break;
     default: break;
     }
     return;
   }
-  if (!sActive) return;
+  if (!sActive && !sLive) return;
   if (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) {
-    if (e->gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) sWantShot = true;
+    if (e->gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) (sPadAResumes && sActive ? sWantExit : sWantShot) = true;
     if (e->gbutton.button == SDL_GAMEPAD_BUTTON_NORTH) sWantReset = true;
     if (e->gbutton.button == SDL_GAMEPAD_BUTTON_WEST) sHide2D = !sHide2D;
     if (e->gbutton.button == SDL_GAMEPAD_BUTTON_START || e->gbutton.button == SDL_GAMEPAD_BUTTON_EAST) {
@@ -663,5 +669,116 @@ void PortPhoto_Frame(void (*pump)(void)) {
 }
 
 bool PortPhoto_Active(void) { return sActive; }
+
+void PortPhoto_LiveSet(bool on) {
+  if (!sEnabled || sLive == on) return;
+  sLive = on;
+  if (on) {
+    sCam = Camera{};
+    sHaveScene = false;
+    std::memset(sSceneProj, 0, sizeof sSceneProj);
+    sLiveLast = SDL_GetTicksNS();
+    if (const char* off = std::getenv("XD_LIVE_CAMERA_OFFSET")) {
+      float v[5] = {};
+      std::sscanf(off, "%f %f %f %f %f", &v[0], &v[1], &v[2], &v[3], &v[4]);
+      Move(sCam, v[0], v[1], v[2]);
+      Turn(sCam, v[3], v[4], 0.f);
+    }
+    if (const char* f = std::getenv("XD_LIVE_CAMERA_FOV")) sCam.fov = static_cast<float>(std::atof(f));
+    std::fprintf(stderr, "[photo] free camera on (the game keeps playing)\n");
+  } else {
+    SetLooking(false);
+    AuroraSetViewOverride(nullptr);
+    std::fprintf(stderr, "[photo] free camera off\n");
+  }
+}
+
+bool PortPhoto_LiveActive(void) { return sEnabled && sLive && !sActive; }
+
+constexpr size_t kLiveBegun = 256;
+bool PortPhoto_LiveBefore(void) {
+  sLiveShown = false;
+  if (!PortPhoto_LiveActive()) return false;
+  static uint32_t calls = 0, drawn = 0, begun = 0, busy = 0;
+  if (++calls % 300 == 0) std::fprintf(stderr, "[photo] free camera: %u fields, %u drawn from the camera, %u skipped (the game had begun its next picture), %u skipped (a port screen has the picture)\n", calls, drawn, begun, busy);
+  AuroraInterpInfo info{};
+  AuroraInterpGetInfo(&info);
+  size_t partial = 0;
+  const uint32_t pictures = PortFreeze_PictureCount(&partial);
+  static uint32_t lastPictures = ~0u;
+  const bool fresh = pictures != lastPictures;
+  lastPictures = pictures;
+  if (calls < 60 && std::getenv("XD_LIVE_CAMERA_LOG")) std::fprintf(stderr, "[photo] live field %u: pictures %u, next picture so far %zu bytes, fresh %d\n", calls, pictures, partial, fresh ? 1 : 0);
+  if (partial > kLiveBegun) { begun++; return false; }
+  if (!PortFreeze_RedrawBegin()) { busy++; return false; }
+  const uint64_t now = SDL_GetTicksNS();
+  const float dt = std::min(static_cast<float>(now - sLiveLast) * 1e-9f, 0.1f);
+  sLiveLast = now;
+  ApplyInput(dt);
+  if (std::getenv("XD_LIVE_CAMERA_AUTO") != nullptr) {
+    static float t = 0.f;
+    t += 1.f / 60.f;
+    sCam = Camera{};
+    Move(sCam, 14.f * std::sin(t * 0.7f), 5.f + 3.f * std::sin(t * 0.35f), 16.f + 6.f * std::cos(t * 0.5f));
+    Turn(sCam, -14.f * std::sin(t * 0.7f), -8.f, 0.f);
+  }
+  if (sWantReset) {
+    sCam = Camera{};
+    sWantReset = false;
+  }
+  AuroraViewOverride o{};
+  o.active = GX_TRUE;
+  o.hide2D = sHide2D || std::getenv("XD_LIVE_CAMERA_HIDE2D") != nullptr ? GX_TRUE : GX_FALSE;
+  ViewMatrix(sCam, o.view);
+  o.zoom = 1.f;
+  o.targetFovY = sCam.fov > 0.f ? sCam.fov : 0.f;
+  o.minViewportWidth = 600.f;
+  o.sceneOnly = GX_TRUE;
+  o.sceneFirst = GX_TRUE;
+  sLiveOverride = o;
+  AuroraSetViewOverride(&o);
+  PortFreeze_DrawPicture();
+  AuroraInterpGetInfo(&info);
+  sLiveShown = true;
+  drawn++;
+  if ((drawn < 6 || drawn % 50 == 0) && std::getenv("XD_LIVE_CAMERA_LOG")) {
+    AuroraViewProjection lp[4];
+    const u32 np = AuroraGetViewOverrideProjections(lp, 4);
+    std::fprintf(stderr, "[photo] live draw %u: the override applied to a projection of %.1f degrees; %u projections drawn; scene known %d\n", drawn, AuroraGetViewOverrideFovY(), np, sHaveScene ? 1 : 0);
+    for (u32 i = 0; i < np && i < 4; i++) std::fprintf(stderr, "[photo]   projection %u: %u draws, p11 %.6f p00 %.6f p22 %.6g p23 %.6g (scene: p11 %.6f p22 %.6g p23 %.6g)\n", i, lp[i].draws, lp[i].proj[1][1], lp[i].proj[0][0], lp[i].proj[2][2], lp[i].proj[2][3], sSceneProj[1][1], sSceneProj[2][2], sSceneProj[2][3]);
+  }
+  return true;
+}
+
+bool PortPhoto_LiveAfter(void) {
+  if (!sLiveShown) return false;
+  sLiveShown = false;
+  AuroraViewOverride o{};
+  o.active = GX_FALSE;
+  AuroraSetViewOverride(&o);
+  PortFreeze_DrawPicture();
+  AuroraInterpInfo info{};
+  AuroraInterpGetInfo(&info);
+  AuroraSetViewOverride(&sLiveOverride);
+  PortFreeze_DrawPicture();
+  AuroraInterpGetInfo(&info);
+  AuroraViewOverride off{};
+  off.active = GX_FALSE;
+  AuroraSetViewOverride(&off);
+  PortFreeze_RedrawEnd();
+  return true;
+}
+
+void PortPhoto_Request(bool open) {
+  if (!sEnabled) return;
+  if (open && !sActive) sRequested = true;
+  if (!open) {
+    if (sActive) sWantExit = true;
+    sRequested = false;
+  }
+}
+
+bool PortPhoto_Enabled(void) { return sEnabled; }
+void PortPhoto_PadAResumes(bool on) { sPadAResumes = on; }
 
 }

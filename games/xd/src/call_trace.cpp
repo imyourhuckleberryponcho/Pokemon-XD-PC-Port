@@ -33,6 +33,7 @@ int PortFuncCost_Init(void);
 int PortFuncCost_Resolve(const char* name);
 void PortFuncCost_Call(int entry, const uintptr_t* regs);
 int PortOS_InHandler(void);
+int PortOS_ThreadKnown(void);
 int64_t PortTime_Now(void);
 void PortCpuCost_PayDebt(void);
 double PortCpuCost_Debt(void);
@@ -53,6 +54,7 @@ bool sExit = false;
 SRWLOCK sLock = SRWLOCK_INIT;
 bool sDone = false;
 void** sActiveThread = nullptr;
+const uint32_t* sTracePass = nullptr;
 uintptr_t sHandlersLo = 0, sHandlersHi = 0;
 
 BOOL CALLBACK find_handlers(PSYMBOL_INFO s, ULONG, PVOID) {
@@ -105,6 +107,10 @@ void init_symbols() {
     sActiveThread = reinterpret_cast<void**>(sym->Address);
   } else {
     fprintf(stderr, "[call trace] GSthread's _activeThread not found: tasks won't be told apart\n");
+  }
+  if (const char* bp = getenv("XD_CALL_TRACE_BY_PASS"); bp != nullptr && bp[0] == '1' &&
+      SymFromName(GetCurrentProcess(), "pokecoloFrameCounter", sym)) {
+    sTracePass = reinterpret_cast<const uint32_t*>(sym->Address);
   }
   SymEnumSymbols(GetCurrentProcess(), 0, "*!*run_handlers*", find_handlers, nullptr);
   if (sHandlersLo == 0) {
@@ -758,10 +764,21 @@ extern "C" void PortCallTrace_Record(uintptr_t inFunction, uintptr_t stackPointe
       return;
     }
   }
-  const uint32_t frame = PortVI_GetFlipCount();
+  const uint32_t frame = sTracePass != nullptr ? *sTracePass : PortVI_GetFlipCount();
   if (frame < sFrom) {
     return;
   }
+  if (!PortOS_ThreadKnown()) {
+    return;
+  }
+  static thread_local bool tInRecord = false;
+  if (tInRecord) {
+    return;
+  }
+  struct Guard {
+    Guard() { tInRecord = true; }
+    ~Guard() { tInRecord = false; }
+  } guard;
   void* frames[4] = {};
   const USHORT got = RtlCaptureStackBackTrace(0, 4, frames, nullptr);
   const bool fromOutside = got < 4 || !in_game_code(reinterpret_cast<uintptr_t>(frames[3]));

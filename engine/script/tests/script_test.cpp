@@ -2,6 +2,7 @@
 #include <script_names.h>
 
 #include <cstdio>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -21,7 +22,7 @@ struct Fixture {
   Host host{{"test.value", "test.other"}, Limits{}, [this](const std::string& line) { log.push_back(line); }};
   bool Add(const std::string& id, const std::string& code, std::string* why = nullptr) {
     std::string error;
-    const bool ok = host.AddMod(id, {{"scripts/main.lua", code}}, error);
+    const bool ok = host.AddMod(id, {{"scripts/main.luau", code}}, error);
     if (why != nullptr) *why = error;
     return ok;
   }
@@ -62,7 +63,7 @@ int main() {
     std::string why;
     const bool ok = f.Add("leaks",
                           "local names = {'io','os','package','require','debug','coroutine','dofile','loadfile','load','loadstring',"
-                          "'collectgarbage','pcall','xpcall','utf8','module'}\n"
+                          "'collectgarbage','pcall','xpcall','utf8','module','getfenv','setfenv','newproxy','buffer','vector','gcinfo'}\n"
                           "for _, n in ipairs(names) do if _G[n] ~= nil then error('leak: ' .. n) end end\n"
                           "if string.dump or string.find or string.match or string.gmatch or string.gsub or string.pack then error('leak: string') end\n"
                           "if math.random or math.randomseed or math.sin or math.cos or math.exp or math.log then error('leak: math') end\n"
@@ -73,7 +74,7 @@ int main() {
     check(f.Add("env", "x = io"), "reading a missing global is just nil");
     check(f.host.LiveMods() == 2, "...and does not stop the mod");
     const bool r_callio = f.Add("callio", "io.open('x')", &why);
-    check(!r_callio && Contains(why, "nil value"), "calling io.open is an error: " + why);
+    check(!r_callio && Contains(why, "nil"), "calling io.open is an error: " + why);
     const bool r_req = f.Add("req", "require('os')", &why);
     check(!r_req && Contains(why, "nil value"), "calling require is an error: " + why);
     const bool r_ld = f.Add("ld", "load('return 1')()", &why);
@@ -86,7 +87,7 @@ int main() {
     Fixture f;
     std::string why;
     std::string error;
-    const bool r_bc = f.host.AddMod("bc", {{"scripts/b.lua", std::string("\x1bLua\x54\x00", 6)}}, error);
+    const bool r_bc = f.host.AddMod("bc", {{"scripts/b.luau", std::string("\x1bLua\x54\x00", 6)}}, error);
     check(!r_bc && Contains(error, "binary"), "precompiled bytecode is refused: " + error);
 
   }
@@ -115,7 +116,7 @@ int main() {
     Fixture f;
     std::string why;
     const bool synOk = f.Add("bad", "on('test.value' function", &why);
-    check(!synOk && Contains(why, "expected"), "a syntax error is reported: " + why);
+    check(!synOk && Contains(why, "xpected") && Contains(why, "scripts/main.luau:1"), "a syntax error is reported with the file and line: " + why);
     f.Add("boom", "on('test.value', function(e) error('my mistake') end)");
     check(f.Call(9) == 9, "a runtime error leaves the game's value");
     auto failed = f.host.TakeFailures();
@@ -263,7 +264,7 @@ int main() {
     Fixture i;
     names.Install(i.host);
     i.Add("raw", "on('test.value', function(e) if getmetatable(TYPE) ~= 'read-only' then return -2 end rawset(TYPE, 'FIRE', 99) return -1 end)");
-    check(i.Call(100) == 100 && i.host.LiveMods() == 0 && Contains(i.host.TakeFailures().at(0).message, "read-only"), "the metatable is hidden and rawset cannot get round it");
+    check(i.Call(100) == 100 && i.host.LiveMods() == 0 && Contains(i.host.TakeFailures().at(0).message, "readonly"), "the metatable is hidden and rawset cannot get round it");
     Fixture j;
     names.Install(j.host);
     j.Add("cat", "on('test.value', function(e) return find('flags', 'x') end)");
@@ -297,6 +298,161 @@ int main() {
     k.host.SetPrelude("function helper_only() return 1 end");
     check(k.Add("a", "if io or os or pcall then error('leak') end"), "the prelude runs in the same sandbox");
     check(k.Add("b", "if rawget(_G, 'helper_only') == nil then error('no helper') end"), "and its functions are in the mod's world");
+  }
+  {
+    Fixture f;
+    std::string why;
+    check(f.Add("typed",
+                "--!strict\n"
+                "type Hit = {value: number, who: {n: number}}\n"
+                "local function bump(h: Hit): number\n"
+                "  local total = 0\n"
+                "  for i = 1, 5 do\n"
+                "    if i == 3 then continue end\n"
+                "    total += i\n"
+                "  end\n"
+                "  local label = if total > 5 then `big {total}` else 'small'\n"
+                "  assert(label == 'big 12')\n"
+                "  return h.value + total\n"
+                "end\n"
+                "on('test.value', function(e: Hit): number return bump(e) end)",
+                &why),
+          "typed Luau loads (type notes, continue, +=, if-expression, string interpolation): " + why);
+    check(f.Call(100) == 112, "...and runs (100 + 12)");
+    Fixture g;
+    check(!g.Add("int", "local x = 7\nlocal y = x & 2", &why) && Contains(why, "scripts/main.luau:2"), "Lua 5.4's & is a syntax error that names the file and line: " + why);
+    Fixture g2;
+    check(g2.Add("fd", "on('test.value', function(e) return e.value // 2 end)", &why), "// (floor division) works in Luau: " + why);
+    check(g2.Call(7) == 3, "7 // 2 is 3");
+    Fixture h;
+    check(!h.Add("goto", "local x = 1\ngoto done\n::done::", &why), "goto is not understood: " + why);
+    Fixture k;
+    check(k.Add("old",
+                "local t = {}\nfor i = 1, 10 do t[#t + 1] = i * i end\n"
+                "local s = 0 for _, v in ipairs(t) do s = s + v end\n"
+                "local words = {} for w in pairs({a = 1}) do words[#words + 1] = w end\n"
+                "on('test.value', function(e) return s + #words + math.floor(e.value / 2) + math.max(1, 2) + #string.rep('ab', 3) end)", &why),
+          "older Lua-style code loads: " + why);
+    check(k.Call(10) == 385 + 1 + 5 + 2 + 6, "...and gives what it gave under Lua (385 + 1 + 5 + 2 + 6)");
+    Fixture m;
+    check(m.Add("bit", "on('test.value', function(e) return bit32.band(e.value, 6) + bit32.lshift(1, 3) end)", &why), "bit32 is there (Luau has no & | << >>): " + why);
+    check(m.Call(7) == 6 + 8, "bit32.band / lshift work");
+  }
+  {
+    Fixture f;
+    f.Add("for", "on('test.value', function(e) for i = 1, 1000000000 do end return 1 end)");
+    f.Add("rec", "local function r(n) return r(n + 1) + 1 end on('test.value', function(e) return r(1) end)");
+    check(f.Call(3) == 3 && f.host.LiveMods() == 0, "a very long for loop and a runaway recursion are both stopped (no freeze)");
+    const auto failed = f.host.TakeFailures();
+    check(failed.size() == 2 && Contains(failed[0].message, "ran too long") && Contains(failed[0].message, "for/scripts/main.luau:1"),
+          "the budget message names the mod, file and line: " + (failed.empty() ? std::string() : failed[0].message));
+    check(failed.size() == 2 && (Contains(failed[1].message, "stack overflow") || Contains(failed[1].message, "ran too long")), "the recursion ends with a clear message: " + (failed.size() > 1 ? failed[1].message : std::string()));
+    Fixture g;
+    g.Add("work", "on('test.value', function(e) local s = 0 for i = 1, 50000 do s = s + 1 end return s end)");
+    check(g.Call(0) == 50000 && g.host.LiveMods() == 1, "an ordinary amount of work is within the budget");
+  }
+  {
+    Fixture f;
+    f.Add("counter", "n = 0 on('test.value', function(e) n = n + 1 return n end)");
+    f.Add("other", "on('test.value', function(e) if n ~= nil then error('shared global') end end)");
+    check(f.Call(0) == 1 && f.Call(0) == 2 && f.host.LiveMods() == 2, "a script's globals persist between calls and are not seen by another mod");
+    Fixture g;
+    check(g.Add("lock", "local ok = pcall == nil; on('test.value', function(e) string.upper = nil end)"), "loads");
+    g.Call(0);
+    check(g.host.LiveMods() == 0, "the library tables are read-only: changing string.upper switches the mod off");
+  }
+  {
+    std::vector<std::string> log;
+    Limits lim;
+    lim.callInstructions = 1000;
+    lim.frameInstructions = 3000;
+    Host host{{"test.value"}, lim, [&](const std::string& line) { log.push_back(line); }};
+    uint64_t frame = 1;
+    host.SetFrameClock([&] { return frame; });
+    std::string error;
+    check(host.AddMod("busy", {{"scripts/main.luau", "on('test.value', function(e) local s = 0 for i = 1, 200 do s = s + i end return e.value + 1 end)"}}, error), "a busy script loads");
+    check(host.AddMod("second", {{"scripts/main.luau", "on('test.value', function(e) return e.value * 10 end)"}}, error), "a second mod loads");
+    const auto call = [&](int64_t v) { return host.CallInt("test.value", Value::Table(), "value", v); };
+    check(call(1) == 20, "within the frame's budget both mods answer");
+    int answered = 0, skippedFirst = -1;
+    for (int i = 0; i < 40; i++) {
+      const int64_t r = call(1);
+      if (r == 20) answered++;
+      else if (skippedFirst < 0) skippedFirst = i;
+    }
+    check(answered > 0 && answered < 40 && skippedFirst > 0, "after the frame's steps are used up the handlers wait: " + std::to_string(answered) + " of 40 calls answered in one frame");
+    check(host.LiveMods() == 2, "running out of the frame's steps does not switch a mod off");
+    const auto stats = host.Budget();
+    check(stats.skipped > 0 || stats.cut > 0, "the host counts what the budget held back");
+    bool said = false;
+    for (const auto& l : log) said = said || Contains(l, "steps for this game frame");
+    check(said, "a log line says the frame's steps are used up");
+    frame = 2;
+    check(call(1) == 20, "the next frame starts with a full budget");
+    std::vector<int> a, b;
+    for (int round = 0; round < 2; round++) {
+      Host h2{{"test.value"}, lim, {}};
+      uint64_t fr = 7;
+      h2.SetFrameClock([&] { return fr; });
+      std::string err2;
+      h2.AddMod("busy", {{"scripts/main.luau", "on('test.value', function(e) local s = 0 for i = 1, 200 do s = s + i end return e.value + 1 end)"}}, err2);
+      h2.AddMod("second", {{"scripts/main.luau", "on('test.value', function(e) return e.value * 10 end)"}}, err2);
+      std::vector<int>& out = round == 0 ? a : b;
+      for (int i = 0; i < 40; i++) out.push_back(static_cast<int>(h2.CallInt("test.value", Value::Table(), "value", 1)));
+    }
+    check(a == b, "two runs of the same calls are cut at the same place");
+    Host h3{{"test.value"}, lim, {}};
+    h3.SetFrameClock([&] { return uint64_t(1); });
+    std::string err3;
+    h3.AddMod("loop", {{"scripts/main.luau", "on('test.value', function(e) while true do end end)"}}, err3);
+    h3.CallInt("test.value", Value::Table(), "value", 1);
+    check(h3.LiveMods() == 0, "an endless loop is still switched off by the call's own limit");
+  }
+  {
+    Fixture f;
+    std::vector<std::string> seen;
+    f.host.SetApi("take", [&seen](const std::string&, const std::vector<Value>& args, std::string&) -> Value {
+      std::function<std::string(const Value&)> text = [&](const Value& v) -> std::string {
+        switch (v.kind) {
+        case Value::Kind::Nil: return "nil";
+        case Value::Kind::Bool: return v.boolean ? "true" : "false";
+        case Value::Kind::Int: return std::to_string(v.integer);
+        case Value::Kind::String: return "'" + v.text + "'";
+        case Value::Kind::List: {
+          std::string out = "[";
+          for (const Value& e : v.fieldValues) out += text(e) + ",";
+          return out + "]";
+        }
+        case Value::Kind::Table: {
+          std::string out = "{";
+          for (size_t i = 0; i < v.fieldNames.size(); i++) out += v.fieldNames[i] + "=" + text(v.fieldValues[i]) + ",";
+          return out + "}";
+        }
+        }
+        return "?";
+      };
+      for (const Value& a : args) seen.push_back(text(a));
+      return Value::Bool(true);
+    });
+    std::string why;
+    check(f.Add("tables",
+                "take({b = 2, a = {1, 2, 3}, c = {x = 'hi', y = true}}, {{species = 133}, {species = 25, moves = {1, 2}}})\n"
+                "on('test.value', function(e) return 1 end)", &why),
+          "a script hands tables to a game function: " + why);
+    check(seen.size() == 2 && seen[0] == "{a=[1,2,3,],b=2,c={x='hi',y=true,},}", "named fields arrive in name order, lists in order: " + (seen.empty() ? std::string("none") : seen[0]));
+    check(seen.size() == 2 && seen[1] == "[{species=133,},{moves=[1,2,],species=25,},]", "a list of tables arrives as a list of tables: " + (seen.size() < 2 ? std::string("none") : seen[1]));
+    Fixture g;
+    g.host.SetApi("take", [](const std::string&, const std::vector<Value>&, std::string&) -> Value { return Value(); });
+    check(!g.Add("mix", "take({1, 2, a = 3})"), "a table with both list and named keys is an error");
+    Fixture h;
+    h.host.SetApi("take", [](const std::string&, const std::vector<Value>&, std::string&) -> Value { return Value(); });
+    check(!h.Add("deep", "take({{{{{1}}}}})"), "a table more than 4 levels deep is an error");
+    Fixture k;
+    k.host.SetApi("take", [](const std::string&, const std::vector<Value>&, std::string&) -> Value { return Value(); });
+    check(!k.Add("big", "local t = {} for i = 1, 500 do t[#t + 1] = i end take(t)"), "a table with more than 400 entries is an error");
+    Fixture m;
+    m.host.SetApi("take", [](const std::string&, const std::vector<Value>&, std::string&) -> Value { return Value(); });
+    check(!m.Add("fn", "take({f = function() end})"), "a function inside a table is an error");
   }
   std::printf(sOk ? "script_test: all passed\n" : "script_test: FAILED\n");
   return sOk ? 0 : 1;

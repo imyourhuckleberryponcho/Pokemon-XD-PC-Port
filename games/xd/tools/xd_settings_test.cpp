@@ -52,10 +52,14 @@ int main(int argc, char** argv) {
   check(devMenu != es::kNoSetting && r.Get(devMenu).AppliesTo("xd") && !r.Get(devMenu).AppliesTo("colo") &&
             r.Get(devMenu).original.i == 0 && r.Get(devMenu).enhanced.i == 0 && !r.Get(devMenu).preference,
         "the developer menu is XD's, off in every preset, and makes a run not Original");
+  const size_t hotReload = r.Find("system.mods_hot_reload");
+  check(hotReload != es::kNoSetting && r.Get(hotReload).AppliesTo("xd") && !r.Get(hotReload).AppliesTo("colo") &&
+            r.Get(hotReload).original.i == 0 && r.Get(hotReload).enhanced.i == 0,
+        "mod hot reload is XD's and off in every preset");
   bool sharedForAll = true, controlsWork = true;
   for (size_t i = 0; i < r.Count(); i++) {
     const es::Definition& d = r.Get(i);
-    if (i != purify && i != devMenu && d.id != "system.language" && d.id.rfind("system.extra_disc.", 0) != 0) {
+    if (i != purify && i != devMenu && d.id != "system.language" && d.id != "system.mods_hot_reload" && d.id != "gameplay.replay_bar" && d.id.rfind("system.extra_disc.", 0) != 0 && d.id.rfind("playthrough.new_", 0) != 0) {
       sharedForAll &= d.games.empty();
     }
     if (d.category == es::Category::Controls && d.id.rfind("controls.", 0) != 0) {
@@ -160,6 +164,9 @@ int main(int argc, char** argv) {
     check(readOnly({{"XD_INPUT_SCRIPT", "600:start"}, {"XD_SETTINGS_DIR", ""}}), "an empty XD_SETTINGS_DIR is no folder");
     check(testRun({{"XD_INPUT_SCRIPT", "600:start"}, {"XD_SETTINGS_DIR", "F:/t"}}),
           "a test run with its own folder is still a test run (it only may write there)");
+    check(readOnly({{"XD_BATTLE_REPLAY", "r.xdreplay"}}) && !testRun({{"XD_BATTLE_REPLAY", "r.xdreplay"}}) && !readOnly({{"XD_BATTLE_REPLAY", ""}}) &&
+              !readOnly({{"XD_BATTLE_REPLAY", "r.xdreplay"}, {"XD_SETTINGS_DIR", "F:/t"}}),
+          "watching a battle replay: the player's settings and mods are never written (and it is not a test run)");
   }
 
   if (argc > 1) {

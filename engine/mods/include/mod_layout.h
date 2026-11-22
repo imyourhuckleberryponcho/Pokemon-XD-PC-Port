@@ -13,6 +13,7 @@ namespace engine::mods {
 constexpr const char* kGamesFolder = "games";
 
 bool ValidGameFolderName(std::string_view name);
+std::string MakeTarget(std::string_view discId, std::string_view edition);
 bool GameCodeMatches(std::string_view code, std::string_view discId);
 bool SupportsGame(const Manifest& manifest, std::string_view discId);
 
@@ -48,6 +49,10 @@ struct GameSupport {
 std::vector<GameSupport> SupportOf(const std::filesystem::path& modFolder, const Manifest& manifest);
 std::string SupportText(const std::vector<GameSupport>& support, bool translate = true);
 bool HasSharedContent(const std::filesystem::path& modFolder);
+std::string GameTag(const Manifest& manifest);
+std::string GameTag(const std::vector<std::string>& games);
+std::string TargetName(std::string_view target);
+std::string NotForTargetText(const Manifest& manifest, std::string_view target);
 std::string GameNameOf(std::string_view code, bool shortForm);
 
 }

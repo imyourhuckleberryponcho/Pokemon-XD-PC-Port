@@ -85,6 +85,14 @@ Line ParseLine(std::string_view text) {
     l.name = Trim(rest);
     return l;
   }
+  if (verb == "stage") {
+    Line l;
+    std::string id;
+    if (!Word(rest, id) || !Number(rest, l.done) || !Number(rest, l.total)) return line;
+    l.kind = Line::Kind::Stage;
+    l.name = id;
+    return l;
+  }
   if (verb == "done") {
     Line l;
     if (!Number(rest, l.converted) || !Number(rest, l.keptOriginal) || !Number(rest, l.totalBytes)) return line;
@@ -143,11 +151,13 @@ fs::path ConverterPath(const Source& source, const fs::path& programFolder) {
 }
 
 std::vector<std::string> ConverterArguments(const Source& source, const std::string& disc, const std::string& gameDisc,
-                                            const fs::path& out, const fs::path& out2) {
+                                            const fs::path& out, const fs::path& out2, const fs::path& out3,
+                                            const std::string& gameProgram, const fs::path& dataFolder) {
   std::vector<std::string> args;
   for (std::string a : source.converterArguments) {
     const std::pair<const char*, std::string> fills[] = {
-        {"{disc}", disc}, {"{game_disc}", gameDisc}, {"{out}", Utf8(out)}, {"{out2}", Utf8(out2)}};
+        {"{disc}", disc}, {"{game_disc}", gameDisc}, {"{out}", Utf8(out)}, {"{out2}", Utf8(out2)},
+        {"{out3}", Utf8(out3)}, {"{game_program}", gameProgram}, {"{data}", Utf8(dataFolder)}};
     for (const auto& [key, value] : fills) {
       for (size_t at = a.find(key); at != std::string::npos; at = a.find(key, at + value.size())) {
         a.replace(at, std::strlen(key), value);
@@ -156,6 +166,22 @@ std::vector<std::string> ConverterArguments(const Source& source, const std::str
     args.push_back(a);
   }
   return args;
+}
+
+GameDiscChoice ChooseGameDisc(const Source& source, const std::string& chosenDisc, const std::string& chosenEdition,
+                              const std::string& rememberedPlain, const std::function<bool(const std::string&)>& exists) {
+  GameDiscChoice r;
+  if (!source.needsPlainGameDisc || chosenEdition.empty()) {
+    r.disc = chosenDisc;
+    return r;
+  }
+  if (!rememberedPlain.empty() && rememberedPlain != chosenDisc && (!exists || exists(rememberedPlain))) {
+    r.disc = rememberedPlain;
+    return r;
+  }
+  r.message = Tr("Making the Gen 4 pack needs the plain Pokemon XD disc once. Choose it on the Disc page, press Make, "
+                 "then choose your Pokemon XG disc again: you can play XG afterwards");
+  return r;
 }
 
 namespace {
@@ -350,17 +376,28 @@ void DiscCheck::Start(const Source& source, const std::string& path, const GameI
     return;
   }
   state_ = State::Checking;
-  thread_ = std::thread([this, source, path, identify = assets.identifyDisc] {
+  thread_ = std::thread([this, source, path, identify = source.identify ? source.identify : assets.identifyDisc] {
     std::string gameId, title, error;
     State result;
     std::string message;
     if (!identify || !identify(path, gameId, title, error)) {
       result = State::Unreadable;
-      message = error.empty() ? std::string(Tr("That file can't be read as a disc image."))
-                              : Fmt(Tr("That file can't be read as a disc image (%s)."), error.c_str());
+      if (source.dump) {
+        message = error.empty() ? std::string(Tr("That file can't be read as a 3DS game dump.")) : error;
+      } else {
+        message = error.empty() ? std::string(Tr("That file can't be read as a disc image."))
+                                : Fmt(Tr("That file can't be read as a disc image (%s)."), error.c_str());
+      }
     } else if (AcceptsGameId(source, gameId)) {
       result = State::Good;
-      message = Fmt(Tr("This is %s (%s): the right disc."), source.name.c_str(), gameId.c_str());
+      message = source.dump ? Fmt(Tr("This is %s (%s): a dump the converter can read."), source.name.c_str(), gameId.c_str())
+                            : Fmt(Tr("This is %s (%s): the right disc."), source.name.c_str(), gameId.c_str());
+    } else if (source.dump) {
+      result = State::WrongGame;
+      message = title.empty() ? Fmt(Tr("This is another 3DS game (%s), not %s. Choose your Ultra Sun or Ultra Moon dump."),
+                                    gameId.c_str(), source.name.c_str())
+                              : Fmt(Tr("This is %s (%s), not %s. Choose your Ultra Sun or Ultra Moon dump."), title.c_str(),
+                                    gameId.c_str(), source.name.c_str());
     } else {
       std::string wanted;
       for (const std::string& g : source.gameIds) wanted += (wanted.empty() ? "" : ", ") + g;
@@ -384,6 +421,11 @@ std::string DiscCheck::message() const {
 std::string DiscCheck::forPath() const {
   std::lock_guard<std::mutex> lock(mutex_);
   return path_;
+}
+
+bool HasUnfinishedWork(const fs::path& outFolder) {
+  std::error_code ec;
+  return fs::exists(fs::path(outFolder.native() + fs::path(".work").native()) / "state.json", ec);
 }
 
 void RemoveLeftovers(const fs::path& outFolder) {
@@ -456,7 +498,14 @@ void MakeJob::Run(MakeRequest request, void* processPointer) {
     for (size_t nl; (nl = pending.find('\n')) != std::string::npos; pending.erase(0, nl + 1)) {
       const Line line = ParseLine(pending.substr(0, nl));
       std::lock_guard<std::mutex> lock(mutex_);
-      if (line.kind == Line::Kind::Progress) {
+      if (line.kind == Line::Kind::Stage) {
+        snap_.stage = line.name;
+        snap_.stageFrom = line.done;
+        snap_.stageTo = line.total;
+        snap_.done = 0;
+        snap_.total = 0;
+        snap_.current.clear();
+      } else if (line.kind == Line::Kind::Progress) {
         snap_.done = line.done;
         snap_.total = line.total;
         snap_.current = line.name;
@@ -492,7 +541,9 @@ void MakeJob::Run(MakeRequest request, void* processPointer) {
     RemoveLeftovers(request.outFolder);
     if (!request.outFolder2.empty()) RemoveLeftovers(request.outFolder2);
     result.phase = Phase::Cancelled;
-    result.message = Tr("Stopped. Nothing was changed.");
+    result.message = !request.outFolder3.empty() && HasUnfinishedWork(request.outFolder3)
+                         ? std::string(Tr("Stopped. What is made so far is kept: press Make and it continues where it stopped."))
+                         : std::string(Tr("Stopped. Nothing was changed."));
   } else if (code == 0 && sawDone) {
     result.phase = Phase::Done;
   } else {

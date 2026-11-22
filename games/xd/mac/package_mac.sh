@@ -120,6 +120,11 @@ if [ -x "$BIN/pbr_models" ]; then
     cp "$BIN/colo_models" "$APP/Contents/Resources/pbr_models/colo_models"
     bundle_needs "$APP/Contents/Resources/pbr_models/colo_models" "@executable_path/../../Frameworks"
   fi
+  # and xd_data_mods (usum_models' Gen 5-7 build reads XD's move / TM tables through it)
+  if [ -x "$BIN/xd_data_mods" ]; then
+    cp "$BIN/xd_data_mods" "$APP/Contents/Resources/pbr_models/xd_data_mods"
+    bundle_needs "$APP/Contents/Resources/pbr_models/xd_data_mods" "@executable_path/../../Frameworks"
+  fi
 fi
 # The language pack maker (docs/LANGUAGES.md), the same way: Contents/Resources/xd_languages/xd_languages (UNTESTED on a Mac)
 if [ -x "$BIN/xd_languages" ]; then
@@ -136,7 +141,7 @@ done
 rm -f "$TODO" "$TODO.needs"
 # Nothing may still point into a package manager's folders (a player's Mac has none).
 LEFT=0
-for f in "$APP/Contents/MacOS/xd" "$APP/Contents/MacOS/xd_launcher" "$APP/Contents/Resources/pbr_models/pbr_models" "$APP/Contents/Resources/pbr_models/colo_models" "$APP/Contents/Resources/xd_languages/xd_languages" "$FW"/*.dylib; do
+for f in "$APP/Contents/MacOS/xd" "$APP/Contents/MacOS/xd_launcher" "$APP/Contents/Resources/pbr_models/pbr_models" "$APP/Contents/Resources/pbr_models/colo_models" "$APP/Contents/Resources/pbr_models/xd_data_mods" "$APP/Contents/Resources/xd_languages/xd_languages" "$FW"/*.dylib; do
   [ -f "$f" ] || continue
   echo "  $(basename "$f") asks for:"
   needs_of "$f" | sed 's/^/      /'
@@ -187,6 +192,25 @@ elif [ -x "$PBR_MODELS_DIR/pbr_models" ]; then
 else
   echo "  pbr_models: NOT included ($PBR_MODELS_DIR/pbr_models is not there)"
 fi
+# The Ultra Sun / Ultra Moon models helper (tools/n3ds/package_usum_models.py, frozen Python, built by the workflow's step
+# before this one; USUM_MODELS_DIR names its folder): same place rule as pbr_models (files in Resources, a link in
+# Contents/MacOS). UNTESTED on a Mac. Left out, with a note in the log, when it was not built.
+USUM_MODELS_DIR="${USUM_MODELS_DIR:-$ROOT/build/usum_models_dist_mac/usum_models}"
+if [ -x "$USUM_MODELS_DIR/usum_models" ]; then
+  cp -R "$USUM_MODELS_DIR" "$APP/Contents/Resources/usum_models"
+  ln -s "../Resources/usum_models" "$APP/Contents/MacOS/usum_models"
+  echo "  usum_models: included (from $USUM_MODELS_DIR)"
+else
+  echo "  usum_models: NOT included ($USUM_MODELS_DIR/usum_models is not there)"
+fi
+# Every helper program must stay runnable (PyInstaller's and ours): a lost execute bit shows as "Permission denied" in the launcher.
+for helper in pbr_models usum_models xd_languages; do
+  if [ -d "$APP/Contents/Resources/$helper" ]; then
+    find "$APP/Contents/Resources/$helper" -type f | while read -r f; do
+      if file -b "$f" | grep -q "Mach-O.*executable"; then chmod +x "$f"; fi
+    done
+  fi
+done
 echo "$VERSION" > "$APP/Contents/Resources/version.txt"
 ln -s "../Resources/version.txt" "$APP/Contents/MacOS/version.txt"
 # The first tester's report script (checks this Mac and the program, starts the game once without a disc, writes one
@@ -235,11 +259,15 @@ for lib in "$FW"/*.dylib; do
 done
 # The helper's own programs and libraries (PyInstaller's; they were changed by being copied and its libnod is ours):
 # each one ad hoc, as the libraries above. Their failure does not fail the app's signature.
-if [ -d "$APP/Contents/Resources/pbr_models" ]; then
-  find "$APP/Contents/Resources/pbr_models" -type f | while read -r f; do
-    if file -b "$f" | grep -q "Mach-O"; then codesign --force --sign - "$f" 2>&1 || echo "  (could not sign ${f#"$DEST"/})"; fi
-  done
-fi
+# (0.7.0: the frozen Ultra Sun / Ultra Moon converter and the language pack maker too: before, only pbr_models was signed.)
+for helper in pbr_models usum_models xd_languages; do
+  if [ -d "$APP/Contents/Resources/$helper" ]; then
+    find "$APP/Contents/Resources/$helper" -type f | while read -r f; do
+      if file -b "$f" | grep -q "Mach-O"; then codesign --force --sign - "$f" 2>&1 || echo "  (could not sign ${f#"$DEST"/})"; fi
+    done
+    echo "  signed the programs inside Resources/$helper"
+  fi
+done
 # (the programs in Contents/MacOS: the main one is signed with the app, but the other one is a second program that
 # the app's seal only records as a file: ad hoc signed by itself first, so it carries a signature of its own)
 for prog in xd xd_launcher; do

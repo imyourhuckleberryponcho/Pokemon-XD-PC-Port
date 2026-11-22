@@ -30,6 +30,9 @@ import readme_text
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FOLDER_NAME = 'Pokemon XD PC'
 PBR_MODELS = os.path.join(ROOT, 'build', 'pbr_models_dist', 'pbr_models')   # optional: included when built
+# The Ultra Sun / Ultra Moon model converter (tools/n3ds/package_usum_models.py: the Python converter frozen with PyInstaller;
+# there is no C++ port of it yet), game/usum_models/usum_models.exe for the Extra assets page. Optional: included when built.
+USUM_MODELS = os.path.join(ROOT, 'build', 'usum_models_dist', 'usum_models')
 
 # The programs and libraries in game\ (next to each other: xd.exe and xd_launcher.exe load the same ones).
 PROGRAMS = ['xd_launcher.exe', 'xd.exe']
@@ -74,8 +77,9 @@ Settings, mods, the memory card (your save), logs and the icon made from your di
 (type that into the address bar of a File Explorer window to open it). Deleting this program's folder
 doesn't touch them.
 
-Portable use (everything inside this folder instead, for example on a USB stick): put a file named
-data_location.json next to "Pokemon XD Launcher.exe" containing
+Portable use (everything inside this folder instead, for example on a USB stick): the launcher asks at its first start
+where your data should be kept, and its Save page ("Where your data is kept") moves it later, either way, without losing
+anything. By hand it is a file named data_location.json next to "Pokemon XD Launcher.exe" containing
     {"version": 1, "mode": "portable"}
 Your things are then kept in the "portable" folder next to it. (The same file inside the "game"
 folder works too; its portable folder is then game\portable.)
@@ -290,9 +294,16 @@ def main():
         if os.path.isfile(os.path.join(build, 'colo_models.exe')):
             shutil.copy2(os.path.join(build, 'colo_models.exe'), pbr_dir)
             print('colo_models: the Colosseum characters converter (game/pbr_models)')
+        # xd_data_mods: usum_models' Gen 5-7 build reads XD's move / TM tables through it (same libraries; it is found next to pbr_models)
+        if os.path.isfile(os.path.join(build, 'xd_data_mods.exe')):
+            shutil.copy2(os.path.join(build, 'xd_data_mods.exe'), pbr_dir)
+            print('xd_data_mods: reads XD tables for the Gen 5-7 build (game/pbr_models)')
     elif os.path.isfile(os.path.join(PBR_MODELS, 'pbr_models.exe')):
         shutil.copytree(PBR_MODELS, pbr_dir)
         print('pbr_models: the frozen Python converter (game/pbr_models)')
+    if os.path.isfile(os.path.join(USUM_MODELS, 'usum_models.exe')):
+        shutil.copytree(USUM_MODELS, os.path.join(game, 'usum_models'))
+        print('usum_models: the frozen Python converter (game/usum_models)')
     # The language pack maker, game\xd_languages\xd_languages.exe (the Extra assets page's "Languages (from the European disc)":
     # docs/LANGUAGES.md; no game data in it), with nod.dll and the C++ runtime beside it as for pbr_models.
     lang_dir = os.path.join(game, 'xd_languages')
@@ -346,6 +357,8 @@ def main():
                 continue
             if os.path.relpath(p, game).startswith('xd_languages' + os.sep) and n in ('xd_languages.exe', 'nod.dll') + tuple(RUNTIME):
                 continue   # the language pack maker's folder
+            if os.path.relpath(p, game).startswith('usum_models' + os.sep):
+                continue   # the Ultra Sun / Ultra Moon converter's own folder (a frozen Python program)
             if os.path.relpath(p, game).startswith('pbr_models' + os.sep):
                 continue   # the converter's own folder (a frozen Python program: .pyd, .dll, .zip files)
             if ext not in allowed_ext or (ext == '.exe' and n not in allowed_exe):

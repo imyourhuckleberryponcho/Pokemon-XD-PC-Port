@@ -27,6 +27,7 @@ struct Evolution {
 
 struct SpeciesRules {
   bool exists = false;
+  uint16_t national = 0;
   uint8_t growth = 0;
   uint8_t abilities[2] = {0, 0};
   uint16_t baseStats[6] = {};

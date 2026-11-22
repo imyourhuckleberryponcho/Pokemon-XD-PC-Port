@@ -366,6 +366,50 @@ int main(int argc, char** argv) {
   }
   {
     DataCatalog cat = catalog;
+    cat.tables[0].addable = true;
+    cat.tables[0].addMax = 16;
+    cat.tables[0].addFirstId = 6;
+    cat.tables[0].idList = "thing";
+    for (NameList& l : cat.lists) {
+      if (l.name == "thing") l.limit = 4;
+    }
+    std::vector<Message> m;
+    DataModFile a{"a", "A", "data/a.json",
+                  "{ \"add\": { \"things\": {\n"
+                  "    \"Delta Two\": { \"copy\": \"thing:base/beta\", \"level\": 77 },\n"
+                  "    \"Eps\": { \"copy\": \"thing:ada.pack/delta-two\", \"label\": \"epsilon\" },\n"
+                  "    \"Zeta\": { \"copy\": \"thing:ada.pack/epsilon\", \"label\": \"thing:ada.pack/zed\", \"kind\": \"Blue\" },\n"
+                  "    \"Bad\": { \"copy\": 1, \"label\": \"Bad Label!\" },\n"
+                  "    \"Wrong\": { \"copy\": 1, \"label\": \"thing:other.pack/w\" },\n"
+                  "    \"Nope\": { \"copy\": \"thing:base/nothing\" },\n"
+                  "    \"Epsilon Too\": { \"copy\": 1, \"label\": \"epsilon\" }\n"
+                  "} } }"};
+    a.labelNamespace = "ada.pack";
+    DataModFile b{"bmod", "B", "data/b.json", "{ \"add\": { \"things\": { \"Plain One\": { \"copy\": 2 } } } }"};
+    DataModFile g{"gen4", "G", "data/g.json", "{ \"add\": { \"things\": { \"Ice Stone\": { \"copy\": 2 } } } }", true};
+    const DataApplyResult r = ApplyDataMods(cat, {a, b, g}, read, m);
+    const auto labelOf = [&](const char* key) {
+      for (const AddedRow& row : r.added) {
+        if (row.key == key) return row.label;
+      }
+      return std::string("(none)");
+    };
+    check(labelOf("Delta Two") == "thing:ada.pack/delta-two", "a new row's label: the mod's namespace + a slug of its name");
+    check(labelOf("Eps") == "thing:ada.pack/epsilon", "\"label\" gives the name part");
+    check(labelOf("Zeta") == "thing:ada.pack/zed", "\"label\" may be the whole label when its namespace is the mod's");
+    check(labelOf("Plain One") == "thing:local.bmod/plain-one", "no namespace in mod.json: local.<mod id>");
+    check(labelOf("Ice Stone") == "thing:base/ice-stone", "a built-in layer's rows (the Gen 4 pack) are base/ labels");
+    check(labelOf("Bad").empty() && labelOf("Wrong").empty(), "a bad \"label\" is refused; the row keeps its number, with no label");
+    check(has_message(m, Message::Level::Problem, "\"label\" of the new row \"Bad\"") && has_message(m, Message::Level::Problem, "must start with thing:ada.pack/"),
+          "the label mistakes are said");
+    check(labelOf("Epsilon Too").empty() && has_message(m, Message::Level::Problem, "has the label thing:ada.pack/epsilon"), "two rows with one label: the second has none, it is said");
+    check(has_message(m, Message::Level::Problem, "no row has the label \"thing:base/nothing\" on this disc"), "an unknown base label is refused");
+    check(r.added.size() == 9 && r.added[0].copyOf == 1 && r.added[1].copyOf == 1 && r.added[2].copyOf == 1,
+          "copy by label (base/ and a mod's own) finds the rows");
+    check(AddedRowsJson(r.added).find("\"label\": \"thing:ada.pack/delta-two\"") != std::string::npos, "the mod -> numbers map has the labels");
+  }
+  {
+    DataCatalog cat = catalog;
     DataTable& t = cat.tables[0];
     t.addable = true;
     t.addMax = 4;
@@ -451,6 +495,12 @@ int main(int argc, char** argv) {
           "the mod's digest changes when its rows' numbers change (another load order)");
     check(AddedRowsJson({AddedRow{"things", 6, 6, 1, "X \"q\"", "m", "M", "", {}}}).find("\"name\": \"X \\\"q\\\"\"") != std::string::npos,
           "the mod -> numbers map is JSON with the names escaped");
+    AddedRow song{"things", 8, 8, 1, "song", "songmod", "S", "", {}};
+    song.unbound = true;
+    const auto onlySong = AddedRowsDigests({song});
+    const auto mixed = AddedRowsDigests({AddedRow{"things", 6, 6, 1, "X", "m", "M", "", {}}, song});
+    check(onlySong.empty() && mixed.size() == 1 && mixed.begin()->second == AddedRowsDigests({AddedRow{"things", 6, 6, 1, "X", "m", "M", "", {}}}).begin()->second,
+          "rows marked unbound (a new song) are not in the playthrough's digest: a mod with only such rows has none");
   }
 
   const fs::path mods = root / "mods", list = root / "mods.ini";

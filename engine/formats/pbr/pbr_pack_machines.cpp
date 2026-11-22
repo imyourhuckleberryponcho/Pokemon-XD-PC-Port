@@ -72,6 +72,15 @@ MachinesOut gen4_machines(const PbrData& pbr, XdTables& xd, const std::vector<st
     row.set("coupon", price);
     row.set("buff", m.no);
     text.set("doc", gen4_item_doc(m.name));
+    {
+      std::string tm_names[kGen4Langs];
+      const char* tm_ptr[kGen4Langs];
+      for (int l = 0; l < kGen4Langs; l++) {
+        tm_names[l] = gen4_tm_name(l, m.tm);
+        tm_ptr[l] = tm_names[l].c_str();
+      }
+      gen4_add_lang_fields(text, {{"name", tm_ptr}, {"doc", gen4_lang_row("item_doc_move", m.name)}});
+    }
     row.set("text", std::move(text));
     out.items.emplace_back(item, std::move(row));
     out.coupon.push_back(item);

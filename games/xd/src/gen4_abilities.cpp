@@ -14,7 +14,18 @@ extern uint8_t pokemon_tokusei_data[];
 extern uint32_t pokemon_tokusei_data_number;
 }
 
+extern "C" const char* PortXD_GetLanguageCode(void);
+
 namespace {
+
+struct LangRow {
+  const char* kind;
+  const char* key;
+  const char* v[5];
+};
+const LangRow kLangRows[] = {
+#include "gen4_text_i18n.inc"
+};
 
 struct Ability {
   uint8_t id;
@@ -82,6 +93,20 @@ constexpr Ability kAbilities[] = {
 
 namespace xd::gen4 {
 
+const char* LangText(const char* kind, const char* key) {
+  const char* code = PortXD_GetLanguageCode();
+  static const char* const kCodes[5] = {"sp", "fr", "ge", "it", "jp"};
+  int index = -1;
+  for (int i = 0; i < 5; i++) {
+    if (code != nullptr && std::strcmp(code, kCodes[i]) == 0) index = i;
+  }
+  if (index < 0) return nullptr;
+  for (const LangRow& r : kLangRows) {
+    if (std::strcmp(r.key, key) == 0 && std::strcmp(r.kind, kind) == 0) return r.v[index];
+  }
+  return nullptr;
+}
+
 bool AbilityTextsWanted() { return !xd::xg::On() && (xd::gen4::Loaded() || xd::challenges::Active("gen4_pokemon")); }
 
 constexpr const char* kMessages[] = {
@@ -103,10 +128,15 @@ void AppendAbilityTexts(std::vector<std::pair<uint32_t, std::string>>& texts) {
   for (const Ability& a : kAbilities) {
     std::string shown = a.name;
     for (char& c : shown) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    if (const char* n = LangText("ability_name", a.name)) shown = n;
+    const char* doc = LangText("ability_doc", a.name);
     texts.emplace_back((kGroup << 20) | (kFirstText + a.id * 2), shown);
-    texts.emplace_back((kGroup << 20) | (kFirstText + a.id * 2 + 1), a.text);
+    texts.emplace_back((kGroup << 20) | (kFirstText + a.id * 2 + 1), doc != nullptr ? doc : a.text);
   }
-  for (size_t i = 0; i < sizeof kMessages / sizeof kMessages[0]; i++) texts.emplace_back((kGroup << 20) | (0x9000 + i), kMessages[i]);
+  for (size_t i = 0; i < sizeof kMessages / sizeof kMessages[0]; i++) {
+    const char* m = LangText("message", kMessages[i]);
+    texts.emplace_back((kGroup << 20) | (0x9000 + i), m != nullptr ? m : kMessages[i]);
+  }
   texts.emplace_back((kGroup << 20) | kNoEffectText, engine::i18n::Tr("No effect with the XD rules."));
 }
 

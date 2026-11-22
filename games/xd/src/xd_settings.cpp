@@ -29,6 +29,18 @@ void Register(es::Registry& registry) {
                    .Preference()
                    .ForGames({kGameId})
                    .Implemented());
+  registry.Add(D::Enum("playthrough.new_rule_set", C::System, "New playthroughs: rule set",
+                       "The rule set the New Game screen starts with: XD original (the GameCube game's battle rules) or Gen 4 (needs the Gen 4 pack). Each playthrough keeps its own.",
+                       {{"xd", "XD original (Gen 3)"}, {"gen4", "Gen 4"}}, "xd", "xd")
+                   .Preference().ForGames({kGameId}).Implemented());
+  registry.Add(D::Enum("playthrough.new_pokemon", C::System, "New playthroughs: Pokemon",
+                       "Which Pokemon the New Game screen starts with: Gen 1-3 (XD's own) or Gen 1-4 (needs the Gen 4 pack). Each playthrough keeps its own.",
+                       {{"3", "Gen 1-3"}, {"4", "Gen 1-4"}}, "3", "3")
+                   .Preference().ForGames({kGameId}).Implemented());
+  registry.Add(D::Enum("playthrough.new_looks", C::System, "New playthroughs: looks",
+                       "Whose models the New Game screen starts with: the original XD look, the most modern models you have, or Battle Revolution first. Only pictures change. Each playthrough keeps its own.",
+                       {{"original_xd", "Original XD look"}, {"most_modern", "Most modern"}, {"br_first", "Battle Revolution first"}}, "original_xd", "original_xd")
+                   .Preference().ForGames({kGameId}).Implemented());
   registry.Add(D::Text("system.extra_disc.languages", C::System, "European disc image (for languages)",
                        "The European (PAL) Pokemon XD disc image the launcher's Extra assets page makes the language "
                        "pack from (empty: none chosen yet).",
@@ -40,6 +52,30 @@ void Register(es::Registry& registry) {
                        "The Japanese Pokemon XD disc image the launcher's Extra assets page makes the Japanese "
                        "pack from (empty: none chosen yet).",
                        "", "")
+                   .Preference()
+                   .ForGames({kGameId})
+                   .Implemented());
+  registry.Add(D::Text("system.extra_disc.usum", C::System, "Ultra Sun / Ultra Moon dump file (for models)",
+                       "The decrypted Pokemon Ultra Sun or Ultra Moon dump (.3ds / .cci) the launcher's Extra assets page makes the "
+                       "Ultra Sun / Ultra Moon models from (empty: none chosen yet).",
+                       "", "")
+                   .Preference()
+                   .ForGames({kGameId})
+                   .Implemented());
+  registry.Add(D::Bool("system.mods_hot_reload", C::System, "Reload mods while playing (developers)",
+                       "For people who make mods. A changed script mod or texture pack is picked up while the game runs: F6, "
+                       "\"Reload mods\" on the in-game MODS page, or by itself a moment after a mod file changed. Data values, "
+                       "text and replaced files still need a restart (the game says so). Only at a quiet moment (not in a "
+                       "battle or while a map loads); never in Original, in replays or in test runs. Runs that reloaded are "
+                       "marked in their recording.",
+                       false, false)
+                   .ForGames({kGameId})
+                   .Implemented());
+  registry.Add(D::Bool("gameplay.replay_bar", C::Gameplay, "Replay bar",
+                       "While you watch a battle replay: the bar with the turn slider, the speed and the pause state, at the battle menu's place. "
+                       "On: shown (the Replay bar button, H or Y by default, hides it and shows it again). Off: only a small tab with the turn "
+                       "number at the top. It only exists while a replay is watched.",
+                       true, true)
                    .Preference()
                    .ForGames({kGameId})
                    .Implemented());

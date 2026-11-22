@@ -1,0 +1,101 @@
+diff --git a/lib/gfx/hash.hpp b/lib/gfx/hash.hpp
+--- a/lib/gfx/hash.hpp
++++ b/lib/gfx/hash.hpp
+@@ -6,6 +6,11 @@
+ 
+ #define XXH_STATIC_LINKING_ONLY
+ #include <xxhash.h>
++#ifdef AURORA_XXH_DISPATCH
++// (patch 0047) x86_64: xxHash's own run-time dispatch (xxh_x86dispatch.c): the same XXH3 hashes, bit for bit,
++// computed with AVX2 where the processor has it and with the plain SSE2 code otherwise.
++#include <xxh_x86dispatch.h>
++#endif
+ 
+ namespace aurora {
+ #if INTPTR_MAX == INT32_MAX
+@@ -15,7 +20,20 @@
+ #endif
+ 
+ inline HashType xxh3_hash_s(const void* input, size_t len, HashType seed = 0) {
++#ifdef AURORA_XXH_DISPATCH
++  return static_cast<HashType>(XXH3_64bits_withSeed_dispatch(input, len, seed));
++#else
+   return static_cast<HashType>(XXH3_64bits_withSeed(input, len, seed));
++#endif
++}
++
++// XXH3 128-bit hash of a larger block (texture contents).
++inline XXH128_hash_t xxh3_128(const void* input, size_t len) {
++#ifdef AURORA_XXH_DISPATCH
++  return XXH3_128bits_dispatch(input, len);
++#else
++  return XXH3_128bits(input, len);
++#endif
+ }
+ 
+ template <typename T>
+@@ -31,7 +49,13 @@
+     XXH3_64bits_reset_withSeed(&m_state, seed);
+   }
+ 
+-  void update(const void* data, size_t size) { XXH3_64bits_update(&m_state, data, size); }
++  void update(const void* data, size_t size) {
++#ifdef AURORA_XXH_DISPATCH
++    XXH3_64bits_update_dispatch(&m_state, data, size);
++#else
++    XXH3_64bits_update(&m_state, data, size);
++#endif
++  }
+ 
+   template <typename T>
+   void update(const T& data) {
+diff --git a/cmake/aurora_gx.cmake b/cmake/aurora_gx.cmake
+--- a/cmake/aurora_gx.cmake
++++ b/cmake/aurora_gx.cmake
+@@ -61,6 +61,18 @@
+ target_link_libraries(aurora_gx PRIVATE absl::btree absl::flat_hash_map sqlite3 Tracy::TracyClient PNG::PNG)
+ target_compile_definitions(aurora_gx PRIVATE WEBGPU_DAWN)
+ 
++# (patch 0047) xxHash's run-time CPU dispatch on x86_64 (AVX2 where present, SSE2 otherwise; same hashes bit for bit).
++# AVX-512 is left out on purpose (frequency drops on some processors).
++if (CMAKE_SYSTEM_PROCESSOR MATCHES "^(AMD64|x86_64|x64|X64)$")
++  FetchContent_GetProperties(xxhash SOURCE_DIR _aurora_xxhash_src)
++  if (_aurora_xxhash_src AND EXISTS "${_aurora_xxhash_src}/xxh_x86dispatch.c")
++    target_sources(aurora_gx PRIVATE "${_aurora_xxhash_src}/xxh_x86dispatch.c")
++    set_source_files_properties("${_aurora_xxhash_src}/xxh_x86dispatch.c" PROPERTIES
++      COMPILE_DEFINITIONS "XXH_DISPATCH_AVX512=0")
++    target_compile_definitions(aurora_gx PUBLIC AURORA_XXH_DISPATCH=1)
++  endif ()
++endif ()
++
+ if (AURORA_ENABLE_RMLUI)
+     target_sources(aurora_gx PRIVATE
+         lib/rmlui/pipeline.cpp
+diff --git a/lib/gx/texture.cpp b/lib/gx/texture.cpp
+--- a/lib/gx/texture.cpp
++++ b/lib/gx/texture.cpp
+@@ -1,5 +1,6 @@
+ #include "texture.hpp"
+ 
++#include "../gfx/hash.hpp"
+ #include "../gfx/lru_cache.hpp"
+ #include "../gfx/recording.hpp"
+ #include "../gfx/tex_copy_conv.hpp"
+@@ -274,7 +275,7 @@
+ 
+   TextureKeys keys;
+   keys.contentKey = {
+-      .textureHash = XXH3_128bits(obj.data, textureBytes),
++      .textureHash = aurora::xxh3_128(obj.data, textureBytes),
+       .width = obj.width(),
+       .height = obj.height(),
+       .format = obj.format(),
+@@ -342,7 +343,7 @@
+   if (tlut != nullptr) {
+     const size_t tlutBytes = texture::tlut_source_size(tlut->numEntries);
+     CHECK(tlut->data != nullptr && tlutBytes != 0, "invalid TLUT source for content hash");
+-    keys.contentKey.tlutHash = XXH3_128bits(tlut->data, tlutBytes);
++    keys.contentKey.tlutHash = aurora::xxh3_128(tlut->data, tlutBytes);
+     keys.contentKey.tlutFormat = static_cast<u32>(tlut->format);
+     keys.contentKey.tlutEntries = tlut->numEntries;
+     s_stats.hashedBytes += tlutBytes;

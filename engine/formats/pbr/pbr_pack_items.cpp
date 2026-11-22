@@ -52,6 +52,7 @@ ItemsOut gen4_items(XdTables& xd, const MachinesOut& machines) {
     for (char& c : upper) c = (char)std::toupper((unsigned char)c);
     text.set("name", upper);
     text.set("doc", d.doc);
+    gen4_add_lang_fields(text, {{"name", gen4_lang_row("item_name", d.name)}, {"doc", gen4_lang_row("item_doc", d.name)}});
     Json one = Json::object();
     one.set("copy", d.copy);
     one.set("price", d.price);

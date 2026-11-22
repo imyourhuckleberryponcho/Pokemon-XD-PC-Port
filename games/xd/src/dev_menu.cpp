@@ -29,6 +29,10 @@ u32 GSflagGet(u32 id);
 void GSflagSet(u32 id, u32 value);
 u16* GSmsgGetGSchar(u32 key);
 u8 fightIsFight(void);
+void PortXD_ScriptRunPending(void);
+s32 PortXD_ScriptLuaCall(const char* name, s32 a, s32 b, s32 c, s32* out);
+u32 PortXD_TakePendingBattle(void);
+u32 scriptEncount(u16 id, u8 fade, s32 noFade);
 FightEncountData* fightEncountDataBiosGetPtr(u16 id);
 u32 fightEncountDataBiosGetFightName(FightEncountData* data);
 u32 fightEncountDataBiosGetFightKind(FightEncountData* data);
@@ -57,6 +61,9 @@ s8 fadeCheck(s32 wait);
 void menuOffScreenSetDisp(s32 on);
 extern "C" s32 PortXD_FieldEvolve(void* pokemon, s32 kind, s32 item);
 s32 pokemonEvolutionAll(void* pokemon, u16 species, u16 extra, void* info, void* hero, s32 writeMemo, s32 mode, s32 fade);
+void pokemonDB_SetMitaFlag(u16 id, bool value);
+void pokemonDB_SetTukamaetaFlag(u16 id, bool value);
+uint16_t pokemonEvolutionCheck(void* pokemon, int32_t mode, uint16_t item, uint16_t* extra, void* info);
 void heroAddPokecoupon(void* hero, s32 amount);
 uintptr_t heroGetStatus(void* hero, u32 selector, u16 index);
 u8 pokemonIsDarkPokemon(void* pokemon);
@@ -69,6 +76,10 @@ uintptr_t savedataGetStatus(u32 save, u32 kind);
 uintptr_t gamedataGetStatus(void* gamedata, u32 kind);
 s32 heroCatchPokemon(void* hero, void* pokemon, u32 arg3, u32 arg4, u8 allowPCBox);
 void memoDataSet(u32 kind, void* pokemon);
+void memoDataSetPokemonID(u32 kind, u16 id);
+u16 memoDataGetCount(u32 kind);
+void* pokemonDataBiosGetPtr(u16 id);
+u16 pokemonDataBiosGetHeight(void* pdata);
 void pokemonBiosSetItemDataId(void* pokemon, u16 item);
 void* fightFloorGetFightOutBanmeToValidFightOutPokemon(void* floor, u16 banme);
 void fightOutPokemonWriteJoutaiDataId(void* fop, u16 id, u32 value);
@@ -268,6 +279,11 @@ void Perform(const std::string& action) {
     dbgMenuFlagSetEtc(static_cast<s32>(Num(w, 1)));
   } else if (k == "flag") {
     GSflagSet(static_cast<u32>(Num(w, 1)), static_cast<u32>(Num(w, 2)));
+  } else if (k == "flagget") {
+    for (size_t i = 1; i < w.size(); i++) {
+      const u32 id = static_cast<u32>(Num(w, i));
+      std::fprintf(stderr, "[dev menu] flag %u = %u\n", id, GSflagGet(id));
+    }
   } else if (k == "battle") {
     if (fightIsFight() != 0) {
       sStatus = "already in a battle";
@@ -328,6 +344,19 @@ void Perform(const std::string& action) {
     }
     pokemonBiosSetTokuseiFlag(p, which != 0);
     sStatus = "ability: party slot " + std::to_string(slot) + " ability flag " + std::to_string(which);
+  } else if (k == "lua") {
+    if (w.size() < 2) {
+      sStatus = "lua: <function name> [a b c]";
+      return;
+    }
+    s32 out = 0;
+    const bool called = PortXD_ScriptLuaCall(w[1].c_str(), static_cast<s32>(Num(w, 2, 0)), static_cast<s32>(Num(w, 3, 0)), static_cast<s32>(Num(w, 4, 0)), &out) != 0;
+    std::fprintf(stderr, "[devmenu] lua %s: %s, answer %d\n", w[1].c_str(), called ? "called" : "no such function (or no script mods)", out);
+    PortXD_ScriptRunPending();
+    if (const u32 battle = PortXD_TakePendingBattle()) {
+      if (fightIsFight() == 0) scriptEncount(static_cast<u16>(battle), 1, 0);
+    }
+    sStatus = "lua " + w[1];
   } else if (k == "kit") {
     dbgMenuDbgPokemonGet();
   } else if (k == "give") {
@@ -344,6 +373,18 @@ void Perform(const std::string& action) {
     heroCatchPokemon(reinterpret_cast<void*>(hero), pokemon, 0, 4, 1);
     memoDataSet(0, pokemon);
     sStatus = "give: species " + std::to_string(species) + " level " + std::to_string(level);
+  } else if (k == "memofill") {
+    const long n = Num(w, 1, 0);
+    const bool onlyValid = w.size() > 2 && w[2] == "valid";
+    for (long id = 1; id <= n && id <= 0x3FFF; id++) {
+      if (onlyValid) {
+        void* pd = pokemonDataBiosGetPtr(static_cast<u16>(id));
+        if (pd == nullptr || pokemonDataBiosGetHeight(pd) == 0) continue;
+      }
+      memoDataSetPokemonID(0, static_cast<u16>(id));
+    }
+    sStatus = "memofill: the memo holds " + std::to_string(memoDataGetCount(0)) + " entries";
+    std::fprintf(stderr, "[dev menu] %s\n", sStatus.c_str());
   } else if (k == "hold") {
     const long slot = Num(w, 1, 1);
     const long item = Num(w, 2, 0);
@@ -404,6 +445,37 @@ void Perform(const std::string& action) {
     gamedatasaveSetStatus(nullptr, 5, floorGetNextFloorID());
     const s32 r = memcardTaskCall(4, 2, 0);
     sStatus = r == 4 ? "save: saved (memory card result 4)" : "save: FAILED, memory card result " + std::to_string(r);
+  } else if (k == "caught") {
+    const long species = Num(w, 1, 0);
+    if (species < 1 || species > 16383) {
+      sStatus = "caught: <species number>";
+      return;
+    }
+    pokemonDB_SetMitaFlag(static_cast<u16>(species), true);
+    pokemonDB_SetTukamaetaFlag(static_cast<u16>(species), true);
+    sStatus = "caught: species " + std::to_string(species) + " marked caught";
+  } else if (k == "evolvecheck") {
+    const int slot = w.size() > 1 ? std::atoi(w[1].c_str()) : 0;
+    const int32_t mode = static_cast<int32_t>(Num(w, 2, 0));
+    const uint16_t item = static_cast<uint16_t>(Num(w, 3, 0));
+    void* p = slot >= 1 && slot <= 6 ? reinterpret_cast<void*>(heroGetStatus(nullptr, 3, static_cast<u16>(slot - 1))) : nullptr;
+    if (p == nullptr) {
+      sStatus = "evolvecheck: <party slot 1-6> <mode 0|1> [item]";
+      return;
+    }
+    struct { uint8_t kind, reserved; uint16_t parameter; } info = {0, 0, 0};
+    uint16_t extra = 0;
+    const uint16_t species = pokemonEvolutionCheck(p, mode, item, &extra, &info);
+    std::fprintf(stderr, "[dev menu] evolvecheck: slot %d mode %d item %u -> species row %u\n", slot, static_cast<int>(mode), static_cast<unsigned>(item), static_cast<unsigned>(species));
+    if (species != 0) {
+      fadeSet(3, 0.5f);
+      fadeCheck(1);
+      menuOffScreenSetDisp(0);
+      pokemonEvolutionAll(p, species, 0, &info, nullptr, 1, 0, 0);
+      menuOffScreenSetDisp(1);
+      fadeSet(2, 0.5f);
+      fadeCheck(1);
+    }
   } else if (k == "evolve") {
     const int slot = w.size() > 1 ? std::atoi(w[1].c_str()) : 0;
     const uint16_t species = static_cast<uint16_t>(Num(w, 2, 0));

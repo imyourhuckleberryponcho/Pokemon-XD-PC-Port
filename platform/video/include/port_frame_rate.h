@@ -10,6 +10,8 @@ extern "C" {
 
 bool PortFrameRate_Init(uint32_t (*field)(void));
 
+void PortFrameRate_SetPresenter(void (*presentAndBegin)(void));
+
 void PortFrameRate_BeforePresent(void);
 
 void PortFrameRate_AfterBegin(void);

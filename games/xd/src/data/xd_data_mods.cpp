@@ -1,4 +1,6 @@
+#include "xd_spare.h"
 #include "xd_data_mods.h"
+#include "xd_flag_scan.h"
 
 #include "dol_tables.h"
 
@@ -781,6 +783,10 @@ void AddDeckTables(const em::EntryReader& read, em::DataCatalog& out) { add_deck
 bool CheckModEntry(int fsysType, const std::string& mod, std::vector<uint8_t>& data, const std::vector<em::AddedRow>& rows,
                    std::string& why) {
   if (fsysType != 7) return true;
+  return CheckModScript(mod, data, rows, why);
+}
+
+bool CheckModScript(const std::string& mod, std::vector<uint8_t>& data, const std::vector<em::AddedRow>& rows, std::string& why) {
   char text[160] = "";
   if (!Tiga_Validate(data.data(), data.size(), text, sizeof(text))) {
     why = std::string("it is not a valid script: ") + text;
@@ -802,6 +808,9 @@ bool CheckModEntry(int fsysType, const std::string& mod, std::vector<uint8_t>& d
       to.push_back(r.id);
     } else if (r.table == "pokemon_data" && r.mod == mod) {
       from.push_back(Tiga_SpeciesPlaceholder(r.key.c_str()));
+      to.push_back(r.id);
+    } else if (r.table == "snd_data" && r.mod == mod && r.key.compare(0, 5, "song:") == 0) {
+      from.push_back(Tiga_SongPlaceholder(r.key.c_str() + 5));
       to.push_back(r.id);
     }
   }
@@ -919,6 +928,7 @@ void add_flag_names(const em::EntryReader& read, const CommonRel& c, const std::
   if (!read(em::kProgramArchive, "main.dol", dol) || !DolAddressToOffset(dol.data(), dol.size(), 0x8038FBE0, 0x21EB4, at)) return;
   const std::vector<Bank> debug = {{dol.data() + at, 0x21EB4}};
   em::NameList steps{"story_step", {}};
+  std::map<uint32_t, std::string> stepText;
   for (uint32_t i = 0, n = count("flag_etc"); i < n; i++) {
     const uint8_t* r = row("flag_etc", i, 0x20);
     if (r == nullptr) break;
@@ -926,10 +936,37 @@ void add_flag_names(const em::EntryReader& read, const CommonRel& c, const std::
     size_t digits = 0;
     while (digits < text.size() && text[digits] >= '0' && text[digits] <= '9') digits++;
     if (digits == 0) continue;
+    stepText.emplace(be32(r + 8), text);
     while (digits < text.size() && text[digits] == ' ') digits++;
     if (digits < text.size()) steps.names.emplace_back(text.substr(digits), be32(r + 8));
   }
   if (!steps.names.empty()) out.lists.push_back(std::move(steps));
+
+  size_t tocSize = 0;
+  uint8_t* toc = PortDisc_ReadOriginalFile("GSfsys.toc", &tocSize);
+  if (toc == nullptr) return;
+  std::vector<std::string> archives;
+  if (tocSize >= 0x20) {
+    const uint32_t groups = be32(toc + 8), go = be32(toc + 0x10);
+    for (uint32_t i = 0; i < groups && static_cast<uint64_t>(go) + 16ull * (i + 1) <= tocSize; i++) {
+      const uint32_t nameAt = be32(toc + go + i * 16 + 4);
+      if (nameAt < tocSize) {
+        const std::string name = reinterpret_cast<const char*>(toc + nameAt);
+        if (!name.empty() && std::find(archives.begin(), archives.end(), name) == archives.end()) archives.push_back(name);
+      }
+    }
+  }
+  PortDisc_Free(toc);
+  std::set<uint32_t> named;
+  if (const em::NameList* f = out.FindList("flag")) {
+    for (const auto& [n, v] : f->names) named.insert(v);
+  }
+  em::NameList autoNames{"flag_auto", {}};
+  for (ScannedFlag& s : ScanRoomScriptFlags(read, std::move(archives), named, stepText)) {
+    autoNames.names.emplace_back(s.name, s.id);
+    autoNames.notes.push_back(s.meaning);
+  }
+  if (!autoNames.names.empty()) out.lists.push_back(std::move(autoNames));
 }
 
 void SetFlagRowsTaken(uint32_t count) { sFlagRowsTaken = count; }
@@ -1009,16 +1046,17 @@ bool BuildDataCatalog(const em::EntryReader& read, em::DataCatalog& out, std::st
   for (em::DataTable& t : out.tables) {
     if (t.name == "pokemon_data") {
       t.addable = true;
-      t.addMax = 1024;
+      t.addMax = XD_PC_SPARE_SPECIES;
       t.idList = "species";
-      t.assetKeys = {"face"};
+      t.assetKeys = {"face", "model", "cry", "dex"};
       t.textFields = {"name", "typeName", "doc"};
       t.primaryText = "name";
     } else if (t.name == "waza_data") {
       t.addable = true;
       t.addFirstId = 375;
-      t.addMax = 1024;
+      t.addMax = XD_PC_SPARE_MOVES;
       t.idList = "move";
+      t.assetKeys = {"animation", "animation_attack", "animation_damage", "animation_status"};
       t.textFields = {"name", "doc"};
       t.primaryText = "name";
     } else if (t.name == "flag_data") {
@@ -1053,7 +1091,7 @@ bool BuildDataCatalog(const em::EntryReader& read, em::DataCatalog& out, std::st
       t.fields.push_back(who);
     } else if (t.name == "item_data_prime" && table_named(out, "item_data_index") != nullptr) {
       t.addable = true;
-      t.addMax = 1024;
+      t.addMax = XD_PC_SPARE_ITEMS;
       t.idList = "item";
       t.idTable = "item_data_index";
       t.textFields = {"name", "doc"};

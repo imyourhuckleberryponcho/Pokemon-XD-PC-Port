@@ -14,6 +14,7 @@
 #define _wfopen(path, mode) std::fopen((path), (mode)[1] == L'b' ? "wb" : "w")
 #endif
 
+#include <algorithm>
 #include <chrono>
 #include <cstdarg>
 #include <cstdint>
@@ -35,6 +36,7 @@ std::filesystem::path sDir;
 FILE* sTimeline = nullptr;
 uint32_t sPics = 0, sShows = 0;
 int sWaitMs = 40;
+uint32_t sEvery = 1;
 uint32_t (*sProgress)(void) = nullptr;
 uint32_t (*sFieldCount)(void) = nullptr;
 std::vector<uint8_t> sPixels, sPrevious;
@@ -144,6 +146,9 @@ bool PortCapture_Init(uint32_t (*progress)(void), uint32_t (*field)(void)) {
       sFrom = static_cast<uint32_t>(a);
     }
   }
+  if (const char* every = std::getenv("XD_CAPTURE_EVERY"); every != nullptr && every[0] != '\0') {
+    sEvery = static_cast<uint32_t>(std::max(1, std::atoi(every)));
+  }
   const char* exitAfter = std::getenv("XD_CAPTURE_EXIT");
   sExit = exitAfter != nullptr && exitAfter[0] == '1';
   if (const char* wait = std::getenv("XD_CAPTURE_WAIT"); wait != nullptr && wait[0] != '\0') {
@@ -170,6 +175,7 @@ void PortCapture_Field(void) {
   }
   if (flip < sFrom) return;
   const uint32_t field = sFieldCount();
+  if (sEvery > 1 && field % sEvery != 0) return;
   const float speed = aurora::time::scale();
   aurora::time::set_scale(0.0f);
   std::this_thread::sleep_for(std::chrono::milliseconds(sWaitMs));

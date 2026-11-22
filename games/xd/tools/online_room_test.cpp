@@ -145,7 +145,7 @@ int main() {
   c.disc = "GXXP01";
   CHECK(Has(Judge(back.caps, back.rules, c, true).refuse, "GXXP01"));
   c = host.caps;
-  c.protocol = 2;
+  c.protocol = 4;
   v = Judge(back.caps, back.rules, c, true);
   CHECK(v.refuse.size() == 1 && Has(v.refuse, "another version"));
 
@@ -191,6 +191,135 @@ int main() {
     CHECK(Has(Judge(xd.caps, xd.rules, xg.caps, true).refuse, "cannot battle or trade"));
     CHECK(Has(Judge(xg.caps, xg.rules, xd.caps, false).refuse, "cannot battle or trade"));
     CHECK(Judge(xg.caps, xg.rules, xg.caps, true).Ok());
+  }
+  {
+    RoomRules legacy;
+    CHECK(ParseRules("rules=gen4", legacy, &err) && !NeedsNewProtocol(legacy));
+    Fingerprint f;
+    f.rules = legacy;
+    std::vector<uint8_t> blob = Encode(f);
+    const std::string text(blob.begin(), blob.end());
+    CHECK(text.find("proto=1\n") != std::string::npos && text.find("r.rs=") == std::string::npos);
+
+    RoomRules a;
+    SetRuleChoice(a, "gen4", "3,4", "");
+    CHECK(a.ruleSet == "gen4" && a.rs.empty() && a.gens.empty() && !NeedsNewProtocol(a));
+    SetRuleChoice(a, "gen4", "3,4", "modern_types:on");
+    CHECK(a.ruleSet == "gen4mt" && a.rs.empty());
+    SetRuleChoice(a, "xd", "3", "modern_types:on");
+    CHECK(a.ruleSet == "classic" && a.rs == "xd" && a.details == "modern_types:on" && NeedsNewProtocol(a));
+    CHECK(RoomRuleSetId(a) == "xd" && RoomGens(a) == "3" && RoomDetails(a) == "modern_types:on");
+    CHECK(RoomRuleSetId(legacy) == "gen4" && RoomGens(legacy) == "3,4" && RoomDetails(legacy).empty());
+    RoomRules mt;
+    ParseRules("rules=gen4mt", mt, &err);
+    CHECK(RoomDetails(mt) == "modern_types:on");
+
+    Fingerprint nf;
+    nf.rules = a;
+    nf.rules.format = "gen4_singles";
+    nf.rules.formatHash = "ab12cd34";
+    Fingerprint back2;
+    CHECK(Decode(Encode(nf), back2) && back2.rules.rs == "xd" && back2.rules.gens == "3" && back2.rules.details == "modern_types:on" &&
+          back2.rules.format == "gen4_singles" && back2.rules.formatHash == "ab12cd34");
+    CHECK(Encode(nf).size() <= 400);
+    CHECK(ParseRules("rules=classic;rs=xd;gens=3;details=modern_types:on;format=gen4_singles;fmthash=ab12cd34", r, &err) && r.format == "gen4_singles");
+    CHECK(!ParseRules("rs=Gen 5", r, &err));
+
+    Capabilities mine;
+    Capabilities roomCaps;
+    roomCaps.protocol = 1;
+    CHECK(Judge(roomCaps, legacy, mine, true).refuse.empty() || !Has(Judge(roomCaps, legacy, mine, true).refuse, "another version"));
+    roomCaps.protocol = 2;
+    mine.knownFormats = "gen4_singles:ab12cd34";
+    CHECK(!Has(Judge(roomCaps, nf.rules, mine, true).refuse, "rule set"));
+    roomCaps.protocol = 1;
+    CHECK(Has(Judge(roomCaps, nf.rules, mine, true).refuse, "another version"));
+    roomCaps.protocol = 2;
+    RoomRules later = nf.rules;
+    later.rs = "gen9";
+    CHECK(Has(Judge(roomCaps, later, mine, true).refuse, "rule set \"gen9\""));
+
+    {
+      RoomRules g6 = nf.rules;
+      SetRuleChoice(g6, "gen6", "3,4", "");
+      g6.format.clear();
+      g6.formatHash.clear();
+      CHECK(g6.rs == "gen6" && g6.ruleSet == "gen4" && NeedsNewProtocol(g6));
+      CHECK(RoomNumbers(g6) == "6f" && RoomNumbers(nf.rules) == "3");
+      CHECK(!Has(Judge(roomCaps, g6, mine, true).refuse, "rule set"));
+      Capabilities oldGame = mine;
+      oldGame.knownRuleSets = "xd,gen4";
+      CHECK(Has(Judge(roomCaps, g6, oldGame, true).refuse, "rule set \"gen6\""));
+      Capabilities has3 = mine, has6 = mine;
+      has3.numbers = "3";
+      has6.numbers = "6f";
+      CHECK(Has(Judge(roomCaps, g6, has3, true).restart, "numbers of this room"));
+      CHECK(!Has(Judge(roomCaps, g6, has6, true).restart, "numbers of this room"));
+      CHECK(Has(Judge(roomCaps, g6, has6, false).restart, "numbers of this room") == false);
+      has6.numbers = "6";
+      CHECK(Has(Judge(roomCaps, g6, has6, true).restart, "numbers of this room"));
+      Fingerprint f;
+      f.caps = has6;
+      f.caps.numbers = "7f";
+      f.rules = g6;
+      Fingerprint back;
+      CHECK(Decode(Encode(f), back) && back.caps.numbers == "7f" && back.rules.rs == "gen6");
+    }
+    later = nf.rules;
+    later.gens = "3,4,5";
+    CHECK(Has(Judge(roomCaps, later, mine, true).refuse, "generation 5"));
+    later = nf.rules;
+    later.formatHash = "ffffffff";
+    CHECK(Has(Judge(roomCaps, later, mine, true).refuse, "another version"));
+    later.format = "nonsense";
+    CHECK(Has(Judge(roomCaps, later, mine, true).refuse, "not in this version"));
+    CHECK(Has(Judge(roomCaps, later, mine, false).refuse, "does not have the format"));
+  }
+  {
+    RoomRules x;
+    CHECK(ParseRules("rules=classic;rs=xd;gens=3;format=gen4_singles;fmthash=ab12cd34;sleep_clause=on;preview=on;pick=3;preview_timer=90;bank=420", x, &err));
+    CHECK(x.sleepClause && x.preview && x.pick == 3 && x.previewSeconds == 90 && x.bankSeconds == 420 && NeedsExtras(x) && NeedsNewProtocol(x));
+    Fingerprint f;
+    f.rules = x;
+    const std::vector<uint8_t> blob = Encode(f);
+    const std::string text(blob.begin(), blob.end());
+    CHECK(text.find("proto=3\n") != std::string::npos && text.find("r.ex=sleep:1,pv:1,pick:3,pvt:90,bank:420") != std::string::npos);
+    CHECK(blob.size() <= 400);
+    Fingerprint back2;
+    CHECK(Decode(blob, back2) && back2.rules.sleepClause && back2.rules.preview && back2.rules.pick == 3 && back2.rules.previewSeconds == 90 && back2.rules.bankSeconds == 420);
+    CHECK(ExtrasKeyText(back2.rules).find("sleep_clause=on") != std::string::npos && ExtrasKeyText(back2.rules).find("bank=420") != std::string::npos);
+    RoomRules again;
+    CHECK(ParseRules("rules=classic" + ExtrasKeyText(x), again, &err) && again.sleepClause && again.pick == 3 && again.format == "gen4_singles");
+    Capabilities mine;
+    mine.knownFormats = "gen4_singles:ab12cd34";
+    Capabilities roomCaps;
+    roomCaps.protocol = 3;
+    CHECK(Judge(roomCaps, x, mine, true).refuse.empty());
+    mine.protocol = 1;
+    Verdict old1 = Judge(roomCaps, x, mine, true);
+    CHECK(!old1.Ok() && Has(old1.refuse, "format rules") && Has(old1.refuse, "Update the game"));
+    mine.protocol = 2;
+    CHECK(Has(Judge(roomCaps, x, mine, true).refuse, "format rules"));
+    CHECK(Has(Judge(roomCaps, x, mine, false).refuse, "does not know this room's format rules"));
+    RoomRules plainFormat = x;
+    plainFormat.sleepClause = plainFormat.preview = false, plainFormat.pick = plainFormat.previewSeconds = plainFormat.bankSeconds = 0;
+    CHECK(!NeedsExtras(plainFormat) && NeedsNewProtocol(plainFormat));
+    Fingerprint pf;
+    pf.rules = plainFormat;
+    const std::vector<uint8_t> pb = Encode(pf);
+    CHECK(std::string(pb.begin(), pb.end()).find("proto=2\n") != std::string::npos && std::string(pb.begin(), pb.end()).find("r.ex=") == std::string::npos);
+    CHECK(!ParseRules("pick=3", again, &err));
+    CHECK(!ParseRules("preview=on;pick=9", again, &err));
+    CHECK(RulesText(x).find("Sleep clause") != std::string::npos && RulesText(x).find("team preview") != std::string::npos);
+  }
+  {
+    CHECK(ActionNumbers("1 0 19 5 1 0 0 0 0 0") == 9);
+    CHECK(ActionNumbers("1 0 19 5 1 0 0 0 0") == 8);
+    CHECK(ActionNumbers("2 0 19 5 1 0 0 0 0 1 19 6 2 0 0 0 0") == 8);
+    CHECK(ActionNumbers("2 0 19 5 1 0 0 0 0 0 1 19 6 2 0 0 0 0 1") == 9);
+    CHECK(ActionNumbers("2 0 19 5 1 0 0 0 0 0 1 19 6 2 0 0 0 0") == 0);
+    CHECK(ActionNumbers("") == 0 && ActionNumbers("x 1 2") == 0);
+    CHECK(ActionNumbers("1 0 8 0 0 0 0 0 0 0") == 9);
   }
   std::printf("online_room_test: %d checks, %d failed\n", sChecks, sFailed);
   return sFailed ? 1 : 0;

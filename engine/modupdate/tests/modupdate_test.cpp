@@ -264,14 +264,72 @@ void testSigning(const fs::path& tmp) {
   check(mu::EvaluateTrust(g, "mymod", "", "").trust == Trust::FirstUse, "trust: no pinned key = first use (the key will be pinned)");
   check(mu::EvaluateTrust(g, "mymod", pub, "").trust == Trust::Trusted, "trust: the pinned key signs = trusted");
   const auto otherKey = mu::EvaluateTrust(o, "mymod", pub, "");
-  check(otherKey.trust == Trust::Refused && otherKey.text.find("DIFFERENT key") != std::string::npos, "trust: another key than the pinned one is refused, with a plain reason");
+  check(otherKey.trust == Trust::NeedsConfirm && otherKey.text.find("DIFFERENT key") != std::string::npos && otherKey.oldKey == pub && otherKey.newKey == otherPub &&
+            !mu::PinsKey(otherKey.trust),
+        "trust: another key than the pinned one, no announcement: needs the player's explicit confirmation (never silent), with a plain reason");
   const auto noSig = mu::EvaluateTrust(u, "mymod", pub, "");
   check(noSig.trust == Trust::Refused && noSig.text.find("isn't signed") != std::string::npos, "trust: no signature is refused, with a plain reason");
   check(mu::EvaluateTrust(t, "mymod", "", "").trust == Trust::Refused, "trust: a bad signature is refused");
   check(mu::EvaluateTrust(g, "othermod", "", "").trust == Trust::Refused, "trust: an update file for another mod is refused");
-  check(mu::EvaluateTrust(g, "mymod", "", otherPub).trust == Trust::Refused, "trust: a key different from the mod's own author_key is refused");
+  check(mu::EvaluateTrust(g, "mymod", "", otherPub).trust == Trust::NeedsConfirm, "trust: a key different from the mod's own author_key needs the player's confirmation");
   check(mu::EvaluateTrust(g, "mymod", "", pub).trust == Trust::FirstUse, "trust: the mod's author_key equal to the signer is accepted");
   check(mc::KeyFingerprint(pub).size() == 19, "signing: the fingerprint has four groups of four");
+
+  {
+    const fs::path newKeyFile = tmp / "keys" / "author2.key", thirdKeyFile = tmp / "keys" / "author3.key";
+    std::string message;
+    check(mc::RotateKeyFile(keyFile, newKeyFile, message, error) && fs::exists(newKeyFile) && message.find("From now on pack with --key") != std::string::npos,
+          "rotate: --rotate-key makes the new key file (when it is missing) and says what to do next");
+    uint8_t seed2[32];
+    std::string pubNew;
+    check(mc::ReadKeyFile(newKeyFile, seed2, pubNew, error) && pubNew != pub, "rotate: the new key file is another key and still reads as a key file");
+    const std::vector<mc::KeyChange> changes = mc::ReadKeyChanges(newKeyFile);
+    check(changes.size() == 1 && changes[0].oldKey == pub && changes[0].newKey == pubNew && mc::VerifyKeyChange(changes[0]), "rotate: the statement is in the new key file and verifies");
+    check(mc::ReadKeyChanges(keyFile).empty(), "rotate: the old key file is not changed");
+    check(!mc::RotateKeyFile(keyFile, keyFile, message, error), "rotate: a key cannot be rotated into itself");
+    mc::KeyChange forged = changes[0];
+    forged.newKey = otherPub;
+    check(!mc::VerifyKeyChange(forged), "rotate: a statement with the new key changed does not verify");
+    mc::KeyChange stranger;
+    std::string why;
+    check(mc::MakeKeyChange(other, pubNew, stranger, why) && mc::VerifyKeyChange(stranger) && stranger.oldKey == otherPub, "rotate: anyone can sign a statement; it only counts for the key that signed it");
+
+    const std::string changed = mc::SignedUpdateText(f, seed2, pubNew, changes);
+    mc::UpdateFile c;
+    check(mc::ParseUpdateFile(changed, c, error) && c.signatureValid && c.publicKey == pubNew && c.keyChanges.size() == 1 && c.keyChanges[0].oldKey == pub,
+          "rotate: the update file carries the statement next to the signature and reads back");
+    const auto planned = mu::EvaluateTrust(c, "mymod", pub, "");
+    check(planned.trust == Trust::KeyChanged && mu::PinsKey(planned.trust) && planned.oldKey == pub && planned.newKey == pubNew && planned.text.find("as planned") != std::string::npos,
+          "rotate: a launcher that pinned the old key accepts the new key by itself (and will keep it)");
+    check(mu::EvaluateTrust(c, "mymod", pubNew, "").trust == Trust::Trusted, "rotate: a launcher that already pinned the new key: trusted as usual");
+    check(mu::EvaluateTrust(c, "mymod", "", pub).trust == Trust::KeyChanged, "rotate: the installed mod.json's author_key (the old key) follows the announcement too");
+    check(mu::EvaluateTrust(c, "mymod", otherPub, "").trust == Trust::NeedsConfirm, "rotate: the statement does not help a launcher that pinned some other key");
+    const std::string bare = mc::SignedUpdateText(f, seed2, pubNew);
+    mc::UpdateFile b;
+    check(mc::ParseUpdateFile(bare, b, error) && b.signatureValid && b.keyChanges.empty(), "lost key: an update signed with a new key and no statement reads fine");
+    const auto lost = mu::EvaluateTrust(b, "mymod", pub, "");
+    check(lost.trust == Trust::NeedsConfirm && !mu::PinsKey(lost.trust) && lost.text.find(mc::KeyFingerprint(pubNew)) != std::string::npos &&
+              lost.text.find("Nothing is installed until you confirm") != std::string::npos,
+          "lost key: the launcher shows the new key's fingerprint and waits for the player (never switches by itself)");
+    mc::UpdateFile forgedFile = c;
+    forgedFile.keyChanges[0].signature[0] = forgedFile.keyChanges[0].signature[0] == 'a' ? 'b' : 'a';
+    check(mu::EvaluateTrust(forgedFile, "mymod", pub, "").trust == Trust::NeedsConfirm, "lost key: a statement with a damaged signature counts for nothing");
+    check(mc::RotateKeyFile(newKeyFile, thirdKeyFile, message, error), "rotate: a second rotation (new -> third) works");
+    uint8_t seed3[32];
+    std::string pubThird;
+    mc::ReadKeyFile(thirdKeyFile, seed3, pubThird, error);
+    const std::vector<mc::KeyChange> chain = mc::ReadKeyChanges(thirdKeyFile);
+    check(chain.size() == 2, "rotate: the third key file also holds the earlier statement (a launcher several keys behind follows)");
+    mc::UpdateFile d;
+    mc::ParseUpdateFile(mc::SignedUpdateText(f, seed3, pubThird, chain), d, error);
+    check(mu::EvaluateTrust(d, "mymod", pub, "").trust == Trust::KeyChanged && mu::EvaluateTrust(d, "mymod", pubNew, "").trust == Trust::KeyChanged,
+          "rotate: a chain of statements leads from either earlier key to the newest");
+    mc::UpdateFile e;
+    mc::ParseUpdateFile(mc::SignedUpdateText(f, seed3, pubThird, {chain[1]}), e, error);
+    check(mu::EvaluateTrust(e, "mymod", pub, "").trust == Trust::NeedsConfirm && mu::EvaluateTrust(e, "mymod", pubNew, "").trust == Trust::KeyChanged,
+          "rotate: with a link missing from the chain the older launcher is asked, the nearer one is not");
+    check(mc::KeyChainReaches({}, pub, pub) && !mc::KeyChainReaches({}, pub, pubNew), "rotate: a key reaches itself; nothing reaches another key without statements");
+  }
 
   mu::Folders folders;
   folders.stateFolder = tmp / "state";
@@ -319,7 +377,22 @@ void testProtection(const fs::path& tmp) {
   check(appended.worldChanged && !appended.addedRowsBreak, "protection: a row added at the end changes the world but doesn't break old rows");
   write(d / "data" / "rows.json", "{\"add\": {\"species\": {\"Blat\": {\"copy\": \"Eevee\"}, \"Zorb\": {\"copy\": \"Eevee\"}}}}");
   const auto reordered = mu::Analyse(a, d);
-  check(reordered.addedRowsBreak && reordered.worldChanged, "protection: reordered added rows break saves that hold them");
+  check(!reordered.addedRowsBreak && reordered.worldChanged && !reordered.reasons.empty(), "protection: reordered added Pokemon keep their labels: not a break (Continue remaps by label), still a world change");
+  const fs::path f = tmp / "prot" / "f", g = tmp / "prot" / "g";
+  for (const fs::path& p : {f, g}) mod(p.parent_path(), p.filename().string());
+  write(f / "data" / "rows.json", "{\"add\": {\"waza_data\": {\"X\": {\"copy\": 1}, \"Y\": {\"copy\": 1}}}}");
+  write(g / "data" / "rows.json", "{\"add\": {\"waza_data\": {\"X2\": {\"copy\": 1, \"label\": \"x\"}, \"Y\": {\"copy\": 1}}}}");
+  check(!mu::Analyse(f, g).addedRowsBreak, "protection: a renamed row that keeps its label (\"label\": \"x\" = the old slug) is not a break");
+  write(g / "data" / "rows.json", "{\"add\": {\"waza_data\": {\"X2\": {\"copy\": 1}, \"Y\": {\"copy\": 1}}}}");
+  check(mu::Analyse(f, g).addedRowsBreak, "protection: a row renamed with no \"label\" is a different label: breaks");
+  write(f / "data" / "rows.json", "{\"add\": {\"flag_data\": {\"X\": {}, \"Y\": {}}}}");
+  write(g / "data" / "rows.json", "{\"add\": {\"flag_data\": {\"Y\": {}, \"X\": {}}}}");
+  check(mu::Analyse(f, g).addedRowsBreak, "protection: tables without labels (flags) are numbered by order: reordering still breaks");
+  write(f / "mod.json", "{\"id\": \"f\", \"name\": \"F\", \"version\": \"1.0\", \"game\": \"GXXE01\", \"label_namespace\": \"a.b\"}");
+  write(g / "mod.json", "{\"id\": \"f\", \"name\": \"F\", \"version\": \"1.1\", \"game\": \"GXXE01\", \"label_namespace\": \"a.c\"}");
+  write(f / "data" / "rows.json", "{\"add\": {\"moves\": {\"X\": {\"copy\": 1}}}}");
+  write(g / "data" / "rows.json", "{\"add\": {\"moves\": {\"X\": {\"copy\": 1}}}}");
+  check(mu::Analyse(f, g).addedRowsBreak, "protection: a changed label_namespace makes every row a new row: breaks");
   write(e / "data" / "rows.json", "{\"add\": {\"species\": {\"Zorb\": {\"copy\": \"Eevee\"}}}}");
   check(mu::Analyse(a, e).addedRowsBreak, "protection: a removed row breaks saves that hold it");
   write(e / "data" / "rows.json", "{\"pokemon\": {\"#1\": {\"hp\": 3}}}");
@@ -327,6 +400,15 @@ void testProtection(const fs::path& tmp) {
   const auto numbers = mu::Analyse(a, e);
   check(numbers.worldChanged && !numbers.addedRowsBreak && !numbers.reasons.empty(), "protection: changed numbers are a world change, with a reason in words");
   check(mu::PlaythroughsUsing({{"Save 1", tmp / "nowhere"}}, "x").empty(), "protection: no setup files = no playthrough uses the mod");
+  {
+    const fs::path root = tmp / "numbers_card";
+    write(root / "playthroughs" / "Card A" / "pt_1.json",
+          "{\"format\": 1, \"engine\": \"faithful\", \"mods\": [{\"id\": \"tower\", \"name\": \"Tower\", \"version\": \"1.0\", \"applies\": \"any_time\"}], "
+          "\"mod_data\": {\"tower\": {\"version\": \"1.0\", \"values\": {\"streak\": 48}}}, \"save\": {\"trainer\": \"Ada\", \"trainer_id\": 1, \"secret_id\": 2}}");
+    const auto users = mu::PlaythroughsUsing({{"Save 1", root}}, "tower");
+    check(users.size() == 1 && users[0].keepsNumbers && users[0].version == "1.0" && users[0].label == "Ada", "protection: a save that keeps a script mod's numbers uses the mod, with the version that wrote them");
+    check(mu::PlaythroughsUsing({{"Save 1", root}}, "other").empty(), "protection: another mod is not a user");
+  }
 }
 
 void testInstall(const fs::path& tmp) {

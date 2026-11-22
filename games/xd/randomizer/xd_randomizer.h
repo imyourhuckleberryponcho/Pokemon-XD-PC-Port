@@ -75,11 +75,23 @@ void SetGen4Species(std::vector<Gen4Species> species);
 bool LoadGen4Species(const std::filesystem::path& randomizerTxt, std::string& error);
 void TranslateGen4Species(const std::function<void(Gen4Species&)>& fix);
 bool CodeIncludesGen4(const std::string& code);
+bool LoadGen57Species(const std::filesystem::path& randomizerTxt, std::string& error);
+bool CodeIncludesGen57(const std::string& code);
 
 Style StyleOf(const engine::randomizer::Settings& s);
 uint32_t CodeVersionOf(const std::string& code);
 std::string CodeFor(Style style, uint64_t seed);
 bool NormalizeCode(const std::string& text, std::string& code, std::string& error);
+
+struct MoreShadowsPlan {
+  int amount = 0;
+  uint64_t seed = 0;
+};
+bool ParseMoreShadows(const std::string& text, MoreShadowsPlan& plan);
+std::string MoreShadowsText(int amount, uint64_t seed);
+uint32_t MoreShadowsRows();
+bool GenerateMoreShadows(const engine::mods::DataCatalog& catalog, const engine::mods::EntryReader& read, const MoreShadowsPlan& plan,
+                         const Result* rando, bool gen4, engine::randomizer::ModOutput& out, std::string& error, bool gen57 = false);
 
 }
 

@@ -96,6 +96,7 @@ static_assert(std::size(kGcInputs) == kGcInputCount);
 constexpr GcInputInfo kActions[] = {
     {"fast_forward", "Fast-forward"},
     {"speedrun_break", "Speedrun break"},
+    {"replay_bar", "Replay bar"},
 };
 static_assert(std::size(kActions) == kActionCount);
 
@@ -231,6 +232,11 @@ ActionMap DefaultActions(int port) {
     m.keys[brk] = {*ParseKeyToken("f6")};
   }
   m.pad[brk] = {Input::Button(PadButton::Back)};
+  const size_t bar = static_cast<size_t>(Action::ReplayBar);
+  if (port == 0) {
+    m.keys[bar] = {*ParseKeyToken("h")};
+  }
+  m.pad[bar] = {Input::Label(FaceLabel::Y)};
   return m;
 }
 

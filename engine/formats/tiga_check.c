@@ -94,6 +94,7 @@ uint32_t Tiga_FloorPlaceholder(const char* name) { return 0x7D000000u | placehol
 uint32_t Tiga_BattlePlaceholder(const char* name) { return 0x7A000000u | placeholder_hash(name); }
 uint32_t Tiga_ItemPlaceholder(const char* name) { return 0x79000000u | placeholder_hash(name); }
 uint32_t Tiga_SpeciesPlaceholder(const char* name) { return 0x78000000u | placeholder_hash(name); }
+uint32_t Tiga_SongPlaceholder(const char* name) { return 0x77000000u | placeholder_hash(name); }
 
 size_t Tiga_ReplaceInts(uint8_t* data, size_t size, const uint32_t* from, const uint32_t* to, size_t n) {
   size_t code = 0, words = 0, found = 0;

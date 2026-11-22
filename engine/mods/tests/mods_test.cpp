@@ -434,7 +434,7 @@ int main(int argc, char** argv) {
     LoadOptions wrong = opt;
     wrong.disc = disc.View("GXXP01");
     const LoadResult r = Load(wrong);
-    check(r.active.empty() && r.files.empty() && has_message(r, Message::Level::Problem, "GXXP01"),
+    check(r.active.empty() && r.files.empty() && has_message(r, Message::Level::Problem, "Made for"),
           "a mod for another game ID is refused, saying which disc this is");
   }
 
@@ -726,7 +726,7 @@ int main(int argc, char** argv) {
     check(mentions(row("b").warnings, "after \"Mod c\""), "review: a mod that wants to come after another further down says so");
     check(!row("gone").Usable() && row("gone").mod == nullptr && mentions(row("gone").problems, "Not in the mods folder"),
           "review: a listed mod that isn't there is a row with the reason");
-    check(!row("other").Usable() && mentions(row("other").problems, "GXXP01"), "review: a mod for another game version is not usable, with the reason");
+    check(!row("other").Usable() && mentions(row("other").problems, "Made for"), "review: a mod for another game version is not usable, with the reason");
     check(!row("needs").Usable() && mentions(row("needs").problems, "missing-one"), "review: a missing requirement is a reason");
     check(row("c2").mod == nullptr && !row("c2").on, "review: a listed mod that is off stays a row (off)");
     check(mentions(ReviewList(p, found, "").rows[4].problems, "GXXP01") == false, "review: no game ID given: the game isn't checked");
@@ -806,8 +806,8 @@ int main(int argc, char** argv) {
     check(r.scripts.size() == 2 && r.scripts[0].name == "scripts/a.lua" && r.scripts[1].name == "scripts/b.lua" &&
               r.scripts[0].modId == "lua1" && r.scripts[0].text == "-- first",
           "scripts: scripts/*.lua of a mod with \"scripts\": true, by name, with their text; .txt left out");
-    check(has_message(r, Message::Level::Warning, "only .lua files") && has_message(r, Message::Level::Warning, "does not say \"scripts\": true") &&
-              has_message(r, Message::Level::Warning, "has no scripts/*.lua"),
+    check(has_message(r, Message::Level::Warning, "only .luau") && has_message(r, Message::Level::Warning, "does not say \"scripts\": true") &&
+              has_message(r, Message::Level::Warning, "has no scripts/*.luau"),
           "scripts: a stray file, a scripts folder without the flag and an empty script mod are said");
     check(has_message(r, Message::Level::Problem, "newer script interface") || has_message(r, Message::Level::Warning, "newer script interface"),
           "scripts: a newer script_api is refused");

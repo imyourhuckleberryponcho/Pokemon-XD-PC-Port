@@ -17,7 +17,7 @@ inline const char* Off(Feature f) {
   case Feature::Gen4Pokemon: return nullptr;
   case Feature::ModernTypes: return "XG has its own modern rules.";
   case Feature::LanguagePacks: return "Would replace XG's own text.";
-  case Feature::DataAddRows: return "Adding rows is not available on XG: its tables have their own layout.";
+  case Feature::DataAddRows: return "Only new Pokemon, moves and items can be added on XG (tried there: add, save, CONTINUE, refused without the mod); story flags, rooms, battles, trainer decks and a Pokemon's own model, cry and face were not tried on XG.";
   case Feature::Mods: return nullptr;
   case Feature::Randomizer: return nullptr;
   case Feature::Online: return nullptr;
@@ -28,7 +28,7 @@ inline const char* Off(Feature f) {
 inline const char* Edition() { return On() ? "xg" : "xd"; }
 
 inline const char* OffForRule(const char* ruleId) {
-  if (std::strcmp(ruleId, "gen4_pokemon") == 0) return Off(Feature::Gen4Pokemon);
+  if (std::strcmp(ruleId, "gen4_pokemon") == 0 || std::strcmp(ruleId, "gen57_pokemon") == 0) return Off(Feature::Gen4Pokemon);
   if (std::strncmp(ruleId, "gen4_", 5) == 0) return Off(Feature::Gen4);
   if (std::strcmp(ruleId, "modern_types") == 0) return Off(Feature::ModernTypes);
   return nullptr;

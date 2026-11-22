@@ -11,6 +11,7 @@
 #include <vector>
 
 extern "C" {
+void (*PortXD_ShopTablesLinkedHook)(void) = nullptr;
 void* PortXD_GameAddressIfKnown(uint32_t gcAddress, uint32_t* size);
 void* PortMem_LowAlloc(size_t size, size_t align);
 }
@@ -195,6 +196,7 @@ int link_module(void* module, void* bss) {
       for (uint32_t g = 0; g < tables->numGlobals; g++)
         for (const Variable& v : kVariables)
           if (std::strcmp(v.name, tables->globals[g].name) == 0) *v.where = tables->globals[g].value;
+      if (PortXD_ShopTablesLinkedHook != nullptr) PortXD_ShopTablesLinkedHook();
     }
     sDataModules.push_back(std::move(m));
     return 1;

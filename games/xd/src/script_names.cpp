@@ -1,4 +1,5 @@
 #include "xd_gen4_abilities.h"
+#include "xd_mod_battle.h"
 #include "xd_modern_types.h"
 #include "xd_scripts.h"
 
@@ -6,6 +7,7 @@
 #include <script_names.h>
 
 #include <cstdio>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -54,18 +56,30 @@ engine::script::Names BuildNames(const engine::mods::LoadResult& result) {
   {
     std::vector<std::pair<std::string, int64_t>> abilities;
     xd::gen4::AppendAbilityNames(abilities);
+    xd::modbattle::AppendAbilityNames(abilities);
     std::vector<NameEntry> entries;
     for (const auto& [n, id] : abilities) entries.push_back({n, id});
     if (!entries.empty()) names.Add("ability", entries);
   }
+  std::set<int64_t> byCode;
   {
     std::vector<NameEntry> flags;
     std::vector<std::string> problems;
     engine::script::ParseNameFile(std::string_view(kStoryFlagNamesText, kStoryFlagNamesText_size), flags, problems);
     for (const std::string& p : problems) std::fprintf(stderr, "[script] story_flag_names.txt %s\n", p.c_str());
+    for (const NameEntry& e : flags) byCode.insert(e.value);
     if (!flags.empty()) names.Add("flag", flags);
   }
-  if (result.catalog != nullptr) FromDisc(*result.catalog, "flag", "flag", names);
+  if (result.catalog != nullptr) {
+    FromDisc(*result.catalog, "flag", "flag", names);
+    if (const engine::mods::NameList* l = result.catalog->FindList("flag_auto")) {
+      std::vector<NameEntry> entries;
+      for (const auto& [name, number] : l->names) {
+        if (byCode.count(number) == 0) entries.push_back({name, static_cast<int64_t>(number)});
+      }
+      if (!entries.empty()) names.Add("flag", entries);
+    }
+  }
   return names;
 }
 

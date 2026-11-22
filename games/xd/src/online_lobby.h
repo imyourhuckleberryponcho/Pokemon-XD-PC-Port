@@ -14,6 +14,10 @@ struct PcInfo {
   std::string gen4Off;
   bool gen4PackPresent = false;
   bool gen4Loaded = false;
+  struct FormatChoice { std::string id, name; bool enabled = true; std::string why; };
+  std::vector<FormatChoice> formats;
+  bool (*applyFormat)(RoomRules& room) = nullptr;
+  std::string (*formatLine)(const RoomRules& room, const char* what) = nullptr;
 };
 
 struct Option {
@@ -34,6 +38,7 @@ struct Row {
 
 std::vector<Row> SettingRows(const RoomRules& r, const PcInfo& pc);
 bool Cycle(RoomRules& r, const std::string& id, int dir, const PcInfo& pc);
+bool SelectFormat(RoomRules& r, const std::string& id, const PcInfo& pc);
 RoomRules Sanitized(RoomRules r, const PcInfo& pc);
 RoomRules DefaultRoom();
 
@@ -42,9 +47,17 @@ std::vector<std::string> RoomLines(const RoomRules& r, const std::string& editio
 std::string RulesToText(const RoomRules& r);
 
 std::string Msg(const std::string& verb, const std::string& arg = "");
+std::string JoinInts(const std::vector<int>& v);
+std::vector<int> SplitInts(const std::string& text);
+bool PickValid(const std::vector<int>& pick, int teamSize, int want);
+std::vector<int> TimeoutPick(const std::vector<int>& chosen, int teamSize, int want);
 struct Peer {
   bool accepted = false, declined = false, ready = false, rematch = false, left = false;
   int teamCount = -1;
+  bool pvTeam = false, pvCommit = false, pvReveal = false;
+  std::vector<int> pvIds;
+  std::string pvCommitHex;
+  std::string pvNonce, pvList;
   uint32_t nonce = 0;
 };
 bool Apply(Peer& peer, const std::string& line);

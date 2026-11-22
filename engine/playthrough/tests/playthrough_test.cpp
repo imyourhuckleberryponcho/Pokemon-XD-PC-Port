@@ -81,6 +81,26 @@ int main(int argc, char** argv) {
     check(moved.size() == 1 && moved[0].find("now gives") != std::string::npos, "added rows: another number (another load order): refused");
     const auto gone = ep::BoundProblems(bound, {{"zorb", "waza_data", "Zap Test", 375}});
     check(gone.size() == 1 && gone[0].find("no longer adds") != std::string::npos, "added rows: the mod is on but the row is gone: refused");
+    ep::Setup labelled = modded;
+    labelled.addedRows = {{"zorb", "pokemon_data", "Zorblat \"Z\"", 415, "species:ada.zorb/zorblat"}, {"zorb", "waza_data", "Zap Test", 375, "move:ada.zorb/zap-test"}};
+    ep::Setup readBack;
+    check(ep::FromJson(ep::ToJson(labelled), readBack, err) && readBack.addedRows == labelled.addedRows &&
+              ep::ToJson(labelled).find("\"label\": \"species:ada.zorb/zorblat\"") != std::string::npos,
+          "labels: written next to the numbers and read back");
+    check(!ep::CheckBound(labelled, labelled.addedRows).plan.Refused() && !ep::CheckBound(labelled, labelled.addedRows).plan.Needed(), "labels: same rows: nothing to do");
+    const auto shifted = ep::CheckBound(labelled, {{"x", "pokemon_data", "Other", 415, "species:x.y/other"}, {"zorb", "pokemon_data", "Zorblat \"Z\"", 416, "species:ada.zorb/zorblat"},
+                                                  {"zorb", "waza_data", "Zap Test", 375, "move:ada.zorb/zap-test"}});
+    check(shifted.plan.Needed() && shifted.plan.Map("species").at(415) == 416 && shifted.plan.Map("move").empty(), "labels: another mod before it: the save's number is remapped, not refused");
+    const auto lost = ep::CheckBound(labelled, {{"zorb", "waza_data", "Zap Test", 375, "move:ada.zorb/zap-test"}});
+    check(lost.plan.Refused() && lost.plan.problems[0].find("no longer adds") != std::string::npos, "labels: a label that is gone: refused, with the reason");
+    const auto none = ep::CheckBound(labelled, {});
+    check(none.plan.Refused() && none.plan.problems.size() == 2 && none.plan.problems[0].find("is not on") != std::string::npos, "labels: no mods on: refused, one reason per row");
+    const auto legacy = ep::CheckBound(bound, labelled.addedRows);
+    check(!legacy.plan.Refused() && !legacy.plan.Needed(), "labels: a file from before labels, the same numbers: loads as before");
+    const auto legacyMoved = ep::CheckBound(bound, {{"zorb", "pokemon_data", "Zorblat \"Z\"", 416, "species:ada.zorb/zorblat"}, {"zorb", "waza_data", "Zap Test", 375, "move:ada.zorb/zap-test"}});
+    check(legacyMoved.plan.Needed() && legacyMoved.plan.Map("species").at(415) == 416, "labels: a file from before labels, a number that moved: matched by mod + name, remapped");
+    check(ep::CheckBound(bound, {}).plan.Refused() && ep::CheckBound(bound, {{"zorb", "pokemon_data", "Zorblat \"Z\"", 416}, {"zorb", "waza_data", "Zap Test", 375}}).plan.Refused(),
+          "labels: from before labels and mods without labels: the old rule (a moved number is refused)");
   }
   {
     ep::Setup run = modded;
@@ -100,12 +120,22 @@ int main(int argc, char** argv) {
     run.challengeState.clear();
     check(ep::FromJson(ep::ToJson(run), again, error) && again.challengeState.empty(), "challenge state: emptied again");
     check(ep::ToJson(run).find("battles_won") == std::string::npos && !again.battlesWonKept, "battles won not kept: not written");
+    check(ep::ToJson(run).find("ext_required") == std::string::npos && again.extRequired.empty(), "no required extension sections: not written");
+    run.extRequired = {"shadow", "bag"};
+    check(ep::FromJson(ep::ToJson(run), again, error) && again.extRequired == run.extRequired, "required extension sections: round trip");
+    run.extRequired.clear();
     run.battlesWonKept = true;
     check(ep::ToJson(run).find("\"battles_won\": []") != std::string::npos, "battles won kept, none yet: an empty list is written");
     check(ep::FromJson(ep::ToJson(run), again, error) && again.battlesWonKept && again.battlesWon.empty(), "battles won: empty round trip");
     run.battlesWon = {216, 375, 393};
     check(ep::FromJson(ep::ToJson(run), again, error) && again.battlesWonKept && again.battlesWon == run.battlesWon,
           "battles won: round trip");
+    check(ep::ToJson(run).find("pokedex") == std::string::npos && !again.dexKept, "pokedex not kept: not written");
+    run.dexKept = true;
+    run.dexCaught = "1,4,133";
+    run.dexShiny = "133";
+    check(ep::FromJson(ep::ToJson(run), again, error) && again.dexKept && again.dexCaught == "1,4,133" && again.dexShiny == "133", "pokedex lists: round trip");
+    run.dexKept = false;
     ep::Setup timed;
     check(ep::ToJson(timed).find("speedrun") == std::string::npos && ep::ToJson(timed).find("stats") == std::string::npos,
           "no timer, no stats: nothing written");
@@ -127,6 +157,13 @@ int main(int argc, char** argv) {
           "speedrun timer: finished round trip");
     check(timed.PureFaithful() && timed.Vanilla() && ep::Label(timed) == ep::Label(ep::Setup{}),
           "the timer does not change Faithful / Vanilla or the label");
+    ep::Setup plain, more, moreBack;
+    check(ep::ToJson(plain).find("more_shadows") == std::string::npos && plain.moreShadows.empty(), "no More Shadow Pokemon: nothing written");
+    more.moreShadows = "few:123456789";
+    check(ep::ToJson(more).find("\"more_shadows\": \"few:123456789\"") != std::string::npos, "More Shadow Pokemon: written");
+    check(ep::FromJson(ep::ToJson(more), moreBack, error) && moreBack.moreShadows == "few:123456789", "More Shadow Pokemon: round trip");
+    check(!more.Vanilla() && ep::Label(more).find("More Shadow Pokemon: few") != std::string::npos && ep::Label(more).find("Vanilla") == std::string::npos,
+          "More Shadow Pokemon: not Vanilla, the label names the amount (not the seed)");
   }
   {
     ep::Setup old;
@@ -254,6 +291,29 @@ int main(int argc, char** argv) {
     check(has("Text speed") && has("Fast-forward key") && has("Fast battle animations") && has("Loading speed") &&
               has("Memory card speed") && !has("Widescreen") && !has("Resolution") && !has("Volume") && !has("Fast-forward speed"),
           "engine setting names: the speed-ups and timings, no picture / sound / preference");
+  }
+
+  {
+    ep::Setup s;
+    s.mods.push_back({"tower", "Tower", "1.0", em::Applies::AnyTime});
+    em::ModValueSet d;
+    d.mod = "tower";
+    d.version = "1.0";
+    d.values["streak"] = 48;
+    d.values["currency:bp"] = 123456789;
+    s.modData.push_back(d);
+    ep::Setup back;
+    std::string err;
+    check(ep::FromJson(ep::ToJson(s), back, err) && back.modData.size() == 1 && back.modData[0] == d, "mod data: written and read back");
+    em::ModFolder f;
+    f.manifest.id = "tower";
+    f.manifest.version = "1.0";
+    check(ep::Compare(back, {f}).Ok(), "mod data: the same version, nothing to say");
+    f.manifest.version = "1.1";
+    const ep::Check c = ep::Compare(back, {f});
+    check(c.notes.size() == 1 && c.notes[0].find("1.0") != std::string::npos && c.notes[0].find("1.1") != std::string::npos, "mod data: another version is said plainly: " + (c.notes.empty() ? std::string() : c.notes[0]));
+    check(ep::Compare(back, {}).notes.size() >= 1, "mod data: a mod that is not on is said");
+    check(ep::FromJson("{\"format\": 1, \"engine\": \"faithful\", \"mods\": []}", back, err) && back.modData.empty(), "mod data: a file without it has none");
   }
 
   fs::remove_all(root, ec);

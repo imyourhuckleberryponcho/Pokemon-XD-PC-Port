@@ -1,4 +1,4 @@
-add_library(engine_formats STATIC formats/lzss_fsys.c formats/fsys_build.c formats/rel.c formats/data_table.c formats/tiga_check.c)
+add_library(engine_formats STATIC formats/dsp_adpcm.cpp formats/lzss_fsys.c formats/fsys_build.c formats/rel.c formats/data_table.c formats/tiga_check.c)
 target_include_directories(engine_formats PUBLIC formats/include)
 
 add_subdirectory(formats/pbr)
@@ -45,6 +45,7 @@ target_link_libraries(controls_test PRIVATE engine_controls)
 
 add_library(engine_memcard STATIC memcard/memcard.cpp memcard/save_backups.cpp)
 target_include_directories(engine_memcard PUBLIC memcard/include)
+target_link_libraries(engine_memcard PUBLIC engine_saveext)
 
 add_executable(memcard_test memcard/tests/memcard_test.cpp)
 target_link_libraries(memcard_test PRIVATE engine_memcard)
@@ -86,13 +87,21 @@ target_compile_options(disc_check_test PRIVATE ${XD_FLAG_UTF8}) # (a test path w
 aurora_copy_runtime_dlls(disc_check_test)
 
 add_library(engine_mods STATIC mods/mod_manifest.cpp mods/mod_list.cpp mods/mod_load.cpp mods/mod_review.cpp mods/mod_deps.cpp mods/mods_disc.cpp
-  mods/data_mods.cpp mods/mod_packs.cpp mods/mod_layout.cpp)
+  mods/data_mods.cpp mods/mod_packs.cpp mods/mod_layout.cpp mods/labels.cpp mods/mod_values.cpp)
 target_include_directories(engine_mods PUBLIC mods/include)
 target_link_libraries(engine_mods PUBLIC engine_formats platform_disc engine_hdtex engine_i18n)
 
 add_executable(mods_test mods/tests/mods_test.cpp)
 target_link_libraries(mods_test PRIVATE engine_mods)
 aurora_copy_runtime_dlls(mods_test)
+
+add_executable(labels_test mods/tests/labels_test.cpp)
+target_link_libraries(labels_test PRIVATE engine_mods)
+aurora_copy_runtime_dlls(labels_test)
+
+add_executable(mod_values_test mods/tests/mod_values_test.cpp)
+target_link_libraries(mod_values_test PRIVATE engine_mods)
+aurora_copy_runtime_dlls(mod_values_test)
 
 add_executable(mod_layout_test mods/tests/mod_layout_test.cpp)
 target_link_libraries(mod_layout_test PRIVATE engine_mods)
@@ -103,30 +112,35 @@ target_link_libraries(data_mods_test PRIVATE engine_mods)
 target_compile_options(data_mods_test PRIVATE ${XD_FLAG_UTF8})
 aurora_copy_runtime_dlls(data_mods_test)
 
-add_library(lua54 STATIC
-  ${PROJECT_SOURCE_DIR}/third_party/lua/src/lapi.c ${PROJECT_SOURCE_DIR}/third_party/lua/src/lauxlib.c
-  ${PROJECT_SOURCE_DIR}/third_party/lua/src/lbaselib.c ${PROJECT_SOURCE_DIR}/third_party/lua/src/lcode.c
-  ${PROJECT_SOURCE_DIR}/third_party/lua/src/lctype.c ${PROJECT_SOURCE_DIR}/third_party/lua/src/ldebug.c
-  ${PROJECT_SOURCE_DIR}/third_party/lua/src/ldo.c ${PROJECT_SOURCE_DIR}/third_party/lua/src/ldump.c
-  ${PROJECT_SOURCE_DIR}/third_party/lua/src/lfunc.c ${PROJECT_SOURCE_DIR}/third_party/lua/src/lgc.c
-  ${PROJECT_SOURCE_DIR}/third_party/lua/src/llex.c ${PROJECT_SOURCE_DIR}/third_party/lua/src/lmathlib.c
-  ${PROJECT_SOURCE_DIR}/third_party/lua/src/lmem.c ${PROJECT_SOURCE_DIR}/third_party/lua/src/lobject.c
-  ${PROJECT_SOURCE_DIR}/third_party/lua/src/lopcodes.c ${PROJECT_SOURCE_DIR}/third_party/lua/src/lparser.c
-  ${PROJECT_SOURCE_DIR}/third_party/lua/src/lstring.c ${PROJECT_SOURCE_DIR}/third_party/lua/src/lstrlib.c
-  ${PROJECT_SOURCE_DIR}/third_party/lua/src/ltable.c ${PROJECT_SOURCE_DIR}/third_party/lua/src/ltm.c
-  ${PROJECT_SOURCE_DIR}/third_party/lua/src/lundump.c ${PROJECT_SOURCE_DIR}/third_party/lua/src/lvm.c
-  ${PROJECT_SOURCE_DIR}/third_party/lua/src/lzio.c
-  script/lua_state_fixed_seed.c script/lua_table_fixed_pivot.c) # (lstate.c and ltablib.c: through these two)
-target_include_directories(lua54 PUBLIC ${PROJECT_SOURCE_DIR}/third_party/lua/src)
+set(_luau ${PROJECT_SOURCE_DIR}/third_party/luau)
+file(GLOB _luau_srcs ${_luau}/Common/src/*.cpp ${_luau}/Ast/src/*.cpp ${_luau}/Bytecode/src/*.cpp ${_luau}/Compiler/src/*.cpp ${_luau}/VM/src/*.cpp)
+add_library(luau STATIC ${_luau_srcs})
+target_include_directories(luau PUBLIC ${_luau}/VM/include ${_luau}/Compiler/include
+  PRIVATE ${_luau}/Common/include ${_luau}/Ast/include ${_luau}/Bytecode/include ${_luau}/Compiler/src ${_luau}/VM/src)
+target_compile_features(luau PUBLIC cxx_std_17)
+target_compile_definitions(luau PUBLIC "LUA_API=extern \"C\"" LUA_USE_LONGJMP=0) # (errors are C++ exceptions: the host's C++ frames unwind properly)
 if (MSVC)
-  target_compile_options(lua54 PRIVATE /W0)
+  target_compile_options(luau PRIVATE /W0 /wd4244 /wd4267)
 else ()
-  target_compile_options(lua54 PRIVATE -w)
+  target_compile_options(luau PRIVATE -w -fno-math-errno)
 endif ()
 
 add_library(engine_script STATIC script/script_host.cpp script/script_names.cpp)
 target_include_directories(engine_script PUBLIC script/include)
-target_link_libraries(engine_script PUBLIC lua54)
+target_link_libraries(engine_script PUBLIC luau)
+
+add_library(engine_stb_vorbis STATIC ${PROJECT_SOURCE_DIR}/third_party/stb_vorbis/stb_vorbis.c)
+target_include_directories(engine_stb_vorbis PUBLIC ${PROJECT_SOURCE_DIR}/third_party/stb_vorbis)
+if (NOT MSVC)
+  target_compile_options(engine_stb_vorbis PRIVATE -w)
+else ()
+  target_compile_options(engine_stb_vorbis PRIVATE /w)
+endif ()
+add_library(engine_audio STATIC audio/audio_codec.cpp audio/audio_ogg.cpp audio/audio_stream.cpp audio/audio_sfx.cpp)
+target_include_directories(engine_audio PUBLIC audio/include)
+target_link_libraries(engine_audio PUBLIC engine_stb_vorbis)
+add_executable(audio_test audio/tests/audio_test.cpp)
+target_link_libraries(audio_test PRIVATE engine_audio)
 
 add_executable(script_test script/tests/script_test.cpp)
 target_link_libraries(script_test PRIVATE engine_script)
@@ -141,9 +155,22 @@ target_link_libraries(modcheck_test PRIVATE engine_modcheck)
 target_compile_definitions(modcheck_test PRIVATE MODCHECK_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/modcheck/tests/fixtures")
 aurora_copy_runtime_dlls(modcheck_test)
 
+add_library(engine_rulesets STATIC rulesets/rulesets.cpp)
+target_include_directories(engine_rulesets PUBLIC rulesets/include PRIVATE mods) # (mods: json.h, a header by itself)
+target_compile_options(engine_rulesets PRIVATE ${XD_FLAG_UTF8})
+
+add_executable(rulesets_test rulesets/tests/rulesets_test.cpp)
+target_include_directories(rulesets_test PRIVATE mods)
+target_link_libraries(rulesets_test PRIVATE engine_rulesets)
+target_compile_options(rulesets_test PRIVATE ${XD_FLAG_UTF8})
+add_library(engine_saveext STATIC saveext/saveext.cpp)
+target_include_directories(engine_saveext PUBLIC saveext/include)
+add_executable(saveext_test saveext/tests/saveext_test.cpp)
+target_link_libraries(saveext_test PRIVATE engine_saveext)
+
 add_library(engine_playthrough STATIC playthrough/playthrough.cpp)
 target_include_directories(engine_playthrough PUBLIC playthrough/include PRIVATE mods)
-target_link_libraries(engine_playthrough PUBLIC engine_mods engine_settings)
+target_link_libraries(engine_playthrough PUBLIC engine_mods engine_settings engine_rulesets)
 target_compile_options(engine_playthrough PRIVATE ${XD_FLAG_UTF8})
 
 add_executable(playthrough_test playthrough/tests/playthrough_test.cpp)
@@ -227,3 +254,8 @@ add_executable(presence_test presence/tests/presence_test.cpp)
 target_link_libraries(presence_test PRIVATE engine_presence)
 add_executable(presence_fake_server presence/tests/presence_fake_server.cpp) # (scripted runs: records what the launcher / game send)
 target_link_libraries(presence_fake_server PRIVATE Threads::Threads)
+
+add_library(engine_pokedex STATIC pokedex/pokedex.cpp)
+target_include_directories(engine_pokedex PUBLIC pokedex/include)
+add_executable(pokedex_test pokedex/tests/pokedex_test.cpp)
+target_link_libraries(pokedex_test PRIVATE engine_pokedex)

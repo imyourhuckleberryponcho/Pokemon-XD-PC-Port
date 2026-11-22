@@ -63,6 +63,7 @@ extern "C" void PortShot_GamePicture(PortShotRgbaDone done, void* ctx) {
 #include <cstring>
 #include <deque>
 #include <memory>
+#include <new>
 #include <string>
 #include <unordered_map>
 
@@ -453,7 +454,29 @@ bool PortShot_LinuxFrozenDraw(const uint8_t* frame, size_t size) {
   return true;
 }
 
+extern "C++" {
+namespace {
+bool sRedrawOpen = false;
+void FrameImpl();
+}
+}
+
 void PortShot_LinuxFrame(void) {
+  try {
+    FrameImpl();
+  } catch (const std::bad_alloc&) {
+    std::fprintf(stderr, "[window shot] out of memory while taking the game's picture: no picture this time\n");
+    if (sRedrawOpen) {
+      PortFreeze_RedrawEnd();
+      sRedrawOpen = false;
+    }
+    if (!sRequests.empty()) FinishGrab(nullptr, "out of memory");
+  }
+}
+
+extern "C++" {
+namespace {
+void FrameImpl() {
   if (sRequests.empty()) {
     return;
   }
@@ -485,11 +508,16 @@ void PortShot_LinuxFrame(void) {
     return;
   }
   size_t size = 0;
+  sRedrawOpen = true;
   const uint8_t* frame = PortFreeze_Picture(&size);
   sColourFreeze = 0;
+  if (const char* fail = std::getenv("XD_TEST_SHOT_FAIL"); fail != nullptr && std::strcmp(fail, "alloc") == 0) throw std::bad_alloc();
   const bool accepted = WriteAndCapture(frame, size);
   PortFreeze_RedrawEnd();
+  sRedrawOpen = false;
   ColourAsked(accepted);
+}
+}
 }
 
 #ifndef _WIN32

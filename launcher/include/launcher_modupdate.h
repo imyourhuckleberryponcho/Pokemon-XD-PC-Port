@@ -72,7 +72,12 @@ class Updater {
     engine::modupdate::Offer offer;
     std::string authorKey;
     bool isNew = false;
+    bool keyConfirmed = false;
   };
+  static bool Allowed(const Item& it) {
+    return it.offer.trust.trust != engine::modupdate::Trust::Refused &&
+           (it.offer.trust.trust != engine::modupdate::Trust::NeedsConfirm || it.keyConfirmed);
+  }
   void StartCheck();
   void StartFetchNew(const std::string& id, const std::string& link);
   void StartDownload(size_t index);

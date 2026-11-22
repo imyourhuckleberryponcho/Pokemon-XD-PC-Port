@@ -72,6 +72,7 @@ bool read_disc_entry(const std::string& archive, const std::string& entry, std::
 }
 
 std::filesystem::path sGen4Pack;
+std::filesystem::path sGen57Pack;
 bool sGen4Spots = false;
 
 std::vector<em::DataModFile> gen4_files() {
@@ -88,6 +89,18 @@ std::vector<em::DataModFile> gen4_files() {
     std::ifstream in(f, std::ios::binary);
     std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
     out.push_back({"gen4", "Gen 4 Pokemon and moves", "gen4/" + f.filename().string(), text});
+  }
+  if (!sGen57Pack.empty()) {
+    std::vector<std::filesystem::path> more;
+    for (const auto& e : std::filesystem::directory_iterator(sGen57Pack / "data", ec)) {
+      if (e.path().extension() == ".json") more.push_back(e.path());
+    }
+    std::sort(more.begin(), more.end());
+    for (const auto& f : more) {
+      std::ifstream in(f, std::ios::binary);
+      std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+      out.push_back({"gen57", "Gen 5-7 Pokemon and moves", "gen57/" + f.filename().string(), text});
+    }
   }
   return out;
 }
@@ -1165,15 +1178,27 @@ int main(int argc, char** argv) {
       }
     }
   }
+  for (int i = 2; i + 1 < argc; i++) {
+    if (std::strcmp(argv[i], "--gen57") == 0) {
+      sGen57Pack = argv[i + 1];
+      if (!xr::LoadGen57Species(sGen57Pack / "randomizer.txt", error)) {
+        std::fprintf(stderr, "FAILED: %s\n", error.c_str());
+        return 2;
+      }
+    }
+  }
   if (std::strcmp(argv[2], "--selftest") == 0) return run_selftest(cat);
 
   er::Settings s;
   xr::ApplyStyle(s, xr::Style::Custom);
-  std::string out;
+  std::string out, moreShadows;
   for (int i = 2; i < argc; i++) {
     const std::string a = argv[i];
     const char* v = i + 1 < argc ? argv[i + 1] : nullptr;
-    if (a == "--code" && v) {
+    if (a == "--more-shadows" && v) {
+      moreShadows = v;
+      i++;
+    } else if (a == "--code" && v) {
       bool seedOnly = false;
       if (!er::DecodeCode(sc, v, s, seedOnly, error)) {
         std::fprintf(stderr, "FAILED: %s\n", error.c_str());
@@ -1200,7 +1225,7 @@ int main(int argc, char** argv) {
       }
       s.Set(sc, kv.substr(0, eq), static_cast<uint32_t>(std::strtoul(kv.c_str() + eq + 1, nullptr, 10)));
       i++;
-    } else if (a == "--gen4" && v) {
+    } else if ((a == "--gen4" || a == "--gen57") && v) {
       i++;
     } else if (a == "--gen4-spots") {
       sGen4Spots = true;
@@ -1227,5 +1252,26 @@ int main(int argc, char** argv) {
   if (!r.text.Empty()) std::printf("%zu TM description(s) rewritten for the bag's box (game.json: what the game applies)\n", r.text.messages.size());
   std::printf("code: %s\n%zu numbers changed, written to %s (data/randomizer.json, spoiler.txt)\n", r.code.c_str(), r.mod.Count(), out.c_str());
   std::printf("%s the data-mod layer took %zu of them%s%s\n", ok ? "ok  " : "FAIL", changes, report.empty() ? "" : ":\n", report.c_str());
+  if (!moreShadows.empty()) {
+    xr::MoreShadowsPlan plan;
+    if (!xr::ParseMoreShadows(moreShadows, plan)) {
+      std::fprintf(stderr, "FAILED: --more-shadows wants few|many|all:<seed number>\n");
+      return 2;
+    }
+    if (!sGen4Pack.empty()) {
+      std::string e2;
+      if (!xr::LoadGen4Species(sGen4Pack / "randomizer.txt", e2)) std::printf("note: %s\n", e2.c_str());
+    }
+    er::ModOutput extra;
+    if (!xr::GenerateMoreShadows(cat, read_disc_entry, plan, &r, !sGen4Pack.empty(), extra, error, !sGen57Pack.empty())) {
+      std::fprintf(stderr, "FAILED more shadows: %s\n", error.c_str());
+      return 1;
+    }
+    std::filesystem::create_directories(std::filesystem::path(out) / "data");
+    std::ofstream(std::filesystem::path(out) / "data" / "more_shadows.json", std::ios::binary) << extra.ToJson("more shadows " + moreShadows);
+    std::ofstream sp(std::filesystem::path(out) / "more_shadows_spoiler.txt", std::ios::binary);
+    for (const std::string& line : extra.spoiler) sp << line << "\n";
+    std::printf("more shadows %s: %zu numbers changed (more_shadows_spoiler.txt)\n%s\n", moreShadows.c_str(), extra.Count(), extra.spoiler.empty() ? "" : extra.spoiler.front().c_str());
+  }
   return ok ? 0 : 1;
 }

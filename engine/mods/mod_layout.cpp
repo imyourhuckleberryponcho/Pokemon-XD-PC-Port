@@ -3,6 +3,8 @@
 #include "i18n.h"
 
 #include <algorithm>
+#include <fstream>
+#include <iterator>
 #include <map>
 #include <set>
 #include <system_error>
@@ -32,10 +34,40 @@ std::string Utf8(const fs::path& p) {
 
 struct KnownGame {
   const char* code;
+  const char* edition;
   const char* name;
   const char* shortName;
 };
-const KnownGame kKnown[] = {{"GXX", "Pokemon XD: Gale of Darkness", "XD"}, {"GC6", "Pokemon Colosseum", "Colosseum"}};
+const KnownGame kKnown[] = {{"GXX", "", "Pokemon XD: Gale of Darkness", "XD"},
+                            {"GXX", "xg", "Pokemon XG", "XG"},
+                            {"GC6", "", "Pokemon Colosseum", "Colosseum"}};
+
+struct GameAlias {
+  const char* name;
+  const char* code;
+  const char* edition;
+};
+const GameAlias kAliases[] = {{"xd", "GXX", ""}, {"xg", "GXX", "xg"}, {"colosseum", "GC6", ""}};
+
+struct Code {
+  std::string base;
+  std::string edition;
+};
+Code ParseCode(std::string_view in) {
+  std::string s(in), edition;
+  const size_t hash = s.find('#');
+  if (hash != std::string::npos) {
+    edition = Lower(s.substr(hash + 1));
+    s.resize(hash);
+  }
+  const std::string lower = Lower(s);
+  for (const GameAlias& a : kAliases) {
+    if (lower == a.name) return {a.code, a.edition};
+  }
+  return {s, edition};
+}
+
+std::string Canon(std::string_view code) { return ParseCode(code).base; }
 
 fs::path GameFolderPath(const fs::path& modFolder, const std::string& upperName) {
   std::error_code ec;
@@ -49,6 +81,9 @@ fs::path GameFolderPath(const fs::path& modFolder, const std::string& upperName)
 }
 
 bool ValidGameFolderName(std::string_view name) {
+  for (const GameAlias& a : kAliases) {
+    if (Upper(a.name) == name) return true;
+  }
   if (name.size() != 3 && name.size() != 4 && name.size() != 6) return false;
   for (char c : name) {
     if (!((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'))) return false;
@@ -56,9 +91,16 @@ bool ValidGameFolderName(std::string_view name) {
   return true;
 }
 
-bool GameCodeMatches(std::string_view code, std::string_view discId) {
-  if (code.empty() || code.size() > discId.size()) return false;
-  return Lower(discId.substr(0, code.size())) == Lower(code);
+std::string MakeTarget(std::string_view discId, std::string_view edition) {
+  std::string out(discId);
+  if (!edition.empty() && Lower(edition) != "xd") out += "#" + Lower(edition);
+  return out;
+}
+
+bool GameCodeMatches(std::string_view codeIn, std::string_view discIdIn) {
+  const Code code = ParseCode(codeIn), disc = ParseCode(discIdIn);
+  if (code.base.empty() || code.base.size() > disc.base.size() || code.edition != disc.edition) return false;
+  return Lower(std::string_view(disc.base).substr(0, code.base.size())) == Lower(code.base);
 }
 
 bool SupportsGame(const Manifest& manifest, std::string_view discId) {
@@ -97,6 +139,21 @@ std::vector<std::string> GameFolderNames(const fs::path& modFolder) {
   return out;
 }
 
+std::vector<std::string> ReadGameCodes(const fs::path& modFolder) {
+  std::vector<std::string> out;
+  std::ifstream in(modFolder / "mod.json", std::ios::binary);
+  if (!in) return out;
+  const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  Manifest m;
+  std::string error;
+  if (ParseManifest(text, m, error)) out = m.games;
+  return out;
+}
+
+bool SupportsGameCodes(const std::vector<std::string>& codes, std::string_view target) {
+  return std::any_of(codes.begin(), codes.end(), [&](const std::string& g) { return GameCodeMatches(g, target); });
+}
+
 std::vector<fs::path> ContentRoots(const fs::path& modFolder, std::string_view discId) {
   std::vector<fs::path> roots{modFolder};
   std::vector<std::string> names = GameFolderNames(modFolder);
@@ -104,9 +161,20 @@ std::vector<fs::path> ContentRoots(const fs::path& modFolder, std::string_view d
     for (const std::string& n : names) roots.push_back(GameFolderPath(modFolder, n));
     return roots;
   }
-  std::stable_sort(names.begin(), names.end(), [](const std::string& a, const std::string& b) { return a.size() < b.size(); });
+  std::stable_sort(names.begin(), names.end(),
+                   [](const std::string& a, const std::string& b) { return Canon(a).size() < Canon(b).size(); });
+  std::string target(discId);
+  bool any = false;
+  for (const std::string& n : names) any = any || GameCodeMatches(n, target);
+  if (!any) {
+    const Code t = ParseCode(discId);
+    if (!t.edition.empty()) {
+      const std::vector<std::string> codes = ReadGameCodes(modFolder);
+      if (SupportsGameCodes(codes, discId) && SupportsGameCodes(codes, t.base)) target = t.base;
+    }
+  }
   for (const std::string& n : names) {
-    if (GameCodeMatches(n, discId)) roots.push_back(GameFolderPath(modFolder, n));
+    if (GameCodeMatches(n, target)) roots.push_back(GameFolderPath(modFolder, n));
   }
   return roots;
 }
@@ -190,10 +258,53 @@ bool HasSharedContent(const fs::path& modFolder) {
 }
 
 std::string GameNameOf(std::string_view code, bool shortForm) {
+  const Code c = ParseCode(code);
   for (const KnownGame& g : kKnown) {
-    if (GameCodeMatches(g.code, code) || GameCodeMatches(code, g.code)) return shortForm ? g.shortName : g.name;
+    if (g.edition != c.edition) continue;
+    const std::string_view known(g.code);
+    const size_t n = std::min(known.size(), c.base.size());
+    if (n > 0 && Lower(known.substr(0, n)) == Lower(std::string_view(c.base).substr(0, n))) return shortForm ? g.shortName : g.name;
   }
   return std::string();
+}
+
+std::string GameTag(const Manifest& manifest) { return GameTag(manifest.games); }
+
+std::string GameTag(const std::vector<std::string>& games) {
+  std::vector<std::string> names;
+  for (const KnownGame& k : kKnown) {
+    const std::string name = k.shortName;
+    for (const std::string& g : games) {
+      if (GameNameOf(g, true) == name && std::find(names.begin(), names.end(), name) == names.end()) names.push_back(name);
+    }
+  }
+  for (const std::string& g : games) {
+    if (GameNameOf(g, true).empty() && std::find(names.begin(), names.end(), g) == names.end()) names.push_back(g);
+  }
+  std::string out;
+  for (const std::string& n : names) out += (out.empty() ? "" : " + ") + n;
+  return out;
+}
+
+std::string TargetName(std::string_view target) {
+  const std::string name = GameNameOf(target, true);
+  return name.empty() ? std::string(target) : name;
+}
+
+std::string NotForTargetText(const Manifest& manifest, std::string_view target) {
+  std::string text = engine::i18n::Tr("Made for %s, not %s.");
+  std::string tag = GameTag(manifest), now = TargetName(target);
+  const bool sameGame = std::any_of(manifest.games.begin(), manifest.games.end(), [&](const std::string& g) { return GameNameOf(g, true) == now; });
+  if (sameGame) {
+    tag.clear();
+    for (const std::string& g : manifest.games) tag += (tag.empty() ? "" : ", ") + g;
+    now = std::string(target);
+  }
+  size_t at = text.find("%s");
+  if (at != std::string::npos) text.replace(at, 2, tag);
+  at = text.find("%s");
+  if (at != std::string::npos) text.replace(at, 2, now);
+  return text;
 }
 
 std::vector<GameSupport> SupportOf(const fs::path& modFolder, const Manifest& manifest) {
@@ -208,6 +319,14 @@ std::vector<GameSupport> SupportOf(const fs::path& modFolder, const Manifest& ma
     s.shortName = GameNameOf(code, true);
     for (const std::string& f : folders) {
       if (GameCodeMatches(f, code) || GameCodeMatches(code, f)) s.folders.push_back(f);
+    }
+    if (s.folders.empty()) {
+      const Code c = ParseCode(code);
+      if (!c.edition.empty() && std::any_of(manifest.games.begin(), manifest.games.end(), [&](const std::string& g) { return GameCodeMatches(g, c.base); })) {
+        for (const std::string& f : folders) {
+          if (GameCodeMatches(f, c.base) || GameCodeMatches(c.base, f)) s.folders.push_back(f);
+        }
+      }
     }
     if (!layered || !s.folders.empty()) {
       s.level = GameSupport::Level::Full;

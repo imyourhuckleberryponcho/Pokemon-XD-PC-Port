@@ -2,6 +2,10 @@
 
 #include <save_slots.h>
 
+#include <algorithm>
+#include <cctype>
+#include <cstdlib>
+#include <cstring>
 #include <mutex>
 
 namespace xd {
@@ -16,6 +20,13 @@ std::string sName;
 bool sSlots = false;
 bool sXG = false;
 std::string sRootUtf8, sNameC;
+std::string sMissingSave;
+std::string sSaveList;
+
+std::string Lower(std::string text) {
+  for (char& c : text) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  return text;
+}
 
 thread_local bool tOverride = false;
 thread_local fs::path tRoot;
@@ -33,6 +44,23 @@ void LookUp() {
     sName.clear();
     sSlots = false;
     return;
+  }
+  sMissingSave.clear();
+  if (const char* want = std::getenv("XD_SAVE_NAME"); want != nullptr && want[0] != 0) {
+    namespace sl = engine::memcard::slots;
+    const sl::Index index = sl::Load(SaveDataFolder(sXG));
+    const std::string wanted = Lower(sl::CleanName(want));
+    sSaveList.clear();
+    for (const sl::Slot& slot : index.slots) {
+      sSaveList += (sSaveList.empty() ? "" : ", ") + std::string("\"") + slot.name + "\"";
+      if (Lower(slot.name) == wanted || Lower(slot.id) == wanted) {
+        sRoot = sl::RootOf(SaveDataFolder(sXG), slot.id);
+        sName = slot.name;
+        sSlots = true;
+        return;
+      }
+    }
+    sMissingSave = want;
   }
   sRoot = engine::memcard::slots::ActiveRoot(SaveDataFolder(sXG), &sName);
   sSlots = true;
@@ -57,6 +85,13 @@ bool SaveSlotsInUse() {
   std::lock_guard<std::mutex> lock(sLock);
   LookUp();
   return sSlots;
+}
+
+std::string MissingSave(std::string& have) {
+  std::lock_guard<std::mutex> lock(sLock);
+  LookUp();
+  have = sSaveList;
+  return sMissingSave;
 }
 
 bool UsingXGSaves() {
@@ -89,6 +124,16 @@ CardRootScope::~CardRootScope() {
   tOverride = mHadBefore;
 }
 
+}
+
+extern "C" const char* PortXD_SaveChoiceProblem(void) {
+  static std::string text;
+  std::string have;
+  const std::string wanted = xd::MissingSave(have);
+  if (wanted.empty()) return nullptr;
+  text = "There is no save named \"" + wanted + "\" (--save). The saves here: " + (have.empty() ? "none" : have) +
+         ".\n\nThe names are the ones on the launcher's Save page.";
+  return text.c_str();
 }
 
 extern "C" void PortXD_UseXGSaves(int xg) { xd::UseXGSaves(xg != 0); }

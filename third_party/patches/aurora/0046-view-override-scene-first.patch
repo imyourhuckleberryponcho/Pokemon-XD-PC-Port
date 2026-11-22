@@ -1,0 +1,36 @@
+diff --git a/lib/gx/gx.cpp b/lib/gx/gx.cpp
+--- a/lib/gx/gx.cpp
++++ b/lib/gx/gx.cpp
+@@ -768,6 +768,9 @@
+   if (g_gxState.projType != GX_PERSPECTIVE || g_gxState.logicalViewport.width < s_viewOverride.minViewportWidth) {
+     return false;
+   }
++  if (s_viewOverride.sceneOnly && s_viewOverride.sceneFirst) {
++    return s_projectionCount > 0 && same_projection(g_gxState.proj, s_projections[0].proj);
++  }
+   return !s_viewOverride.sceneOnly || same_projection(g_gxState.proj, s_viewOverride.sceneProj);
+ }
+ } // namespace
+@@ -803,6 +806,9 @@
+     s_overrideFovY.store(2.f * std::atan(1.f / p11) * 57.2957795f, std::memory_order_relaxed);
+   }
+   *zoom = s_viewOverride.zoom > 0.f ? s_viewOverride.zoom : 1.f;
++  if (s_viewOverride.targetFovY > 0.f && p11 > 0.f) {
++    *zoom = 1.f / (p11 * std::tan(s_viewOverride.targetFovY * 0.5f * 0.0174532925f));
++  }
+   return &s_overrideView;
+ }
+ 
+diff --git a/include/dolphin/gx/GXAurora.h b/include/dolphin/gx/GXAurora.h
+--- a/include/dolphin/gx/GXAurora.h
++++ b/include/dolphin/gx/GXAurora.h
+@@ -266,6 +266,9 @@
+   GXBool active;
+   GXBool hide2D;
+   GXBool sceneOnly;
++  GXBool sceneFirst; /* with sceneOnly: the scene's projection is the first perspective one over a large viewport that the
++                        picture draws (sceneProj is not used): a camera that moves, a live free camera */
++  f32 targetFovY;    /* degrees; > 0: zoom so that the scene's vertical field of view is this (zoom is not used) */
+   f32 view[3][4];
+   f32 zoom;
+   f32 minViewportWidth;

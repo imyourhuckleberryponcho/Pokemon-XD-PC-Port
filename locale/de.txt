@@ -312,9 +312,6 @@
 = %s turns on "%s", but there is no such mod in the mods folder.
 > %s schaltet "%s" ein, aber es gibt keinen solchen Mod im Mods-Ordner.
 
-= The mod "%s" is made for another game or game version (%s); this disc is %s. It is not used.
-> Der Mod "%s" ist für ein anderes Spiel oder eine andere Spielversion gemacht (%s); diese Disc ist %s. Er wird nicht verwendet.
-
 = The mod "%s" is a compatibility patch for "%s", which is not on. It is not used.
 > Der Mod „%s“ ist ein Kompatibilitäts-Patch für „%s“, der nicht aktiv ist. Er wird nicht verwendet.
 
@@ -348,11 +345,11 @@
 = The mod "%s" has scripts, but running scripts is switched off for it (Mods page); its scripts are skipped and the rest of the mod is used.
 > Der Mod "%s" hat Skripte, aber das Ausführen von Skripten ist für ihn abgeschaltet (Mods-Seite); seine Skripte werden übersprungen, der Rest des Mods wird verwendet.
 
-= The mod "%s" has "scripts/%s": only .lua files are read; ignored.
-> Der Mod "%s" hat "scripts/%s": Nur .lua-Dateien werden gelesen; ignoriert.
+= The mod "%s" has "scripts/%s": only .luau (or older .lua) files are read; ignored.
+> Der Mod "%s" hat "scripts/%s": Nur .luau (.lua)-Dateien werden gelesen; ignoriert.
 
-= The mod "%s" says "scripts": true but has no scripts/*.lua.
-> Der Mod "%s" sagt "scripts": true, hat aber kein scripts/*.lua.
+= The mod "%s" says "scripts": true but has no scripts/*.luau.
+> Der Mod "%s" sagt "scripts": true, hat aber kein scripts/*.luau.
 
 = The mod "%s" has more than %d script files; its scripts are not used.
 > Der Mod "%s" hat mehr als %d Skriptdateien; seine Skripte werden nicht verwendet.
@@ -681,20 +678,35 @@
 = How sharp the picture is drawn: at the GameCube's own 640x480 (Native), at a multiple of it, or at the window's size. Sharper edges and text, the same picture otherwise. Native is scaled up to fill the window and looks softer, as on the console.
 > Wie scharf das Bild gezeichnet wird: in der eigenen GameCube-Auflösung 640x480 (Nativ), in einem Vielfachen davon oder in der Fenstergröße. Schärfere Kanten und Text, sonst dasselbe Bild. Nativ wird auf das Fenster hochskaliert und wirkt weicher, wie auf der Konsole.
 
+= Performance mode
+> Leistungsmodus
+
+= For slow PCs: the picture is drawn smaller (three quarters of the GameCube's 640x480, a little softer) and the in-between pictures of Frame rate 60 are left out, so the graphics chip has far less to do. Only how the picture is drawn changes; the game itself runs exactly as before. It replaces the Resolution and Frame rate choices while it is on. Applies at once.
+> Für langsame PCs: Das Bild wird kleiner gezeichnet (drei Viertel der 640x480 der GameCube, etwas weicher) und die Zwischenbilder der Bildrate 60 entfallen, damit der Grafikchip deutlich weniger zu tun hat. Nur die Darstellung ändert sich; das Spiel selbst läuft genau wie zuvor. Ersetzt die Auswahl von Auflösung und Bildrate, solange er an ist. Wirkt sofort.
+
 = Anti-aliasing
 > Kantenglättung
 
-= Smooths the jagged edges of 3D models.
-> Glättet die gezackten Kanten von 3D-Modellen.
+= Smooths the jagged edges of 3D models. FXAA: a smoothing pass over the finished picture (cheap; also softens some text a little). MSAA 4x: the 3D is drawn with four samples per pixel (cleaner edges, uses more of the graphics card; takes effect the next time the game starts). Only how the picture is drawn changes.
+> Glättet die gezackten Kanten von 3D-Modellen. FXAA: ein Glättungsdurchgang über das fertige Bild (billig; macht manchen Text etwas weicher). MSAA 4x: die 3D-Grafik wird mit vier Proben pro Pixel gezeichnet (sauberere Kanten, braucht mehr von der Grafikkarte; gilt ab dem nächsten Spielstart). Es ändert sich nur, wie das Bild gezeichnet wird.
 
 = Off
 > Aus
 
+= FXAA
+> FXAA
+
+= MSAA 4x
+> MSAA 4x
+
+= MSAA 4x + FXAA
+> MSAA 4x + FXAA
+
 = Texture filtering
 > Texturfilter
 
-= Keeps textures sharp when seen at an angle (anisotropic filtering).
-> Hält Texturen scharf, wenn sie schräg gesehen werden (anisotrope Filterung).
+= Keeps textures sharp when seen at a slant (anisotropic filtering: the ground and walls far away). Applies at once; only how textures are sampled changes.
+> Hält Texturen bei schrägem Blick scharf (anisotrope Filterung: Boden und Wände in der Ferne). Wirkt sofort; es ändert sich nur, wie Texturen abgetastet werden.
 
 = Original
 > Original
@@ -729,8 +741,8 @@
 = Frame pacing
 > Bildtakt
 
-= How pictures are handed to the monitor. The game always runs at the GameCube's own speed (59.94 pictures a second); this only decides how they reach the monitor. Original: every picture waits for the monitor's next refresh (vsync). Matched to the monitor: pictures are handed over on an exactly even 59.94 Hz rhythm, so on a 120/144/180 Hz monitor each stays on screen as evenly as the monitor allows; on monitors slower than 59.94 Hz (50 Hz TVs) a picture that can't be shown in time is skipped instead of holding the game up. Lowest delay: never waits for the monitor (the newest picture is shown at each refresh). With Frame rate at 60, Original behaves as Matched to the monitor (the in-between pictures need the even rhythm).
-> Wie die Bilder an den Monitor übergeben werden. Das Spiel läuft immer in GameCube-Geschwindigkeit (59,94 Bilder pro Sekunde); dies bestimmt nur, wie sie den Monitor erreichen. Original: Jedes Bild wartet auf die nächste Aktualisierung des Monitors (VSync). An den Monitor angepasst: Bilder werden in einem gleichmäßigen 59,94-Hz-Takt übergeben, sodass auf einem 120/144/180-Hz-Monitor jedes so gleichmäßig wie möglich angezeigt wird; auf Monitoren unter 59,94 Hz (50-Hz-Fernseher) wird ein Bild, das nicht rechtzeitig gezeigt werden kann, übersprungen, statt das Spiel aufzuhalten. Geringste Verzögerung: wartet nie auf den Monitor (bei jeder Aktualisierung wird das neueste Bild gezeigt). Bei Bildrate 60 verhält sich Original wie An den Monitor angepasst (die Zwischenbilder brauchen den gleichmäßigen Takt).
+= How pictures are handed to the monitor. The game always runs at the GameCube's own speed (59.94 pictures a second); this only decides how they reach the monitor. Original: every picture waits for the monitor's next refresh (vsync). Matched to the monitor: pictures are handed over on an exactly even 59.94 Hz rhythm, so on a 120/144/180 Hz monitor each stays on screen as evenly as the monitor allows; on monitors slower than 59.94 Hz (50 Hz TVs) a picture that can't be shown in time is skipped instead of holding the game up. Lowest delay: never waits for the monitor (the newest picture is shown at each refresh). With Frame rate above 30, Original behaves as Matched to the monitor (the in-between pictures need the even rhythm).
+> Wie die Bilder an den Monitor übergeben werden. Das Spiel läuft immer in GameCube-Geschwindigkeit (59,94 Bilder pro Sekunde); dies bestimmt nur, wie sie den Monitor erreichen. Original: Jedes Bild wartet auf die nächste Aktualisierung des Monitors (VSync). An den Monitor angepasst: Bilder werden in einem gleichmäßigen 59,94-Hz-Takt übergeben, sodass auf einem 120/144/180-Hz-Monitor jedes so gleichmäßig wie möglich angezeigt wird; auf Monitoren unter 59,94 Hz (50-Hz-Fernseher) wird ein Bild, das nicht rechtzeitig gezeigt werden kann, übersprungen, statt das Spiel aufzuhalten. Geringste Verzögerung: wartet nie auf den Monitor (bei jeder Aktualisierung wird das neueste Bild gezeigt). Bei einer Bildrate über 30 verhält sich Original wie An den Monitor angepasst (die Zwischenbilder brauchen den gleichmäßigen Takt).
 
 = Matched to the monitor
 > An den Monitor angepasst
@@ -741,11 +753,14 @@
 = Frame rate
 > Bildrate
 
-= 30: the game's own pictures, as on the GameCube (most of the game draws 30 a second). 60: between two of the game's pictures the port shows an in-between picture, with the camera and every 3D object half way, so movement looks smoother. The game itself still runs exactly as before (same speed, same timing, same random numbers: it can be used in a Faithful playthrough); menus, text and effects that can't be matched stay at the game's own rate. While it is on the game's picture is shown 1/60 s later, frame pacing is matched to the monitor, and each picture is drawn three times: on a PC that can't afford that the in-between pictures are left out by themselves. Applies at once.
-> 30: die Bilder des Spiels selbst, wie beim GameCube (der größte Teil des Spiels zeichnet 30 pro Sekunde). 60: Zwischen zwei Bildern des Spiels zeigt die Portierung ein Zwischenbild, bei dem Kamera und jedes 3D-Objekt auf halbem Weg sind, sodass Bewegung flüssiger wirkt. Das Spiel selbst läuft genau wie vorher (gleiche Geschwindigkeit, gleiches Timing, gleiche Zufallszahlen: auch in einem originalgetreuen Durchgang nutzbar); Menüs, Text und nicht anpassbare Effekte bleiben bei der Rate des Spiels. Solange es an ist, wird das Bild des Spiels 1/60 s später gezeigt, der Bildtakt ist an den Monitor angepasst, und jedes Bild wird dreimal gezeichnet: Auf einem PC, der das nicht schafft, werden die Zwischenbilder von selbst weggelassen. Gilt sofort.
+= 30: the game's own pictures, as on the GameCube (most of the game draws 30 a second). 60 and up: between two of the game's pictures the port shows in-between pictures, with the camera and every 3D object part of the way, so movement looks smoother: one picture at 60, more at 120, 144, 165, 180 or 240 (pick the number your monitor shows; "Match the monitor" counts it for you). The game itself still runs exactly as before (same speed, same timing, same random numbers: it can be used in a Faithful playthrough); menus, text and effects that can't be matched stay at the game's own rate. While it is on the game's picture is shown 1/60 s later, frame pacing is matched to the monitor, and each picture is drawn once for every refresh: on a PC that can't afford that the in-between pictures are left out by themselves. Applies at once.
+> 30: die Bilder des Spiels selbst, wie auf dem GameCube (das meiste im Spiel wird mit 30 Bildern pro Sekunde gezeichnet). 60 und mehr: zwischen zwei Spielbildern zeigt der Port Zwischenbilder, mit Kamera und jedem 3D-Objekt ein Stück weiter, damit Bewegung flüssiger aussieht: ein Bild bei 60, mehr bei 120, 144, 165, 180 oder 240 (wähle die Zahl, die dein Monitor zeigt; „An den Monitor anpassen“ zählt sie für dich). Das Spiel selbst läuft genau wie zuvor (gleiche Geschwindigkeit, gleiches Timing, gleiche Zufallszahlen: in einem Originalgetreu-Durchgang nutzbar); Menüs, Text und Effekte, die sich nicht zuordnen lassen, bleiben im Takt des Spiels. Solange es an ist, wird das Spielbild 1/60 s später gezeigt, das Bildtempo an den Monitor angepasst und jedes Bild einmal pro Aktualisierung gezeichnet: auf einem PC, der das nicht schafft, werden die Zwischenbilder von selbst weggelassen. Wirkt sofort.
 
 = 30 (original)
 > 30 (original)
+
+= Match the monitor
+> An den Monitor anpassen
 
 = Original fog and glow
 > Originaler Nebel und Glühen
@@ -1038,6 +1053,42 @@
 = While the fast-forward key is held (Tab at first, or the right stick pressed in; Controls page), the whole game runs faster (Fast-forward speed) and its sound plays sped up. Only the waiting gets shorter: the game itself plays out the same. It waits at normal speed while the memory card saves.
 > Solange die Vorspul-Taste gehalten wird (zunächst Tab oder der gedrückte rechte Stick; Seite Steuerung), läuft das ganze Spiel schneller (Vorspul-Tempo) und sein Ton wird beschleunigt abgespielt. Nur das Warten wird kürzer: Das Spiel selbst verläuft gleich. Beim Speichern auf die Memory Card läuft es im normalen Tempo.
 
+= Music while fast-forwarding
+> Musik beim Vorspulen
+
+= While fast-forward is held, the music plays at normal speed (new), played by a second copy of the sound engine, or sped up with the rest of the sound (old). The game itself plays out the same.
+> Beim Vorspulen läuft die Musik in normaler Geschwindigkeit (neu), abgespielt von einer zweiten Kopie der Klang-Engine, oder beschleunigt mit dem restlichen Ton (alt). Das Spiel selbst läuft gleich ab.
+
+= Sped up (old)
+> Beschleunigt (alt)
+
+= Normal speed (new)
+> Normale Geschwindigkeit (neu)
+
+= Sound effects while fast-forwarding
+> Soundeffekte beim Vorspulen
+
+= With the music at normal speed: the sound effects and cries while fast-forwarding are sped up as before (Sped up), left out (Muted) or played with a higher pitch (Tape).
+> Bei Musik in normaler Geschwindigkeit: Soundeffekte und Schreie beim Vorspulen sind wie bisher beschleunigt (Beschleunigt), weggelassen (Stumm) oder höher gespielt (Band).
+
+= Sped up
+> Beschleunigt
+
+= Muted
+> Stumm
+
+= Tape (higher pitch)
+> Band (höhere Tonlage)
+
+= Effects while fast-forwarding
+> Effekte beim Vorspulen
+
+= Fast-forward music crossfade
+> Überblendung der Vorspul-Musik
+
+= Milliseconds the music takes to blend back into the game's own when fast-forward is let go.
+> Millisekunden, die die Musik braucht, um in die Musik des Spiels überzublenden, wenn das Vorspulen losgelassen wird.
+
 = Fast-forward key works
 > Vorspul-Taste funktioniert
 
@@ -1283,6 +1334,15 @@
 
 = Custom  (started from %s)
 > Benutzerdefiniert  (gestartet von %s)
+
+= Look presets: set resolution, frame rate, anti-aliasing and texture filtering together. Only how the picture is drawn changes, never the game.
+> Look-Voreinstellungen: stellen Auflösung, Bildrate, Kantenglättung und Texturfilterung gemeinsam ein. Es ändert sich nur, wie das Bild gezeichnet wird, nie das Spiel.
+
+= Best looks (fast PC)
+> Beste Optik (schneller PC)
+
+= Smooth on a weak PC
+> Flüssig auf schwachem PC
 
 = Switch preset
 > Vorlage wechseln
@@ -1935,9 +1995,6 @@
 = Needs "%s" in version %s %s; you have %s.
 > Benötigt „%s“ in Version %s %s; du hast %s.
 
-= Made for another game or game version.
-> Für ein anderes Spiel oder eine andere Spielversion gemacht.
-
 = The game couldn't be started (%s, %s). Is it next to the launcher?
 > Das Spiel konnte nicht gestartet werden (%s, %s). Liegt es neben dem Launcher?
 
@@ -2199,6 +2256,9 @@
 = %s preset
 > Vorlage %s
 
+= still looking at your game disc
+> die Disc deines Spiels wird noch angesehen
+
 = still looking at what is installed
 > prüft noch, was installiert ist
 
@@ -2208,8 +2268,14 @@
 = choose your own game disc on the Disc page first
 > zuerst auf der Seite Disc die eigene Spiel-Disc wählen
 
+= choose the %s dump first
+> wähle zuerst die %s-Dump-Datei
+
 = choose the %s disc first
 > zuerst die Disc %s wählen
+
+= that file isn't the right game dump (or is still being looked at)
+> diese Datei ist nicht der richtige Spiel-Dump (oder wird noch geprüft)
 
 = that disc isn't the right game (or is still being looked at)
 > diese Disc ist nicht das richtige Spiel (oder wird noch geprüft)
@@ -2220,17 +2286,26 @@
 = Can't start: %s.
 > Start nicht möglich: %s.
 
-= Discs of other games that this port can borrow assets from. Your discs are only read; what is made from them is made on this PC, kept in your own data folder (extra_assets) and never sent anywhere.
-> Discs anderer Spiele, aus denen diese Portierung Daten übernehmen kann. Die Discs werden nur gelesen; was daraus erstellt wird, entsteht auf diesem PC, liegt im eigenen Datenordner (extra_assets) und wird nirgendwohin gesendet.
+= Removed. Make it again here whenever you like.
+> Entfernt. Du kannst es hier jederzeit wieder erstellen.
 
 = Looking...
 > Suche läuft...
 
+= From a %s dump. %s
+> Von einem %s-Dump. %s
+
 = From a %s disc. %s
 > Von einer %s-Disc. %s
 
+= %s dump file (.3ds / .cci)
+> %s-Dump-Datei (.3ds / .cci)
+
 = %s disc image
 > %s-Disc-Abbild
+
+= Choose dump...
+> Dump wählen...
 
 = Choose disc...
 > Disc wählen...
@@ -2238,14 +2313,26 @@
 = Disc images (ISO, RVZ, WBFS, CISO, GCZ...)
 > Disc-Abbilder (ISO, RVZ, WBFS, CISO, GCZ...)
 
+= 3DS game dumps (3DS, CCI)
+> 3DS-Spiel-Dumps (3DS, CCI)
+
 = All files
 > Alle Dateien
+
+= Looking at the dump file...
+> Dump-Datei wird geprüft...
 
 = Looking at the disc image...
 > Das Disc-Abbild wird untersucht...
 
+= No dump chosen yet.
+> Noch kein Dump gewählt.
+
 = No disc chosen yet.
 > Noch keine Disc gewählt.
+
+= Needs your own game disc (Disc page) and this dump file.
+> Braucht deine eigene Spiel-Disc (Seite Disc) und diese Dump-Datei.
 
 = Needs your own game disc (Disc page) and this disc.
 > Braucht die eigene Spiel-Disc (Seite Disc) und diese Disc.
@@ -2277,6 +2364,24 @@
 = Look again
 > Neu suchen
 
+= Remove what was made
+> Erstelltes entfernen
+
+= Remove this?
+> Das entfernen?
+
+= Remove "%s"?
+> „%s“ entfernen?
+
+= The folder "%s" in extra_assets (in your data folder) is deleted. Your own discs and dumps are not touched; you can make it again.
+> Der Ordner „%s“ in extra_assets (in deinem Datenordner) wird gelöscht. Deine eigenen Discs und Dumps werden nicht angetastet; du kannst es wieder erstellen.
+
+= Remove it
+> Entfernen
+
+= Keep it
+> Behalten
+
 = HD texture packs
 > HD-Texturpakete
 
@@ -2288,6 +2393,15 @@
 
 = Go to the Mods page
 > Zur Seite Mods gehen
+
+= Discs of other games that this port can borrow assets from. Your discs are only read; what is made from them is made on this PC, kept in your own data folder (extra_assets) and never sent anywhere.
+> Discs anderer Spiele, aus denen diese Portierung Daten übernehmen kann. Die Discs werden nur gelesen; was daraus erstellt wird, entsteht auf diesem PC, liegt im eigenen Datenordner (extra_assets) und wird nirgendwohin gesendet.
+
+= Installed: nothing yet.
+> Installiert: noch nichts.
+
+= Installed: %s.
+> Installiert: %s.
 
 = More discs can be added to this page later.
 > Später können weitere Discs zu dieser Seite hinzugefügt werden.
@@ -2400,6 +2514,12 @@
 = What's the difference?
 > Was ist der Unterschied?
 
+= New playthroughs start with
+> Neue Spielstände starten mit
+
+= The New Game screen starts with these. Each playthrough keeps its own choices; only pictures change with Looks.
+> Der Neues-Spiel-Bildschirm beginnt mit diesen Werten. Jeder Spielstand behält seine eigenen; Optik ändert nur Bilder.
+
 = Preset: %s. Changing a game setting switches to Custom; volumes, window and controls never do.
 > Vorlage: %s. Eine Spieleinstellung zu ändern wechselt zu Benutzerdefiniert; Lautstärken, Fenster und Steuerung tun das nie.
 
@@ -2472,8 +2592,8 @@
 = Order
 > Reihenfolge
 
-= Runs scripts (Lua)
-> Führt Skripte aus (Lua)
+= Runs scripts (Luau)
+> Führt Skripte aus (Luau)
 
 = Allow
 > Erlauben
@@ -2717,9 +2837,6 @@
 
 = Delete it
 > Löschen
-
-= Keep it
-> Behalten
 
 = The game does not load this save (its circle is not ticked).
 > Das Spiel lädt diesen Spielstand nicht (sein Kreis ist nicht angehakt).
@@ -2991,6 +3108,12 @@
 = %d on (list "%s")
 > %d an (Liste "%s")
 
+= %d on, %d not used (list "%s")
+> %d an, %d nicht verwendet (Liste "%s")
+
+= none on, %d not used (list "%s")
+> keine an, %d nicht verwendet (Liste "%s")
+
 = Use it:
 > Verwenden:
 
@@ -3026,6 +3149,9 @@
 
 = Don't start
 > Nicht starten
+
+= Making the Gen 4 pack needs the plain Pokemon XD disc once. Choose it on the Disc page, press Make, then choose your Pokemon XG disc again: you can play XG afterwards
+> Für das Gen-4-Paket wird einmal die normale Pokemon-XD-Disc gebraucht. Wähle sie auf der Seite Disc, drücke Erstellen und wähle danach wieder deine Pokemon-XG-Disc: Danach kannst du XG spielen
 
 = The folder %s is there but its mod.json can't be read (%s).
 > Der Ordner %s ist da, aber seine mod.json kann nicht gelesen werden (%s).
@@ -3084,14 +3210,26 @@
 = %s: ready
 > %s: bereit
 
+= That file can't be read as a 3DS game dump.
+> Diese Datei kann nicht als 3DS-Spiel-Dump gelesen werden.
+
 = That file can't be read as a disc image.
 > Diese Datei kann nicht als Disc-Abbild gelesen werden.
 
 = That file can't be read as a disc image (%s).
 > Diese Datei kann nicht als Disc-Abbild gelesen werden (%s).
 
+= This is %s (%s): a dump the converter can read.
+> Das ist %s (%s): ein Dump, den der Konverter lesen kann.
+
 = This is %s (%s): the right disc.
 > Das ist %s (%s): die richtige Disc.
+
+= This is another 3DS game (%s), not %s. Choose your Ultra Sun or Ultra Moon dump.
+> Das ist ein anderes 3DS-Spiel (%s), nicht %s. Wähle deinen Ultrasonne- oder Ultramond-Dump.
+
+= This is %s (%s), not %s. Choose your Ultra Sun or Ultra Moon dump.
+> Das ist %s (%s), nicht %s. Wähle deinen Ultrasonne- oder Ultramond-Dump.
 
 = This is another game (%s), not %s (%s). Choose the %s disc image.
 > Das ist ein anderes Spiel (%s), nicht %s (%s). Das Disc-Abbild von %s wählen.
@@ -3550,16 +3688,25 @@
 > Die Sprache auf der Spielen-Leiste (oder in den SETTINGS des Spiels) wählen: Sie gilt ab dem nächsten Start des Spiels.
 
 = Japanese (from the Japanese disc)
-> 
+> Japanisch (von der japanischen Disc)
 
 = Make the Japanese pack
-> 
+> Japanisches Paket erstellen
 
 = The program xd_languages, which ships with the game, copies the Japanese texts, fonts and pictures with words from that disc into the folder extra_assets\\languages_jp in your data folder; the game itself stays the USA game and only its text and pictures change. Your USA copy (the Disc page) is needed too: the game's code comes from it.
-> 
+> Das Programm xd_languages, das mit dem Spiel geliefert wird, kopiert die japanischen Texte, Schriften und Bilder mit Text von dieser Disc in den Ordner extra_assets\\languages_jp in deinem Datenordner; das Spiel bleibt das USA-Spiel, nur Texte und Bilder ändern sich. Deine USA-Kopie (Seite Disc) wird ebenfalls gebraucht: Der Spielcode stammt von ihr.
 
 = Choose Japanese on the Play bar (or in the game's SETTINGS): it applies the next time the game starts.
-> 
+> Wähle Japanisch in der Spielleiste (oder in den EINSTELLUNGEN des Spiels): Es gilt beim nächsten Start des Spiels.
+
+= Ultra Sun / Ultra Moon models and Gen 4 Pokemon
+> Ultrasonne-/Ultramond-Modelle und Gen-4-Pokémon
+
+= The program usum_models, which ships with the game, converts the Pokemon models in your own Ultra Sun or Ultra Moon dump into XD's model format, in the folder extra_assets\\usum in your data folder. The dump must be a decrypted cartridge dump (.3ds or .cci); a .cia file, an encrypted dump or a folder can't be used yet. Your XD disc (the Disc page) is needed too: it says which models XD has. It takes about ten minutes. Afterwards pick "Models: Ultra Sun / Ultra Moon" in a New Game's setup.
+> Das Programm usum_models, das mit dem Spiel geliefert wird, wandelt die Pokémon-Modelle aus deinem eigenen Ultrasonne- oder Ultramond-Dump in das Modellformat von XD um, im Ordner extra_assets\\usum in deinem Datenordner. Der Dump muss ein entschlüsselter Modul-Dump (.3ds oder .cci) sein; eine .cia-Datei, ein verschlüsselter Dump oder ein Ordner können noch nicht verwendet werden. Deine XD-Disc (Seite Disc) wird ebenfalls gebraucht: Sie sagt, welche Modelle XD hat. Es dauert etwa zehn Minuten. Danach wählst du in der Einrichtung eines neuen Spiels „Modelle: Ultrasonne / Ultramond“.
+
+= Pick "Models: Ultra Sun / Ultra Moon" in the New Game setup to play with them.
+> Wähle in der Einrichtung des neuen Spiels „Modelle: Ultrasonne / Ultramond“, um mit ihnen zu spielen.
 
 = %s (boy)
 > %s (Junge)
@@ -3849,6 +3996,30 @@
 = XD, light
 > XD, hell
 
+= That is a folder. The converter needs the cartridge dump as one file (.3ds or .cci); an unpacked folder can't be used yet.
+> Das ist ein Ordner. Der Konverter braucht den Modul-Dump als eine Datei (.3ds oder .cci); ein entpackter Ordner kann noch nicht verwendet werden.
+
+= That is a .cia file (an installable copy). The converter needs the decrypted cartridge dump (.3ds or .cci); a .cia can't be used yet.
+> Das ist eine .cia-Datei (eine installierbare Kopie). Der Konverter braucht den entschlüsselten Modul-Dump (.3ds oder .cci); eine .cia kann noch nicht verwendet werden.
+
+= That file can't be opened.
+> Diese Datei kann nicht geöffnet werden.
+
+= That is not a 3DS cartridge dump (.3ds or .cci). A .cia, an .nds / .gba file or a disc image can't be used here.
+> Das ist kein 3DS-Modul-Dump (.3ds oder .cci). Eine .cia, eine .nds-/.gba-Datei oder ein Disc-Abbild kann hier nicht verwendet werden.
+
+= That dump has no game in it (its first partition is empty).
+> In diesem Dump ist kein Spiel enthalten (seine erste Partition ist leer).
+
+= That dump looks cut short or damaged: the game's data is not where the header says.
+> Dieser Dump wirkt abgeschnitten oder beschädigt: Die Spieldaten liegen nicht dort, wo der Header sie angibt.
+
+= That dump is encrypted. The converter only reads decrypted dumps and does not decrypt anything itself: use a decrypted copy of your own cartridge.
+> Dieser Dump ist verschlüsselt. Der Konverter liest nur entschlüsselte Dumps und entschlüsselt selbst nichts: Nimm eine entschlüsselte Kopie deines eigenen Moduls.
+
+= That dump has no readable game code.
+> Dieser Dump hat keinen lesbaren Spielcode.
+
 = The graphics card stopped working for the game (its driver was reset or updated, the computer switched graphics cards, or it woke from sleep), so the game has to close.\n\nStart it again to carry on from your last save. A report of this was saved in the game's reports folder.
 > Die Grafikkarte hat für das Spiel nicht mehr funktioniert (der Treiber wurde zurückgesetzt oder aktualisiert, der Computer hat die Grafikkarte gewechselt oder wachte aus dem Ruhezustand auf), daher muss das Spiel schließen.\n\nErneut starten, um vom letzten Spielstand aus weiterzumachen. Ein Bericht darüber wurde im Berichte-Ordner des Spiels gespeichert.
 
@@ -3933,6 +4104,18 @@
 = Nuzlocke: the PC boxes are full, so a fainted Pokemon stays with you. This run has failed.
 > Nuzlocke: Die PC-Boxen sind voll, daher bleibt ein besiegtes Pokémon bei dir. Dieser Durchgang ist gescheitert.
 
+= Models: Battle Revolution
+> Modelle: Battle Revolution
+
+= Pokemon Battle Revolution's models for the Pokemon of this playthrough, from the models you made with your own Battle Revolution disc. Only how they look changes.
+> Die Modelle aus Pokémon Battle Revolution für die Pokémon dieses Spielstands, aus den Modellen, die du mit deiner eigenen Battle-Revolution-Disc erstellt hast. Nur das Aussehen ändert sich.
+
+= Models: Ultra Sun / Ultra Moon
+> Modelle: Ultra Sonne / Ultra Mond
+
+= The Pokemon models of Ultra Sun / Ultra Moon for the Pokemon of this playthrough, from the models you made with your own 3DS dump. Only how they look changes.
+> Die Pokémon-Modelle aus Ultra Sonne / Ultra Mond für die Pokémon dieses Spielstands, aus den Modellen, die du mit deinem eigenen 3DS-Abbild erstellt hast. Nur das Aussehen ändert sich.
+
 = No items in battle
 > Keine Items im Kampf
 
@@ -3958,7 +4141,7 @@
 > Gen-4-Regeln
 
 = The Diamond/Pearl rules for battles (needs the Gen 4 Pokemon): abilities (Technician, Adaptability, Iron Fist, Scrappy...) and the new effects of moves such as U-turn and Trick Room.
-> Die Diamant/Perl-Regeln für Kämpfe (braucht die Gen-4-Pokémon): Fähigkeiten (Techniker, Anpassung, Eisenfaust, Rauflust...) und die neuen Effekte von Attacken wie Kehrtwende und Trickraum.
+> Die Diamant/Perl-Regeln für Kämpfe (braucht die Gen-4-Pokémon): Fähigkeiten (Techniker, Anpassung, Eisenfaust, Rauflust...) und die neuen Effekte von Attacken wie Kehrtwende und Bizarroraum.
 
 = Modern types (Fairy)
 > Moderne Typen (Fee)
@@ -4071,6 +4254,9 @@
 = Nuzlocke
 > Nuzlocke
 
+= No effect with the XD rules.
+> Ohne Wirkung mit den XD-Regeln.
+
 = the Gen 4 files are not made yet (no %s)
 > die Gen-4-Dateien sind noch nicht erstellt (kein %s)
 
@@ -4175,6 +4361,18 @@
 
 = %s (not built yet)
 > %s (noch nicht gebaut)
+
+= %d on the ban list
+> %d auf der Bannliste
+
+= Bring %d, pick %d
+> %d mitbringen, %d wählen
+
+= No limit
+> Kein Limit
+
+= %d s a turn, %d min each
+> %d s pro Zug, je %d Min.
 
 = Your friend's choice does not match what he committed to. The battle stops (a changed or cheating game).
 > Die Wahl deines Freundes passt nicht zu dem, was er festgelegt hatte. Der Kampf wird beendet (ein verändertes oder manipuliertes Spiel).
@@ -4440,8 +4638,41 @@
 = Make the room
 > Raum erstellen
 
-= Up / down: choose   Left / right: change   A: choose   B: back
-> Hoch / runter: wählen   Links / rechts: ändern   A: wählen   B: zurück
+= Up / down: choose   Left / right: change   A: open "..."   B: back
+> Hoch / runter: wählen   Links / rechts: ändern   A: „...“ öffnen   B: zurück
+
+= CLAUSES AND BANS
+> KLAUSELN UND BANNS
+
+= Clauses
+> Klauseln
+
+= team step
+> Teamschritt
+
+= battle rule
+> Kampfregel
+
+= Bans
+> Banns
+
+= Not allowed
+> Nicht erlaubt
+
+= Allowed
+> Erlaubt
+
+= Ban list: %d entries (species, items, moves, abilities)
+> Bannliste: %d Einträge (Arten, Items, Attacken, Fähigkeiten)
+
+= Ban list: none
+> Bannliste: keine
+
+= Only our own categories and a list. No outside tier lists; a format file can carry its own ban list. The clauses are the format's own: choose another format to change them.
+> Nur unsere eigenen Kategorien und eine Liste. Keine fremden Tier-Listen; eine Formatdatei kann eine eigene Bannliste mitbringen. Die Klauseln gehören zum Format: wähle ein anderes Format, um sie zu ändern.
+
+= B: back
+> B: zurück
 
 = Type your friend's room code
 > Gib den Raumcode deines Freundes ein
@@ -4475,6 +4706,9 @@
 
 = Gen 4 Pokemon and moves with the modern types
 > Gen-4-Pokémon und -Attacken mit den modernen Typen
+
+= Classic XG
+> Klassisches XG
 
 = Classic XD
 > Klassisches XD
@@ -4977,11 +5211,170 @@
 = New Game: %s (as chosen before)
 > Neues Spiel: %s (wie zuvor gewählt)
 
+= This playthrough has Gen 4 Pokemon.
+> Dieser Spielstand hat Gen-4-Pokémon.
+
+= Add your Battle Revolution disc or your Ultra Sun / Ultra Moon dump in the launcher (Extra assets) to continue it.
+> Füge deine Battle-Revolution-Disc oder deinen Ultra-Sonne-/Ultra-Mond-Dump im Launcher (Zusatzdaten) hinzu, um ihn fortzusetzen.
+
+= Your save is safe and unchanged. It needs the Gen 4 pack because the Pokemon in it come from there.
+> Dein Spielstand ist sicher und unverändert. Er braucht das Gen-4-Paket, weil die Pokémon darin von dort kommen.
+
 = This save's setup had: %s. The game carries on without it.
 > Die Einrichtung dieses Spielstands hatte: %s. Das Spiel macht ohne sie weiter.
 
+= %s not found: the next source in this playthrough's list shows instead.
+> %s nicht gefunden: stattdessen zeigt sich die nächste Quelle der Liste dieses Spielstands.
+
 = The save on the memory card holds Pokemon, moves or items that mods added, and their numbers would mean other things without the same mods: %s. Nothing on the card is read or changed.
 > Der Spielstand auf der Memory Card enthält Pokémon, Attacken oder Items, die Mods hinzugefügt haben, und ihre Nummern würden ohne dieselben Mods etwas anderes bedeuten: %s. Auf der Karte wird nichts gelesen oder geändert.
+
+= Needs the Gen 4 pack: add your Battle Revolution disc in the launcher (Extra assets page). (%s)
+> Braucht das Gen-4-Paket: füge deine Battle-Revolution-Disc im Launcher hinzu (Seite Zusatzdaten). (%s)
+
+= Fairy type
+> Fee-Typ
+
+= Poke Spots
+> Pokémon-Spots
+
+= Custom...
+> Eigene...
+
+= Gen 4 Pokemon under XD rules: some of their moves and abilities work differently (see the list).
+> Gen-4-Pokémon mit XD-Regeln: manche Attacken und Fähigkeiten wirken anders (siehe Liste).
+
+= (%d pinned)
+> (%d festgelegt)
+
+= On (part of Gen 4)
+> An (Teil von Gen 4)
+
+= Off (Faithful)
+> Aus (Originalgetreu)
+
+= As in your settings
+> Wie in deinen Einstellungen
+
+= RULE SET
+> REGELWERK
+
+= how battles work
+> wie Kämpfe ablaufen
+
+= Gen 4 pack ready
+> Gen-4-Paket bereit
+
+= needs the Gen 4 pack
+> braucht das Gen-4-Paket
+
+= Details
+> Details
+
+= Moves are physical or special by the move, not by its type (Gen 4 and later). Free with XD original; part of Gen 4.
+> Attacken sind je nach Attacke physisch oder speziell, nicht nach Typ (ab Gen 4). Frei bei XD-Original; Teil von Gen 4.
+
+= The split is fixed for this choice, so its row is grey.
+> Die Aufteilung ist für diese Wahl festgelegt, darum ist die Zeile grau.
+
+= Adds the Fairy type and the newer type chart. Free with XD original and Gen 4; part of Gen 6 and later.
+> Fügt den Fee-Typ und die neuere Typentabelle hinzu. Frei bei XD-Original und Gen 4; Teil von Gen 6 und später.
+
+= Up / down: choose   Left / right: change   A: pick   B: back
+> Hoch / runter: wählen   Links / rechts: ändern   A: nehmen   B: zurück
+
+= POKEMON
+> POKÉMON
+
+= which Pokemon are in Orre
+> welche Pokémon es in Orre gibt
+
+= Where they appear
+> Wo sie erscheinen
+
+= Also at the Poke Spots
+> Auch an den Pokémon-Spots
+
+= The list is one choice: each step includes the ones before it.
+> Die Liste ist eine Wahl: jede Stufe enthält die davor.
+
+= LOOKS
+> OPTIK
+
+= pictures only: battles never change
+> nur Bilder: Kämpfe ändern sich nie
+
+= Style
+> Stil
+
+= You will see:
+> Du siehst:
+
+= Sources
+> Quellen
+
+= (Custom)
+> (Eigene)
+
+= later
+> später
+
+= ready
+> bereit
+
+= Advanced: per Pokemon ...
+> Erweitert: pro Pokémon ...
+
+= %d pinned
+> %d festgelegt
+
+= For each Pokemon the game uses the first source in the list that has it, so there are never gaps. Grey sources are skipped until you add them in the launcher.
+> Für jedes Pokémon nimmt das Spiel die erste Quelle der Liste, die es hat – so gibt es nie Lücken. Graue Quellen werden übersprungen, bis du sie im Launcher hinzufügst.
+
+= Choose Custom... to change the order of the sources.
+> Wähle Eigene..., um die Reihenfolge der Quellen zu ändern.
+
+= X / Y models are not available yet.
+> X/Y-Modelle gibt es noch nicht.
+
+= %s is not on this PC: it is skipped until you add it in the launcher (Extra assets page).
+> %s ist nicht auf diesem PC: wird übersprungen, bis du es im Launcher hinzufügst (Seite Zusatzdaten).
+
+= X: move up   Y: move down   A: on / off   B: back
+> X: nach oben   Y: nach unten   A: an / aus   B: zurück
+
+= Up / down: choose   A: pick   B: back
+> Hoch / runter: wählen   A: nehmen   B: zurück
+
+= LOOKS: PER POKEMON
+> OPTIK: PRO POKÉMON
+
+= left / right: pick the source
+> links / rechts: Quelle wählen
+
+= pinned
+> festgelegt
+
+= Pinned: %s always uses %s.
+> Festgelegt: %s nutzt immer %s.
+
+= %s follows your style (%s).
+> %s folgt deinem Stil (%s).
+
+= A pin only changes how that one Pokemon looks, never how it battles. Y on a pinned Pokemon removes the pin.
+> Eine Festlegung ändert nur das Aussehen dieses Pokémon, nie den Kampf. Y bei einem festgelegten Pokémon hebt sie auf.
+
+= Up / down: Pokemon   Left / right: source   A: pin   Y: unpin   L: page up   R: page down   B: back
+> Hoch / runter: Pokémon   Links / rechts: Quelle   A: festlegen   Y: lösen   L: Seite hoch   R: Seite runter   B: zurück
+
+= %s is not on this PC: add it in the launcher first.
+> %s ist nicht auf diesem PC: füge es zuerst im Launcher hinzu.
+
+= CONTINUE
+> FORTSETZEN
+
+= A: OK
+> A: OK
 
 = This save holds Pokemon, moves or items that this game does not have (the game has %d Pokemon, %d moves, %d items):\n\n%s\nIt was probably saved with a mod that adds Pokemon, moves or items. Start the game with that mod switched on (same mods, same order). Nothing was read into the game and nothing on the card was changed. The game stops here.
 > Dieser Spielstand enthält Pokémon, Attacken oder Items, die dieses Spiel nicht hat (das Spiel hat %d Pokémon, %d Attacken, %d Items):\n\n%s\nEr wurde wahrscheinlich mit einem Mod gespeichert, der Pokémon, Attacken oder Items hinzufügt. Das Spiel mit diesem Mod eingeschaltet starten (dieselben Mods, dieselbe Reihenfolge). Nichts wurde ins Spiel gelesen, und auf der Karte wurde nichts geändert. Das Spiel hält hier an.
@@ -5325,6 +5718,12 @@
 = Play the original game
 > Das Originalspiel spielen
 
+= Rule set
+> Regelwerk
+
+= Looks
+> Optik
+
 = Engine
 > Engine
 
@@ -5332,7 +5731,7 @@
 > %s (nicht verfügbar)
 
 = Randomizer (not available)
-> 
+> Randomizer (nicht verfügbar)
 
 = Use a friend's code
 > Code eines Freundes verwenden
@@ -5360,6 +5759,12 @@
 
 = Faithful, no mods: exactly the GameCube game. Starts at once.
 > Originalgetreu, keine Mods: genau das GameCube-Spiel. Startet sofort.
+
+= A: open the list and its detail rows.
+> A: Liste und Detailzeilen öffnen.
+
+= Only pictures change, never a battle. A: open the Looks page.
+> Nur Bilder ändern sich, nie ein Kampf. A: Optik-Seite öffnen.
 
 = Faithful: the game decides everything exactly as on the GameCube. Enhanced: speed-ups (text, fast-forward, battle animations) can be used.
 > Originalgetreu: Das Spiel entscheidet alles genau wie auf dem GameCube. Verbessert: Beschleunigungen (Text, Vorspulen, Kampfanimationen) können benutzt werden.
@@ -5481,6 +5886,9 @@
 = Your partner Pokemon is not Eevee this time. Choose one of these three to start with.
 > Ihr Partner-Pokémon ist diesmal nicht Evoli. Wählen Sie eines dieser drei zum Start.
 
+= Ultra Sun / Ultra Moon
+> Ultra Sonne / Ultra Mond
+
 = by %s
 > von %s
 
@@ -5507,12 +5915,6 @@
 
 = (It says %s, but %s.)
 > (Er sagt %s, aber %s.)
-
-= Runs scripts (Lua): allowed. They run in a locked box and cannot touch your files, but they can change how the game plays. Press Z to skip them (the rest of the mod stays).
-> Führt Skripte (Lua) aus: erlaubt. Sie laufen in einer abgeschlossenen Box und können deine Dateien nicht anfassen, aber sie können ändern, wie das Spiel abläuft. Drücke Z, um sie zu überspringen (der Rest des Mods bleibt).
-
-= Runs scripts (Lua): skipped. The rest of the mod is still used. Press Z to allow them.
-> Führt Skripte (Lua) aus: übersprungen. Der Rest des Mods wird weiter verwendet. Drücke Z, um sie zu erlauben.
 
 = In use now.
 > Gerade in Verwendung.
@@ -5546,12 +5948,6 @@
 
 = The mod list couldn't be saved to mods.ini, so nothing was changed.
 > Die Mod-Liste konnte nicht in mods.ini gespeichert werden, daher wurde nichts geändert.
-
-= L / R: move up / down the order
-> L / R: in der Reihenfolge hoch / runter
-
-= Apply and restart
-> Anwenden und neu starten
 
 = Missing
 > Fehlt
@@ -5661,6 +6057,216 @@
 = A: type   B: delete   choose OK when done
 > A: eingeben   B: löschen   Wähle OK, wenn du fertig bist
 
+= XD original (Gen 3)
+> XD-Original (Gen 3)
+
+= Gen 4 (Diamond / Pearl / Platinum)
+> Gen 4 (Diamant / Perl / Platin)
+
+= Gen 5 (Black / White)
+> Gen 5 (Schwarz / Weiß)
+
+= Gen 6 (X / Y)
+> Gen 6 (X / Y)
+
+= Gen 7 (Sun / Moon)
+> Gen 7 (Sonne / Mond)
+
+= Unknown rule set
+> Unbekanntes Regelwerk
+
+= XD original
+> XD-Original
+
+= Gen 4
+> Gen 4
+
+= Gen 5
+> Gen 5
+
+= Gen 6
+> Gen 6
+
+= Gen 7
+> Gen 7
+
+= the GameCube game's own rules
+> die Regeln des GameCube-Spiels
+
+= Abilities, moves and the split as in Gen 4
+> Fähigkeiten, Attacken und Aufteilung wie in Gen 4
+
+= XD original (Gen 3): the GameCube game's own battle rules.
+> XD-Original (Gen 3): die Kampfregeln des GameCube-Spiels.
+
+= Gen 4: abilities and moves work as in the Gen 4 games. Physical and special moves are split.
+> Gen 4: Fähigkeiten und Attacken wirken wie in den Gen-4-Spielen. Physische und spezielle Attacken sind getrennt.
+
+= Not available yet: it needs packs that do not exist yet.
+> Noch nicht verfügbar: es braucht Pakete, die es noch nicht gibt.
+
+= Gen 1-3 (XD's own)
+> Gen 1-3 (die von XD)
+
+= Gen 1-5
+> Gen 1-5
+
+= Gen 1-6
+> Gen 1-6
+
+= Gen 1-7
+> Gen 1-7
+
+= Unknown
+> Unbekannt
+
+= 386 Pokemon
+> 386 Pokémon
+
+= 493 Pokemon
+> 493 Pokémon
+
+= The 386 Pokemon of the GameCube game.
+> Die 386 Pokémon des GameCube-Spiels.
+
+= Adds the 107 Gen 4 Pokemon, their moves, items and evolutions. "Also at the Poke Spots": some of them can turn up at the Poke Spots too.
+> Fügt die 107 Gen-4-Pokémon samt Attacken, Items und Entwicklungen hinzu. „Auch an den Pokémon-Spots“: einige können dort ebenfalls auftauchen.
+
+= Original XD look
+> Original-XD-Optik
+
+= Most modern
+> Modernste
+
+= Battle Revolution first
+> Battle Revolution zuerst
+
+= XD > Battle Revolution > Ultra Sun/Moon
+> XD > Battle Revolution > Ultra Sonne/Mond
+
+= Ultra Sun/Moon > Battle Revolution > XD
+> Ultra Sonne/Mond > Battle Revolution > XD
+
+= Battle Revolution > XD > Ultra Sun/Moon
+> Battle Revolution > XD > Ultra Sonne/Mond
+
+= your own order
+> deine eigene Reihenfolge
+
+= XD look
+> XD-Optik
+
+= modern look
+> moderne Optik
+
+= BR look
+> BR-Optik
+
+= custom look
+> eigene Optik
+
+= XD (your disc)
+> XD (deine Disc)
+
+= Battle Revolution
+> Battle Revolution
+
+= X / Y
+> X / Y
+
+= Unknown source
+> Unbekannte Quelle
+
+= XD
+> XD
+
+= Ultra Sun/Moon
+> Ultra Sonne/Mond
+
+= X/Y
+> X/Y
+
+= add your dump
+> füge deinen Dump hinzu
+
+= add your disc
+> füge deine Disc hinzu
+
+= XD Classic
+> XD Klassik
+
+= XD Classic Doubles
+> XD Klassik Doppel
+
+= Level 50 Singles
+> Level-50-Einzel
+
+= Gen 4 Singles
+> Gen-4-Einzel
+
+= Gen 4 Doubles
+> Gen-4-Doppel
+
+= Anything goes
+> Alles erlaubt
+
+= XD Classic: the GameCube game's rules, teams and levels as they are, no extra rules.
+> XD Klassik: die Regeln des GameCube-Spiels, Teams und Level wie sie sind, keine Zusatzregeln.
+
+= XD Classic Doubles: double battles under the GameCube game's rules, no extra rules.
+> XD Klassik Doppel: Doppelkämpfe nach den Regeln des GameCube-Spiels, keine Zusatzregeln.
+
+= Level 50 Singles: XD rules with the split, all Pokemon set to level 50 for the battle, one of each species, no two same items, sleep clause, no OHKO / evasion moves. Bring 6, pick 3.
+> Level-50-Einzel: XD-Regeln mit Aufteilung, alle Pokémon im Kampf auf Level 50, je Art eines, nie dasselbe Item doppelt, Schlafklausel, keine K.O.-/Fluchtwert-Attacken. 6 mitbringen, 3 wählen.
+
+= Gen 4 Singles: Gen 4 rules, level 50, one of each species, no two same items, sleep clause, no OHKO / evasion moves. Bring 6, pick 3.
+> Gen-4-Einzel: Gen-4-Regeln, Level 50, je Art eines, nie dasselbe Item doppelt, Schlafklausel, keine K.O.-/Fluchtwert-Attacken. 6 mitbringen, 3 wählen.
+
+= Gen 4 Doubles: Gen 4 rules in double battles, level 50, one of each species, no two same items. Bring 6, pick 4.
+> Gen-4-Doppel: Gen-4-Regeln im Doppelkampf, Level 50, je Art eines, nie dasselbe Item doppelt. 6 mitbringen, 4 wählen.
+
+= Anything goes: the rows below are yours; no extra rules.
+> Alles erlaubt: die Zeilen darunter gehören dir; keine Zusatzregeln.
+
+= Species
+> Art
+
+= Item
+> Item
+
+= Sleep
+> Schlaf
+
+= OHKO
+> K.O. mit einem Schlag
+
+= Evasion
+> Fluchtwert
+
+= Other
+> Sonstiges
+
+= Species clause: one of each Pokemon per team.
+> Artklausel: jede Pokémon-Art nur einmal pro Team.
+
+= Item clause: no two Pokemon hold the same item.
+> Item-Klausel: keine zwei Pokémon tragen dasselbe Item.
+
+= Sleep clause: a player cannot put a second foe to sleep while one is still asleep from their move; the move fails.
+> Schlafklausel: ein Spieler kann keinen zweiten Gegner einschläfern, solange einer durch seine Attacke schläft; die Attacke schlägt fehl.
+
+= OHKO clause: Fissure, Sheer Cold, Horn Drill and Guillotine are not allowed.
+> K.O.-Klausel: Geofissur, Eiseskälte, Hornbohrer und Guillotine sind verboten.
+
+= Evasion clause: Double Team and Minimize are not allowed.
+> Fluchtwert-Klausel: Doppelteam und Komprimator sind verboten.
+
+= legendary Pokemon
+> legendäre Pokémon
+
+= mythical Pokemon
+> mysteriöse Pokémon
+
 = Purification speed
 > Läutertempo
 
@@ -5668,7 +6274,7 @@
 > Um wie viel schneller sich das Herz eines Crypto-Pokémon öffnet (beim Gehen, Kämpfen, in der Läuterkammer). 1 ist das Original.
 
 = The language of the game's texts, menus and pictures. English (US) is the USA game as it is. The others come from the European (PAL) copy of the game, added on the launcher's Extra assets page ("Languages (from the European disc)"), and Japanese from the Japanese copy ("Japanese (from the Japanese disc)"); a language the pack doesn't have falls back to English. Applies the next time the game starts. It changes only text and pictures, not how the game plays.
-> 
+> Die Sprache der Texte, Menüs und Bilder des Spiels. Englisch (US) ist das USA-Spiel, wie es ist. Die anderen stammen von der europäischen (PAL) Kopie des Spiels, die auf der Seite Zusätzliche Inhalte des Launchers hinzugefügt wird („Sprachen (von der europäischen Disc)“), und Japanisch von der japanischen Kopie („Japanisch (von der japanischen Disc)“); eine Sprache, die das Paket nicht hat, fällt auf Englisch zurück. Gilt beim nächsten Start des Spiels. Es ändert nur Texte und Bilder, nicht den Spielablauf.
 
 = English (US)
 > Englisch (US)
@@ -5685,6 +6291,24 @@
 = Spanish
 > Spanisch
 
+= New playthroughs: rule set
+> Neue Spielstände: Regelwerk
+
+= The rule set the New Game screen starts with: XD original (the GameCube game's battle rules) or Gen 4 (needs the Gen 4 pack). Each playthrough keeps its own.
+> Das Regelwerk, mit dem der Neues-Spiel-Bildschirm beginnt: XD-Original (Kampfregeln des GameCube-Spiels) oder Gen 4 (braucht das Gen-4-Paket). Jeder Spielstand behält sein eigenes.
+
+= New playthroughs: Pokemon
+> Neue Spielstände: Pokémon
+
+= Which Pokemon the New Game screen starts with: Gen 1-3 (XD's own) or Gen 1-4 (needs the Gen 4 pack). Each playthrough keeps its own.
+> Welche Pokémon der Neues-Spiel-Bildschirm anbietet: Gen 1-3 (die von XD) oder Gen 1-4 (braucht das Gen-4-Paket). Jeder Spielstand behält seine eigenen.
+
+= New playthroughs: looks
+> Neue Spielstände: Optik
+
+= Whose models the New Game screen starts with: the original XD look, the most modern models you have, or Battle Revolution first. Only pictures change. Each playthrough keeps its own.
+> Wessen Modelle der Neues-Spiel-Bildschirm anbietet: die Original-XD-Optik, die modernsten Modelle, die du hast, oder Battle Revolution zuerst. Nur Bilder ändern sich. Jeder Spielstand behält seine eigenen.
+
 = European disc image (for languages)
 > Europäisches Disc-Abbild (für Sprachen)
 
@@ -5692,10 +6316,16 @@
 > Das europäische (PAL) Disc-Abbild von Pokémon XD, aus dem die Launcher-Seite Zusatzdaten das Sprachpaket erstellt (leer: noch keine gewählt).
 
 = Japanese disc image (for Japanese)
-> 
+> Japanisches Disc-Abbild (für Japanisch)
 
 = The Japanese Pokemon XD disc image the launcher's Extra assets page makes the Japanese pack from (empty: none chosen yet).
-> 
+> Das japanische Pokémon-XD-Disc-Abbild, aus dem die Seite Zusätzliche Inhalte des Launchers das japanische Paket erstellt (leer: noch keines gewählt).
+
+= Ultra Sun / Ultra Moon dump file (for models)
+> Ultrasonne-/Ultramond-Dump-Datei (für Modelle)
+
+= The decrypted Pokemon Ultra Sun or Ultra Moon dump (.3ds / .cci) the launcher's Extra assets page makes the Ultra Sun / Ultra Moon models from (empty: none chosen yet).
+> Der entschlüsselte Pokémon-Ultrasonne- oder -Ultramond-Dump (.3ds / .cci), aus dem die Seite Zusätzliche Inhalte des Launchers die Ultrasonne-/Ultramond-Modelle erstellt (leer: noch keiner gewählt).
 
 = Developer menu (cheats)
 > Entwicklermenü (Cheats)
@@ -5844,12 +6474,6 @@
 = Shadow Pokemon obey
 > Crypto-Pokémon gehorchen
 
-= Classic XG
-> Klassisches XG
-
-= Gen 4
-> Gen 4
-
 = Gen 4 + modern types
 > Gen 4 + moderne Typen
 
@@ -5898,12 +6522,6 @@
 = Last stage of a line
 > Letzte Stufe einer Reihe
 
-= Allowed
-> Erlaubt
-
-= Not allowed
-> Nicht erlaubt
-
 = As they are
 > Unverändert
 
@@ -5921,9 +6539,6 @@
 
 = Standard kit (Max Potion, Full Heal, Revive)
 > Standardset (Top-Trank, Hyperheiler, Beleber)
-
-= No limit
-> Kein Limit
 
 = 30 seconds
 > 30 Sekunden
@@ -5955,11 +6570,1435 @@
 = Gen 4 Pokemon, XD rules
 > Gen-4-Pokémon, XD-Regeln
 
-= No effect with the XD rules.
-> Ohne Wirkung mit den XD-Regeln.
+= Keep battle replays
+> Kampfwiederholungen speichern
 
-= Performance mode
-> Leistungsmodus
+= After a battle, the game keeps it as a small replay file (the starting state, every choice of both sides and a check number per turn) in the replays folder of the data folder; watch it later with xd.exe --replay <file>. Online and important battles: online battles and every trainer battle, not the wild ones. Every battle: all. The game plays exactly the same with it on or off.
+> Nach einem Kampf behält das Spiel ihn als kleine Wiederholungsdatei (Startzustand, jede Wahl beider Seiten und eine Prüfzahl pro Runde) im Ordner replays des Datenordners; später mit xd.exe --replay <Datei> ansehen. Online- und wichtige Kämpfe: Online-Kämpfe und jeder Kampf gegen einen Trainer, nicht die wilden. Jeder Kampf: alle. Das Spiel läuft mit und ohne genau gleich.
 
-= For slow PCs: the picture is drawn smaller (three quarters of the GameCube's 640x480, a little softer) and the in-between pictures of Frame rate 60 are left out, so the graphics chip has far less to do. Only how the picture is drawn changes; the game itself runs exactly as before. It replaces the Resolution and Frame rate choices while it is on. Applies at once.
-> Für langsame PCs: Das Bild wird kleiner gezeichnet (drei Viertel der 640x480 der GameCube, etwas weicher) und die Zwischenbilder der Bildrate 60 entfallen, damit der Grafikchip deutlich weniger zu tun hat. Nur die Darstellung ändert sich; das Spiel selbst läuft genau wie zuvor. Ersetzt die Auswahl von Auflösung und Bildrate, solange er an ist. Wirkt sofort.
+= Online and important battles
+> Online- und wichtige Kämpfe
+
+= Every battle
+> Jeder Kampf
+
+= Battle replays kept
+> Gespeicherte Kampfwiederholungen
+
+= How many automatically kept battle replays stay in the replays folder: the newest ones; older ones are deleted. A replay you saved with the replay key (F7) is never deleted by this.
+> Wie viele automatisch gespeicherte Kampfwiederholungen im Ordner replays bleiben: die neuesten; ältere werden gelöscht. Eine mit der Replay-Taste (F7) gespeicherte Wiederholung wird dadurch nie gelöscht.
+
+= next to the game (portable)
+> neben dem Spiel (portabel)
+
+= in a folder set by hand (data_location.json)
+> in einem von Hand festgelegten Ordner (data_location.json)
+
+= in a folder given for this run (--data-folder)
+> in einem für diesen Start angegebenen Ordner (--data-folder)
+
+= in a folder set for testing
+> in einem für Tests festgelegten Ordner
+
+= in your user folder
+> in Ihrem Benutzerordner
+
+= Test run on the player's own files: the data is not changed.
+> Testlauf mit den Dateien des Spielers: Die Daten werden nicht verändert.
+
+= Your data is being copied.
+> Ihre Daten werden gerade kopiert.
+
+= The launcher is still preparing pictures for your disc; try again in a minute.
+> Der Launcher bereitet noch Bilder Ihrer Disc vor; versuchen Sie es in einer Minute erneut.
+
+= This run keeps its data in a folder it was given (--data-folder).
+> Dieser Start speichert seine Daten in einem angegebenen Ordner (--data-folder).
+
+= Portable isn't possible here: %s.
+> Portabel ist hier nicht möglich: %s.
+
+= Your data is now in %s. The old folder went to %s, so you can still take it back.
+> Ihre Daten liegen jetzt in %s. Der alte Ordner wurde nach %s verschoben, Sie können ihn also zurückholen.
+
+= Your data is now in %s. The old folder is still in %s; delete it yourself once you have checked that the game works.
+> Ihre Daten liegen jetzt in %s. Der alte Ordner liegt noch in %s; löschen Sie ihn selbst, sobald Sie geprüft haben, dass das Spiel funktioniert.
+
+= Saved %d copies of your saves in %s.
+> %d Kopien Ihrer Speicherstände wurden in %s gespeichert.
+
+= There was no save to copy.
+> Es gab keinen Speicherstand zum Kopieren.
+
+= This folder was chosen by hand or for this run, so the launcher doesn't empty it: it could hold more than the game's data. Delete it yourself (Open data folder).
+> Dieser Ordner wurde von Hand oder für diesen Start gewählt, deshalb leert der Launcher ihn nicht: Er könnte mehr als die Spieldaten enthalten. Löschen Sie ihn selbst (Datenordner öffnen).
+
+= All game data was removed from %s.
+> Alle Spieldaten wurden aus %s entfernt.
+
+= Some files could not be removed (in use?): %s
+> Einige Dateien konnten nicht entfernt werden (in Benutzung?): %s
+
+= Where should your data be kept?
+> Wo sollen Ihre Daten gespeichert werden?
+
+= Your saves, settings and mods need a home. Choose once; you can change it later on the Save page ("Move my data").
+> Ihre Speicherstände, Einstellungen und Mods brauchen ein Zuhause. Wählen Sie einmal; Sie können es später auf der Seite „Speichern“ ändern („Meine Daten verschieben“).
+
+= Keep saves and settings in your user folder (recommended)
+> Speicherstände und Einstellungen in Ihrem Benutzerordner behalten (empfohlen)
+
+= It survives deleting or updating the game folder.
+> Sie bleiben erhalten, wenn der Spielordner gelöscht oder aktualisiert wird.
+
+= Keep everything next to the game (portable)
+> Alles neben dem Spiel behalten (portabel)
+
+= For a USB stick or a single folder: everything stays beside the game.
+> Für einen USB-Stick oder einen einzigen Ordner: Alles bleibt neben dem Spiel.
+
+= If you close this window without choosing, your user folder is used and you are asked again next time.
+> Wenn Sie dieses Fenster ohne Auswahl schließen, wird Ihr Benutzerordner verwendet und Sie werden beim nächsten Mal erneut gefragt.
+
+= Move my data
+> Meine Daten verschieben
+
+= Move your data next to the game?
+> Ihre Daten neben das Spiel verschieben?
+
+= Move your data to your user folder?
+> Ihre Daten in Ihren Benutzerordner verschieben?
+
+= From: %s
+> Von: %s
+
+= To: %s
+> Nach: %s
+
+= %llu files, %s
+> %llu Dateien, %s
+
+= Everything is copied and the copy is checked before anything is switched. Your saves are never touched until the copy is right.
+> Alles wird kopiert und die Kopie geprüft, bevor etwas umgestellt wird. Ihre Speicherstände bleiben unangetastet, bis die Kopie stimmt.
+
+= Then the old folder goes to %s, so you can still take it back.
+> Danach wird der alte Ordner nach %s verschoben, Sie können ihn also zurückholen.
+
+= The launcher then starts again to use the new place.
+> Danach startet der Launcher neu, um den neuen Ort zu verwenden.
+
+= Copying your data...
+> Ihre Daten werden kopiert...
+
+= Checking the copy...
+> Die Kopie wird geprüft...
+
+= %llu of %llu files
+> %llu von %llu Dateien
+
+= Finishing...
+> Wird abgeschlossen...
+
+= Your data has moved
+> Ihre Daten wurden verschoben
+
+= Your data was not moved
+> Ihre Daten wurden nicht verschoben
+
+= Nothing was lost: your data is still in %s.
+> Nichts ging verloren: Ihre Daten liegen weiterhin in %s.
+
+= Restart the launcher
+> Launcher neu starten
+
+= Remove all game data?
+> Alle Spieldaten entfernen?
+
+= This deletes everything the game keeps in %s: your saves, settings, mods, logs and bug reports.
+> Dies löscht alles, was das Spiel in %s aufbewahrt: Ihre Speicherstände, Einstellungen, Mods, Protokolle und Fehlerberichte.
+
+= Saves that will be deleted: %d
+> Speicherstände, die gelöscht werden: %d
+
+= This cannot be undone. The game and the launcher themselves are not removed.
+> Dies kann nicht rückgängig gemacht werden. Das Spiel und der Launcher selbst werden nicht entfernt.
+
+= Export my saves first...
+> Zuerst meine Speicherstände exportieren...
+
+= Delete everything
+> Alles löschen
+
+= Keep my data
+> Meine Daten behalten
+
+= Game data removed
+> Spieldaten entfernt
+
+= Not everything could be removed
+> Nicht alles konnte entfernt werden
+
+= Close the launcher
+> Launcher schließen
+
+= Where your data is kept
+> Wo Ihre Daten gespeichert sind
+
+= Saves, settings, mods, logs and reports are kept %s: %s.
+> Speicherstände, Einstellungen, Mods, Protokolle und Berichte liegen %s: %s.
+
+= The user folder survives deleting or updating the game folder. Portable keeps everything next to the game, for a USB stick or a single folder.
+> Der Benutzerordner bleibt erhalten, wenn der Spielordner gelöscht oder aktualisiert wird. Portabel behält alles neben dem Spiel, für einen USB-Stick oder einen einzigen Ordner.
+
+= Open data folder
+> Datenordner öffnen
+
+= Move my data next to the game...
+> Meine Daten neben das Spiel verschieben...
+
+= Move my data to my user folder...
+> Meine Daten in meinen Benutzerordner verschieben...
+
+= Remove all game data...
+> Alle Spieldaten entfernen...
+
+= This run keeps its data in a folder it was given (--data-folder); that can't be changed here.
+> Dieser Start speichert seine Daten in einem angegebenen Ordner (--data-folder); das lässt sich hier nicht ändern.
+
+= Not available: %s. The Gen 5-7 Pokemon are made from your own Ultra Sun / Ultra Moon dump (launcher, Extra assets page).
+> Nicht verfügbar: %s. Die Pokémon der 5. bis 7. Generation werden aus deinem eigenen Ultrasonne-/Ultramond-Dump erstellt (Launcher, Seite Extra-Daten).
+
+= The mod "%s" is not used: %s
+> Der Mod "%s" wird nicht verwendet: %s
+
+= Made for %s, not %s.
+> Gemacht für %s, nicht für %s.
+
+= It isn't used.
+> Er wird nicht verwendet.
+
+= It won't be used with this disc.
+> Er wird mit dieser Disc nicht verwendet.
+
+= Runs scripts (Luau): allowed. They run in a locked box and cannot touch your files, but they can change how the game plays. Press Z to skip them (the rest of the mod stays).
+> Führt Skripte (Luau) aus: erlaubt. Sie laufen in einer abgeschlossenen Box und können deine Dateien nicht anfassen, aber sie können ändern, wie das Spiel abläuft. Drücke Z, um sie zu überspringen (der Rest des Mods bleibt).
+
+= Runs scripts (Luau): skipped. The rest of the mod is still used. Press Z to allow them.
+> Führt Skripte (Luau) aus: übersprungen. Der Rest des Mods wird weiter verwendet. Drücke Z, um sie zu erlauben.
+
+= "label_namespace" must be <author>.<pack> (lower case letters, digits, - and _; one dot), and not "base"
+> "label_namespace" muss <Autor>.<Paket> sein (Kleinbuchstaben, Ziffern, - und _; ein Punkt) und nicht "base"
+
+= The new signing key was not confirmed, so nothing was installed.
+> Der neue Signaturschlüssel wurde nicht bestätigt, deshalb wurde nichts installiert.
+
+= Key you had: %s    New key: %s
+> Bisheriger Schlüssel: %s    Neuer Schlüssel: %s
+
+= I checked this fingerprint with the author: trust the new key
+> Ich habe diesen Fingerabdruck beim Autor geprüft: dem neuen Schlüssel vertrauen
+
+= the numbers of the mods' rows are not what they were when it was saved, and the save could not be adjusted (%s)
+> die Nummern der Mod-Zeilen stimmen nicht mehr mit denen beim Speichern überein, und der Spielstand konnte nicht angepasst werden (%s)
+
+= Mod zip files (*.zip)
+> Mod-Zip-Dateien (*.zip)
+
+= Check this mod
+> Diesen Mod prüfen
+
+= Pack for sharing...
+> Zum Teilen verpacken...
+
+= the mod
+> der Mod
+
+=  line %d
+>  Zeile %d
+
+= Nothing wrong found.
+> Nichts Auffälliges gefunden.
+
+= Nothing wrong found (notes to read: %d).
+> Nichts Auffälliges gefunden (Hinweise zum Lesen: %d).
+
+= No problems, but there are warnings to read: %d.
+> Keine Probleme, aber Warnungen zum Lesen: %d.
+
+= Problems: %d, warnings: %d. The mod may not work, or may not be safe, as it is.
+> Probleme: %d, Warnungen: %d. Der Mod funktioniert so vielleicht nicht oder ist nicht sicher.
+
+= Checked against your disc: the game's own loader read the mod and found nothing wrong (table and field names, number ranges).
+> Mit Ihrer Disc geprüft: Das Ladeprogramm des Spiels hat den Mod gelesen und nichts Auffälliges gefunden (Tabellen- und Feldnamen, Zahlenbereiche).
+
+= Checked against your disc: the game's own loader read the mod and said %d things (below).
+> Mit Ihrer Disc geprüft: Das Ladeprogramm des Spiels hat den Mod gelesen und %d Dinge gemeldet (unten).
+
+= Not checked against a disc: choose your disc on the Disc page and check again to test table and field names and number ranges.
+> Nicht mit einer Disc geprüft: Wählen Sie Ihre Disc auf der Disc-Seite und prüfen Sie erneut, um Tabellen- und Feldnamen und Zahlenbereiche zu testen.
+
+= The disc could not be used for the deeper check (%s). The other checks ran.
+> Die Disc konnte für die gründlichere Prüfung nicht verwendet werden (%s). Die anderen Prüfungen liefen.
+
+= this game has no deeper check
+> dieses Spiel hat keine gründlichere Prüfung
+
+= the launcher is still reading the disc; try again in a moment
+> der Launcher liest noch die Disc; versuchen Sie es gleich noch einmal
+
+= Checked "%s" before switching it on: nothing wrong found.
+> „%s“ wurde vor dem Einschalten geprüft: nichts Auffälliges gefunden.
+
+= Pack: %s
+> Verpacken: %s
+
+= Check: %s
+> Prüfung: %s
+
+= Packed. The zip is at %s (%s).
+> Verpackt. Die Zip-Datei liegt unter %s (%s).
+
+= SHA-256: %s. %d files in it, %d left out as junk.
+> SHA-256: %s. %d Dateien darin, %d als Überflüssiges weggelassen.
+
+= The update file %s was written next to the zip.
+> Die Update-Datei %s wurde neben die Zip-Datei geschrieben.
+
+= To sign an update file with your own key, use xd_mod_pack on the command line (see the sharing guide).
+> Um eine Update-Datei mit Ihrem eigenen Schlüssel zu signieren, verwenden Sie xd_mod_pack in der Befehlszeile (siehe Anleitung zum Teilen).
+
+= Nothing was packed. The mod has to be fixed first:
+> Es wurde nichts verpackt. Der Mod muss zuerst repariert werden:
+
+= The zip was made but could not be saved there (%s).
+> Die Zip-Datei wurde erstellt, konnte dort aber nicht gespeichert werden (%s).
+
+= Left out of the zip, because it is the game's own data or yours
+> Nicht im Zip enthalten, weil es Daten des Spiels oder Ihre eigenen sind
+
+= Safety problems
+> Sicherheitsprobleme
+
+= Safety warnings
+> Sicherheitswarnungen
+
+= Safety notes
+> Sicherheitshinweise
+
+= Problems
+> Probleme
+
+= Warnings
+> Warnungen
+
+= Notes
+> Hinweise
+
+= What this mod can do
+> Was dieser Mod kann
+
+= No findings at all.
+> Gar keine Befunde.
+
+= This lowers the risk; it cannot prove a mod is harmless. Only use mods from people you trust.
+> Das senkt das Risiko, kann aber nicht beweisen, dass ein Mod harmlos ist. Verwenden Sie nur Mods von Leuten, denen Sie vertrauen.
+
+= Keep it off
+> Ausgeschaltet lassen
+
+= Switch it on anyway
+> Trotzdem einschalten
+
+= Switch it on
+> Einschalten
+
+= Copy the report
+> Bericht kopieren
+
+= Show the zip
+> Zip-Datei anzeigen
+
+= No mods were loaded when the game started.
+> Beim Start des Spiels wurden keine Mods geladen.
+
+= scripts
+> Skripte
+
+= textures
+> Texturen
+
+= data values and text, replaced files, or which mods are on
+> Datenwerte und Texte, ersetzte Dateien oder welche Mods eingeschaltet sind
+
+= Mods reloaded: no script or texture changes.
+> Mods neu geladen: keine Änderungen an Skripten oder Texturen.
+
+= Mods reloaded: %s.
+> Mods neu geladen: %s.
+
+= Restart the game to use changes to %s.
+> Starten Sie das Spiel neu, um Änderungen an %s zu nutzen.
+
+= A script could not be loaded: see the log.
+> Ein Skript konnte nicht geladen werden: siehe Protokoll.
+
+= Reloading mods while playing is off. Turn on "Reload mods while playing" on the SETTINGS page (a developer setting).
+> Das Neuladen von Mods während des Spielens ist aus. Schalten Sie „Mods beim Spielen neu laden“ auf der Seite EINSTELLUNGEN ein (eine Entwickler-Einstellung).
+
+= Nothing was reloaded.
+> Es wurde nichts neu geladen.
+
+= Reload mods
+> Mods neu laden
+
+= Off. For people who make mods: turn on "Reload mods while playing" on the SETTINGS page. It is never used in Original, in replays or in test runs.
+> Aus. Für Mod-Entwickler: Schalten Sie „Mods beim Spielen neu laden“ auf der Seite EINSTELLUNGEN ein. Es wird nie im Original-Modus, in Wiedergaben oder in Testläufen verwendet.
+
+= Loads changed script mods and texture packs again without restarting. Data values, text and replaced files need Apply and restart. It changes nothing in your game.
+> Lädt geänderte Skript-Mods und Texturpakete ohne Neustart neu. Datenwerte, Texte und ersetzte Dateien brauchen „Anwenden und neu starten“. An Ihrem Spiel ändert sich nichts.
+
+= Reload mods while playing (developers)
+> Mods beim Spielen neu laden (Entwickler)
+
+= For people who make mods. A changed script mod or texture pack is picked up while the game runs: F6, "Reload mods" on the in-game MODS page, or by itself a moment after a mod file changed. Data values, text and replaced files still need a restart (the game says so). Only at a quiet moment (not in a battle or while a map loads); never in Original, in replays or in test runs. Runs that reloaded are marked in their recording.
+> Für Mod-Entwickler. Ein geänderter Skript-Mod oder ein geändertes Texturpaket wird bei laufendem Spiel übernommen: F6, „Mods neu laden“ auf der MODS-Seite im Spiel, oder von selbst kurz nach der Änderung einer Mod-Datei. Datenwerte, Texte und ersetzte Dateien brauchen weiterhin einen Neustart (das Spiel sagt es). Nur in einem ruhigen Moment (nicht im Kampf oder beim Laden einer Karte); nie im Original-Modus, in Wiedergaben oder in Testläufen. Läufe mit Neuladen sind in ihrer Aufzeichnung vermerkt.
+
+= it changes the common script (common_script/)
+> er ändert das gemeinsame Skript (common_script/)
+
+= Take a Pokemon out of a mod
+> Ein Pokémon aus einer Mod herausholen
+
+= Copy Pokemon out of a MODDED Pokemon XD save into the PC boxes of this save, made fit for the plain game. The modded save is only read. Look at what each Pokemon loses on the way before you confirm; Pokemon that can't come say why.
+> Kopiert Pokémon aus einem GEMODDETEN Pokémon-XD-Spielstand in die PC-Boxen dieses Spielstands, passend gemacht für das normale Spiel. Der gemoddete Spielstand wird nur gelesen. Sieh dir vor dem Bestätigen an, was jedes Pokémon unterwegs verliert; Pokémon, die nicht mitkommen können, nennen den Grund.
+
+= Choose a modded save...
+> Gemoddeten Spielstand wählen...
+
+= Modded save of
+> Gemoddeter Spielstand von
+
+= Stays in the modded save:
+> Bleibt im gemoddeten Spielstand:
+
+= Copy the ticked Pokemon into the PC boxes
+> Die angehakten Pokémon in die PC-Boxen kopieren
+
+= The numbers %s keeps with this save are not used: the mod is not on
+> Die Zahlen, die %s bei diesem Spielstand speichert, werden nicht benutzt: die Mod ist nicht aktiv
+
+= %s keeps numbers with this save made by version %s; it is now version %s
+> %s speichert bei diesem Spielstand Zahlen, die von Version %s stammen; jetzt ist es Version %s
+
+= keeps its saved numbers
+> speichert eigene Zahlen
+
+= Some of these saves keep numbers this mod's scripts saved (streaks, points). A new version reads them as they are: if it counts them another way, a streak or a point total can come out wrong. Keep the current version for those saves unless the notes say the numbers carry over.
+> Einige dieser Spielstaende speichern Zahlen, die die Skripte dieser Mod gespeichert haben (Serien, Punkte). Eine neue Version liest sie unveraendert: zaehlt sie anders, kann eine Serie oder ein Punktestand falsch werden. Behalte fuer diese Spielstaende die aktuelle Version, ausser die Hinweise sagen, dass die Zahlen uebernommen werden.
+
+= Not enough %s.
+> Nicht genug %s.
+
+= The bag is full.
+> Der Beutel ist voll.
+
+= Thank you!
+> Danke!
+
+= Leave
+> Verlassen
+
+= A: choose   START: done   B: back
+> A: waehlen   START: fertig   B: zurueck
+
+= A: choose
+> A: waehlen
+
+= MENU
+> MENUE
+
+= Pokemon XD - this save needs its extra data
+> Pokémon XD - dieser Spielstand braucht seine Zusatzdaten
+
+= The save needs data of the kind %s that this game does not know.
+> Der Spielstand braucht Daten der Art %s, die dieses Spiel nicht kennt.
+
+= The extra data kept next to this save was written by a newer version of the game.
+> Die Zusatzdaten neben diesem Spielstand wurden von einer neueren Version des Spiels geschrieben.
+
+= The extra data this save needs (%s) is %s.
+> Die Zusatzdaten, die dieser Spielstand braucht (%s), sind %s.
+
+= missing
+> nicht vorhanden
+
+= from another version of the save
+> die eines anderen Stands des Spielstands
+
+= damaged
+> beschädigt
+
+= %s Nothing was read into the game and nothing on the card was changed. Use the same version and mods that made the save, or restore a backup from the launcher's Save page.
+> %s Nichts wurde ins Spiel gelesen und auf der Karte wurde nichts geändert. Dieselbe Version und dieselben Mods verwenden, die den Spielstand erzeugt haben, oder auf der Seite Spielstand des Launchers eine Sicherung zurückholen.
+
+= Change looks...
+> Optik ändern...
+
+= Looks only change the pictures of this playthrough, never how battles work. A change shows the next time the game starts.
+> Die Optik ändert nur die Bilder dieses Spielstands, nie den Ablauf der Kämpfe. Eine Änderung wird beim nächsten Start des Spiels sichtbar.
+
+= Change looks
+> Optik ändern
+
+= Which models does this playthrough show?
+> Welche Modelle zeigt dieser Spielstand?
+
+= Pictures only: how a Pokemon looks, never how it battles. Pokemon you pinned in the game keep their pin.
+> Nur Bilder: wie ein Pokémon aussieht, nie wie es kämpft. Im Spiel festgelegte Pokémon behalten ihre Festlegung.
+
+= %s (now)
+> %s (aktuell)
+
+= Looks changed to %s. They show the next time the game starts.
+> Optik auf %s geändert. Sie wird beim nächsten Start des Spiels sichtbar.
+
+= The looks could not be changed: %s
+> Die Optik konnte nicht geändert werden: %s
+
+= your own setting
+> deine eigene Einstellung
+
+= This playthrough has no looks choice to change.
+> Dieser Spielstand hat keine Optikwahl, die geändert werden kann.
+
+= The setup file could not be written.
+> Die Setup-Datei konnte nicht geschrieben werden.
+
+= Your friend's team is not the one they picked in the team preview. The battle was not started.
+> Das Team deines Freundes ist nicht das, das er in der Teamvorschau gewählt hat. Der Kampf wurde nicht gestartet.
+
+= Time left: %d s - battle clock %d:%02d
+> Zeit übrig: %d s - Kampfuhr %d:%02d
+
+= all set to %s for the battle
+> alle für den Kampf auf %s gesetzt
+
+= The room: %s
+> Der Raum: %s
+
+= Team preview
+> Teamvorschau
+
+= %s - timers: %s
+> %s - Zeitlimits: %s
+
+= JOIN A ROOM
+> RAUM BEITRETEN
+
+= You can't join this room yet:
+> Du kannst diesem Raum noch nicht beitreten:
+
+= Looks are never a room rule: each player sees their own.
+> Die Optik ist nie eine Raumregel: jeder sieht seine eigene.
+
+= Your friend's team preview pick does not match what they locked in. The battle was not started.
+> Die Wahl deines Freundes in der Teamvorschau passt nicht zu dem, was er festgelegt hatte. Der Kampf wurde nicht gestartet.
+
+= TEAM PREVIEW
+> TEAMVORSCHAU
+
+= Pick %d of your %d, the one you lead with first.
+> Wähle %d von deinen %d; das erste führt an.
+
+= Revealing the picks...
+> Die Wahlen werden aufgedeckt...
+
+= Locked in. Waiting for your friend...
+> Festgelegt. Warte auf deinen Freund...
+
+= Lock in
+> Festlegen
+
+= Pick %d more
+> Noch %d wählen
+
+= A: pick / un-pick   B: leave the room
+> A: wählen / abwählen   B: Raum verlassen
+
+= XD rules
+> XD-Regeln
+
+= level %d
+> Level %d
+
+= levels as they are
+> Level wie sie sind
+
+= %d clauses
+> %d Klauseln
+
+= pick %d of %d
+> %d von %d wählen
+
+= MAKE A ROOM
+> RAUM ERSTELLEN
+
+= Choose a format
+> Format wählen
+
+= set every row yourself
+> jede Zeile selbst einstellen
+
+= Custom: the rows of the room are yours, no format.
+> Eigene: die Zeilen des Raums gehören dir, kein Format.
+
+= no two Pokemon hold the same item
+> keine zwei Pokémon mit demselben Item
+
+= no two Pokemon of one species
+> keine zwei Pokémon derselben Art
+
+= %s: not allowed here
+> %s: hier nicht erlaubt
+
+= knows %s (evasion clause)
+> kennt %s (Fluchtklausel)
+
+= knows %s (OHKO clause)
+> kennt %s (K.O.-Klausel)
+
+= banned in this format
+> in diesem Format gebannt
+
+= generation %s Pokemon are not allowed here
+> Pokémon der Generation %s sind hier nicht erlaubt
+
+= holds %s, which is banned
+> trägt %s, das gebannt ist
+
+= knows %s, which is banned
+> kennt %s, das gebannt ist
+
+= has the ability %s, which is banned
+> hat die Fähigkeit %s, die gebannt ist
+
+= level %s is above the room's limit
+> Level %s liegt über der Grenze des Raums
+
+= not allowed here
+> hier nicht erlaubt
+
+= YOUR TEAM
+> DEIN TEAM
+
+= Checked against the room's rules
+> Gegen die Regeln des Raums geprüft
+
+= This team can't enter: %d Pokemon break the room's rules.
+> Dieses Team kann nicht teilnehmen: %d Pokémon verstoßen gegen die Regeln des Raums.
+
+= This team can't enter: it does not fit the room's rules.
+> Dieses Team kann nicht teilnehmen: es passt nicht zu den Regeln des Raums.
+
+= Change the team in your save, or pick another save. Your Pokemon are never changed by the room.
+> Ändere das Team in deinem Spielstand oder wähle einen anderen Spielstand. Deine Pokémon werden vom Raum nie verändert.
+
+= A: pick another save   B: leave the room
+> A: anderen Spielstand wählen   B: Raum verlassen
+
+= The pictures on the cards are drawn from your own discs and dumps; where there is none yet, make them with tools/looks_pictures.py.
+> Die Bilder auf den Karten werden aus deinen eigenen Discs und Dumps gezeichnet; gibt es noch keine, erstelle sie mit tools/looks_pictures.py.
+
+= your own rules
+> eigene Regeln
+
+= a move
+> eine Attacke
+
+= this item
+> dieses Item
+
+= an ability
+> eine Fähigkeit
+
+
+# Pokedex (docs/design/4-pokedex.md)
+
+= SHOW
+> ANZEIGE
+
+= SORT
+> SORTIEREN
+
+= CANCEL
+> ABBRUCH
+
+= Seen:
+> Gesehen:
+
+= Caught:
+> Gefangen:
+
+= ORDER
+> REIHENFOLGE
+
+= TYPE
+> TYP
+
+= GEN.
+> GEN.
+
+= All
+> Alle
+
+= National No.
+> National-Nr.
+
+= A-Z
+> A-Z
+
+= Type
+> Typ
+
+= Height
+> Größe
+
+= Weight
+> Gewicht
+
+= Order met
+> Reihenfolge der Begegnung
+
+= Caught first
+> Gefangene zuerst
+
+= All seen
+> Alle gesehenen
+
+= Caught
+> Gefangen
+
+= Not caught yet
+> Noch nicht gefangen
+
+= From mods
+> Aus Mods
+
+= Left / Right changes   B: back
+> Links / Rechts: ändern   B: zurück
+
+= Stats
+> Werte
+
+= Where
+> Wo
+
+= Matchup
+> Typenvergleich
+
+= ENTRY:
+> EINTRAG:
+
+= Add your Ultra Sun/Moon to see entries
+> Füge dein Ultrasonne/-mond hinzu, um Einträge zu sehen
+
+= No.
+> Nr.
+
+= ABILITY:
+> FÄHIGKEIT:
+
+= HT:
+> GRÖ:
+
+= WT:
+> GEW:
+
+= Genderless
+> Geschlechtslos
+
+= CAUGHT
+> GEFANGEN
+
+= SEEN
+> GESEHEN
+
+= Catch rate
+> Fangrate
+
+= TOTAL
+> SUMME
+
+= HP
+> KP
+
+= ATTACK
+> ANGRIFF
+
+= DEFENSE
+> VERTEIDIGUNG
+
+= SP. ATK
+> SP.-ANGR.
+
+= SP. DEF
+> SP.-VERT.
+
+= SPEED
+> TEMPO
+
+= Medium Fast
+> Mittel schnell
+
+= Erratic
+> Erratisch
+
+= Fluctuating
+> Schwankend
+
+= Medium Slow
+> Mittel langsam
+
+= Slow
+> Langsam
+
+= LEVEL
+> LEVEL
+
+= TM
+> TM
+
+= TUTOR
+> LEHRER
+
+= SWITCH
+> WECHSELN
+
+= moves
+> Attacken
+
+= Level %d
+> Level %d
+
+= FRIENDSHIP
+> FREUNDSCHAFT
+
+= FRIENDSHIP, DAY
+> FREUNDSCHAFT, TAG
+
+= FRIENDSHIP, NIGHT
+> FREUNDSCHAFT, NACHT
+
+= TRADE
+> TAUSCH
+
+= TRADE HOLDING 
+> TAUSCH MIT 
+
+= LEVEL UP HOLDING 
+> LEVEL MIT 
+
+=  (FEMALE)
+>  (WEIBLICH)
+
+=  (MALE)
+>  (MÄNNLICH)
+
+= ATTACK > DEFENSE
+> ANGRIFF > VERTEIDIGUNG
+
+= ATTACK = DEFENSE
+> ANGRIFF = VERTEIDIGUNG
+
+= ATTACK < DEFENSE
+> ANGRIFF < VERTEIDIGUNG
+
+= SPECIAL
+> BESONDERS
+
+= POKE SPOT
+> POKÉSPOT
+
+= SHADOW POKEMON
+> CRYPTO-POKÉMON
+
+= SEEN WITH TRAINERS
+> BEI TRAINERN GESEHEN
+
+= Rock Poke Spot
+> Felsen-Pokéspot
+
+= Oasis Poke Spot
+> Oasen-Pokéspot
+
+= Cave Poke Spot
+> Höhlen-Pokéspot
+
+= Poke Spot (any)
+> Pokéspot (alle)
+
+= Nowhere in the wild: it is given, traded or evolved.
+> Nicht in der Wildnis: man bekommt, tauscht oder entwickelt es.
+
+= The game's own page: press A to open the Strategy Memo.
+> Die Seite des Spiels: A öffnet das Strategie-Memo.
+
+= The PDA's Strategy Memo becomes a Pokédex: National numbers, what you have seen and caught, sorting and filters, and a page each for Details, Stats, Moves, Evolution and Where, next to the game's own View, Size and Matchup. It only shows things and never changes the game or your save. Pokemon you have not met are only a number.
+> Das Strategie-Memo des PDA wird zum Pokédex: National-Nummern, Gesehenes und Gefangenes, Sortieren und Filter und je eine Seite für Details, Werte, Attacken, Entwicklung und Wo, neben Ansicht, Größe und Typenvergleich des Spiels. Er zeigt nur an und ändert nie das Spiel oder deinen Spielstand. Nicht begegnete Pokémon sind nur eine Nummer.
+
+= Pokédex: show everything
+> Pokédex: alles zeigen
+
+= The Pokédex shows every Pokemon, every evolution, every trainer and every shiny colour from the start, like a reference book, instead of only what you have met.
+> Der Pokédex zeigt von Anfang an alle Pokémon, Entwicklungen, Trainer und Farb-Varianten wie ein Nachschlagewerk, nicht nur, was du getroffen hast.
+
+= Pokédex
+> Pokédex
+
+# Pokedex (docs/design/4-pokedex.md)
+
+
+# Pokedex (docs/design/4-pokedex.md)
+
+= Pokédex: Ultra Moon entries
+> Pokédex: Ultramond-Einträge
+
+= The Pokédex entry texts come from the Ultra Sun or Ultra Moon you added on the Extra assets page. With both added it uses Ultra Sun's; turn this on for Ultra Moon's.
+> Die Pokédex-Texte stammen aus dem Ultrasonne oder Ultramond, das du auf der Extra-assets-Seite hinzugefügt hast. Mit beiden werden die von Ultrasonne genutzt; schalte dies für Ultramond ein.
+
+= No entry for this Pokemon in your Ultra Sun/Moon
+> Kein Eintrag für dieses Pokémon in deinem Ultrasonne/-mond
+
+# Pokedex (docs/design/4-pokedex.md)
+
+= YOURS
+> DEINE
+
+= PARTY
+> TEAM
+
+= PC BOX
+> PC-BOX
+
+= SHADOW
+> CRYPTO
+
+# Pokedex (docs/design/4-pokedex.md)
+
+= CATCH RATE
+> FANGRATE
+
+= GROWTH
+> WACHSTUM
+
+= MOVE:
+> ATTACKE:
+
+= POWER
+> STÄRKE
+
+= ACCURACY
+> GENAUIGKEIT
+
+= Pin
+> Anheften
+
+= Unpin
+> Lösen
+
+= Ultra Sun / Ultra Moon models
+> Ultrasonne-/Ultramond-Modelle
+
+= Make the models
+> Modelle erstellen
+
+= Gen 5-7 Pokemon
+> Pokémon der Gen. 5-7
+
+= Pokemon of the Gen 5 to 7 games (so far Lillipup, Herdier, Stoutland, Tepig and Bouffalant), with their models, names, cries and moves, made from your own Ultra Sun / Ultra Moon dump. The battles keep the GameCube rules: abilities and moves that need later rules do a plain hit or nothing.
+> Pokémon aus den Spielen der 5. bis 7. Generation (bisher Yorkleff, Terribark, Bissbark, Floink und Bisofank), mit ihren Modellen, Namen, Schreien und Attacken, erstellt aus deinem eigenen Ultrasonne-/Ultramond-Dump. Die Kämpfe behalten die GameCube-Regeln: Fähigkeiten und Attacken, die spätere Regeln brauchen, machen einen einfachen Treffer oder nichts.
+
+= the Gen 5-7 files are not made yet (no %s)
+> die Dateien der 5. bis 7. Generation sind noch nicht erstellt (kein %s)
+
+= the Gen 5-7 files were made by another version, make them again
+> die Dateien der 5. bis 7. Generation stammen von einer anderen Version, bitte neu erstellen
+
+= Pokemon XD - Gen 5-7
+> Pokémon XD - 5. bis 7. Generation
+
+= The Gen 5-7 Pokemon can't be used: %s.\n\nThey are made from your own Ultra Sun / Ultra Moon dump on the launcher's "Extra assets" page.\nThe game starts without them.
+> Die Pokémon der 5. bis 7. Generation können nicht benutzt werden: %s.\n\nSie werden aus deinem eigenen Ultrasonne-/Ultramond-Dump auf der Seite „Extra-Daten“ des Launchers erstellt.\nDas Spiel startet ohne sie.
+
+= The rule set's own numbers
+> Die Werte des Regelwerks
+
+= Base stats, move power, accuracy and PP and the types are the ones of the rule set's generation.
+> Basiswerte, Stärke, Genauigkeit und AP der Attacken sowie die Typen sind die der Generation des Regelwerks.
+
+= Gen 5 rules
+> Regeln der 5. Generation
+
+= The Black / White rules for battles, on top of the Gen 4 rules.
+> Die Schwarz/Weiß-Regeln für Kämpfe, zusätzlich zu den Regeln der 4. Generation.
+
+= Gen 6 rules
+> Regeln der 6. Generation
+
+= The X / Y rules for battles, on top of the Gen 4 rules: critical hits and the Fairy type chart.
+> Die X/Y-Regeln für Kämpfe, zusätzlich zu den Regeln der 4. Generation: Volltreffer und die Typentabelle mit dem Fee-Typ.
+
+= Gen 7 rules
+> Regeln der 7. Generation
+
+= The Sun / Moon rules for battles, on top of the Gen 6 rules: paralysis and burn are milder.
+> Die Sonne/Mond-Regeln für Kämpfe, zusätzlich zu den Regeln der 6. Generation: Lähmung und Verbrennung sind milder.
+
+= Gen 4 rules, Gen 5 numbers
+> Gen-4-Regeln, Gen-5-Werte
+
+= Fairy type, softer critical hits
+> Fee-Typ, schwächere Volltreffer
+
+= Milder paralysis and burn
+> Mildere Lähmung und Verbrennung
+
+= Gen 5: the Gen 4 battle rules with the Black / White numbers (stats, move power, accuracy and PP). Rock Pokemon get more Sp. Def in a sandstorm.
+> Gen 5: die Kampfregeln der 4. Generation mit den Werten von Schwarz/Weiß (Werte, Stärke, Genauigkeit und AP). Gesteins-Pokémon haben im Sandsturm mehr Sp.-Vert.
+
+= Gen 6: the Fairy type and the newer type chart, critical hits that do 1.5 times (and are surer with Focus Energy), the X / Y numbers.
+> Gen 6: der Fee-Typ und die neuere Typentabelle, Volltreffer mit dem Faktor 1,5 (sicherer mit Energiefokus), die Werte von X/Y.
+
+= Gen 7: the Gen 6 rules, paralysis halves Speed (it quartered it before), a burn hurts a sixteenth, the Sun / Moon numbers.
+> Gen 7: die Regeln der 6. Generation, Lähmung halbiert die Initiative (vorher geviertelt), eine Verbrennung schadet um ein Sechzehntel, die Werte von Sonne/Mond.
+
+= Ultra Sun / Moon dump
+> Ultra-Sonne/Ultra-Mond-Dump
+
+= Adds the Gen 5 to 7 Pokemon (so far a few), made from your own Ultra Sun / Moon dump.
+> Fügt die Pokémon der Gen 5 bis 7 hinzu (bisher einige), erstellt aus deinem eigenen Ultra-Sonne/Ultra-Mond-Dump.
+
+= Needs the Gen 5-7 pack: add your Ultra Sun / Ultra Moon dump in the launcher.
+> Braucht das Gen-5-7-Paket: Füge deinen Ultra-Sonne/Ultra-Mond-Dump im Launcher hinzu.
+
+= Gen 5-7 pack ready
+> Gen-5-7-Paket bereit
+
+= needs the Gen 5-7 pack
+> braucht das Gen-5-7-Paket
+
+= ALOLAN
+> ALOLA
+
+= Mega Evolution
+> Mega-Entwicklung
+
+= Pokemon holding their Mega Stone can Mega Evolve once in a battle (needs the Gen 5-7 Pokemon).
+> Pokémon mit ihrem Mega-Stein können einmal pro Kampf Mega-Entwicklung nutzen (braucht die Pokémon der Gen 5-7).
+
+= Pokemon that hold their Mega Stone can Mega Evolve once per battle for each side (press the Z button in the move menu, then pick the move). The trainers' Pokemon with a Mega Stone do it too. Groudon and Kyogre go Primal when they come in holding their Orb.
+> Pokémon, die ihren Mega-Stein tragen, können einmal pro Kampf und Seite Mega-Entwickeln (im Attackenmenü die Z-Taste drücken, dann die Attacke wählen). Pokémon von Trainern mit Mega-Stein tun es auch. Groudon und Kyogre werden beim Eintritt mit ihrer Kugel zur Protoform.
+
+= PICTURE
+> BILD
+
+= SOUND
+> TON
+
+= CONTROLS
+> STEUERUNG
+
+= MEMO
+> MEMO
+
+= PAGE
+> SEITE
+
+= MOVE
+> VERSCHIEBEN
+
+= DROP
+> ABLEGEN
+
+= RELOAD
+> NEU LADEN
+
+= APPLY
+> ÜBERNEHMEN
+
+= Move %s up or down, then press A to put it down there.
+> Verschiebe %s nach oben oder unten und drücke dann A, um es dort abzulegen.
+
+= From the mod %s. Press A to use it.
+> Aus dem Mod %s. Drücke A, um es zu benutzen.
+
+= The things mods let you do from here. Choose one and press A.
+> Was dir Mods von hier aus erlauben. Wähle eines und drücke A.
+
+= TURN %d / %d
+> RUNDE %d / %d
+
+= TURN %d
+> RUNDE %d
+
+= PAUSED
+> PAUSIERT
+
+= PLAYING
+> LÄUFT
+
+= FINISHED
+> BEENDET
+
+= PLAY
+> WEITER
+
+= PAUSE
+> PAUSE
+
+= HIDE
+> AUSBLENDEN
+
+= CAMERA
+> KAMERA
+
+= Replay bar
+> Replay-Leiste
+
+= While you watch a battle replay: the bar with the turn slider, the speed and the pause state, at the battle menu's place. On: shown (the Replay bar button, H or Y by default, hides it and shows it again). Off: only a small tab with the turn number at the top. It only exists while a replay is watched.
+> Wenn du dir die Wiederholung eines Kampfes ansiehst: die Leiste mit Rundenschieber, Tempo und Pausenstatus an der Stelle des Kampfmenüs. An: sichtbar (die Taste Replay-Leiste, standardmäßig H oder Y, blendet sie aus und wieder ein). Aus: nur ein kleines Feld mit der Rundenzahl oben. Es gibt sie nur während einer Wiederholung.
+
+= More Shadow Pokemon
+> Mehr Crypto-Pokémon
+
+= A few
+> Ein paar
+
+= Many
+> Viele
+
+= More Shadow Pokemon: %s
+> Mehr Crypto-Pokémon: %s
+
+= Trainers without a Shadow Pokemon get one (a species that is no Shadow yet), met after you have the Snag Machine. A few: about 15. Many: 44. All: greyed, this game holds 127 Shadow Pokemon.
+> Trainer ohne Crypto-Pokémon bekommen eines (einer Art, die noch kein Crypto-Pokémon ist), dem du begegnest, wenn du die Snag-Maschine hast. Ein paar: etwa 15. Viele: 44. Alle: ausgegraut, dieses Spiel fasst 127 Crypto-Pokémon.
+
+= All is not possible yet: this game holds 127 Shadow Pokemon.
+> Alle geht noch nicht: dieses Spiel fasst 127 Crypto-Pokémon.
+
+# Pokedex forms
+
+= FORM
+> FORM
+
+= Alolan
+> Alola-Form
+
+= Mega
+> Mega
+
+= Mega X
+> Mega X
+
+= Mega Y
+> Mega Y
+
+= Primal
+> Proto
+
+= Heat
+> Hitze
+
+= Wash
+> Wasch
+
+= Frost
+> Frost
+
+= Fan
+> Wirbel
+
+= Mow
+> Schneid
+
+# Pokedex forms
+
+= Zoom
+> Zoom
+
+= Confirm
+> Bestätigen
+
+= 1st control
+> 1. Kontrolle
+
+= Credits
+> Abspann
+
+= Black, pre-film
+> Schwarz, vor Film
+
+= Black, last text
+> Schwarz, Schluss
+
+= No loads
+> Ohne Laden
+
+= SPEED##stat
+> INIT.
+
+= Hardy
+> Robust
+
+= Lonely
+> Solo
+
+= Brave
+> Mutig
+
+= Adamant
+> Hart
+
+= Naughty
+> Frech
+
+= Bold
+> Kühn
+
+= Docile
+> Sanft
+
+= Relaxed
+> Locker
+
+= Impish
+> Pfiffig
+
+= Lax
+> Lasch
+
+= Timid
+> Scheu
+
+= Hasty
+> Hastig
+
+= Serious
+> Ernst
+
+= Jolly
+> Froh
+
+= Naive
+> Naiv
+
+= Modest
+> Mäßig
+
+= Mild
+> Mild
+
+= Quiet
+> Ruhig
+
+= Bashful
+> Zaghaft
+
+= Rash
+> Hitzig
+
+= Calm
+> Still
+
+= Gentle
+> Zart
+
+= Sassy
+> Raubein
+
+= Careful
+> Besonnen
+
+= Quirky
+> Kauzig
+
+= BASE
+> BASIS
+
+= NATURE
+> WESEN
+
+= IV / EV
+> IV / EV
+
+= HIDE IV / EV
+> IV / EV AUS
+
+= BOX %d
+> BOX %d
+
+= Lv%d
+> Lv%d
+
+= {10}'s {0E}{00}is reacting!
+> {0E} von {10}{00}reagiert!
+
+= {10} has Mega Evolved{00}into {0E}!
+> {10} hat sich zu{00}{0E} mega-entwickelt!
+
+= {10} went back to its primal form!
+> {10} ist zur Urform zurückgekehrt!
+
+= Grass grew to cover the battlefield!
+> Das Schlachtfeld wurde mit Gras bedeckt!
+
+= An electric current runs across the battlefield!
+> Elektrische Energie fließt über das Schlachtfeld!
+
+= The battlefield got weird!
+> Das Schlachtfeld wurde merkwürdig!
+
+= Mist swirled about the battlefield!
+> Nebel breitet sich über das Schlachtfeld aus!
+
+= The grass disappeared from the battlefield.
+> Das Gras ist vom Schlachtfeld verschwunden.
+
+= The electricity disappeared from the battlefield.
+> Die Elektrizität ist vom Schlachtfeld verschwunden.
+
+= The weirdness disappeared from the battlefield.
+> Die Merkwürdigkeit ist vom Schlachtfeld verschwunden.
+
+= The mist disappeared from the battlefield.
+> Der Nebel ist vom Schlachtfeld verschwunden.
+
+= Aurora Veil made {name}'s team stronger against physical and special moves!
+> Auroraschleier stärkt das Team von {name} gegen physische und spezielle Attacken!
+
+= A sticky web spreads out on the ground at {name}'s feet!
+> Ein klebriges Netz breitet sich zu Füßen von {name} aus!
+
+= {name} was caught in a sticky web!
+> {name} hat sich im Klebenetz verfangen!
+
+= {name} is not affected!
+> {name} ist nicht betroffen!
+
+= {name} was hurt!
+> {name} wurde verletzt!
+
+= {name} was healed by the grassy terrain!
+> {name} wurde vom Grasfeld geheilt!
+
+= {name} restored some HP!
+> {name} erhielt KP zurück!
+
+= {name} absorbed the move and restored HP!
+> {name} absorbierte die Attacke und erhielt KP zurück!
+
+= {name} absorbed the move!
+> {name} absorbierte die Attacke!
+
+= {name} shored up and restored its HP!
+> {name} stärkte sich und erhielt KP zurück!
+
+= {name} hurt itself!
+> {name} verletzte sich selbst!
+
+= {10} entered Zen Mode!
+> {10} ist in den Trance-Modus gewechselt!
+
+= {10} left Zen Mode!
+> {10} hat den Trance-Modus verlassen!
+
+= {10} changed to Blade Forme!
+> {10} wechselt zur Klingenform!
+
+= {10} changed to Shield Forme!
+> {10} wechselt zur Schildform!
+
+= {10} formed a school!
+> {10} bildet einen Schwarm!
+
+= {10} stopped schooling!
+> {10} löst den Schwarm auf!
+
+= {10}'s shell broke!
+> Der Panzer von {10} ist zerbrochen!
+
+= {10} is covered by its shell again!
+> {10} steckt wieder in seinem Panzer!
+
+= {10}'s disguise was busted!
+> Die Tarnung von {10} ist aufgeflogen!
+
+= {10} changed to Pirouette Forme!
+> {10} wechselt zur Tanzform!
+
+= {10} changed to Aria Forme!
+> {10} wechselt zur Gesangsform!
+
+= {10} became Ash-Greninja!
+> {10} wurde zu Ash-Quajutsu!
+
+= It was started and stopped. Press Make: it continues where it stopped.
+> Sie wurde begonnen und angehalten. Drücken Sie Erstellen: Sie geht dort weiter, wo sie aufgehört hat.
+
+= Unpacking the dump, converting Gen 1-4 models
+> Dump wird entpackt, Modelle der Gen. 1-4 werden umgewandelt
+
+= Reading the game's tables
+> Tabellen des Spiels werden gelesen
+
+= Converting models
+> Modelle werden umgewandelt
+
+= Writing Pokemon, moves and abilities
+> Pokémon, Attacken und Fähigkeiten werden geschrieben
+
+= Converting forms and Mega Evolutions
+> Formen und Mega-Entwicklungen werden umgewandelt
+
+= Rendering faces
+> Gesichter werden gezeichnet
+
+= Drawing Pokedex pictures
+> Pokédex-Bilder werden gezeichnet
+
+= Checking the pack
+> Paket wird geprüft
+
+= Continue
+> Fortsetzen
+
+= This takes a while. You can keep using the launcher or play meanwhile (the launcher stays open until it is done). Cancel pauses it: what is made so far is kept, and Make continues later.
+> Das dauert eine Weile. Sie können den Launcher weiter benutzen oder in der Zwischenzeit spielen (der Launcher bleibt bis zum Ende geöffnet). Abbrechen hält es an: Was bisher erstellt wurde, bleibt erhalten, und Erstellen macht später weiter.
+
+= This takes a while
+> Das dauert eine Weile
+
+= Stopped. What is made so far is kept: press Make and it continues where it stopped.
+> Angehalten. Was bisher erstellt wurde, bleibt erhalten: Drücken Sie Erstellen, um dort weiterzumachen, wo es aufgehört hat.
+
+= Ultra Sun / Ultra Moon models, Gen 4 and Gen 5-7 Pokemon
+> Modelle aus Ultrasonne / Ultramond, Pokémon der Gen. 4 und 5-7
+
+= Make models and Gen 4 + Gen 5-7 packs
+> Modelle und Gen.-4- + Gen.-5-7-Pakete erstellen
+
+= Start making
+> Erstellen starten
+
+= There are a lot of assets to unpack and convert for the Gen 5, 6 and 7 Pokemon. This may take a while (often 15-30 minutes, longer on slower PCs). You can keep using the launcher or play while it works; the launcher stays open until it is done. If you close it, it continues where it stopped next time.
+> Für die Pokémon der Generationen 5, 6 und 7 müssen sehr viele Daten entpackt und umgewandelt werden. Das kann eine Weile dauern (oft 15 bis 30 Minuten, auf langsameren PCs länger). Sie können den Launcher weiter benutzen oder währenddessen spielen; der Launcher bleibt bis zum Ende geöffnet. Wenn Sie ihn schließen, macht er beim nächsten Mal dort weiter, wo er aufgehört hat.
+
+= The program usum_models, which ships with the game, converts the Pokemon models in your own Ultra Sun or Ultra Moon dump into XD's model format, in the folder extra_assets\\usum in your data folder. The dump must be a decrypted cartridge dump (.3ds or .cci); a .cia file, an encrypted dump or a folder can't be used yet. Your XD disc (the Disc page) is needed too: it says which models XD has. The models and the Gen 4 pack take about ten minutes; the Gen 5, 6 and 7 Pokemon (models, forms, moves, abilities, cries, faces and Pokedex pictures) take much longer, but they are made in the background: you can keep using the launcher or play meanwhile. Afterwards pick "Models: Ultra Sun / Ultra Moon" or the Gen 4 / Gen 5-7 choices in a New Game's setup.
+> Das Programm usum_models, das mit dem Spiel geliefert wird, wandelt die Pokémon-Modelle aus Ihrem eigenen Ultrasonne- oder Ultramond-Dump in das Modellformat von XD um, im Ordner extra_assets\\usum in Ihrem Datenordner. Der Dump muss ein entschlüsselter Modul-Dump sein (.3ds oder .cci); eine .cia-Datei, ein verschlüsselter Dump oder ein Ordner können noch nicht verwendet werden. Ihre XD-Disc (Seite Disc) wird ebenfalls gebraucht: Sie sagt, welche Modelle XD hat. Die Modelle und das Gen-4-Paket brauchen etwa zehn Minuten; die Pokémon der Gen. 5 bis 7 (Modelle, Formen, Attacken, Fähigkeiten, Schreie, Gesichter und Pokédex-Bilder) dauern deutlich länger, werden aber im Hintergrund erstellt: Sie können den Launcher weiter benutzen oder währenddessen spielen. Wählen Sie danach „Modelle: Ultrasonne / Ultramond“ oder die Gen.-4-/Gen.-5-7-Auswahl im Setup eines neuen Spiels.
+
+= Writing Pokedex entries
+> Pokédex-Einträge werden geschrieben
+
+= There are a lot of assets to unpack and convert for the Gen 5, 6 and 7 Pokemon. This may take a while (often 45 minutes to 1.5 hours, longer on slower PCs). You can keep using the launcher or play while it works; the launcher stays open until it is done. If you close it, it continues where it stopped next time.
+> Für die Pokémon der Generationen 5, 6 und 7 müssen sehr viele Daten entpackt und umgewandelt werden. Das kann eine Weile dauern (oft 45 Minuten bis 1,5 Stunden, auf langsameren PCs länger). Sie können den Launcher weiter benutzen oder währenddessen spielen; der Launcher bleibt bis zum Ende geöffnet. Wenn Sie ihn schließen, macht er beim nächsten Mal dort weiter, wo er aufgehört hat.
+

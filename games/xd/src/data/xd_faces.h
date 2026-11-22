@@ -10,6 +10,9 @@
 namespace xd::faces {
 
 void BuildFaces(engine::mods::RowsJob& job);
+void SetFaceRowsTaken(uint32_t count);
+
+void SetFaceRowsTaken(uint32_t count);
 
 std::vector<uint8_t> TextureFromPicture(const std::vector<uint8_t>& templateFile, const engine::memcard::thumbnail::Picture& picture);
 bool DecodeTexture(const std::vector<uint8_t>& file, engine::memcard::thumbnail::Picture& out);

@@ -544,6 +544,13 @@ void PortInput_SettingsNote(const char* list) {
   std::fprintf(stderr, "[input record] %s%s\n", line.c_str(), sFile != nullptr ? "" : " (not recording)");
 }
 
+void PortInput_ModsNote(const char* what) {
+  std::lock_guard<std::mutex> lock(sLock);
+  const std::string line = FormatMods(PortVI_GetFlipCount(), VIGetRetraceCount(), what != nullptr ? what : "");
+  WriteLine(line);
+  std::fprintf(stderr, "[input record] %s%s\n", line.c_str(), sFile != nullptr ? "" : " (not recording)");
+}
+
 void PortInput_PlaythroughNote(const char* what) {
   std::lock_guard<std::mutex> lock(sLock);
   const std::string line = FormatPlaythrough(PortVI_GetFlipCount(), VIGetRetraceCount(), what != nullptr ? what : "");
@@ -966,7 +973,17 @@ int PortInput_Tick(const PortAnchorEvent* events, int count, const PortAnchorSta
   return forced;
 }
 
+static void (*sPadObserver)(const PADStatus* status) = nullptr;
+void PortInput_SetPadObserver(void (*observer)(const PADStatus* status)) { sPadObserver = observer; }
+
+static u32 PadReadMain(PADStatus* status);
 u32 PortInput_PADRead(PADStatus* status) {
+  const u32 result = PadReadMain(status);
+  if (sPadObserver != nullptr) sPadObserver(status);
+  return result;
+}
+
+static u32 PadReadMain(PADStatus* status) {
   const u32 result = PADRead(status);
   const uint32_t frame = PortVI_GetFlipCount();
   const uint32_t field = VIGetRetraceCount();

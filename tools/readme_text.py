@@ -20,9 +20,17 @@ DISCORD_URL = 'https://discord.gg/XVbDVXH4Pn'
 
 # What differs per system: the data folder and how a path is written.
 SYSTEMS = {
-    'windows': {'data': '%APPDATA%\\Pokemon XD', 'sep': '\\', 'launcher': '"Pokemon XD Launcher.exe"'},
-    'linux': {'data': '~/.local/share/Pokemon XD', 'sep': '/', 'launcher': '"Pokemon XD Launcher.sh"'},
-    'mac': {'data': '~/Library/Application Support/Pokemon XD', 'sep': '/', 'launcher': 'the app'},
+    'windows': {'data': '%APPDATA%\\Pokemon XD', 'sep': '\\', 'launcher': '"Pokemon XD Launcher.exe"',
+                'example': '"Pokemon XD Launcher.exe" --no-launcher --fullscreen --preset enhanced',
+                'portable': 'the folder "portable" next to "Pokemon XD Launcher.exe"', 'bin': 'the recycle bin'},
+    'linux': {'data': '~/.local/share/Pokemon XD', 'sep': '/', 'launcher': '"Pokemon XD Launcher.sh"',
+              'example': './"Pokemon XD Launcher.sh" --no-launcher --fullscreen --preset enhanced',
+              'portable': 'the folder "portable" next to "Pokemon XD Launcher.sh"', 'bin': 'your desktop trash'},
+    'mac': {'data': '~/Library/Application Support/Pokemon XD', 'sep': '/', 'launcher': 'the app',
+            'example': 'open -a "Pokemon XD" --args --fullscreen   (in Terminal; --no-launcher works the same way, or run '
+                       '"Pokemon XD.app/Contents/MacOS/xd_launcher" --no-launcher directly)',
+            'portable': 'the folder "portable" next to the app, which needs the app to sit in a folder you can write to',
+            'bin': 'the Trash'},
 }
 
 
@@ -55,6 +63,7 @@ page. Online battles and trades, Discord, controls, volumes and full screen work
 
 def howto(system):
     p = paths(system)
+    s = SYSTEMS[system]
     return f"""How to...
 =========
 Everything here is done in the launcher (it opens first) unless it says "in the game". Your own discs are only read, never
@@ -159,8 +168,73 @@ Discord presence
   talks only to the Discord app on this same PC, and shows no save name, trainer name or place.
 - To turn it off: Settings page of the launcher, or SETTINGS in the game, "Discord presence".
 - If nothing shows up while Discord is open, check that Discord is not running as administrator: a program started normally cannot reach it.
+
+Start options (for other launchers, Steam shortcuts, scripts)
+-------------------------------------------------------------
+Another launcher (RecompLauncher, a Steam shortcut, Steam Deck / Bazzite) can start the game with options written after
+the program's name. The launcher takes the same options and hands them to the game. Every option is for that one
+start only and is never saved (a disc that loads is remembered, as always).
+- --disc <file>        use this disc image. Just the file after the program's name still works too.
+- --fullscreen         full screen; --windowed: a window.
+- --data-folder <folder>   keep saves, settings, logs, cache and mods in that folder for this start. A new folder starts
+                       empty (it is a clean copy of the game), so your normal saves are not touched.
+- --preset original    or --preset enhanced: play with that preset (Original is exactly the GameCube game).
+- --save <name>        load the save with that name (the names on the launcher's Save page). A name that does not exist is
+                       reported and the game does not start.
+- --no-launcher        go straight into the game with the remembered disc (or --disc); the program you started stays
+                       open until the game ends, so a Steam shortcut follows the game itself.
+- --help and --version.
+Example: {s['example']}
+
+Where your data is kept
+-----------------------
+Saves, settings, mods, logs and bug reports live in one data folder: {p['data']}.
+- The first time the launcher starts it asks once where it should be: your user folder (recommended: it survives deleting or
+  updating the game folder) or next to the game (portable: for a USB stick or one folder; {s['portable']}).
+- Launcher, Save page, "Where your data is kept": "Open data folder"; "Move my data..." (user folder <-> portable: it
+  copies everything, checks the copy, switches, and puts the old folder in {s['bin']} so nothing is lost; the launcher then
+  starts again); "Remove all game data..." (asks first, names the folder, offers to export your saves first).
 """
 
+
+NEW_070 = """New in 0.7.0
+------------
+This is the big one. Parts that need a game disc or dump of your own are marked.
+New:
+- Gen 5, 6 and 7 Pokemon (314 of them, Victini to Zeraora), made from your own Pokemon Ultra Sun / Ultra Moon (3DS)
+  dump: species, moves (261 new ones), abilities (about 110 new ones), cries, models and round face pictures. Alolan
+  forms, Mega Evolution (a Z button row in the move menu; Mega Stones at the Poke Coupon desk) and Primal Groudon /
+  Kyogre. Battle forms change in battle (Aegislash, Mimikyu, Wishiwashi, Minior, Darmanitan, Meloetta, Greninja).
+  Not everything is complete: some new abilities and moves say so in their text, and Z-moves only do damage.
+- Pokemon Ultra Sun / Ultra Moon models can also be used for the Gen 1-4 Pokemon, and the Gen 4 Pokemon can be made
+  from that dump alone (no Battle Revolution disc needed). Gen 4 moves, abilities and items now show in French, German,
+  Italian, Spanish and Japanese too.
+- Rule sets on the New Game screen and in online rooms: XD, Gen 4, Gen 5, Gen 6, Gen 7 (each with its generation's
+  numbers and mechanics), the Pokemon generations you want, and "Looks" (which models to show: XD, Battle Revolution or
+  Ultra Sun / Ultra Moon, in your own order, with a pick per Pokemon). Each player sees his own Looks online.
+- Pokedex (Enhanced): the PDA's Strategy Memo opens a real Pokedex for all 807 Pokemon: list, details, stats, moves,
+  evolutions, where to find each one (Poke Spots, Shadow Pokemon, trainers) and Ultra Sun / Moon entry texts. Original
+  keeps the game's own Memo.
+- Native-looking menus: SETTINGS in the field menu looks like the bag, the title SETTINGS like OPTIONS, the EXTRAS
+  box, the New Game window, the MODS page (switch on / off, pick up and move), a mod's question as a person talking.
+- Battle replays: keep your battles (setting), play them back with Space (pause), [ and ] (speed), a replay bar and a
+  free camera you can move while it plays. Online battles save a file on both PCs too.
+- Online formats: six formats, Sleep clause, team preview, a battle clock, and plain refusal screens that say why a room
+  cannot be joined. 0.6.1 players can still join a classic room.
+- More Shadow Pokemon (New Game option, Enhanced): Off / A few / Many.
+- Modding is much bigger: new moves, abilities and battle rules without code, sounds, textures and music, scripts
+  (now Luau), stories and bigger Pokemon / move / item lists, a check-and-pack page in the launcher, and "Reload mods"
+  to see changes without restarting. The Modding Guide and a guide for AI helpers are in the public repository.
+- Smoother and faster: the graphics work is cheaper, fast-forward is lighter, fast-forward can keep the music at
+  normal speed, frame rates above 60 and optional FXAA / MSAA / texture filtering (all off by default).
+- Start options (--disc, --fullscreen, --data-folder, --save, --no-launcher...) and a clear choice of where your data
+  is kept.
+- Japanese text for all of the port's own screens (machine-made: corrections welcome).
+Fixed:
+- The thin grey line down the battle menu in widescreen.
+- A rare crash while taking a save picture, and the picture maker for the launcher's icons no longer stops on a model that loads late.
+Also: a battle rule that sets a level cap (rule sets, mods) never changes your real Pokemon's level or experience.
+"""
 
 NEW_061 = """New in 0.6.1
 ------------
@@ -285,7 +359,7 @@ The full history is on the GitHub releases page: """ + RELEASES_URL + """
 
 
 def new_in():
-    return NEW_060 + '\n' + NEW_05X
+    return NEW_070 + chr(10) + NEW_061 + chr(10) + NEW_060 + chr(10) + NEW_05X
 
 
 def known_issues(system):

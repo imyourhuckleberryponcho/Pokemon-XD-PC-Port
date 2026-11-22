@@ -70,3 +70,55 @@ This PC has no Gen 4 pack yet (make it from your Pokemon Battle Revolution disc 
 shared parts only
 nothing for it in this mod
 Gen 4 Pokemon, XD rules
+National No.
+A-Z
+Type
+Height
+Weight
+Order met
+Caught first
+All seen
+Caught
+Not caught yet
+From mods
+Details
+Stats
+Moves
+Where
+View
+Looks
+Size
+Matchup
+Medium Fast
+Erratic
+Fluctuating
+Medium Slow
+Fast
+Slow
+LEVEL
+TM
+TUTOR
+Rock Poke Spot
+Oasis Poke Spot
+Cave Poke Spot
+Poke Spot (any)
+Grass grew to cover the battlefield!
+An electric current runs across the battlefield!
+The battlefield got weird!
+Mist swirled about the battlefield!
+The grass disappeared from the battlefield.
+The electricity disappeared from the battlefield.
+The weirdness disappeared from the battlefield.
+The mist disappeared from the battlefield.
+Aurora Veil made {name}'s team stronger against physical and special moves!
+A sticky web spreads out on the ground at {name}'s feet!
+{name} was caught in a sticky web!
+{name} is not affected!
+{name} was hurt!
+{name} was healed by the grassy terrain!
+{name} restored some HP!
+{name} absorbed the move and restored HP!
+{name} absorbed the move!
+{name} shored up and restored its HP!
+{name} hurt itself!
+

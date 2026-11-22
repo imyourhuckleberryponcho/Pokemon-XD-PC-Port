@@ -1,4 +1,5 @@
 #include "xd_challenges.h"
+#include "xd_forms.h"
 #include "xd_gen4.h"
 
 #include <cstdint>
@@ -41,9 +42,11 @@ void SetExtraEvolutions(const std::vector<ExtraEvolution>& list, int32_t linking
   sCord = linkingCord;
 }
 
+const std::vector<ExtraEvolution>& ExtraEvolutions() { return sList; }
+
 }
 
-extern "C" uint16_t pokemonEvolutionCheck(void* pokemon, int32_t mode, uint16_t item, uint16_t* extra, void* infoPtr) {
+static uint16_t Gen4EvolutionCheck(void* pokemon, int32_t mode, uint16_t item, uint16_t* extra, void* infoPtr) {
   if (!Gen4On() || (sList.empty() && sCord < 0)) return PortXD_RealEvolutionCheck(pokemon, mode, item, extra, infoPtr);
   const bool cord = mode == 1 && sCord >= 0 && item == static_cast<uint16_t>(sCord);
   const int32_t askMode = cord ? 2 : mode;
@@ -88,4 +91,10 @@ extern "C" uint16_t pokemonEvolutionCheck(void* pokemon, int32_t mode, uint16_t 
     info->parameter = e.param;
   }
   return result;
+}
+
+extern "C" uint16_t pokemonEvolutionCheck(void* pokemon, int32_t mode, uint16_t item, uint16_t* extra, void* infoPtr) {
+  const uint16_t result = Gen4EvolutionCheck(pokemon, mode, item, extra, infoPtr);
+  if (result == 0 || !xd::forms::Loaded()) return result;
+  return static_cast<uint16_t>(xd::forms::AlolaEvolution(pokemonBiosGetPokemonDataId(pokemon), pokemonGetSoubiItemDataId(pokemon), result));
 }

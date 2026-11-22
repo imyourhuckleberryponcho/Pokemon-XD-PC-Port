@@ -1,4 +1,5 @@
 #include "mods.h"
+#include "labels.h"
 
 #include "json.h"
 
@@ -169,7 +170,7 @@ bool ParseManifest(std::string_view json, Manifest& out, std::string& error) {
       !ListField(root, "after", out.after, error) || !ListField(root, "before", out.before, error) ||
       !ListField(root, "works_with", out.worksWith, error) || !ListField(root, "recommends", out.recommends, error) ||
       !ListField(root, "only_with", out.onlyWith, error) || !TextField(root, "updates", out.updates, error) ||
-      !TextField(root, "author_key", out.authorKey, error) ||
+      !TextField(root, "author_key", out.authorKey, error) || !TextField(root, "label_namespace", out.labelNamespace, error) ||
       !IntField(root, "priority", out.priority, error) || !IntField(root, "format", format, error)) {
     return false;
   }
@@ -261,6 +262,10 @@ bool ParseManifest(std::string_view json, Manifest& out, std::string& error) {
         out.links[id] = value.text;
       }
     }
+  }
+  if (!out.labelNamespace.empty() && (!ValidNamespace(out.labelNamespace) || out.labelNamespace == kBaseNamespace)) {
+    error = Tr("\"label_namespace\" must be <author>.<pack> (lower case letters, digits, - and _; one dot), and not \"base\"");
+    return false;
   }
   if (!out.authorKey.empty()) {
     bool hex = out.authorKey.size() == 64;

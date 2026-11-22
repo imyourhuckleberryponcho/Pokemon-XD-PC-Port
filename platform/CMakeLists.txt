@@ -16,7 +16,7 @@ target_compile_options(platform_sdk INTERFACE "${XD_FLAG_FORCE_INCLUDE}${CMAKE_C
 add_library(platform_dsp STATIC audio/dsp/dsp_decode.cpp audio/dsp/dsp_core.cpp audio/dsp/dsp_rom.cpp)
 target_include_directories(platform_dsp PUBLIC audio/dsp/include)
 
-add_library(platform_audio STATIC audio/gc_ai.cpp audio/gc_dsp_sdk.cpp audio/menu_music.cpp audio/port_sfx.cpp)
+add_library(platform_audio STATIC audio/gc_ai.cpp audio/gc_dsp_sdk.cpp audio/menu_music.cpp audio/ff_music.cpp audio/port_sfx.cpp)
 target_include_directories(platform_audio PRIVATE audio/musyx_sdk PUBLIC audio/include)
 target_link_libraries(platform_audio PRIVATE platform_dsp ${AURORA_SDL3_TARGET})
 
@@ -38,7 +38,7 @@ else ()
   set(XD_PLATFORM_OS_SYSTEM_SOURCES os/crash_report.cpp os/log_tee.cpp os/picture_jpeg.cpp os/run_status.cpp
     os/folder_claim.cpp os/window_icon.cpp)
 endif ()
-add_library(platform_os STATIC os/message.c os/zip_store.cpp os/user_folder.cpp os/disc_dialog.cpp
+add_library(platform_os STATIC os/message.c os/zip_store.cpp os/battle_replay_file.cpp os/user_folder.cpp os/disc_dialog.cpp
   ${XD_PLATFORM_OS_SYSTEM_SOURCES})
 target_include_directories(platform_os PUBLIC os/include)
 xd_link_windows_libs(platform_os PRIVATE dbghelp shell32 propsys ole32 windowscodecs)

@@ -136,12 +136,8 @@ Review ReviewList(const ModList::Profile& profile, const std::vector<ModFolder>&
       row.problems.push_back(Tr("Not in the mods folder any more (left in the list; it isn't used)."));
       continue;
     }
-    const std::vector<std::string>& games = row.mod->manifest.games;
     if (!gameId.empty() && !SupportsGame(row.mod->manifest, gameId)) {
-      std::string list;
-      for (const std::string& g : games) list += (list.empty() ? "" : ", ") + g;
-      row.problems.push_back(Fmt(Tr("Made for another game or game version (%s); this disc is %s. It isn't used."), list.c_str(),
-                                 std::string(gameId).c_str()));
+      row.problems.push_back(NotForTargetText(row.mod->manifest, gameId) + " " + Tr("It isn't used."));
       continue;
     }
     if (!gameId.empty() && !row.mod->texturePack) {

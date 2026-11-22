@@ -1,5 +1,7 @@
 #include "i18n.h"
 
+#include <map>
+#include <cstring>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -122,19 +124,29 @@ const char* LanguageName(std::string_view id) {
   return "English";
 }
 
+static std::string PlainOf(const std::string& key) {
+  const size_t at = key.find("##");
+  return at == std::string::npos ? key : key.substr(0, at);
+}
+static const char* PlainCstr(const char* key) {
+  if (std::strstr(key, "##") == nullptr) return key;
+  static std::map<std::string, std::string> sPlain;
+  return sPlain.emplace(key, PlainOf(key)).first->second.c_str();
+}
+
 const char* Tr(const char* english) {
   if (english == nullptr) return "";
-  if (sTable.empty()) return english;
+  if (sTable.empty()) return PlainCstr(english);
   const auto it = sTable.find(english);
   if (it != sTable.end()) return it->second.c_str();
   if (sLog) std::fprintf(stderr, "[locale] no %s text for: %s\n", sLanguage, english);
-  return english;
+  return PlainCstr(english);
 }
 
 std::string Tr(const std::string& english) {
-  if (sTable.empty()) return english;
+  if (sTable.empty()) return PlainOf(english);
   const auto it = sTable.find(english);
-  return it != sTable.end() ? it->second : english;
+  return it != sTable.end() ? it->second : PlainOf(english);
 }
 
 size_t ParseForTest(std::string_view text) {

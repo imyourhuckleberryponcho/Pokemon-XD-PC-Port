@@ -279,6 +279,12 @@ std::string FormatSettings(uint32_t frame, uint32_t field, const std::string& li
   return line + list;
 }
 
+std::string FormatMods(uint32_t frame, uint32_t field, const std::string& what) {
+  char line[64];
+  std::snprintf(line, sizeof line, "MODS frame %u field %u ", frame, field);
+  return line + what;
+}
+
 std::string FormatPlaythrough(uint32_t frame, uint32_t field, const std::string& what) {
   char line[64];
   std::snprintf(line, sizeof line, "PLAYTHROUGH frame %u field %u ", frame, field);
@@ -384,6 +390,11 @@ bool ParseLine(const std::string& line, Recording& into) {
       d.action = "gameplay.text_speed=" + w[9];
       into.settings.push_back(d);
     }
+    return true;
+  }
+  if (w[0] == "MODS") {
+    uint32_t frame = 0, field = 0;
+    if (ParseFrameField(w, frame, field)) into.modReloads.push_back(frame);
     return true;
   }
   if (w[0] == "PHOTO" || w[0] == "PLAYTHROUGH") {

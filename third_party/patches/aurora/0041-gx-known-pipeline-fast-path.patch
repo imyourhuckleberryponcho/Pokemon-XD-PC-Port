@@ -1,0 +1,26 @@
+diff --git a/lib/gfx/pipeline_cache.cpp b/lib/gfx/pipeline_cache.cpp
+--- a/lib/gfx/pipeline_cache.cpp
++++ b/lib/gfx/pipeline_cache.cpp
+@@ -1150,7 +1150,21 @@ PipelineRef find_pipeline(const clear::PipelineConfig& config, const RenderTarge
+ }
+ 
+ PipelineRef find_pipeline(const gx::PipelineConfig& config, const RenderTargetLayout& layout, bool blocking) {
+-  remember_pipeline_config(ShaderType::GX, config, current_frame(), true);
++  // (patch 0041) A pipeline that is already known and already built (nearly every call): found with the two hashes
++  // the slow path below computes anyway, one lock and two lookups, without building the remembered copy of the config
++  // (remember_pipeline_config) or the callback that would create the pipeline (resolve_pipeline). Same result: the
++  // slow path does nothing more for such a config than return the same key.
++  const auto cacheKey = xxh3_hash(config, static_cast<HashType>(ShaderType::GX));
++  const auto runtimeKey = xxh3_hash(layout.key, cacheKey);
++  const auto frame = current_frame();
++  {
++    std::lock_guard lock{g_pipelineMutex};
++    const auto known = g_knownPipelines.find(cacheKey);
++    if (known != g_knownPipelines.end() && known->second.firstFrameUsed <= frame && g_pipelines.contains(runtimeKey)) {
++      return runtimeKey;
++    }
++  }
++  remember_pipeline_config(ShaderType::GX, config, frame, true);
+   return resolve_pipeline(ShaderType::GX, config, layout,
+                           blocking ? PipelinePriority::Blocking : PipelinePriority::Normal);
+ }

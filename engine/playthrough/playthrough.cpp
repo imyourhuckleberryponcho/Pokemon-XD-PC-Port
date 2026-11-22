@@ -123,9 +123,11 @@ std::string Label(const Setup& setup) {
     std::replace(name.begin(), name.end(), '_', ' ');
     label += (i == 0 ? kDot + std::string("Challenge: ") : std::string(", ")) + name;
   }
+  if (!setup.moreShadows.empty()) label += kDot + std::string("More Shadow Pokemon: ") + setup.moreShadows.substr(0, setup.moreShadows.find(':'));
   for (size_t i = 0; i < setup.options.size(); i++) {
     label += (i == 0 ? kDot + std::string("Options: ") : std::string(", ")) + setup.options[i];
   }
+  if (!setup.ruleSetChanged.empty() && !setup.ruleSetStarted.empty()) label += kDot + std::string("rules were ") + setup.ruleSetStarted;
   if (!world.empty()) {
     label += kDot + std::string("Mods: ");
     for (size_t i = 0; i < world.size(); i++) {
@@ -172,6 +174,8 @@ std::string DisplayLabel(const Setup& setup) {
     }
     label += kDot + Fmt(Tr("Mods: %s"), names.c_str());
   }
+  if (!setup.moreShadows.empty()) label += kDot + Fmt(Tr("More Shadow Pokemon: %s"), setup.moreShadows.substr(0, setup.moreShadows.find(':')).c_str());
+  if (!setup.ruleSetChanged.empty() && !setup.ruleSetStarted.empty()) label += kDot + std::string("rules were ") + setup.ruleSetStarted;
   if (setup.Vanilla()) label += kDot + std::string(Tr("Vanilla"));
   if (!setup.engineChanged.empty()) {
     label += kDot + Fmt(Tr("was %s"), TrEngineName(setup.engine == Engine::Enhanced ? Engine::Faithful : Engine::Enhanced));
@@ -205,7 +209,7 @@ std::string ToJson(const Setup& s) {
     for (size_t i = 0; i < s.addedRows.size(); i++) {
       const AddedRowRef& r = s.addedRows[i];
       out += std::string(i > 0 ? "," : "") + "\n    {\"mod\": " + Quote(r.mod) + ", \"table\": " + Quote(r.table) + ", \"name\": " +
-             Quote(r.name) + ", \"id\": " + std::to_string(r.id) + "}";
+             Quote(r.name) + ", \"id\": " + std::to_string(r.id) + (r.label.empty() ? "" : ", \"label\": " + Quote(r.label)) + "}";
     }
     out += "\n  ],\n";
   }
@@ -225,7 +229,16 @@ std::string ToJson(const Setup& s) {
     for (size_t i = 0; i < s.options.size(); i++) out += (i > 0 ? ", " : "") + Quote(s.options[i]);
     out += "],\n";
   }
+  if (s.rules.present) {
+    out += rulesets::ToJsonKeys(s.rules, 2) + ",\n";
+    if (!s.ruleSetChanged.empty()) {
+      out += "  \"rule_set_started\": " + Quote(s.ruleSetStarted) + ",\n  \"rule_set_changed\": [";
+      for (size_t i = 0; i < s.ruleSetChanged.size(); i++) out += (i > 0 ? ", " : "") + Quote(s.ruleSetChanged[i]);
+      out += "],\n";
+    }
+  }
   if (!s.split.empty()) out += "  \"physical_special_split\": " + Quote(s.split) + ",\n";
+  if (!s.moreShadows.empty()) out += "  \"more_shadows\": " + Quote(s.moreShadows) + ",\n";
   out += "  \"started\": " + Quote(s.started) + ",\n";
   out += "  \"port_version\": " + Quote(s.portVersion) + ",\n";
   if (!s.chosenBy.empty()) out += "  \"chosen_by\": " + Quote(s.chosenBy) + ",\n";
@@ -245,10 +258,29 @@ std::string ToJson(const Setup& s) {
     for (size_t i = 0; i < s.challengeState.size(); i++) out += (i > 0 ? ", " : "") + Quote(s.challengeState[i]);
     out += "],\n";
   }
+  if (!s.modData.empty()) {
+    out += "  \"mod_data\": {";
+    for (size_t i = 0; i < s.modData.size(); i++) {
+      const mods::ModValueSet& m = s.modData[i];
+      out += std::string(i > 0 ? "," : "") + "\n    " + Quote(m.mod) + ": {\"version\": " + Quote(m.version) + ", \"values\": {";
+      size_t n = 0;
+      for (const auto& [name, v] : m.values) out += std::string(n++ > 0 ? ", " : "") + Quote(name) + ": " + std::to_string(v);
+      out += "}}";
+    }
+    out += "\n  },\n";
+  }
+  if (!s.extRequired.empty()) {
+    out += "  \"ext_required\": [";
+    for (size_t i = 0; i < s.extRequired.size(); i++) out += (i > 0 ? ", " : "") + Quote(s.extRequired[i]);
+    out += "],\n";
+  }
   if (s.battlesWonKept) {
     out += "  \"battles_won\": [";
     for (size_t i = 0; i < s.battlesWon.size(); i++) out += (i > 0 ? ", " : "") + std::to_string(s.battlesWon[i]);
     out += "],\n";
+  }
+  if (s.dexKept) {
+    out += "  \"pokedex\": {\"caught\": " + Quote(s.dexCaught) + ", \"shiny\": " + Quote(s.dexShiny) + "},\n";
   }
   if (s.stats.kept) {
     out += "  \"stats\": {\"battles_won\": " + std::to_string(s.stats.battlesWon) + ", \"battles_lost\": " +
@@ -329,6 +361,7 @@ bool FromJson(std::string_view text, Setup& out, std::string& error) {
       a.table = Text(v, "table");
       a.name = Text(v, "name");
       a.id = Number(v, "id");
+      a.label = Text(v, "label");
       if (!a.mod.empty() && !a.table.empty()) out.addedRows.push_back(std::move(a));
     }
   }
@@ -340,8 +373,12 @@ bool FromJson(std::string_view text, Setup& out, std::string& error) {
   }
   out.challenges = Texts(root, "challenges");
   out.options = Texts(root, "options");
+  if (!rulesets::FromJson(root, out.rules, error)) return false;
+  out.ruleSetStarted = Text(root, "rule_set_started");
+  out.ruleSetChanged = Texts(root, "rule_set_changed");
   out.split = Text(root, "physical_special_split");
   if (out.split != "on" && out.split != "off") out.split.clear();
+  out.moreShadows = Text(root, "more_shadows");
   out.edition = Text(root, "edition");
   out.started = Text(root, "started");
   out.portVersion = Text(root, "port_version");
@@ -354,12 +391,35 @@ bool FromJson(std::string_view text, Setup& out, std::string& error) {
   out.setupChanged = Texts(root, "setup_changed");
   out.challengeLog = Texts(root, "challenge_log");
   out.challengeState = Texts(root, "challenge_state");
+  const auto md = root.fields.find("mod_data");
+  if (md != root.fields.end() && md->second.kind == Value::Kind::Object) {
+    for (const auto& [id, v] : md->second.fields) {
+      if (v.kind != Value::Kind::Object) continue;
+      mods::ModValueSet set;
+      set.mod = id;
+      set.version = Text(v, "version");
+      const auto vals = v.fields.find("values");
+      if (vals != v.fields.end() && vals->second.kind == Value::Kind::Object) {
+        for (const auto& [name, n] : vals->second.fields) {
+          if (n.kind == Value::Kind::Number && n.number == static_cast<double>(static_cast<long long>(n.number))) set.values[name] = static_cast<int64_t>(n.number);
+        }
+      }
+      out.modData.push_back(std::move(set));
+    }
+  }
+  out.extRequired = Texts(root, "ext_required");
   const auto won = root.fields.find("battles_won");
   if (won != root.fields.end() && won->second.kind == Value::Kind::Array) {
     out.battlesWonKept = true;
     for (const Value& v : won->second.items) {
       if (v.kind == Value::Kind::Number && v.number >= 1 && v.number <= 65535) out.battlesWon.push_back(static_cast<uint32_t>(v.number));
     }
+  }
+  const auto dex = root.fields.find("pokedex");
+  if (dex != root.fields.end() && dex->second.kind == Value::Kind::Object) {
+    out.dexKept = true;
+    out.dexCaught = Text(dex->second, "caught");
+    out.dexShiny = Text(dex->second, "shiny");
   }
   const auto st = root.fields.find("stats");
   if (st != root.fields.end() && st->second.kind == Value::Kind::Object) {
@@ -494,37 +554,76 @@ Check Compare(const Setup& setup, const std::vector<mods::ModFolder>& found) {
       check.notes.push_back(Fmt(Tr("%s (%s) is not in the mods folder any more"), was.c_str(), mods::AppliesName(m.applies)));
     }
   }
+  for (const mods::ModValueSet& d : setup.modData) {
+    const mods::ModFolder* there = nullptr;
+    for (const mods::ModFolder& f : found) {
+      if (Lower(f.manifest.id) == Lower(d.mod)) there = &f;
+    }
+    if (there == nullptr) {
+      check.notes.push_back(Fmt(Tr("The numbers %s keeps with this save are not used: the mod is not on"), d.mod.c_str()));
+    } else if (!d.version.empty() && mods::CompareVersions(there->manifest.version, d.version) != 0) {
+      check.notes.push_back(Fmt(Tr("%s keeps numbers with this save made by version %s; it is now version %s"), d.mod.c_str(), d.version.c_str(),
+                                (there->manifest.version.empty() ? std::string(Tr("(none)")) : there->manifest.version).c_str()));
+    }
+  }
   return check;
+}
+
+namespace {
+std::string RowKind(const std::string& table) {
+  return table == "pokemon_data" ? Tr("Pokemon") : table == "waza_data" ? Tr("move") : table == "item_data_prime" ? Tr("item") : table == "flag_data" ? Tr("story flag") : Tr("entry");
+}
+std::string DescribeUnmet(const AddedRowRef& want, const std::vector<AddedRowRef>& now) {
+  const AddedRowRef* moved = nullptr;
+  bool modThere = false;
+  for (const AddedRowRef& n : now) {
+    if (Lower(n.mod) == Lower(want.mod)) modThere = true;
+    if (Lower(n.mod) == Lower(want.mod) && n.table == want.table && n.name == want.name) moved = &n;
+  }
+  if (moved != nullptr) {
+    return Fmt(Tr("the mod \"%s\" now gives the %s \"%s\" the number %d, the save has it as %d (another mod before it, or another order of the mods)"),
+               want.mod.c_str(), RowKind(want.table).c_str(), want.name.c_str(), static_cast<int>(moved->id), static_cast<int>(want.id));
+  }
+  if (modThere) {
+    return Fmt(Tr("the mod \"%s\" no longer adds the %s \"%s\" (it was changed)"), want.mod.c_str(), RowKind(want.table).c_str(), want.name.c_str());
+  }
+  return Fmt(Tr("the mod \"%s\" is not on: this save has its %s \"%s\" (number %d)"), want.mod.c_str(), RowKind(want.table).c_str(),
+             want.name.c_str(), static_cast<int>(want.id));
+}
+mods::LabelRow ToLabelRow(const AddedRowRef& r, const std::vector<AddedRowRef>& now) {
+  mods::LabelRow row;
+  row.label = r.label;
+  row.number = r.id;
+  row.legacy = r.mod + "|" + r.table + "|" + r.name;
+  row.describe = DescribeUnmet(r, now);
+  return row;
+}
 }
 
 std::vector<std::string> BoundProblems(const Setup& setup, const std::vector<AddedRowRef>& now) {
   std::vector<std::string> problems;
   std::set<std::string> said;
-  const auto kind = [](const std::string& table) {
-    return table == "pokemon_data" ? Tr("Pokemon") : table == "waza_data" ? Tr("move") : table == "item_data_prime" ? Tr("item") : table == "flag_data" ? Tr("story flag") : Tr("entry");
-  };
   for (const AddedRowRef& want : setup.addedRows) {
     if (std::find(now.begin(), now.end(), want) != now.end()) continue;
-    const AddedRowRef* moved = nullptr;
-    bool modThere = false;
-    for (const AddedRowRef& n : now) {
-      if (Lower(n.mod) == Lower(want.mod)) modThere = true;
-      if (Lower(n.mod) == Lower(want.mod) && n.table == want.table && n.name == want.name) moved = &n;
-    }
-    std::string text;
-    if (moved != nullptr) {
-      text = Fmt(Tr("the mod \"%s\" now gives the %s \"%s\" the number %d, the save has it as %d (another mod before it, or another order of the mods)"),
-                 want.mod.c_str(), kind(want.table), want.name.c_str(), static_cast<int>(moved->id), static_cast<int>(want.id));
-    } else if (modThere) {
-      text = Fmt(Tr("the mod \"%s\" no longer adds the %s \"%s\" (it was changed)"), want.mod.c_str(), kind(want.table),
-                 want.name.c_str());
-    } else {
-      text = Fmt(Tr("the mod \"%s\" is not on: this save has its %s \"%s\" (number %d)"), want.mod.c_str(), kind(want.table),
-                 want.name.c_str(), static_cast<int>(want.id));
-    }
+    const std::string text = DescribeUnmet(want, now);
     if (said.insert(text).second) problems.push_back(text);
   }
   return problems;
+}
+
+BoundCheck CheckBound(const Setup& setup, const std::vector<AddedRowRef>& now) {
+  std::vector<mods::LabelRow> saved, current;
+  for (const AddedRowRef& r : setup.addedRows) saved.push_back(ToLabelRow(r, now));
+  for (const AddedRowRef& r : now) {
+    mods::LabelRow row;
+    row.label = r.label;
+    row.number = r.id;
+    row.legacy = r.mod + "|" + r.table + "|" + r.name;
+    current.push_back(std::move(row));
+  }
+  BoundCheck check;
+  check.plan = mods::PlanRemap(saved, current);
+  return check;
 }
 
 std::vector<std::string> WorldModIds(const Setup& setup) {

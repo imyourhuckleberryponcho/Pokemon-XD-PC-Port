@@ -3,7 +3,7 @@ namespace ol {
 using xd::online::Peer;
 using xd::online::RoomRules;
 
-enum class Step { Menu, Settings, Typing, Connect, HostView, JoinView, SavePick, Choose, Team, Ready, Restart, Message };
+enum class Step { Menu, Settings, Details, Typing, Connect, HostView, JoinView, SavePick, Choose, Team, Ready, Preview, FormatList, TeamCheck, Restart, Message };
 
 struct Slot {
   std::string name;
@@ -44,6 +44,16 @@ struct State {
   float age = 0.f;
   bool started = false;
   const PortMenuPage* sub = nullptr;
+  bool pvDone = false, pvStarted = false, pvSent = false, pvLocked = false, pvRevealSent = false;
+  std::vector<int> pvMine;
+  std::vector<int> pvChosen;
+  std::vector<int> pvOrder;
+  std::string pvNonceHex, pvRecord;
+  std::vector<uint16_t> pvPresetOrder;
+  std::vector<uint16_t> pvFriendPicked;
+  std::chrono::steady_clock::time_point pvDeadline;
+  int fmtCursor = 0;
+  std::vector<engine::rulesets::MemberProblem> tcProblems;
   bool cardSent = false, haveFriendCard = false;
   std::string friendCardLine;
 };
@@ -193,7 +203,12 @@ void Follow() {
     L.theirs = peer.caps;
     if (L.host) {
       L.verdict = xd::online::Judge(L.mine, L.rules, peer.caps, false);
-      if (!L.verdict.Ok()) return Fail(Fmt(Tr("Your friend can't play in this room: %s"), L.verdict.refuse.front().c_str()));
+      if (!L.verdict.Ok()) {
+        L.message = Fmt(Tr("Your friend can't play in this room: %s"), L.verdict.refuse.front().c_str());
+        Note(L.message);
+        L.step = Step::Message;
+        return;
+      }
       L.step = Step::HostView;
     } else {
       L.rules = peer.rules;
@@ -276,7 +291,21 @@ bool StepSettings(ImDrawList* dl, const Screen& sc, const PortMenuInput* in) {
     int d = 0;
     if (in->repeat & PAD_BUTTON_LEFT) d = -1;
     if (in->repeat & PAD_BUTTON_RIGHT) d = 1;
-    if ((in->pressed & PAD_BUTTON_A) && !rows[static_cast<size_t>(L.row)].number) d = 1;
+    const std::string& rid = rows[static_cast<size_t>(L.row)].id;
+    if ((in->pressed & PAD_BUTTON_A) && (rid == "clauses" || rid == "bans")) {
+      PlayMenuSound(kTitleMenu, kSoundChoose);
+      L.step = Step::Details;
+      return true;
+    }
+    if ((in->pressed & PAD_BUTTON_A) && rid == "format") {
+      PlayMenuSound(kTitleMenu, kSoundChoose);
+      L.fmtCursor = 0;
+      if (L.rules.format.empty()) L.fmtCursor = static_cast<int>(L.pc.formats.size());
+      for (size_t i = 0; i < L.pc.formats.size(); i++) if (L.pc.formats[i].id == L.rules.format) L.fmtCursor = static_cast<int>(i);
+      L.step = Step::FormatList;
+      return true;
+    }
+    if ((in->pressed & PAD_BUTTON_A) && !rows[static_cast<size_t>(L.row)].number && rid != "preview" && rid != "timers") d = 1;
     if (d != 0) {
       if (xd::online::Cycle(L.rules, rows[static_cast<size_t>(L.row)].id, d, L.pc)) PlayMenuSound(kTitleMenu, kSoundMove);
       else PlayMenuSound(kTitleMenu, kSoundBack);
@@ -314,9 +343,14 @@ bool StepSettings(ImDrawList* dl, const Screen& sc, const PortMenuInput* in) {
     const xd::online::Row& row = rows[static_cast<size_t>(i)];
     kit::Text(dl, sc, 76.f, y + 6.f, Tr(row.title), sel ? kit::kText : kit::kSoft, 0.78f, 236.f, 1);
     kit::Value(dl, sc, 322.f, y + 3.f, 262.f, Tr(row.Current().label), sel, sel ? kit::kText : kit::kGold);
+    if (row.id == "format" || row.id == "clauses" || row.id == "bans") kit::Text(dl, sc, 572.f, y + 8.f, "...", kit::kDim, 0.7f);
   }
   if (L.top > 0) kit::Arrow(dl, sc, 320.f, 78.f, true);
   if (L.top + kVisibleRows < n) kit::Arrow(dl, sc, 320.f, 384.f, false);
+  if (!onButton && rows[static_cast<size_t>(L.row)].id == "format" && !L.rules.format.empty()) {
+    kit::Window(dl, sc, 40.f, 394.f, 600.f, 440.f);
+    kit::Para(dl, sc, 64.f, 403.f, 512.f, xd::rulesets::text::FormatInfo(L.rules.format), kit::kText, 0.62f, 14.f, 3);
+  }
   if (!onButton) {
     const xd::online::Row& row = rows[static_cast<size_t>(L.row)];
     for (const xd::online::Option& o : row.options) {
@@ -327,7 +361,39 @@ bool StepSettings(ImDrawList* dl, const Screen& sc, const PortMenuInput* in) {
       }
     }
   }
-  Hint(dl, sc, Tr("Up / down: choose   Left / right: change   A: choose   B: back"));
+  Hint(dl, sc, Tr("Up / down: choose   Left / right: change   A: open \"...\"   B: back"));
+  return true;
+}
+
+bool StepDetails(ImDrawList* dl, const Screen& sc, const PortMenuInput* in) {
+  if (Back(in)) { L.step = Step::Settings; return true; }
+  namespace tx = xd::rulesets::text;
+  const engine::rulesets::Format* f = xd::rulesets::FindFormat(L.rules.format);
+  Title(dl, sc, Tr("CLAUSES AND BANS"));
+  kit::Window(dl, sc, 20.f, 76.f, 620.f, 270.f);
+  kit::Text(dl, sc, 45.f, 82.f, Tr("Clauses"), kit::kGold, 0.8f, 200.f, 1);
+  const char* ids[] = {"species", "item", "sleep", "ohko", "evasion"};
+  for (int i = 0; i < 5; i++) {
+    const float y = 104.f + 32.f * static_cast<float>(i);
+    const bool on = f != nullptr && f->clauses.count(ids[i]) > 0;
+    kit::Text(dl, sc, 55.f, y, tx::ClauseName(ids[i]), kit::kText, 0.75f, 120.f, 1);
+    kit::Text(dl, sc, 135.f, y + 4.f, tx::ClauseInfo(ids[i]), kit::kSoft, 0.46f, 295.f);
+    const bool atTeam = engine::rulesets::ClauseCheckedAtSubmit(ids[i]);
+    kit::Text(dl, sc, 435.f, y + 4.f, atTeam ? Tr("team step") : Tr("battle rule"), kit::kDim, 0.5f, 70.f);
+    kit::Value(dl, sc, 520.f, y - 3.f, 80.f, on ? Tr("On") : Tr("Off"), false, on ? kit::kGold : kit::kDim);
+  }
+  kit::Window(dl, sc, 20.f, 280.f, 620.f, 392.f);
+  kit::Text(dl, sc, 45.f, 285.f, Tr("Bans"), kit::kGold, 0.8f, 200.f, 1);
+  const bool leg = f != nullptr && f->bannedCategories.count("legendary") > 0, myth = f != nullptr && f->bannedCategories.count("mythical") > 0;
+  kit::Text(dl, sc, 55.f, 308.f, tx::CategoryName("legendary"), kit::kText, 0.72f, 220.f, 1);
+  kit::Value(dl, sc, 490.f, 304.f, 110.f, leg ? Tr("Not allowed") : Tr("Allowed"), false, leg ? kit::kGold : kit::kDim);
+  kit::Text(dl, sc, 55.f, 336.f, tx::CategoryName("mythical"), kit::kText, 0.72f, 220.f, 1);
+  kit::Value(dl, sc, 490.f, 332.f, 110.f, myth ? Tr("Not allowed") : Tr("Allowed"), false, myth ? kit::kGold : kit::kDim);
+  const size_t n = f != nullptr ? f->bannedSpecies.size() + f->bannedItems.size() + f->bannedMoves.size() + f->bannedAbilities.size() : 0;
+  kit::Text(dl, sc, 55.f, 362.f, n > 0 ? Fmt(Tr("Ban list: %d entries (species, items, moves, abilities)"), static_cast<int>(n)) : std::string(Tr("Ban list: none")), kit::kSoft, 0.62f, 540.f);
+  kit::Window(dl, sc, 20.f, 398.f, 620.f, 436.f);
+  kit::Para(dl, sc, 40.f, 406.f, 560.f, Tr("Only our own categories and a list. No outside tier lists; a format file can carry its own ban list. The clauses are the format's own: choose another format to change them."), kit::kText, 0.6f, 14.f, 2);
+  Hint(dl, sc, Tr("B: back"));
   return true;
 }
 
@@ -455,6 +521,46 @@ float DrawRoom(ImDrawList* dl, const Screen& sc, float y) {
   return bottom;
 }
 
+std::string FormatTitle(const RoomRules& r) { return r.format.empty() ? std::string(Tr("Custom")) : xd::rulesets::text::FormatName(r.format, r.format); }
+std::string LevelsText(const RoomRules& r) {
+  return r.level == "asis" ? std::string(Tr("as they are")) : r.level.compare(0, 4, "all:") == 0 ? Fmt(Tr("all set to %s for the battle"), r.level.substr(4).c_str()) : Fmt(Tr("capped at level %s"), r.level.substr(4).c_str());
+}
+float DrawRoomCard(ImDrawList* dl, const Screen& sc, float y0, float y1) {
+  namespace tx = xd::rulesets::text;
+  kit::Window(dl, sc, 40.f, y0, 600.f, y1, true);
+  kit::Text(dl, sc, 62.f, y0 + 10.f, Fmt(Tr("The room: %s"), FormatTitle(L.rules).c_str()), kit::kGold, 0.86f, 520.f, 1);
+  std::vector<std::pair<std::string, std::string>> rows;
+  rows.push_back({Tr("Rule set"), tx::RuleSetShort(xd::online::RoomRuleSetId(L.rules))});
+  rows.push_back({Tr("Pokemon"), tx::PokemonShort(xd::online::RoomMaxGen(L.rules))});
+  rows.push_back({Tr("Levels"), LevelsText(L.rules)});
+  const bool fmt = L.pc.formatLine != nullptr && !L.rules.format.empty();
+  if (fmt) {
+    rows.push_back({Tr("Clauses"), L.pc.formatLine(L.rules, "clauses")});
+    rows.push_back({Tr("Bans"), L.pc.formatLine(L.rules, "bans")});
+    rows.push_back({Tr("Team preview"), L.rules.preview ? Fmt(Tr("%s - timers: %s"), L.pc.formatLine(L.rules, "preview").c_str(), L.pc.formatLine(L.rules, "timers").c_str()) : std::string(Tr("Off"))});
+  }
+  float y = y0 + 42.f;
+  for (const auto& kv : rows) {
+    kit::Text(dl, sc, 62.f, y, kv.first, kit::kSoft, 0.7f, 140.f);
+    y += 17.f * static_cast<float>(kit::Para(dl, sc, 212.f, y, 360.f, kv.second, kit::kText, 0.7f, 17.f, 2));
+  }
+  return y;
+}
+
+bool DrawJoinRefusal(ImDrawList* dl, const Screen& sc, const PortMenuInput* in) {
+  Title(dl, sc, Tr("JOIN A ROOM"));
+  const float bottom = DrawRoomCard(dl, sc, 76.f, 352.f);
+  float y = bottom + 4.f;
+  kit::Text(dl, sc, 62.f, y, Tr("You can't join this room yet:"), kit::kBad, 0.82f, 520.f, 1);
+  y += 24.f;
+  for (const std::string& r : L.verdict.refuse) y += 16.f * static_cast<float>(kit::Para(dl, sc, 62.f, y, 510.f, std::string("- ") + TrVerdictLine(r), kit::kBad, 0.68f, 16.f, 3));
+  kit::Text(dl, sc, 62.f, 330.f, Tr("Looks are never a room rule: each player sees their own."), kit::kDim, 0.62f, 520.f);
+  kit::Button(dl, sc, 200.f, 380.f, 240.f, Tr("Back"), true);
+  Hint(dl, sc, Tr("A: choose   B: back"));
+  (void)in;
+  return true;
+}
+
 bool StepHostView(ImDrawList* dl, const Screen& sc, const PortMenuInput* in) {
   if (Back(in)) { Send(xd::online::Msg("LEAVE")); Reset(); return true; }
   if (L.peer.accepted) {
@@ -495,6 +601,7 @@ bool StepJoinView(ImDrawList* dl, const Screen& sc, const PortMenuInput* in) {
     Reset();
     return true;
   }
+  if (!ok) return DrawJoinRefusal(dl, sc, in);
   Title(dl, sc, Tr("THE ROOM'S SETTINGS"));
   float y = DrawRoom(dl, sc, 72.f) + 6.f;
   if (!L.verdict.refuse.empty() || !L.verdict.restart.empty()) {
@@ -537,7 +644,7 @@ bool StepRestart(ImDrawList* dl, const Screen& sc, const PortMenuInput* in) {
         resume = "join|" + L.code;
         Send(xd::online::Msg("LEAVE"));
       }
-      if (xd::pt::RestartForRoom(xd::online::RoomGen4Pokemon(L.rules.ruleSet), xd::online::RoomGen4Rules(L.rules.ruleSet))) {
+      if (xd::pt::RestartForRoom(xd::online::RoomGen4Pokemon(L.rules.ruleSet), xd::online::RoomGen4Rules(L.rules.ruleSet), xd::online::RoomRuleSetId(L.rules))) {
 #ifdef _WIN32
         _putenv_s("XD_ONLINE_ROOM_RESUME", resume.c_str());
 #else
@@ -701,6 +808,8 @@ std::string Plain(const std::string& t) {
 }
 int MaxTeam() { return 6; }
 
+bool CheckPickedTeam();
+bool CheckPickedTeamEarly() { return CheckPickedTeam(); }
 bool StepChoose(ImDrawList* dl, const Screen& sc, const PortMenuInput* in) {
   const bool fromSave = L.rules.team == "save";
   const int n = fromSave ? static_cast<int>(L.entries.size()) : static_cast<int>(L.species.size());
@@ -718,6 +827,11 @@ bool StepChoose(ImDrawList* dl, const Screen& sc, const PortMenuInput* in) {
   const int count = fromSave ? static_cast<int>(L.picked.size()) : static_cast<int>(L.chosenSpecies.size());
   if (in->pressed & PAD_BUTTON_A) {
     if (L.cursor == n) {
+      if (count >= 1 && fromSave && !CheckPickedTeamEarly()) {
+        PlayMenuSound(kTitleMenu, kSoundBack);
+        L.step = Step::TeamCheck;
+        return true;
+      }
       if (count >= 1) {
         PlayMenuSound(kTitleMenu, kSoundChoose);
         Send(xd::online::Msg("TEAM", std::to_string(count)));
@@ -816,6 +930,235 @@ bool StepTeam(ImDrawList* dl, const Screen& sc, const PortMenuInput* in) {
   return true;
 }
 
+bool PreviewWanted() {
+  const std::string& t = L.rules.team;
+  return L.rules.preview && (t == "save" || t == "free12" || t == "free14" || t == "preset");
+}
+std::vector<int> MyPreviewTeam() {
+  std::vector<int> ids;
+  const std::string& t = L.rules.team;
+  if (t == "save") { for (int i : L.picked) ids.push_back(L.entries[static_cast<size_t>(i)].pokemon.species); }
+  else if (t == "preset") { for (int id : (L.host ? std::vector<int>{3, 6, 9} : std::vector<int>{135, 134, 136})) ids.push_back(id); }
+  else { for (uint16_t id : L.chosenSpecies) ids.push_back(id); }
+  return ids;
+}
+std::string PreviewName(int id) {
+  std::string n = xd::starter::SpeciesName(static_cast<uint32_t>(id));
+  if (n.empty()) return "#" + std::to_string(id);
+  for (char& c : n) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+  return n;
+}
+int PreviewWant(int teamSize) { return std::max(1, std::min(L.rules.pick > 0 ? L.rules.pick : 6, teamSize)); }
+void PreviewLock(const std::vector<int>& order) {
+  L.pvOrder = order;
+  L.pvLocked = true;
+  unsigned char nonce[xd::online::kNonceBytes];
+  xdnet::randomBytes(nonce, sizeof nonce);
+  L.pvNonceHex = xd::online::ToHex(nonce, sizeof nonce);
+  L.pvRecord = xd::online::JoinInts(order);
+  Send(xd::online::Msg("PVC", xd::online::Commit(L.pvNonceHex, L.pvRecord)));
+  Note("team preview: my pick " + L.pvRecord + " is locked in (committed)");
+}
+void PreviewApply(const std::vector<int>& friendOrder) {
+  const std::string& t = L.rules.team;
+  if (t == "save") { std::vector<int> np; for (int pos : L.pvOrder) np.push_back(L.picked[static_cast<size_t>(pos)]); L.picked = np; }
+  else if (t == "preset") { L.pvPresetOrder.clear(); for (int pos : L.pvOrder) L.pvPresetOrder.push_back(static_cast<uint16_t>(L.pvMine[static_cast<size_t>(pos)])); }
+  else { std::vector<uint16_t> ns; for (int pos : L.pvOrder) ns.push_back(L.chosenSpecies[static_cast<size_t>(pos)]); L.chosenSpecies = ns; }
+  L.pvFriendPicked.clear();
+  for (int pos : friendOrder) L.pvFriendPicked.push_back(static_cast<uint16_t>(L.peer.pvIds[static_cast<size_t>(pos)]));
+  L.peer.teamCount = static_cast<int>(friendOrder.size());
+  L.pvDone = true;
+  Note("team preview: done, mine " + xd::online::JoinInts(L.pvOrder) + " of " + std::to_string(L.pvMine.size()) + ", the friend's " + xd::online::JoinInts(friendOrder) + " of " + std::to_string(L.peer.pvIds.size()));
+}
+
+bool StepPreview(ImDrawList* dl, const Screen& sc, const PortMenuInput* in) {
+  if (!EnsureRules()) { L.step = Step::Message; return true; }
+  if (!L.pvStarted) {
+    L.pvStarted = true;
+    L.pvMine = MyPreviewTeam();
+    L.pvChosen.clear();
+    L.cursor = 0;
+    const char* testMs = std::getenv("XD_ONLINE_TEST_PREVIEW_MS");
+    L.pvDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(testMs ? std::atoi(testMs) : (L.rules.previewSeconds > 0 ? L.rules.previewSeconds * 1000 : 0));
+    Send(xd::online::Msg("PV", xd::online::JoinInts(L.pvMine)));
+    L.pvSent = true;
+  }
+  const int mineN = static_cast<int>(L.pvMine.size());
+  const int want = PreviewWant(mineN);
+  const bool haveFriend = L.peer.pvTeam && !L.peer.pvIds.empty();
+  const int friendN = static_cast<int>(L.peer.pvIds.size());
+  const int friendWant = PreviewWant(friendN);
+  const bool timed = L.rules.previewSeconds > 0 || std::getenv("XD_ONLINE_TEST_PREVIEW_MS") != nullptr;
+  const long leftMs = timed ? static_cast<long>(std::chrono::duration_cast<std::chrono::milliseconds>(L.pvDeadline - std::chrono::steady_clock::now()).count()) : (1L << 30);
+  if (Back(in)) { Send(xd::online::Msg("LEAVE")); Reset(); return true; }
+  if (haveFriend && !L.pvLocked) {
+    if (const char* t = std::getenv("XD_ONLINE_TEST_PREVIEW")) {
+      if (std::strcmp(t, "timeout") != 0) {
+        std::vector<int> order = xd::online::SplitInts(t);
+        if (!xd::online::PickValid(order, mineN, want)) order = xd::online::TimeoutPick(order, mineN, want);
+        PreviewLock(order);
+      }
+    }
+  }
+  if (haveFriend && !L.pvLocked) {
+    if (timed && leftMs <= 0) { Note("team preview: time is up, the timeout rule picks"); PreviewLock(xd::online::TimeoutPick(L.pvChosen, mineN, want)); }
+    else {
+      Move(in, L.cursor, mineN + 1);
+      if (in->pressed & PAD_BUTTON_A) {
+        if (L.cursor == mineN) {
+          if (static_cast<int>(L.pvChosen.size()) == want) { PlayMenuSound(kTitleMenu, kSoundChoose); PreviewLock(L.pvChosen); }
+          else PlayMenuSound(kTitleMenu, kSoundBack);
+        } else {
+          auto it = std::find(L.pvChosen.begin(), L.pvChosen.end(), L.cursor);
+          if (it != L.pvChosen.end()) { L.pvChosen.erase(it); PlayMenuSound(kTitleMenu, kSoundBack); }
+          else if (static_cast<int>(L.pvChosen.size()) >= want) PlayMenuSound(kTitleMenu, kSoundBack);
+          else { L.pvChosen.push_back(L.cursor); PlayMenuSound(kTitleMenu, kSoundChoose); }
+        }
+      }
+    }
+  }
+  if (L.pvLocked && L.peer.pvCommit && !L.pvRevealSent) { Send(xd::online::Msg("PVR", L.pvNonceHex + " " + L.pvRecord)); L.pvRevealSent = true; }
+  if (L.pvRevealSent && L.peer.pvReveal) {
+    const std::vector<int> theirs = xd::online::SplitInts(L.peer.pvList);
+    if (!xd::online::Verify(L.peer.pvCommitHex, L.peer.pvNonce, L.peer.pvList) || !xd::online::PickValid(theirs, friendN, friendWant)) {
+      L.message = Tr("Your friend's team preview pick does not match what they locked in. The battle was not started.");
+      Send(xd::online::Msg("LEAVE"));
+      L.step = Step::Message;
+      return true;
+    }
+    PreviewApply(theirs);
+    L.step = Step::Ready;
+    return true;
+  }
+  Title(dl, sc, Tr("TEAM PREVIEW"));
+  kit::TitledWindow(dl, sc, 40.f, 72.f, 330.f, 380.f, Tr("Your team"));
+  for (int k = 0; k < mineN; k++) {
+    const float y = 108.f + 36.f * static_cast<float>(k);
+    const bool sel = !L.pvLocked && L.cursor == k;
+    if (sel) kit::RowSel(dl, sc, 46.f, 324.f, y, 31.f);
+    const auto at = std::find(L.pvChosen.begin(), L.pvChosen.end(), k);
+    const bool on = L.pvLocked ? std::find(L.pvOrder.begin(), L.pvOrder.end(), k) != L.pvOrder.end() : at != L.pvChosen.end();
+    if (on) {
+      const int order = L.pvLocked ? static_cast<int>(std::find(L.pvOrder.begin(), L.pvOrder.end(), k) - L.pvOrder.begin()) + 1 : static_cast<int>(at - L.pvChosen.begin()) + 1;
+      kit::Chip(dl, sc, 282.f, y + 6.f, std::to_string(order), true);
+    }
+    kit::Text(dl, sc, 62.f, y + 6.f, PreviewName(L.pvMine[static_cast<size_t>(k)]), on ? kit::kGood : sel ? kit::kText : kit::kSoft, 0.78f, 210.f, 1);
+  }
+  kit::TitledWindow(dl, sc, 340.f, 72.f, 610.f, 380.f, Tr("Your friend's team"));
+  if (!haveFriend) kit::Text(dl, sc, 356.f, 120.f, Tr("Waiting for your friend..."), kit::kSoft, 0.72f, 240.f);
+  for (int k = 0; k < friendN; k++) kit::Text(dl, sc, 356.f, 108.f + 36.f * static_cast<float>(k) + 6.f, PreviewName(L.peer.pvIds[static_cast<size_t>(k)]), kit::kText, 0.78f, 240.f, 1);
+  const std::string timeText = timed && leftMs < (1L << 29) ? Fmt(Tr("Time left: %d s"), static_cast<int>(std::max(0L, (leftMs + 999) / 1000))) : std::string();
+  kit::Text(dl, sc, 46.f, 386.f, Fmt(Tr("Pick %d of your %d, the one you lead with first."), want, mineN) + (timeText.empty() ? "" : "   " + timeText), kit::kGold, 0.7f, 560.f);
+  if (L.pvLocked) kit::Text(dl, sc, 46.f, 408.f, L.peer.pvCommit ? Tr("Revealing the picks...") : Tr("Locked in. Waiting for your friend..."), kit::kGood, 0.72f, 560.f);
+  else if (haveFriend) kit::Button(dl, sc, 214.f, 404.f, 212.f, static_cast<int>(L.pvChosen.size()) == want ? Tr("Lock in") : Fmt(Tr("Pick %d more"), want - static_cast<int>(L.pvChosen.size())), L.cursor == mineN, static_cast<int>(L.pvChosen.size()) == want);
+  Hint(dl, sc, Tr("A: pick / un-pick   B: leave the room"));
+  return true;
+}
+
+std::string FormatSummary(const engine::rulesets::Format& f) {
+  namespace tx = xd::rulesets::text;
+  std::string s = f.ruleSet == "xd" ? std::string(Tr("XD rules")) : f.ruleSet == "gen4" ? std::string(Tr("Gen 4 rules")) : f.ruleSet.empty() ? std::string(Tr("your own rules")) : std::string(tx::RuleSetShort(f.ruleSet));
+  int top = 3;
+  for (int g : f.gens) top = std::max(top, g);
+  s += std::string(" - ") + tx::PokemonShort(top);
+  s += std::string(" - ") + (f.style == "double" ? Tr("double") : Tr("single"));
+  s += " - " + (f.level.kind == engine::rulesets::LevelRule::Kind::SetAll ? Fmt(Tr("level %d"), f.level.a) : std::string(Tr("levels as they are")));
+  if (!f.clauses.empty()) s += " - " + Fmt(Tr("%d clauses"), static_cast<int>(f.clauses.size()));
+  if (f.teamPreview) s += " - " + Fmt(Tr("pick %d of %d"), f.pick > 0 ? f.pick : f.teamMax, f.teamMax);
+  return s;
+}
+
+bool StepFormatList(ImDrawList* dl, const Screen& sc, const PortMenuInput* in) {
+  namespace tx = xd::rulesets::text;
+  const int n = static_cast<int>(L.pc.formats.size()) + 1;
+  Move(in, L.fmtCursor, n);
+  if (Back(in)) { L.step = Step::Settings; return true; }
+  if (in->pressed & PAD_BUTTON_A) {
+    const std::string id = L.fmtCursor < n - 1 ? L.pc.formats[static_cast<size_t>(L.fmtCursor)].id : std::string();
+    if (xd::online::SelectFormat(L.rules, id, L.pc)) { PlayMenuSound(kTitleMenu, kSoundChoose); L.step = Step::Settings; return true; }
+    PlayMenuSound(kTitleMenu, kSoundBack);
+  }
+  Title(dl, sc, Tr("MAKE A ROOM"));
+  kit::Window(dl, sc, 30.f, 70.f, 610.f, 372.f, true);
+  kit::Text(dl, sc, 52.f, 84.f, Tr("Choose a format"), kit::kGold, 0.9f, 400.f, 1);
+  for (int i = 0; i < n; i++) {
+    const float y = 114.f + 29.f * static_cast<float>(i) + (i == n - 1 ? 8.f : 0.f);
+    const bool sel = i == L.fmtCursor;
+    const bool custom = i == n - 1;
+    const bool enabled = custom || L.pc.formats[static_cast<size_t>(i)].enabled;
+    if (sel) kit::RowSel(dl, sc, 38.f, 602.f, y, 27.f);
+    const std::string name = custom ? std::string(Tr("Custom...")) : L.pc.formats[static_cast<size_t>(i)].name;
+    kit::Text(dl, sc, 56.f, y + 4.f, name, enabled ? (sel ? kit::kText : kit::kSoft) : kit::kDim, 0.78f, 190.f, 1);
+    std::string right = custom ? std::string(Tr("set every row yourself")) : enabled ? FormatSummary(*xd::rulesets::FindFormat(L.pc.formats[static_cast<size_t>(i)].id)) : std::string(Tr("needs the Gen 4 pack"));
+    kit::Text(dl, sc, 232.f, y + 6.f, right, enabled ? kit::kSoft : kit::kDim, 0.5f, 362.f);
+  }
+  kit::Window(dl, sc, 30.f, 384.f, 610.f, 432.f);
+  const std::string info = L.fmtCursor < n - 1 ? std::string(tx::FormatInfo(L.pc.formats[static_cast<size_t>(L.fmtCursor)].id)) : std::string(Tr("Custom: the rows of the room are yours, no format."));
+  kit::Para(dl, sc, 46.f, 391.f, 548.f, info, kit::kText, 0.6f, 15.f, 3);
+  Hint(dl, sc, Tr("Up / down: choose   A: pick   B: back"));
+  return true;
+}
+
+std::string ProblemText(const engine::rulesets::MemberProblem& p) {
+  namespace tx = xd::rulesets::text;
+  const auto name = [&](const char* fallback) { const std::string a = Plain(p.arg); return a.empty() ? std::string(fallback) : a; };
+  if (p.kind == "item") return Tr("no two Pokemon hold the same item");
+  if (p.kind == "species") return Tr("no two Pokemon of one species");
+  if (p.kind == "category") return Fmt(Tr("%s: not allowed here"), tx::CategoryName(p.arg));
+  if (p.kind == "evasion") return Fmt(Tr("knows %s (evasion clause)"), name(Tr("a move")).c_str());
+  if (p.kind == "ohko") return Fmt(Tr("knows %s (OHKO clause)"), name(Tr("a move")).c_str());
+  if (p.kind == "banned_species") return Tr("banned in this format");
+  if (p.kind == "gen") return Fmt(Tr("generation %s Pokemon are not allowed here"), p.arg.c_str());
+  if (p.kind == "banned_item") return Fmt(Tr("holds %s, which is banned"), name(Tr("this item")).c_str());
+  if (p.kind == "banned_move") return Fmt(Tr("knows %s, which is banned"), name(Tr("a move")).c_str());
+  if (p.kind == "banned_ability") return Fmt(Tr("has the ability %s, which is banned"), name(Tr("an ability")).c_str());
+  if (p.kind == "level") return Fmt(Tr("level %s is above the room's limit"), p.arg.c_str());
+  return Tr("not allowed here");
+}
+bool CheckPickedTeam() {
+  L.tcProblems.clear();
+  if (L.rules.format.empty() || L.rules.team != "save" || !L.rulesData) return true;
+  std::vector<xd::save::Pokemon> team;
+  for (int i : L.picked) team.push_back(L.entries[static_cast<size_t>(i)].pokemon);
+  if (std::getenv("XD_ONLINE_TEST_TEAM_FIXTURE") && team.size() >= 3) {
+    team[0].heldItem = team[1].heldItem = 17;
+    team[2].moves[0].id = 107;
+  }
+  L.tcProblems = xd::online::CheckTeamMembers(team, L.rulesData->rules, L.rules);
+  return L.tcProblems.empty();
+}
+
+bool StepTeamCheck(ImDrawList* dl, const Screen& sc, const PortMenuInput* in) {
+  if (Back(in)) { Send(xd::online::Msg("LEAVE")); Reset(); return true; }
+  if (in->pressed & PAD_BUTTON_A) { PlayMenuSound(kTitleMenu, kSoundChoose); L.picked.clear(); BeginTeam(); return true; }
+  kit::Header(dl, sc, Tr("YOUR TEAM"), FormatTitle(L.rules));
+  const int count = static_cast<int>(L.picked.size());
+  kit::TitledWindow(dl, sc, 30.f, 66.f, 610.f, 66.f + 54.f + 56.f * static_cast<float>(std::min(count, 6)) - 8.f, Tr("Checked against the room's rules"));
+  std::set<int> bad;
+  for (const auto& p : L.tcProblems) if (p.member >= 0) bad.insert(p.member);
+  for (int k = 0; k < count && k < 6; k++) {
+    const xd::trade::Entry& e = L.entries[static_cast<size_t>(L.picked[static_cast<size_t>(k)])];
+    const float y = 106.f + 56.f * static_cast<float>(k);
+    const bool isBad = bad.count(k) > 0;
+    if (isBad) kit::RowSel(dl, sc, 38.f, 602.f, y, 50.f, false);
+    kit::Text(dl, sc, 60.f, y + 14.f, e.card.name, kit::kText, 0.78f, 190.f, 1);
+    kit::Text(dl, sc, 262.f, y + 17.f, Plain(e.card.item).empty() ? std::string("-") : e.card.item, kit::kSoft, 0.62f, 110.f);
+    if (!isBad) { kit::Text(dl, sc, 392.f, y + 14.f, Tr("OK"), kit::kGood, 0.78f, 40.f, 1); continue; }
+    for (const auto& p : L.tcProblems) {
+      if (p.member != k) continue;
+      kit::Para(dl, sc, 392.f, y + 6.f, 200.f, ProblemText(p), kit::kBad, 0.6f, 15.f, 3);
+      break;
+    }
+  }
+  const float by = 66.f + 54.f + 56.f * static_cast<float>(std::min(count, 6)) + 4.f;
+  kit::Window(dl, sc, 30.f, by, 610.f, by + 74.f, true);
+  int broken = static_cast<int>(bad.size());
+  kit::Text(dl, sc, 46.f, by + 8.f, broken > 0 ? Fmt(Tr("This team can't enter: %d Pokemon break the room's rules."), broken) : Tr("This team can't enter: it does not fit the room's rules."), kit::kBad, 0.78f, 560.f, 1);
+  kit::Para(dl, sc, 46.f, by + 32.f, 560.f, Tr("Change the team in your save, or pick another save. Your Pokemon are never changed by the room."), kit::kSoft, 0.6f, 15.f, 2);
+  Hint(dl, sc, Tr("A: pick another save   B: leave the room"));
+  return true;
+}
+
 void StartDrive(bool rematch);
 
 void Go() {
@@ -846,6 +1189,9 @@ void Go() {
     xd::online::draft::ParseSettings(L.rules.team == "offer" ? "offer" : "snake", L.rules.draft, ds, nullptr);
     h.mineCount = h.friendCount = ds.teamSize;
   }
+  h.friendPreview = L.pvFriendPicked;
+  if (L.pvDone && L.rules.team == "preset") { h.freeSpecies = L.pvPresetOrder; h.mineCount = static_cast<int>(L.pvPresetOrder.size()); }
+  if (L.pvDone) h.friendCount = static_cast<int>(L.pvFriendPicked.size());
   xd::online::SetVsNonce(L.host ? L.myNonce : L.peer.nonce);
   Note("both ready: the battle starts (" + xd::online::RulesText(h.rules) + ")");
   xd::online::SetLobbyRoom(h);
@@ -872,6 +1218,7 @@ bool StepReady(ImDrawList* dl, const Screen& sc, const PortMenuInput* in) {
     if (L.host) L.myNonce = xd::online::NewNonce();
     { char nb[16]; std::snprintf(nb, sizeof nb, "%x", static_cast<unsigned>(L.host ? L.myNonce : 0u)); Send(xd::online::Msg("READY", L.host ? std::string(nb) : std::string())); }
   }
+  if (L.iReady && L.peer.ready && PreviewWanted() && !L.pvDone) { L.step = Step::Preview; return true; }
   if (L.iReady && L.peer.ready) {
     if (!L.cardSent) { L.cardSent = true; Send(xd::card::Encode(xd::card::MyCard())); }
     if (L.haveFriendCard) {
@@ -928,6 +1275,7 @@ bool Frame(void*, const PortMenuInput* in) {
   switch (L.step) {
   case Step::Menu: return StepMenu(dl, sc, in);
   case Step::Settings: return StepSettings(dl, sc, in);
+  case Step::Details: return StepDetails(dl, sc, in);
   case Step::Typing: return StepTyping(dl, sc, in);
   case Step::Connect: return StepConnect(dl, sc, in);
   case Step::HostView: return StepHostView(dl, sc, in);
@@ -936,6 +1284,9 @@ bool Frame(void*, const PortMenuInput* in) {
   case Step::Choose: return StepChoose(dl, sc, in);
   case Step::Team: return StepTeam(dl, sc, in);
   case Step::Ready: return StepReady(dl, sc, in);
+  case Step::Preview: return StepPreview(dl, sc, in);
+  case Step::FormatList: return StepFormatList(dl, sc, in);
+  case Step::TeamCheck: return StepTeamCheck(dl, sc, in);
   case Step::Restart: return StepRestart(dl, sc, in);
   case Step::Message: return StepMessage(dl, sc, in);
   }

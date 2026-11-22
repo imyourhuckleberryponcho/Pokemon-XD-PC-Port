@@ -4,6 +4,7 @@
 #include <mods.h>
 #include <settings.h>
 
+#include <mod_layout.h>
 #include "texture_observers.h"
 #include "xd_user_folder.h"
 
@@ -23,14 +24,7 @@
 #include <tuple>
 #include <vector>
 
-namespace xd::hd {
-struct Pack {
-  std::filesystem::path folder;
-  std::string name;
-  bool loose = false;
-};
-void SetPacks(std::vector<Pack> packs);
-}
+#include "xd_hd_packs.h"
 
 namespace {
 
@@ -235,6 +229,7 @@ struct WriterJoiner {
 
 uint32_t sSeenChanges = ~0u;
 bool sFirst = true;
+bool sPacksAllowed = false;
 
 }
 
@@ -243,10 +238,19 @@ void SetPacks(std::vector<Pack> packs) {
   std::lock_guard lk(sPackMutex);
   sPacks = std::move(packs);
 }
+
+bool ReloadPacks(std::vector<Pack> packs) {
+  if (sFirst || !sPacksAllowed) return false;
+  for (at::ReplacementGroup& group : sGroups) at::unregister_replacements(group);
+  sGroups.clear();
+  SetPacks(std::move(packs));
+  LoadPacks();
+  return true;
+}
 }
 
 extern "C" void PortXD_InstallTexturePackSource(void) {
-  engine::mods::SetTexturePackSource(xd::SettingsFolder() / "textures", kGameId);
+  engine::mods::SetTexturePackSource(xd::SettingsFolder() / "textures", kGameId, {engine::mods::MakeTarget(kGameId, "xg")});
 }
 
 extern "C" void PortXD_HdTexturesUpdate(void) {
@@ -261,6 +265,7 @@ extern "C" void PortXD_HdTexturesUpdate(void) {
       any = !sPacks.empty();
     }
     const bool original = reg.IsOriginal() || reg.CurrentPreset() == engine::settings::Preset::Original;
+    sPacksAllowed = !disabled && !original;
     if (any && !disabled && !original) {
       LoadPacks();
     } else if (any) {

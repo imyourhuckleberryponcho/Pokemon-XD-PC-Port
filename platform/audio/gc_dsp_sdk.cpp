@@ -467,16 +467,33 @@ void DSPHalt(void) {
 
 u32 DSPGetDMAStatus(void) { return 0; }
 
+bool PortDsp_GhostEnter(GcDsp* chip, bool pendingInterrupt) {
+  join_chip();
+  if (sDsp == nullptr || sCurrentTask == nullptr || sGhost || chip == nullptr) return false;
+  sSavedSdk = {sInterruptQueued, sBooted, sInitialised, sYields, sInstructions.load()};
+  sRealDsp = sDsp;
+  sDsp = chip;
+  sGhost = true;
+  sGhostInterrupt = pendingInterrupt;
+  sInterruptQueued = false;
+  return true;
+}
+
 bool PortDsp_GhostBegin(void) {
   join_chip();
   if (sDsp == nullptr || sCurrentTask == nullptr || sGhost) return false;
-  sSavedSdk = {sInterruptQueued, sBooted, sInitialised, sYields, sInstructions.load()};
-  sRealDsp = sDsp;
-  sDsp = GcDsp_Clone(sRealDsp);
-  sGhost = true;
-  sGhostInterrupt = sInterruptQueued;
-  sInterruptQueued = false;
-  return true;
+  return PortDsp_GhostEnter(GcDsp_Clone(sDsp), sInterruptQueued);
+}
+
+void* PortDsp_GhostClone(bool* pendingInterrupt) {
+  join_chip();
+  if (sDsp == nullptr || sCurrentTask == nullptr || sGhost) return nullptr;
+  if (pendingInterrupt != nullptr) *pendingInterrupt = sInterruptQueued;
+  return GcDsp_Clone(sDsp);
+}
+
+void PortDsp_GhostDestroy(void* chip) {
+  if (chip != nullptr) GcDsp_Destroy(static_cast<GcDsp*>(chip));
 }
 
 void PortDsp_GhostService(void) {
@@ -487,9 +504,11 @@ void PortDsp_GhostService(void) {
   }
 }
 
-void PortDsp_GhostEnd(void) {
-  if (!sGhost) return;
-  GcDsp_Destroy(sDsp);
+void* PortDsp_GhostLeave(bool* pendingInterrupt) {
+  join_chip();
+  if (!sGhost) return nullptr;
+  GcDsp* chip = sDsp;
+  if (pendingInterrupt != nullptr) *pendingInterrupt = sGhostInterrupt;
   sDsp = sRealDsp;
   sRealDsp = nullptr;
   sGhost = false;
@@ -499,6 +518,12 @@ void PortDsp_GhostEnd(void) {
   sInitialised = sSavedSdk.initialised;
   sYields = sSavedSdk.yields;
   sInstructions.store(sSavedSdk.instructions);
+  return chip;
+}
+
+void PortDsp_GhostEnd(void) {
+  if (!sGhost) return;
+  PortDsp_GhostDestroy(PortDsp_GhostLeave(nullptr));
 }
 
 uint64_t PortDsp_Instructions(void) { return sInstructions.load(std::memory_order_relaxed); }

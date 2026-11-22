@@ -45,6 +45,9 @@ void ResetCategory(settings::Registry& registry, settings::Category category, co
 
 void ResetToPreset(settings::Registry& registry);
 
+enum class LookPreset { BestLooks, SmoothOnWeakPC };
+int ApplyLookPreset(settings::Registry& registry, LookPreset preset);
+
 class ControlsPanel {
  public:
   struct Pad {

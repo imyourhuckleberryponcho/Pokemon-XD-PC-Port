@@ -502,7 +502,9 @@ PackResult PackMod(const PackOptions& o) {
       fields.games = m.games;
       fields.permissions = codes;
       std::string pub;
-      out << SignedUpdateText(fields, signSeed, pub);
+      const std::vector<KeyChange> changes = ReadKeyChanges(o.signKey);
+      out << SignedUpdateText(fields, signSeed, pub, changes);
+      if (!changes.empty()) r.messages.push_back("The update file carries " + std::to_string(changes.size()) + " key change statement(s): launchers that trust an earlier key of yours accept this one.");
       r.messages.push_back("The update file is signed with the key " + pub + " (fingerprint " + KeyFingerprint(pub) +
                            "). Launchers pin this key the first time they install the mod: always sign with the same key.");
     } else {

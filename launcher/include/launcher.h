@@ -40,6 +40,9 @@ struct SaveSummary {
   std::vector<std::string> setupNotes;
   std::string shareCode;
   std::filesystem::path spoilerFile;
+  std::filesystem::path setupFile;
+  std::string looksStyle;
+  std::vector<std::pair<std::string, std::string>> looksStyles;
 };
 
 struct GameInfo {
@@ -49,6 +52,8 @@ struct GameInfo {
   std::string gameId;
   std::string textureGameId;
   std::string discHelp;
+  std::string discOverride;
+  std::vector<std::string> restartArguments;
   std::filesystem::path settingsFolder;
   std::filesystem::path modsFolder;
   std::filesystem::path modListFile;
@@ -71,8 +76,11 @@ struct GameInfo {
   std::function<DiscVerdict(const std::string& path, const std::function<bool(uint64_t, uint64_t)>& progress)>
       checkDisc;
   std::function<SaveSummary(const std::string& discPath)> readSave;
+  std::function<bool(const std::filesystem::path& setupFile, const std::string& style, std::string& error)> changeLooks;
   engine::mods::LooksOrSound modLooks;
   const engine::modcheck::GameRules* modRules = nullptr;
+  std::function<bool(const std::string& discPath, engine::mods::LoadOptions& load, std::string& error)> openModDisc;
+  std::function<void()> closeModDisc;
 
   struct DiscPicture {
     std::string id;
@@ -180,6 +188,18 @@ struct GameInfo {
                               const std::string& discPath, const std::vector<int>& rows)>
         monsDo;
     std::string monsName = "Colosseum import";
+    std::function<bool(const std::filesystem::path& cardRoot, const std::filesystem::path& file, const std::string& discPath,
+                       MonsView& out, std::string& error)>
+        monsOpen2;
+    std::function<TradeResult(const std::filesystem::path& cardRoot, const std::filesystem::path& file,
+                              const std::string& discPath, const std::vector<int>& rows)>
+        monsDo2;
+    std::string monsName2;
+    std::string monsHelp2;
+    std::string monsChoose2;
+    std::string monsSaveLabel2;
+    std::string monsStays2;
+    std::string monsCopy2;
     std::string tradeFileTypes = "sav";
     std::string tradeName = "GBA trade";
     std::string exportName = "save.gci";
@@ -196,9 +216,14 @@ struct GameInfo {
     std::string manifestId;
     std::string switchSetting;
     std::string modelsFolder = "fsys";
+    bool needsPlainGameDisc = false;
     bool needsGameDisc = true;
     std::string contentsFile;
     std::string doneText;
+    bool dump = false;
+    std::function<bool(const std::string& path, std::string& gameId, std::string& title, std::string& error)> identify;
+    std::string tab;
+    int tabOrder = 0;
     std::string converterStem;
     std::string converterFolder;
     std::string versionArgument;
@@ -209,6 +234,12 @@ struct GameInfo {
     std::string secondManifestId;
     std::string secondProvides;
     int secondVersion = 0;
+    std::string thirdFolder;
+    std::string thirdManifestFile;
+    std::string thirdManifestId;
+    std::string thirdProvides;
+    int thirdVersion = 0;
+    std::string thirdWarning;
   };
   struct ExtraAssets {
     std::vector<ExtraSource> sources;

@@ -1,4 +1,5 @@
 #include <save_backups.h>
+#include <saveext.h>
 
 #include <cstdio>
 #include <ctime>
@@ -113,6 +114,42 @@ int main(int argc, char** argv) {
   broken.folder = broken.folder.parent_path() / "missing";
   Check(!bk::Restore(broken, file, card, backups, bk::kKeep, error) && !error.empty(), "missing backup refused: " + error);
   Check(ReadFile(card / file) == want, "card unchanged");
+
+  {
+    namespace se = engine::saveext;
+    const fs::path root2 = work / "ext";
+    const fs::path backups2 = bk::FolderFor(root2), card2 = root2 / "USA" / "Card A", setup2 = root2 / "playthroughs" / "Card A";
+    fs::create_directories(card2);
+    fs::create_directories(setup2);
+    const std::vector<uint8_t> saveA = Bytes(0x11), saveB = Bytes(0x22);
+    const auto extFor = [&](const std::vector<uint8_t>& save, uint8_t mark) {
+      se::File f;
+      f.saveHash = se::Hash64(save.data() + se::kGciHeader, save.size() - se::kGciHeader);
+      f.Set({"memo", 1, false, {mark, mark}});
+      return se::Encode(f);
+    };
+    const std::vector<uint8_t> extA = extFor(saveA, 1), extB = extFor(saveB, 2);
+    std::string err2;
+    Check(!bk::AddWith(backups2, "Card A", file, saveA, {{"pt_x.ext", extA}}, t0, bk::kKeep, &err2).empty(), "backup of save A with its extension");
+    Check(bk::AddWith(backups2, "Card A", file, saveA, {{"pt_x.ext", extA}}, t0 + 1, bk::kKeep, &err2).empty(), "same save, same extension: nothing new");
+    Check(!bk::AddWith(backups2, "Card A", file, saveA, {{"pt_x.ext", extFor(saveA, 9)}}, t0 + 2, bk::kKeep, &err2).empty(), "same save, changed extension: a new backup");
+    Check(!bk::AddWith(backups2, "Card A", file, saveA, {}, t0 + 3, bk::kKeep, &err2).empty(), "same save, no extension any more: a new backup");
+    const auto l2 = bk::List(backups2);
+    Check(l2.size() == 3 && l2.back().companions.size() == 1 && l2.back().files.size() == 1, "listed: the extension is a companion, not a save");
+    WriteFile(card2 / file, saveB);
+    WriteFile(setup2 / "pt_x.ext", extB);
+    Check(bk::Restore(l2.back(), file, card2, backups2, bk::kKeep, err2, setup2), "restore with companions " + err2);
+    Check(ReadFile(card2 / file) == saveA && ReadFile(setup2 / "pt_x.ext") == extA, "save A and its own extension are back");
+    const auto l3 = bk::List(backups2);
+    bool foundB = false;
+    for (const auto& b : l3) {
+      if (!b.files.empty() && ReadFile(b.folder / file) == saveB && b.companions.size() == 1 && ReadFile(b.folder / "pt_x.ext") == extB) foundB = true;
+    }
+    Check(foundB, "the save that was replaced was backed up with its extension");
+    WriteFile(setup2 / "pt_x.ext", extB);
+    Check(bk::Restore(l3.back(), file, card2, backups2, bk::kKeep, err2), "restore without a companion folder");
+    Check(ReadFile(setup2 / "pt_x.ext") == extB, "the extension was not touched");
+  }
 
   Check(bk::SizeText(0x58040) == "352 KB", "size text " + bk::SizeText(0x58040));
   Check(bk::CardTimeText(0) == "" && bk::CardTimeText(86400 + 3600) == "2000-01-02 01:00", "card time text");

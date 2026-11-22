@@ -1,17 +1,22 @@
 #include "i18n.h"
 #include "xd_battle_models.h"
 #include "xd_playthrough.h"
+#include "xd_rulesets.h"
+#include "xd_ruleset_texts.h"
 #include "xd_speedrun.h"
 #include "xd_challenges.h"
 #include "xd_shiny.h"
 #include "xd_gen4.h"
+#include "xd_gen57.h"
 #include "xd_languages.h"
 #include "xd_randomizer.h"
 #include "xd_starter.h"
 #include "xd_user_folder.h"
 #include "xd_xg.h"
 #include "xd_test_run.h"
+#include "online_commit.h"
 #include "online_battle.h"
+#include "battle_replay.h"
 #include "online_lobby.h"
 #include "online_team.h"
 #include "online_draft.h"
@@ -30,14 +35,18 @@
 #include <xd_trade_online.h>
 #include "xd_pc_trade.h"
 #include "xd_ui.h"
+#include "ui_kit2.h"
+#include "script_ext.h"
 
 #include <SDL3/SDL_clipboard.h>
+#include <SDL3/SDL_surface.h>
 #include <SDL3/SDL_stdinc.h>
 
 #include <gx_texture_decode.h>
 #include <port_audio.h>
 #include <port_disc.h>
 #include <port_menu.h>
+#include <port_user_folder.h>
 #include <port_sfx.h>
 #include <port_video.h>
 #include <settings.h>
@@ -50,8 +59,11 @@
 #include <game/gstexture.h>
 #include <game/pxdvs/GSAPI/GSsnd/sndData.h>
 #include <game/winwork.h>
+#include <game/relglobal.h>
+#include <game/pxdvs/app/pokemon/pokemonDB.hpp>
 
 #include <algorithm>
+#include <functional>
 #include <cctype>
 #include <climits>
 #include <chrono>
@@ -81,6 +93,7 @@ void* menuItemBiosGetPtr(s32 menuID, u32 index);
 void* menuDataBiosGetPtr(s32 menuID);
 s32 menuIsCheck(s32 id);
 s32 menuCloseCustom(s32 id, u32 flags, u8 wait);
+void PortVideo_Notice(const char* text, double seconds);
 void PortVideo_SetNoticeDrawer(bool (*draw)(const char* text));
 }
 uint32_t PortXD_HintButtonStyle();
@@ -108,9 +121,17 @@ const PortMenuPage* PortXD_TrainerCardPage(void);
 int PortXD_AudioCategoryVolumeChanged(const char* id, int percent);
 }
 
+extern "C" int PortXD_SpeciesIndexOfNational(int national) {
+  if (pokemon_data == nullptr || pokemon_data_number == nullptr) return 0;
+  for (uint32_t i = 1; i < *pokemon_data_number; i++) if (pokemon_data[i].numPokemon == national) return static_cast<int>(i);
+  return 0;
+}
+
 namespace {
 
 namespace es = engine::settings;
+
+constexpr bool PreviewOn() { return true; }
 using engine::i18n::Tr;
 
 std::string Fmt(const char* format, ...) {
@@ -202,9 +223,18 @@ Picture PictureById(u32 id) {
   auto it = sPicturesById.find(id);
   if (it != sPicturesById.end()) return it->second;
   const auto* tex = static_cast<const GStexture*>(GSresGetResourceAllGroup(id));
-  if (tex == nullptr) return {};
-  const Picture p = PictureOf(tex);
-  if (p.ok) sPicturesById[id] = p;
+  if (tex != nullptr) {
+    const Picture p = PictureOf(tex);
+    if (p.ok) {
+      sPicturesById[id] = p;
+      return p;
+    }
+  }
+  const xd::kit2::Image& k = xd::kit2::Texture(id >> 16);
+  if (!k.ok) return {};
+  Picture p;
+  p.id = k.id, p.w = static_cast<float>(k.w), p.h = static_cast<float>(k.h), p.ok = true;
+  sPicturesById[id] = p;
   return p;
 }
 
@@ -398,11 +428,140 @@ Screen ScreenNow() {
 
 ImU32 Rgba(const uint8_t* c) { return IM_COL32(c[0], c[1], c[2], c[3]); }
 
+namespace fit {
+struct Box {
+  float x0 = 0, y0 = 0, x1 = 0, y1 = 0;
+  std::string what;
+};
+constexpr float kMinGap = 6.f;
+struct State {
+  bool live = false;
+  bool noDraw = false;
+  bool inited = false;
+  int frame = -1;
+  std::string scene;
+  std::vector<Box> text, art, regions;
+  long checked = 0, bad = 0, narrowed = 0;
+  FILE* out = nullptr;
+  bool audit = false;
+  bool mute = false;
+  std::vector<std::string> notes;
+} sFit;
+
+bool On() {
+  if (!sFit.inited) {
+    sFit.inited = true;
+    const char* e = std::getenv("XD_TEXT_FIT_LOG");
+    sFit.live = e != nullptr && e[0] != '\0' && e[0] != '0';
+  }
+  return sFit.live || !sFit.scene.empty();
+}
+std::string Clip(const std::string& s) { return s.size() > 36 ? s.substr(0, 36) + "~" : s; }
+std::vector<std::string> Check() {
+  std::vector<std::string> bad;
+  auto inter = [](const Box& a, const Box& b, float padX, float& ix, float& iy) {
+    ix = std::min(a.x1, b.x1) - std::max(a.x0, b.x0) + padX;
+    iy = std::min(a.y1, b.y1) - std::max(a.y0, b.y0);
+    return ix > 0.f && iy > 0.f;
+  };
+  char buf[400];
+  for (size_t i = 0; i < sFit.text.size(); i++) {
+    const Box& a = sFit.text[i];
+    for (size_t j = i + 1; j < sFit.text.size(); j++) {
+      const Box& b = sFit.text[j];
+      if (a.what == b.what && std::fabs(a.x0 - b.x0) < 0.5f && std::fabs(a.y0 - b.y0) < 0.5f) continue;
+      const float h = std::min(a.y1 - a.y0, b.y1 - b.y0);
+      const float iy = std::min(a.y1, b.y1) - std::max(a.y0, b.y0);
+      if (iy <= 0.f) continue;
+      const bool sameLine = iy >= 0.5f * h;
+      float ix = 0.f, iy2 = 0.f;
+      if (sameLine) {
+        const float gap = std::max(a.x0, b.x0) - std::min(a.x1, b.x1);
+        if (gap < kMinGap) {
+          std::snprintf(buf, sizeof buf, "%s: '%s' and '%s' %s (gap %.1f)", sFit.scene.c_str(), Clip(a.what).c_str(), Clip(b.what).c_str(),
+                        gap < 0.f ? "OVERLAP" : "TOO CLOSE", gap);
+          bad.push_back(buf);
+        }
+      } else if (inter(a, b, 0.f, ix, iy2) && iy2 > 0.25f * h && ix > 1.f) {
+        std::snprintf(buf, sizeof buf, "%s: '%s' and '%s' OVERLAP (lines)", sFit.scene.c_str(), Clip(a.what).c_str(), Clip(b.what).c_str());
+        bad.push_back(buf);
+      }
+    }
+    for (const Box& r : sFit.art) {
+      float ix = 0.f, iy = 0.f;
+      if (inter(a, r, 0.f, ix, iy) && ix > 1.f && iy > 2.f) {
+        std::snprintf(buf, sizeof buf, "%s: '%s' runs into the %s", sFit.scene.c_str(), Clip(a.what).c_str(), r.what.c_str());
+        bad.push_back(buf);
+      }
+    }
+    for (const Box& r : sFit.regions) {
+      const float cx = (a.x0 + a.x1) / 2.f, cy = (a.y0 + a.y1) / 2.f;
+      if (cx >= r.x0 && cx <= r.x1 && cy >= r.y0 && cy <= r.y1 && (a.x0 < r.x0 - 0.5f || a.x1 > r.x1 + 0.5f)) {
+        std::snprintf(buf, sizeof buf, "%s: '%s' leaves the %s (%.1f..%.1f of %.1f..%.1f)", sFit.scene.c_str(), Clip(a.what).c_str(), r.what.c_str(), a.x0,
+                      a.x1, r.x0, r.x1);
+        bad.push_back(buf);
+      }
+    }
+  }
+  sFit.checked++;
+  sFit.bad += static_cast<long>(bad.size());
+  sFit.text.clear(), sFit.art.clear(), sFit.regions.clear();
+  return bad;
+}
+void Report(const std::vector<std::string>& bad) {
+  for (const std::string& l : bad) std::fprintf(sFit.out != nullptr ? sFit.out : stderr, "[textfit] %s\n", l.c_str());
+}
+void FrameTick() {
+  if (!sFit.live || !sFit.scene.empty() || ImGui::GetCurrentContext() == nullptr) return;
+  const int f = ImGui::GetFrameCount();
+  if (f == sFit.frame) return;
+  if (sFit.frame >= 0 && !sFit.text.empty()) {
+    char scene[64];
+    std::snprintf(scene, sizeof scene, "frame %d", sFit.frame);
+    sFit.scene = scene;
+    Report(Check());
+    sFit.scene.clear();
+  }
+  sFit.frame = f;
+  sFit.text.clear(), sFit.art.clear(), sFit.regions.clear();
+}
+void AddText(float x, float y, float w, float h, const char* text) {
+  FrameTick();
+  if (sFit.mute) return;
+  sFit.text.push_back(Box{x, y, x + w, y + h, text});
+}
+void Art(float x, float y, float w, float h, const char* what) {
+  if (!On()) return;
+  FrameTick();
+  sFit.art.push_back(Box{x, y, x + w, y + h, what});
+}
+void Region(float x0, float y0, float x1, float y1, const char* what) {
+  if (!On()) return;
+  FrameTick();
+  sFit.regions.push_back(Box{x0, y0, x1, y1, what});
+}
+void Finish() {
+  if (!sFit.live) return;
+  if (!sFit.text.empty()) {
+    sFit.scene = "last frame";
+    Report(Check());
+    sFit.scene.clear();
+  }
+  std::fprintf(stderr, "[textfit] live frames checked: %ld, problems: %ld\n", sFit.checked, sFit.bad);
+}
+}
+
 void DrawText(ImDrawList* dl, const Screen& sc, float x, float y, const char* text, const uint8_t rgba[4],
               float squeeze = 1.f, float scale = 1.f) {
   const uint8_t shadowA = static_cast<uint8_t>(rgba[3] * 0xC0 / 0xFF);
   const float xs = squeeze * scale;
   float cx = x;
+  if (fit::On()) {
+    float w = 0.f;
+    EachCell(text, [&](const Cell& c) { w += (c.space ? static_cast<float>(sFontW / 2) : c.g != nullptr ? static_cast<float>(c.g->w) : static_cast<float>(sFontW)) * xs; });
+    fit::AddText(x, y, w, static_cast<float>(sFontW) * scale, text);
+    if (fit::sFit.noDraw) return;
+  }
   EachCell(text, [&](const Cell& c) {
     if (c.space) {
       cx += static_cast<float>(sFontW / 2) * xs;
@@ -425,6 +584,7 @@ void DrawText(ImDrawList* dl, const Screen& sc, float x, float y, const char* te
 struct Shot {
   SpriteWorkLayout sp{};
   s16 offX = 0, offY = 0;
+  s16 shift = 0;
   uint8_t winColor[4] = {255, 255, 255, 255};
   const GStexture* tex = nullptr;
   Picture pic;
@@ -624,6 +784,10 @@ struct Capture {
   bool any = false;
 };
 Capture sBuilding, sShown;
+bool sFrozenValid = false;
+int sFrozenShift = 0;
+float sFrozenWide = 1.f;
+uint32_t sClosedFlip = 0;
 float sFlashSpeed = 0.f;
 float sLastRot = 0.f;
 uint32_t sLastRotFlip = 0;
@@ -634,7 +798,8 @@ Shot ShotOf(const WinWorkLayout* w, const SpriteWorkLayout* sp, s16 realY) {
   Shot s;
   s.sp = *sp;
   s.sp.y = realY;
-  s.offX = static_cast<s16>(w->offX + PortXD_WideMenuShiftNow());
+  s.shift = static_cast<s16>(PortXD_WideMenuShiftNow());
+  s.offX = static_cast<s16>(w->offX + s.shift);
   s.offY = w->offY;
   std::memcpy(s.winColor, &w->pad_90, 4);
   s.tex = static_cast<const GStexture*>(GSresGetResourceAllGroup(sp->tex2));
@@ -800,7 +965,10 @@ const Row kRows[] = {
     {"video.fullscreen", [] { return Tr("Full screen"); }, 0, false, ""},
     {"video.borderless_window", [] { return Tr("Borderless window"); }, 0, false, ""},
     {"video.frame_rate", [] { return Tr("Frame rate"); }, 0, false, ""},
+    {"video.anti_aliasing", [] { return Tr("Anti-aliasing"); }, 0, false, ""},
+    {"video.texture_filtering", [] { return Tr("Texture filtering"); }, 0, false, ""},
     {"video.fps_counter", [] { return Tr("Frame rate counter"); }, 0, false, ""},
+    {"x.mods", [] { return Tr("MODS"); }, 0, false, ""},
     {"x.speedrun_timer", [] { return Tr("Speedrun timer"); }, 0, false, ""},
     {"x.speedrun_category", [] { return Tr("Timer category"); }, 0, false, ""},
     {"x.speedrun_start", [] { return Tr("Timer start (Custom)"); }, 0, false, ""},
@@ -823,6 +991,8 @@ const Row kRows[] = {
     {"gameplay.fast_forward_mode", [] { return Tr("Fast-forward key"); }, 0, true, ""},
     {"gameplay.fast_forward_speed", [] { return Tr("Fast-forward speed"); }, 1, true, "x"},
     {"gameplay.fast_battle_animations", [] { return Tr("Fast animations"); }, 0, true, ""},
+    {"audio.ff_music", [] { return Tr("Music while fast-forwarding"); }, 0, true, ""},
+    {"audio.ff_effects", [] { return Tr("Effects while fast-forwarding"); }, 0, true, ""},
     {"gameplay.physical_special_split", [] { return Tr("Physical/special split"); }, 0, true, ""},
     {"gameplay.tm_move_names", [] { return Tr("TMs show their move"); }, 0, true, ""},
     {"video.battle_revolution_models", [] { return Tr("Battle Revolution models"); }, 0, true, ""},
@@ -846,6 +1016,117 @@ struct Page {
 constexpr int kVisibleRows = 10;
 Page sPage;
 
+namespace secs {
+
+constexpr int kSections = 5;
+const char* SectionName(int i) {
+  switch (i) {
+  case 0: return Tr("PICTURE");
+  case 1: return Tr("SOUND");
+  case 2: return Tr("SPEED");
+  case 3: return Tr("CONTROLS");
+  default: return Tr("MEMO");
+  }
+}
+int SectionOf(const Row& r) {
+  if (r.id == nullptr) return 4;
+  const std::string id = r.id;
+  if (id == "video.speedrun_timer_position" || id == "video.speedrun_timer_size" || id == "video.speedrun_timer_splits") return 4;
+  if (id.rfind("video.", 0) == 0) return 0;
+  if (id.rfind("audio.ff_", 0) == 0) return 2;
+  if (id.rfind("audio.", 0) == 0) return 1;
+  if (id.rfind("gameplay.", 0) == 0) return 2;
+  if (id.rfind("controls.", 0) == 0) return 3;
+  return 4;
+}
+
+struct State {
+  int section = 0;
+  const Row* row = nullptr;
+  int first = 0;
+  float descAge = 0.f;
+};
+State sB;
+std::vector<std::vector<const Row*>> sSec(kSections);
+
+void Collect() {
+  for (auto& v : sSec) v.clear();
+  for (const Row* r : sPage.rows) {
+    if (r->id != nullptr) sSec[static_cast<size_t>(SectionOf(*r))].push_back(r);
+  }
+}
+bool Find(const Row* row, int& sec, int& idx) {
+  for (int s = 0; s < kSections; s++) {
+    for (size_t i = 0; i < sSec[static_cast<size_t>(s)].size(); i++) {
+      if (sSec[static_cast<size_t>(s)][i] == row) return sec = s, idx = static_cast<int>(i), true;
+    }
+  }
+  return false;
+}
+int NextSection(int from, int dir) {
+  for (int k = 1; k <= kSections; k++) {
+    const int s = (from + dir * k + kSections * 2) % kSections;
+    if (!sSec[static_cast<size_t>(s)].empty()) return s;
+  }
+  return from;
+}
+void Reset() {
+  sB = State();
+  Collect();
+  const int s = NextSection(kSections - 1, 1);
+  sB.section = s;
+  sB.row = sSec[static_cast<size_t>(s)].empty() ? nullptr : sSec[static_cast<size_t>(s)].front();
+  int tsec = 0, trow = 0;
+  if (const char* e = std::getenv("XD_SETTINGS_PAGE"); e != nullptr && std::sscanf(e, "%d:%d", &tsec, &trow) == 2 && tsec >= 0 && tsec < kSections &&
+                                                         !sSec[static_cast<size_t>(tsec)].empty()) {
+    sB.section = tsec;
+    sB.row = sSec[static_cast<size_t>(tsec)][static_cast<size_t>(std::clamp(trow, 0, static_cast<int>(sSec[static_cast<size_t>(tsec)].size()) - 1))];
+  }
+}
+const Row* BackRow() {
+  for (const Row* r : sPage.rows) {
+    if (r->id == nullptr) return r;
+  }
+  return nullptr;
+}
+void Navigate(const PortMenuInput* in, bool withBack) {
+  Collect();
+  int sec = sB.section, idx = 0;
+  const bool onBack = sB.row != nullptr && sB.row->id == nullptr;
+  if (!onBack && (sB.row == nullptr || !Find(sB.row, sec, idx))) {
+    Reset();
+    if (!Find(sB.row, sec, idx)) return;
+  }
+  const int before = sec;
+  if (in->pressed & PAD_TRIGGER_L) sec = NextSection(sec, -1);
+  if (in->pressed & PAD_TRIGGER_R) sec = NextSection(sec, +1);
+  if (sec != before) {
+    sB.descAge = 0.f;
+    sB.first = 0;
+    sB.row = sSec[static_cast<size_t>(sec)].front();
+    idx = 0;
+  } else if (onBack) {
+    idx = static_cast<int>(sSec[static_cast<size_t>(sec)].size());
+  }
+  const int sn = static_cast<int>(sSec[static_cast<size_t>(sec)].size());
+  const int n = sn + (withBack ? 1 : 0);
+  int next = idx;
+  if (in->repeat & PAD_BUTTON_UP) next = (idx + n - 1) % n;
+  if (in->repeat & PAD_BUTTON_DOWN) next = (idx + 1) % n;
+  if (next != idx) sB.descAge = 0.f;
+  sB.section = sec;
+  sB.row = next < sn ? sSec[static_cast<size_t>(sec)][static_cast<size_t>(next)] : BackRow();
+  for (size_t i = 0; i < sPage.rows.size(); i++) {
+    if (sPage.rows[i] == sB.row) sPage.cursor = static_cast<int>(i);
+  }
+}
+std::vector<const Row*> TitleRows() {
+  std::vector<const Row*> v = sSec[static_cast<size_t>(sB.section)];
+  if (const Row* back = BackRow()) v.push_back(back);
+  return v;
+}
+}
+
 int TimerWhich(const Row& r) {
   if (r.id == nullptr) return -1;
   if (std::strcmp(r.id, "x.speedrun_timer") == 0) return 0;
@@ -856,7 +1137,8 @@ int TimerWhich(const Row& r) {
 }
 bool IsTimerRow(const Row& r) { return TimerWhich(r) >= 0; }
 bool IsStatsRow(const Row& r) { return r.id != nullptr && std::strcmp(r.id, "x.play_stats") == 0; }
-bool IsSpecialRow(const Row& r) { return IsTimerRow(r) || IsStatsRow(r); }
+bool IsModsRow(const Row& r) { return r.id != nullptr && std::strcmp(r.id, "x.mods") == 0; }
+bool IsSpecialRow(const Row& r) { return IsTimerRow(r) || IsStatsRow(r) || IsModsRow(r); }
 const char* const kTimerModes[] = {"Off", "Real time", "Without loads"};
 
 bool IsLanguageRow(const char* id) { return id != nullptr && std::strcmp(id, xd::languages::kSetting) == 0; }
@@ -887,8 +1169,13 @@ bool LanguagePending() {
 bool RowShown(const Row& r) {
   if (r.id == nullptr) return true;
   if (IsTimerRow(r)) return true;
+  if (IsModsRow(r)) return !sPageFromTitle && xd::scriptext::HasMenuEntries();
   if (IsStatsRow(r)) return xd::speedrun::PlaythroughChosen();
   if (IsActionRow(r.id)) return LanguagePending() && !sLangAck;
+  if (std::strcmp(r.id, "audio.ff_effects") == 0) {
+    const size_t m = es::Global().Find("audio.ff_music");
+    if (m != es::kNoSetting && es::Global().ValueText(m) != "realtime") return false;
+  }
   if (std::strcmp(r.id, "gameplay.physical_special_split") == 0) return false;
   const es::Registry& reg = es::Global();
   const size_t i = reg.Find(r.id);
@@ -897,15 +1184,21 @@ bool RowShown(const Row& r) {
   return !r.enhancedOnly || reg.CurrentPreset() != es::Preset::Original;
 }
 
-std::string ValueText(const Row& r) {
+std::string ShortOf(const char* english);
+std::string ValueShortAt(const Row& r, int32_t value) {
   if (r.id == nullptr) return "";
-  if (IsTimerRow(r)) return xd::speedrun::RowName(TimerWhich(r), xd::speedrun::RowValue(TimerWhich(r)));
-  if (IsStatsRow(r)) return Tr("See below");
-  if (IsActionRow(r.id)) return std::strcmp(r.id, "language.restart_now") == 0 && sLangConfirm ? Tr("Press A again") : "";
+  if (IsTimerRow(r)) return ShortOf(xd::speedrun::RowName(TimerWhich(r), value));
+  if (IsModsRow(r) || IsStatsRow(r) || IsActionRow(r.id)) return "";
+  const es::Registry& reg = es::Global();
+  const es::Definition& d = reg.Get(reg.Find(r.id));
+  if (d.type == es::Type::Enum && value >= 0 && value < static_cast<int32_t>(d.choices.size())) return ShortOf(d.choices[value].name.c_str());
+  return "";
+}
+
+std::string ValueTextAt(const Row& r, const es::Value& v) {
   const es::Registry& reg = es::Global();
   const size_t i = reg.Find(r.id);
   const es::Definition& d = reg.Get(i);
-  const es::Value v = reg.ValueOf(i);
   switch (d.type) {
   case es::Type::Bool: return v.i ? Tr("On") : Tr("Off");
   case es::Type::Enum:
@@ -924,6 +1217,59 @@ std::string ValueText(const Row& r) {
   }
   default: return reg.ValueText(i);
   }
+}
+
+std::string ValueShort(const Row& r) {
+  if (r.id == nullptr || IsModsRow(r) || IsStatsRow(r) || IsActionRow(r.id)) return "";
+  if (IsTimerRow(r)) return ValueShortAt(r, xd::speedrun::RowValue(TimerWhich(r)));
+  const es::Registry& reg = es::Global();
+  return ValueShortAt(r, reg.ValueOf(reg.Find(r.id)).i);
+}
+
+std::string ValueText(const Row& r) {
+  if (r.id == nullptr) return "";
+  if (IsTimerRow(r)) return Tr(xd::speedrun::RowName(TimerWhich(r), xd::speedrun::RowValue(TimerWhich(r))));
+  if (IsModsRow(r)) return "";
+  if (IsStatsRow(r)) return Tr("See below");
+  if (IsActionRow(r.id)) return std::strcmp(r.id, "language.restart_now") == 0 && sLangConfirm ? Tr("Press A again") : "";
+  const es::Registry& reg = es::Global();
+  return ValueTextAt(r, reg.ValueOf(reg.Find(r.id)));
+}
+
+std::vector<std::pair<std::string, std::string>> RowValueForms(const Row& r) {
+  std::vector<std::pair<std::string, std::string>> v;
+  if (r.id == nullptr) return v;
+  if (IsTimerRow(r)) {
+    for (int k = 0; k < xd::speedrun::RowCount(TimerWhich(r)); k++) v.emplace_back(Tr(xd::speedrun::RowName(TimerWhich(r), k)), ShortOf(xd::speedrun::RowName(TimerWhich(r), k)));
+    return v;
+  }
+  if (IsModsRow(r)) return {{"", ""}};
+  if (IsStatsRow(r)) return {{Tr("See below"), ""}};
+  if (IsActionRow(r.id)) return {{"", ""}, {Tr("Press A again"), ""}};
+  const es::Registry& reg = es::Global();
+  const size_t i = reg.Find(r.id);
+  if (i == es::kNoSetting) return v;
+  const es::Definition& d = reg.Get(i);
+  auto at = [&](int32_t x) {
+    es::Value val;
+    val.i = x;
+    v.emplace_back(ValueTextAt(r, val), ValueShortAt(r, x));
+  };
+  switch (d.type) {
+  case es::Type::Bool: at(0), at(1); break;
+  case es::Type::Enum:
+    for (size_t k = 0; k < d.choices.size(); k++) at(static_cast<int32_t>(k));
+    break;
+  case es::Type::Int:
+    if (!d.intNames.empty()) {
+      for (const auto& n : d.intNames) at(n.first);
+    } else {
+      at(d.minInt), at(d.maxInt), at((d.minInt + d.maxInt) / 2);
+    }
+    break;
+  default: v.emplace_back(ValueText(r), ""); break;
+  }
+  return v;
 }
 
 void ApplyMenuSoundVolume() {
@@ -952,7 +1298,7 @@ void Change(const Row& r, int dir) {
     sPage.changed = true;
     return;
   }
-  if (IsStatsRow(r)) return;
+  if (IsStatsRow(r) || IsModsRow(r)) return;
   if (IsActionRow(r.id)) return;
   es::Registry& reg = es::Global();
   const size_t i = reg.Find(r.id);
@@ -988,6 +1334,7 @@ void Change(const Row& r, int dir) {
     sLangConfirm = false;
     RebuildRows();
   }
+  if (std::strcmp(r.id, "audio.ff_music") == 0) RebuildRows();
   if (std::strncmp(r.id, "video.", 6) == 0) {
     PortVideo_ApplySettings();
   } else if (std::strcmp(r.id, "audio.master_volume") == 0) {
@@ -1000,6 +1347,9 @@ void Change(const Row& r, int dir) {
 }
 
 void PageOpen(void*) {
+  sFrozenValid = sShown.any;
+  sFrozenShift = sShown.button.shift;
+  sFrozenWide = PortVideo_WideScale();
   sPage.rows.clear();
   for (const Row& r : kRows) {
     if (RowShown(r)) sPage.rows.push_back(&r);
@@ -1014,6 +1364,8 @@ void PageOpen(void*) {
 }
 
 void PageClose(void*) {
+  sClosedFlip = PortVI_GetFlipCount();
+  if (sShown.any) sShown.flip = sClosedFlip;
   if (sPage.changed) {
     if (xd::SaveSettings(es::Global()) == xd::SettingsSave::Saved) {
       std::fprintf(stderr, "[settings menu] saved to %ls\n", (xd::SettingsFolder() / es::Registry::kFileName).wstring().c_str());
@@ -1074,32 +1426,66 @@ void Choose(const Row& r, int side) {
   if (now != side) Change(r, side > now ? +1 : -1);
 }
 
-std::vector<std::string> Wrap(const std::string& text, float w) {
+template <class F> std::vector<std::string> WrapBy(const std::string& text, F&& widthOf) {
   std::vector<std::string> lines;
   std::string line, word;
+  auto addChars = [&](const std::string& chars) {
+    for (const char* q = chars.c_str(); *q != 0;) {
+      const char* st = q;
+      NextCodePoint(q);
+      const std::string ch(st, q), tryLine = line + ch;
+      if (!line.empty() && static_cast<float>(TextWidth(tryLine.c_str())) > widthOf(lines.size())) {
+        lines.push_back(line);
+        line = ch;
+      } else {
+        line = tryLine;
+      }
+    }
+  };
   auto flush = [&]() {
     if (word.empty()) return;
     const std::string tryLine = line.empty() ? word : line + " " + word;
-    if (!line.empty() && static_cast<float>(TextWidth(tryLine.c_str())) > w) {
+    if (!line.empty() && static_cast<float>(TextWidth(tryLine.c_str())) > widthOf(lines.size())) {
       lines.push_back(line);
-      line = word;
-    } else {
+      line.clear();
+    } else if (!line.empty()) {
       line = tryLine;
+      word.clear();
+      return;
     }
+    if (static_cast<float>(TextWidth(word.c_str())) > widthOf(lines.size())) addChars(word);
+    else line = word;
     word.clear();
   };
-  for (char c : text) {
-    if (c == ' ') flush();
-    else word += c;
+  for (const char* p = text.c_str(); *p != 0;) {
+    const char* start = p;
+    const uint32_t cp = NextCodePoint(p);
+    if (cp == ' ') {
+      flush();
+    } else if (cp >= 0x3000 && cp != 0xA0) {
+      flush();
+      addChars(std::string(start, p));
+    } else {
+      word.append(start, p);
+    }
   }
   flush();
   if (!line.empty()) lines.push_back(line);
   return lines;
 }
+std::vector<std::string> Wrap(const std::string& text, float w) {
+  return WrapBy(text, [w](size_t) { return w; });
+}
+std::vector<std::string> WrapPaged(const std::string& text, float w, float lastW, int perPage) {
+  std::vector<std::string> lines = Wrap(text, w);
+  if (static_cast<int>(lines.size()) <= perPage) return lines;
+  return WrapBy(text, [=](size_t line) { return static_cast<int>(line % static_cast<size_t>(perPage)) == perPage - 1 ? lastW : w; });
+}
 
 std::string Description(const Row& r) {
   if (r.id == nullptr) return Tr("Save any changes and leave the settings.");
   if (IsTimerRow(r)) return xd::speedrun::TimerRowInfo(TimerWhich(r));
+  if (IsModsRow(r)) return Tr("The things mods let you do from here. Choose one and press A.");
   if (IsStatsRow(r)) return xd::speedrun::StatsText();
   const es::Registry& reg = es::Global();
   if (IsActionRow(r.id)) {
@@ -1160,33 +1546,210 @@ void FillWindow(ImDrawList* dl, ImU32 col) {
   dl->AddRectFilled(ImVec2(0, 0), ImVec2(W, H), col);
 }
 
+std::string ShortOf(const char* english) {
+  const std::string e = english;
+  if (e == "Confirm New Game") return Tr("Confirm");
+  if (e == "First control") return Tr("1st control");
+  if (e == "Credits start") return Tr("Credits");
+  if (e == "Black before cinematic") return Tr("Black, pre-film");
+  if (e == "Black after last text") return Tr("Black, last text");
+  if (e == "Without loads") return Tr("No loads");
+  return "";
+}
+
+std::string CutTo(const std::string& text, float room) {
+  std::string t = text;
+  while (!t.empty() && static_cast<float>(TextWidth((t + "...").c_str())) > room) {
+    size_t cut = t.size() - 1;
+    while (cut > 0 && (static_cast<uint8_t>(t[cut]) & 0xC0) == 0x80) cut--;
+    t.erase(cut);
+  }
+  return t.empty() ? t : t + "...";
+}
+
+struct RowLay {
+  std::string label;
+  std::string value;
+  float labelS = 1.f;
+  float valueS = 1.f;
+  float scale = 1.f;
+  float labelRoom = 0.f;
+  float valueRoom = 0.f;
+  bool labelCut = false;
+  bool valueCut = false;
+  int how = 0;
+};
+std::string WithoutParen(const std::string& t) {
+  const size_t p = t.rfind(" (");
+  return p != std::string::npos && p > 2 && t.back() == ')' ? t.substr(0, p) : std::string();
+}
+RowLay FitRowOnly(const char* label, const std::string& value, const std::string& shortValue, float avail, float gap) {
+  RowLay L;
+  L.label = label, L.value = value;
+  auto W = [](const std::string& t) { return static_cast<float>(TextWidth(t.c_str())); };
+  const std::string shortLabel = WithoutParen(label);
+  const std::string sv = shortValue.empty() ? WithoutParen(value) : shortValue;
+  constexpr float kMinScale = 0.72f, kMinSqueeze = 0.85f;
+  if (value.empty()) {
+    L.value.clear();
+    const float lw = W(label);
+    L.labelRoom = avail;
+    if (lw > avail && avail > 8.f) {
+      if (!shortLabel.empty() && W(shortLabel) <= avail) return L.label = shortLabel, L.how = 1, L;
+      if (lw * kMinScale <= avail) return L.scale = avail / lw, L.how = 2, L;
+      L.scale = kMinScale, L.labelCut = true, L.how = 3;
+    }
+    return L;
+  }
+  const float lw = W(label), vw = W(value);
+  L.labelRoom = lw, L.valueRoom = vw;
+  if (lw + gap + vw <= avail) return L;
+  if (!sv.empty() && lw + gap + W(sv) <= avail) return L.value = sv, L.valueRoom = W(sv), L.how = 1, L;
+  if (!shortLabel.empty() && W(shortLabel) + gap + vw <= avail) return L.label = shortLabel, L.labelRoom = W(shortLabel), L.how = 1, L;
+  if (!shortLabel.empty() && !sv.empty() && W(shortLabel) + gap + W(sv) <= avail) {
+    return L.label = shortLabel, L.value = sv, L.labelRoom = W(shortLabel), L.valueRoom = W(sv), L.how = 1, L;
+  }
+  if (!shortLabel.empty()) L.label = shortLabel;
+  if (!sv.empty()) L.value = sv;
+  const float l2 = W(L.label), v2 = W(L.value);
+  const float k = (avail - gap) / (l2 + v2);
+  L.how = 2;
+  if (k >= kMinScale) return L.scale = std::min(1.f, k), L.labelRoom = l2 * L.scale, L.valueRoom = v2 * L.scale, L;
+  if (k >= kMinScale * kMinSqueeze) {
+    L.scale = kMinScale, L.labelS = L.valueS = k / kMinScale;
+    return L.labelRoom = l2 * k, L.valueRoom = v2 * k, L;
+  }
+  L.scale = kMinScale, L.how = 3;
+  const float room = avail - gap, lN = l2 * kMinScale, vN = v2 * kMinScale;
+  L.valueRoom = std::min(vN, std::max(room * 0.5f, room - lN));
+  L.labelRoom = room - L.valueRoom;
+  L.labelCut = lN > L.labelRoom + 0.5f, L.valueCut = vN > L.valueRoom + 0.5f;
+  return L;
+}
+RowLay FitRow(const char* label, const std::string& value, const std::string& shortValue, float avail, float gap) {
+  const RowLay L = FitRowOnly(label, value, shortValue, avail, gap);
+  if (L.how >= 2 && fit::On()) {
+    fit::sFit.notes.push_back(std::string(L.how == 3 ? "C" : "N") + "'" + label + "' + '" + value + "' in " + std::to_string(static_cast<int>(avail)) + " px -> '" + L.label + "' '" + L.value + "'");
+  }
+  return L;
+}
+
+void DrawFitText(ImDrawList* dl, const Screen& sc, float x, float y, float room, const std::string& text, const uint8_t* col, float squeeze, float scale,
+                 bool cut, bool chosen, bool alignRight) {
+  const float nat = static_cast<float>(TextWidth(text.c_str())) * squeeze * scale;
+  if (!cut || nat <= room + 0.5f) {
+    DrawText(dl, sc, alignRight ? x + room - nat : x, y, text.c_str(), col, squeeze, scale);
+    return;
+  }
+  if (!chosen) {
+    const std::string t = CutTo(text, room / (squeeze * scale));
+    DrawText(dl, sc, x, y, t.c_str(), col, squeeze, scale);
+    return;
+  }
+  static const auto t0 = std::chrono::steady_clock::now();
+  const float t = std::chrono::duration<float>(std::chrono::steady_clock::now() - t0).count();
+  const float over = nat - room, speed = 28.f, cycle = 2.f + over / speed;
+  const float at = std::fmod(t, cycle), off = std::clamp((at - 1.f) * speed, 0.f, over);
+  if (fit::On()) {
+    fit::AddText(x, y, room, static_cast<float>(sFontW) * scale, text.c_str());
+    if (fit::sFit.noDraw) return;
+    fit::sFit.mute = true;
+  }
+  dl->PushClipRect(sc.At(x, y - 3.f), sc.At(x + room, y + static_cast<float>(sFontW + 4) * scale), true);
+  DrawText(dl, sc, x - off, y, text.c_str(), col, squeeze, scale);
+  dl->PopClipRect();
+  fit::sFit.mute = false;
+}
+
 #include "ui_kit.inc"
+
+void DrawScreenRow(ImDrawList* dl, const Screen& sc, float mid, const char* label, bool sel, uint8_t pulse, int set, const std::string& left,
+                   const std::string& right, const std::string& value, const std::string& shortValue) {
+  const uint8_t white[4] = {0xF0, 0xF0, 0xF0, 0xFF};
+  const UseFont font(kScrFont);
+  const float labelW = static_cast<float>(TextWidth(label)), room = 321.f - 8.f - 74.f;
+  DrawText(dl, sc, 74.f, std::floor(mid - static_cast<float>(sFontW + 1) / 2.f), label, white, labelW > room ? room / labelW : 1.f);
+  const float boxY = mid - 12.f;
+  auto inBox = [&](float x, float w, const std::string& text) {
+    const RowLay L = FitRow("", text, "", w - 16.f, 0.f);
+    const float tw = std::min(w - 16.f, static_cast<float>(TextWidth(L.value.c_str())) * L.valueS * L.scale);
+    DrawFitText(dl, sc, std::floor(x + (w - tw) / 2.f), std::floor(boxY + (24.f - static_cast<float>(sFontW + 1) * L.scale) / 2.f), tw, L.value, white, L.valueS, L.scale, L.how == 3, sel, false);
+  };
+  if (set >= 0) {
+    DrawItem(dl, sc, set == 0 ? kOptChoice : kOptChoice2, set == 0 ? 321.f : 449.f, boxY, -1.f, -1.f, sel ? pulse : 255);
+    inBox(321.f, 121.f, left);
+    inBox(449.f, 121.f, right);
+    return;
+  }
+  DrawItem(dl, sc, kOptChoice, 321.f, boxY, 249.f, -1.f, sel ? pulse : 255, 14.f);
+  const RowLay L = FitRow("", value, shortValue, 249.f - 2.f * 34.f, 0.f);
+  const float tw = std::min(249.f - 2.f * 34.f, static_cast<float>(TextWidth(L.value.c_str())) * L.valueS * L.scale);
+  DrawFitText(dl, sc, std::floor(321.f + (249.f - tw) / 2.f), std::floor(boxY + (24.f - static_cast<float>(sFontW + 1) * L.scale) / 2.f), tw, L.value, white, L.valueS, L.scale, L.how == 3, sel, false);
+  if (sel) {
+    fit::Art(321.f + 14.f, mid - 6.f, 12, 12, "left arrow");
+    fit::Art(321.f + 249.f - 26.f, mid - 6.f, 12, 12, "right arrow");
+    DrawTriangle(dl, sc, 321.f + 20.f, mid, 12.f, 2, IM_COL32(0xF0, 0xF0, 0xF0, 0xFF));
+    DrawTriangle(dl, sc, 321.f + 249.f - 20.f, mid, 12.f, 3, IM_COL32(0xF0, 0xF0, 0xF0, 0xFF));
+  }
+}
+
+void DrawScreenHeader(ImDrawList* dl, const Screen& sc, const std::string& name) {
+  const uint8_t white[4] = {0xF0, 0xF0, 0xF0, 0xFF};
+  const UseFont font(kScrFont);
+  const float ty = 38.f + std::floor((22.f - static_cast<float>(sFontW + 1)) / 2.f);
+  DrawText(dl, sc, 82.f, ty, EntryName(), white);
+  const float nw = static_cast<float>(TextWidth(name.c_str()));
+  const float cx = 588.f - 22.f - 6.f - nw / 2.f - 4.f;
+  kit::Key(dl, sc, cx - nw / 2.f - 22.f, ty + 11.f, "L");
+  DrawText(dl, sc, cx - nw / 2.f, ty, name.c_str(), white);
+  kit::Key(dl, sc, cx + nw / 2.f + 22.f, ty + 11.f, "R");
+}
+
+void DrawScreenDesc(ImDrawList* dl, const Screen& sc, const std::string& text, float age, int forcePage = -1) {
+  const uint8_t white[4] = {0xF0, 0xF0, 0xF0, 0xFF};
+  const UseFont font(kScrInfoFont);
+  const std::vector<std::string> lines = WrapPaged(text, 446.f, 446.f, 2);
+  fit::Region(90.f, 355.f, 542.f, 430.f, "description box");
+  const int pages = std::max(1, (static_cast<int>(lines.size()) + 1) / 2);
+  const int page = forcePage >= 0 ? std::min(forcePage, pages - 1) : pages > 1 ? static_cast<int>(age / 3.2f) % pages : 0;
+  for (int k = 0; k < 2; k++) {
+    const size_t li = static_cast<size_t>(page * 2 + k);
+    if (li < lines.size()) DrawText(dl, sc, 90.f, 363.f + 33.f * static_cast<float>(k), lines[li].c_str(), white);
+  }
+  if (pages > 1) {
+    fit::Art(538.f, 418.f, 14.f, 14.f, "more arrow");
+    DrawTriangle(dl, sc, 545.f, 425.f + 2.f * std::sin(kit::Time() * 6.28f), 14.f, 1, IM_COL32(0xF0, 0xF0, 0xF0, 0xE0));
+  }
+}
 
 void DrawSettingsScreen(ImDrawList* dl, float dt) {
   const Screen sc = ScreenNow();
-  const int n = static_cast<int>(sPage.rows.size());
+  secs::Collect();
+  const std::vector<const Row*> vis = secs::TitleRows();
+  const int n = static_cast<int>(vis.size());
+  int cur = 0;
+  for (int i = 0; i < n; i++) {
+    if (vis[static_cast<size_t>(i)] == secs::sB.row) cur = i;
+  }
   FillWindow(dl, IM_COL32(0, 0, 0, 255));
   kit::OptionsScreen(dl, sc);
   for (int i = kOptDescFirst; i <= kOptDescLast; i++) DrawItemAsIs(dl, sc, i);
   const uint8_t white[4] = {0xF0, 0xF0, 0xF0, 0xFF};
-  {
-    const UseFont font(kScrFont);
-    DrawText(dl, sc, 82.f, 38.f + std::floor((22.f - static_cast<float>(sFontW + 1)) / 2.f), EntryName(), white);
-  }
+  DrawScreenHeader(dl, sc, secs::SectionName(secs::sB.section));
   const int shown = std::min(n, kScrRows);
-  sPage.first = std::clamp(sPage.first, std::max(0, sPage.cursor - shown + 1), sPage.cursor);
+  sPage.first = std::clamp(sPage.first, std::max(0, cur - shown + 1), cur);
   sPage.first = std::clamp(sPage.first, 0, n - shown);
   if (static_cast<int>(sPage.rowAlpha.size()) != n) sPage.rowAlpha.assign(n, 0.f);
   for (int i = 0; i < n; i++) {
-    const float target = i == sPage.cursor ? 255.f : 0.f;
+    const float target = i == cur ? 255.f : 0.f;
     const float step = 255.f * dt / 0.15f;
     float& a = sPage.rowAlpha[i];
     a = a < target ? std::min(target, a + step) : std::max(target, a - step);
   }
   const uint8_t pulse = PulseAlpha(sPage.titleTimer);
   for (int i = sPage.first; i < sPage.first + shown; i++) {
-    const Row& r = *sPage.rows[i];
-    const bool sel = i == sPage.cursor;
+    const Row& r = *vis[static_cast<size_t>(i)];
+    const bool sel = i == cur;
     const float y = kScrRowTop + kScrPitch * static_cast<float>(i - sPage.first);
     const float mid = y + kScrBarH / 2.f;
     DrawItem(dl, sc, kOptRowBar, 0.f, y, 640.f, kScrBarH, static_cast<uint8_t>(sPage.rowAlpha[i]));
@@ -1197,57 +1760,200 @@ void DrawSettingsScreen(ImDrawList* dl, float dt) {
       DrawTextCentred(dl, sc, 437.f, mid - 16.f, 144.f, 32.f, Tr("EXIT"), white);
       continue;
     }
-    const char* rowLabel = r.label();
-    const float labelW = static_cast<float>(TextWidth(rowLabel)), room = 321.f - 8.f - 74.f;
-    DrawText(dl, sc, 74.f, std::floor(mid - static_cast<float>(sFontW + 1) / 2.f), rowLabel, white,
-             labelW > room ? room / labelW : 1.f);
-    const float boxY = mid - 12.f;
-    if (TwoChoices(r)) {
-      std::string left, right;
-      const int set = ChoiceNames(r, left, right);
-      DrawItem(dl, sc, set == 0 ? kOptChoice : kOptChoice2, set == 0 ? 321.f : 449.f, boxY, -1.f, -1.f, sel ? pulse : 255);
-      DrawTextCentred(dl, sc, 321.f, boxY, 121.f, 24.f, left.c_str(), white);
-      DrawTextCentred(dl, sc, 449.f, boxY, 121.f, 24.f, right.c_str(), white);
-    } else {
-      DrawItem(dl, sc, kOptChoice, 321.f, boxY, 249.f, -1.f, sel ? pulse : 255, 14.f);
-      const std::string v = ValueText(r);
-      DrawTextCentred(dl, sc, 321.f, boxY, 249.f, 24.f, v.c_str(), white);
-      if (sel) {
-        DrawTriangle(dl, sc, 321.f + 20.f, mid, 12.f, 2, IM_COL32(0xF0, 0xF0, 0xF0, 0xFF));
-        DrawTriangle(dl, sc, 321.f + 249.f - 20.f, mid, 12.f, 3, IM_COL32(0xF0, 0xF0, 0xF0, 0xFF));
-      }
-    }
+    std::string left, right, value;
+    int set = -1;
+    if (TwoChoices(r)) set = ChoiceNames(r, left, right);
+    else value = ValueText(r);
+    DrawScreenRow(dl, sc, mid, r.label(), sel, pulse, set, left, right, value, ValueShort(r));
   }
   if (sPage.first > 0) DrawTriangle(dl, sc, 320.f, 75.f, 16.f, 0, IM_COL32(0xF0, 0xF0, 0xF0, 0xE0));
   if (sPage.first + shown < n) DrawTriangle(dl, sc, 320.f, 328.f, 16.f, 1, IM_COL32(0xF0, 0xF0, 0xF0, 0xE0));
-  {
-    const UseFont font(kScrInfoFont);
-    const std::string text = Description(*sPage.rows[sPage.cursor]);
-    constexpr float kBoxW = 452.f;
-    struct Fit {
-      size_t lines;
-      float pitch, scale, squeeze, top;
-    };
-    constexpr Fit kFits[] = {{2, 33.f, 1.f, 1.f, 363.f},    {3, 20.f, 1.f, 0.9f, 360.f}, {4, 14.5f, 0.75f, 0.9f, 359.f},
-                             {5, 11.5f, 0.6f, 0.9f, 358.f}, {6, 9.6f, 0.5f, 0.9f, 358.f}};
-    std::vector<std::string> lines;
-    Fit fit = kFits[0];
-    for (const Fit& f : kFits) {
-      fit = f;
-      lines = Wrap(text, kBoxW / (f.scale * f.squeeze));
-      if (lines.size() <= f.lines) break;
-    }
-    const size_t count = std::min(lines.size(), fit.lines);
-    const float top = count <= 2 ? fit.top : 392.f - fit.pitch * static_cast<float>(count) / 2.f;
-    for (size_t k = 0; k < count; k++) {
-      DrawText(dl, sc, 90.f, top + fit.pitch * static_cast<float>(k), lines[k].c_str(), white, fit.squeeze, fit.scale);
-    }
-  }
+  secs::sB.descAge += dt;
+  DrawScreenDesc(dl, sc, Description(*secs::sB.row), secs::sB.descAge);
   if (sPage.age < 0.25f) FillWindow(dl, IM_COL32(0, 0, 0, std::clamp(static_cast<int>(255.f * (1.f - sPage.age / 0.25f)), 0, 255)));
+}
+
+namespace bag {
+
+constexpr uint32_t kSheet = 0x16BD, kArrows = 0x16BE, kCursor = 0x16C1;
+using namespace secs;
+
+void Frame(ImDrawList* dl, const Screen& sc, int active, const bool* live) {
+  using kit::Spr;
+  Spr(dl, sc, kSheet, 152, 166, 8, 8, 24, 96, 324, 340);
+  Spr(dl, sc, kSheet, 152, 166, 8, 8, 24, 40, 324, 34);
+  Spr(dl, sc, kSheet, 66, 0, 4, 76, 75, 37, 222, 76);
+  Spr(dl, sc, kSheet, 0, 0, 65, 104, 10, 37, 65, 104);
+  Spr(dl, sc, kSheet, 0, 0, 65, 104, 297, 37, -65, 104);
+  Spr(dl, sc, kSheet, 128, 166, 14, 6, 10, 141, 14, 264);
+  Spr(dl, sc, kSheet, 128, 166, 14, 6, 348, 141, 14, 264);
+  Spr(dl, sc, kSheet, 144, 166, 6, 6, 37, 434, 298, 6);
+  Spr(dl, sc, kSheet, 184, 0, 27, 35, 10, 405, 27, 35);
+  Spr(dl, sc, kSheet, 184, 0, 27, 35, 335, 405, -27, 35);
+  for (int i = 0; live != nullptr && i < kSections; i++) {
+    const float x = 91.f + 40.f * static_cast<float>(i);
+    const uint8_t a = live[i] ? 255 : 90;
+    Spr(dl, sc, kSheet, 33, 144, 31, 31, x, 80, 31, 31, a);
+    if (i == active) Spr(dl, sc, kSheet, 1, 144, 31, 31, x, 80, 31, 31);
+  }
+}
+void Pill(ImDrawList* dl, const Screen& sc, float x0, float x1, float y) { kit::ListPill(dl, sc, x0, x1, y); }
+void DescBox(ImDrawList* dl, const Screen& sc) {
+  using kit::Spr;
+  Spr(dl, sc, kSheet, 152, 166, 8, 8, 380, 348, 235, 86);
+  Spr(dl, sc, kSheet, 187, 36, 24, 16, 366, 342, 24, 16);
+  Spr(dl, sc, kSheet, 187, 36, 24, 16, 604, 342, -24, 16);
+  Spr(dl, sc, kSheet, 187, 36, 24, 16, 366, 424, 24, -16);
+  Spr(dl, sc, kSheet, 187, 36, 24, 16, 604, 424, -24, -16);
+  Spr(dl, sc, kSheet, 128, 166, 14, 6, 366, 358, 14, 67);
+  Spr(dl, sc, kSheet, 128, 166, 14, 6, 614, 358, 14, 67);
+  Spr(dl, sc, kSheet, 144, 166, 6, 6, 390, 342, 214, 6);
+  Spr(dl, sc, kSheet, 144, 166, 6, 6, 390, 434, 214, 6);
+}
+
+void Plate(ImDrawList* dl, const Screen& sc, const std::string& name) {
+  const uint8_t white[4] = {0xF0, 0xF0, 0xF0, 0xFF};
+  fit::Art(44.f, 48.f, 10, 17, "plate arrow");
+  fit::Art(319.f, 48.f, 10, 17, "plate arrow");
+  kit::TextC(dl, sc, 62.f, 56.f - std::floor(static_cast<float>(sFontW + 1) / 2.f) + 2.f, 248.f, name, white, 1.f, 1);
+  kit::Spr(dl, sc, kArrows, 2, 15, 10, 17, 44.f, 48.f, 10, 17);
+  kit::Spr(dl, sc, kArrows, 2, 15, 10, 17, 319.f, 48.f, -10, 17);
+}
+
+constexpr float kRowTop = 141.f, kPitch = 30.f, kRowsShown = 9.f;
+
+void DrawDescription(ImDrawList* dl, const Screen& sc, const std::string& text, float age, int forcePage = -1) {
+  const uint8_t white[4] = {0xF0, 0xF0, 0xF0, 0xFF};
+  DescBox(dl, sc);
+  const UseFont font(1);
+  const std::vector<std::string> lines = WrapPaged(text, 210.f, 196.f, 3);
+  const int pages = std::max(1, (static_cast<int>(lines.size()) + 2) / 3);
+  const int page = forcePage >= 0 ? std::min(forcePage, pages - 1) : pages > 1 ? static_cast<int>(age / 3.2f) % pages : 0;
+  fit::Region(391.f, 350.f, 606.f, 430.f, "description box");
+  for (int k = 0; k < 3; k++) {
+    const size_t li = static_cast<size_t>(page * 3 + k);
+    if (li < lines.size()) DrawText(dl, sc, 391.f, 354.f + 24.f * static_cast<float>(k), lines[li].c_str(), white);
+  }
+  if (pages > 1) {
+    fit::Art(598.f, 417.f, 13, 8, "more arrow");
+    kit::Spr(dl, sc, kArrows, 23, 48, 13, 8, 598.f, 417.f + 2.f * std::sin(kit::Time() * 6.28f), 13, 8);
+  }
+}
+
+void DrawRow(ImDrawList* dl, const Screen& sc, float top, const char* label, const std::string& value, const std::string& shortValue, bool sel,
+             bool arrows) {
+  const uint8_t white[4] = {0xF0, 0xF0, 0xF0, 0xFF};
+  const UseFont font(1);
+  const float ty = std::floor(top + 14.f - static_cast<float>(sFontW + 1) / 2.f);
+  if (sel) Pill(dl, sc, 28.f, 344.f, top);
+  const float vr = arrows ? 316.f : 336.f;
+  const RowLay L = FitRow(label, value, shortValue, vr - 51.f - 4.f, arrows || !value.empty() ? 26.f : 10.f);
+  const float vw = L.valueCut ? L.valueRoom : static_cast<float>(TextWidth(L.value.c_str())) * L.valueS * L.scale;
+  const float ty2 = ty + (1.f - L.scale) * static_cast<float>(sFontW) / 2.f;
+  DrawFitText(dl, sc, 51.f, ty2, L.labelRoom, L.label, white, L.labelS, L.scale, L.labelCut, sel, false);
+  if (!L.value.empty()) DrawFitText(dl, sc, vr - L.valueRoom, ty2, L.valueRoom, L.value, white, L.valueS, L.scale, L.valueCut, sel, true);
+  if (arrows && !L.value.empty()) {
+    fit::Art(vr - vw - 16.f, top + 5.5f, 10, 17, "left arrow");
+    fit::Art(vr + 6.f, top + 5.5f, 10, 17, "right arrow");
+    kit::Spr(dl, sc, kArrows, 2, 15, 10, 17, vr - vw - 16.f, top + 5.5f, 10, 17);
+    kit::Spr(dl, sc, kArrows, 2, 15, 10, 17, vr + 6.f, top + 5.5f, -10, 17);
+  }
+}
+
+void Draw(ImDrawList* dl, float dt) {
+  const Screen sc = ScreenNow();
+  const uint8_t white[4] = {0xF0, 0xF0, 0xF0, 0xFF};
+  FillWindow(dl, IM_COL32(0, 0, 0, 128));
+  Collect();
+  bool live[kSections];
+  for (int i = 0; i < kSections; i++) live[i] = !sSec[static_cast<size_t>(i)].empty();
+  Frame(dl, sc, sB.section, live);
+  Plate(dl, sc, SectionName(sB.section));
+  kit::Prompt(dl, sc, 380.f, 44.f, {"L", "R"}, Tr("PAGE"));
+  const std::vector<const Row*>& rows = sSec[static_cast<size_t>(sB.section)];
+  const int n = static_cast<int>(rows.size()), shown = std::min(n, static_cast<int>(kRowsShown));
+  int at = 0;
+  for (int i = 0; i < n; i++) {
+    if (rows[static_cast<size_t>(i)] == sB.row) at = i;
+  }
+  sB.first = std::clamp(sB.first, std::max(0, at - shown + 1), at);
+  sB.first = std::clamp(sB.first, 0, std::max(0, n - shown));
+  for (int i = sB.first; i < sB.first + shown; i++) {
+    const Row& r = *rows[static_cast<size_t>(i)];
+    const bool sel = &r == sB.row;
+    DrawRow(dl, sc, kRowTop + kPitch * static_cast<float>(i - sB.first), r.label(), ValueText(r), ValueShort(r), sel,
+            sel && !ValueText(r).empty() && !IsSpecialRow(r) && !IsActionRow(r.id));
+  }
+  if (sB.first > 0) kit::Spr(dl, sc, kArrows, 23, 1, 13, 8, 180.f, 128.f, 13, 8);
+  if (sB.first + shown < n) kit::Spr(dl, sc, kArrows, 23, 48, 13, 8, 180.f, 414.f, 13, 8);
+  if (sB.row != nullptr) {
+    sB.descAge += dt;
+    DrawDescription(dl, sc, Description(*sB.row), sB.descAge);
+  } else {
+    DescBox(dl, sc);
+  }
+}
+
+struct ModsList {
+  bool up = false;
+  int cursor = 0, first = 0;
+} sMods;
+
+void DrawMods(ImDrawList* dl) {
+  const Screen sc = ScreenNow();
+  const uint8_t white[4] = {0xF0, 0xF0, 0xF0, 0xFF};
+  FillWindow(dl, IM_COL32(0, 0, 0, 128));
+  const bool dots[kSections] = {true, false, false, false, false};
+  Frame(dl, sc, 0, dots);
+  Plate(dl, sc, Tr("MODS"));
+  const int n = static_cast<int>(xd::scriptext::MenuEntryCount()), shown = std::min(n, static_cast<int>(kRowsShown));
+  sMods.first = std::clamp(sMods.first, std::max(0, sMods.cursor - shown + 1), sMods.cursor);
+  sMods.first = std::clamp(sMods.first, 0, std::max(0, n - shown));
+  for (int i = sMods.first; i < sMods.first + shown; i++) {
+    DrawRow(dl, sc, kRowTop + kPitch * static_cast<float>(i - sMods.first), xd::scriptext::MenuEntryLabel(static_cast<size_t>(i)), "", "", i == sMods.cursor, false);
+  }
+  if (sMods.first > 0) kit::Spr(dl, sc, kArrows, 23, 1, 13, 8, 180.f, 128.f, 13, 8);
+  if (sMods.first + shown < n) kit::Spr(dl, sc, kArrows, 23, 48, 13, 8, 180.f, 414.f, 13, 8);
+  static float age = 0.f;
+  age += 1.f / 60.f;
+  if (n > 0) DrawDescription(dl, sc, Fmt(Tr("From the mod %s. Press A to use it."), xd::scriptext::MenuEntryMod(static_cast<size_t>(sMods.cursor))), age);
+  else DescBox(dl, sc);
+}
+
 }
 
 void PlayMenuSound(s32 menuId, int event);
 s32 PageSoundMenu();
+
+void OpenModsList() {
+  bag::sMods = bag::ModsList();
+  bag::sMods.up = true;
+  xd::scriptext::EntryPageReset();
+}
+bool ModsListFrame(const PortMenuInput* in) {
+  if (xd::scriptext::EntryPageUp()) {
+    xd::scriptext::EntryPageFrame(in);
+    return true;
+  }
+  const int n = static_cast<int>(xd::scriptext::MenuEntryCount());
+  int event = 0;
+  if (n > 0 && (in->repeat & PAD_BUTTON_UP)) bag::sMods.cursor = (bag::sMods.cursor + n - 1) % n, event = kSoundMove;
+  if (n > 0 && (in->repeat & PAD_BUTTON_DOWN)) bag::sMods.cursor = (bag::sMods.cursor + 1) % n, event = kSoundMove;
+  if (n > 0 && (in->pressed & PAD_BUTTON_A)) {
+    xd::scriptext::MenuEntryRun(static_cast<size_t>(bag::sMods.cursor));
+    PlayMenuSound(PageSoundMenu(), kSoundChoose);
+    return true;
+  }
+  if ((in->pressed & (PAD_BUTTON_B | PAD_BUTTON_START)) || n == 0) {
+    bag::sMods.up = false;
+    PlayMenuSound(PageSoundMenu(), kSoundBack);
+    PortInput_LatchHeld();
+    return true;
+  }
+  if (event != 0) PlayMenuSound(PageSoundMenu(), event);
+  bag::DrawMods(ImGui::GetForegroundDrawList());
+  return true;
+}
 
 bool PageFrame(void*, const PortMenuInput* in) {
   const int n = static_cast<int>(sPage.rows.size());
@@ -1263,9 +1969,19 @@ bool PageFrame(void*, const PortMenuInput* in) {
   if (in->pressed != 0 && std::getenv("XD_SETTINGS_DEBUG") != nullptr) {
     std::fprintf(stderr, "[settings menu] pressed 0x%X held 0x%X cursor %d of %d\n", in->pressed, in->held, sPage.cursor, n);
   }
-  if (in->repeat & PAD_BUTTON_UP) sPage.cursor = (sPage.cursor + n - 1) % n;
-  if (in->repeat & PAD_BUTTON_DOWN) sPage.cursor = (sPage.cursor + 1) % n;
   const bool screen = (sPageFromTitle || sLookScreen) && ItemPicture(kOptMenu, kOptPanel).ok;
+  const bool bagLook = !sPageFromTitle && !sLookScreen && xd::kit2::Texture(bag::kSheet).ok;
+  if (bagLook && bag::sMods.up) return ModsListFrame(in);
+  if (bagLook) {
+    if (sPage.age == 0.f) secs::Reset();
+    secs::Navigate(in, false);
+  } else if (screen) {
+    if (sPage.age == 0.f) secs::Reset();
+    secs::Navigate(in, true);
+  } else {
+    if (in->repeat & PAD_BUTTON_UP) sPage.cursor = (sPage.cursor + n - 1) % n;
+    if (in->repeat & PAD_BUTTON_DOWN) sPage.cursor = (sPage.cursor + 1) % n;
+  }
   const Row& row = *sPage.rows[sPage.cursor];
   if (row.id != nullptr) {
     if (screen && TwoChoices(row)) {
@@ -1294,7 +2010,8 @@ bool PageFrame(void*, const PortMenuInput* in) {
         sPage.changed = true;
       }
     } else if (in->pressed & PAD_BUTTON_A) {
-      Change(row, +1);
+      if (IsModsRow(row)) OpenModsList();
+      else Change(row, +1);
     }
   } else if (in->pressed & PAD_BUTTON_A) {
     sPage.changed = changedBefore;
@@ -1321,6 +2038,10 @@ bool PageFrame(void*, const PortMenuInput* in) {
   sPage.age += dt;
   if (screen) {
     DrawSettingsScreen(dl, dt);
+    return true;
+  }
+  if (bagLook) {
+    bag::Draw(dl, dt);
     return true;
   }
   if (sPageFromTitle) {
@@ -1400,7 +2121,7 @@ void CoverRoomResume();
 
 namespace ng {
 
-enum class Kind { Original, Engine, Timer, Setting, Mod, Randomizer, RandomizerSwitch, RandomizerCode, RandomizerPaste, Challenges, ShinyOdds, ShinyShadow, ShinyGift, ShinySpot, Start };
+enum class Kind { Original, RuleSet, Pokemon, Looks, Engine, Timer, Setting, Mod, Randomizer, RandomizerSwitch, RandomizerCode, RandomizerPaste, MoreShadows, Challenges, ShinyOdds, ShinyShadow, ShinyGift, ShinySpot, Start };
 struct SRow {
   Kind kind;
   const Row* setting = nullptr;
@@ -1426,16 +2147,23 @@ struct State {
   int rStyle = 0;
   std::string rCode;
   std::string rMessage;
+  int moreShadows = 0;
+  uint64_t moreShadowsSeed = 0;
+  std::string moreShadowsNote;
   int shinyOdds = 0;
   int shinyUnlock = 0;
   std::vector<bool> rules;
   int timer[4] = {0, 0, 0, 0};
+  std::string gen57Why;
   std::string gen4Why;
+  engine::rulesets::Choice choice;
+  int view = 0;
 } s;
 
 std::string RuleBlockedWhy(const char* id) {
   if (const char* xg = xd::xg::OffForRule(id)) return Tr(xg);
   if (!s.gen4Why.empty() && std::string(id).rfind("gen4_", 0) == 0) return s.gen4Why;
+  if (!s.gen57Why.empty() && std::strcmp(id, "gen57_pokemon") == 0) return s.gen57Why;
   return {};
 }
 
@@ -1462,6 +2190,8 @@ void SetRule(int rule, bool on) {
     if (need != nullptr && std::strcmp(need, xd::challenges::Rules()[rule].id) == 0) s.rules[i] = false;
   }
 }
+
+#include "rulesets_pages.inc"
 
 const char* RandomizerStyleName(int style) {
   switch (style) {
@@ -1666,6 +2396,9 @@ const Row* SettingRow(const char* id) {
 void BuildRows() {
   s.rows.clear();
   s.rows.push_back({Kind::Original});
+  s.rows.push_back({Kind::RuleSet});
+  s.rows.push_back({Kind::Pokemon});
+  s.rows.push_back({Kind::Looks});
   s.rows.push_back({Kind::Engine});
   for (int w : {0, 3, 1, 2}) s.rows.push_back({Kind::Timer, nullptr, -1, w});
   if (s.engine == engine::playthrough::Engine::Enhanced) {
@@ -1686,7 +2419,7 @@ void BuildRows() {
   }
   for (int m = 0; m < static_cast<int>(s.defaults.mods.size()); m++) s.rows.push_back({Kind::Mod, nullptr, m});
   s.rows.push_back({Kind::Randomizer});
-  if (s.rStyle == 4) {
+  if (s.rStyle != 0) {
     const auto& schema = xd::randomizer::GetSchema();
     const engine::randomizer::Settings rs = CodeSettings(s.rCode);
     for (int i = 0; i < static_cast<int>(schema.switches.size()); i++) {
@@ -1701,7 +2434,11 @@ void BuildRows() {
     s.rows.push_back({Kind::RandomizerCode});
     s.rows.push_back({Kind::RandomizerPaste});
   }
-  for (int i = 0; i < static_cast<int>(xd::challenges::Rules().size()); i++) s.rows.push_back({Kind::Challenges, nullptr, -1, i});
+  if (xd::xg::Off(xd::xg::Feature::Randomizer) == nullptr) s.rows.push_back({Kind::MoreShadows});
+  for (int i = 0; i < static_cast<int>(xd::challenges::Rules().size()); i++) {
+    if (xd::rulesets::IsOwnedId(xd::challenges::Rules()[i].id)) continue;
+    s.rows.push_back({Kind::Challenges, nullptr, -1, i});
+  }
   s.rows.push_back({Kind::Start});
   s.cursor = std::clamp(s.cursor, 0, static_cast<int>(s.rows.size()) - 1);
 }
@@ -1718,7 +2455,18 @@ engine::playthrough::Setup Chosen() {
       std::find(rules.begin(), rules.end(), "gen4_pokemon") == rules.end()) {
     rules.insert(rules.begin(), "gen4_pokemon");
   }
+  if (s.rStyle != 0 && xd::xg::Off(xd::xg::Feature::Gen4Pokemon) == nullptr && xd::randomizer::CodeIncludesGen57(s.rCode) &&
+      std::find(rules.begin(), rules.end(), "gen57_pokemon") == rules.end()) {
+    rules.insert(rules.begin(), "gen57_pokemon");
+  }
   engine::playthrough::Setup setup = xd::pt::SetupOf(s.engine, s.defaults.mods, s.rStyle != 0 ? s.rCode : std::string(), rules, options);
+  {
+    engine::rulesets::Choice c = s.choice;
+    if (s.rStyle != 0 && xd::xg::Off(xd::xg::Feature::Gen4Pokemon) == nullptr && xd::randomizer::CodeIncludesGen4(s.rCode) && !c.HasGen(4)) c.gens = {3, 4};
+    c.present = true;
+    xd::rulesets::Apply(setup, c);
+  }
+  if (s.moreShadows != 0 && xd::xg::Off(xd::xg::Feature::Randomizer) == nullptr) setup.moreShadows = xd::randomizer::MoreShadowsText(s.moreShadows, s.moreShadowsSeed);
   setup.speedrun.present = setup.speedrun.on = s.timer[0] != 0;
   setup.speedrun.withoutLoads = s.timer[0] == 2;
   setup.speedrun.start = s.timer[1];
@@ -1737,6 +2485,9 @@ std::string Shown(std::string text) {
 std::string RowLabel(const SRow& r) {
   switch (r.kind) {
   case Kind::Original: return Tr("Play the original game");
+  case Kind::RuleSet: return Tr("Rule set");
+  case Kind::Pokemon: return Tr("Pokemon");
+  case Kind::Looks: return Tr("Looks");
   case Kind::Engine: return Tr("Engine");
   case Kind::Timer: {
     switch (r.sw) {
@@ -1760,6 +2511,7 @@ std::string RowLabel(const SRow& r) {
   }
   case Kind::RandomizerCode: return Tr("Randomizer code");
   case Kind::RandomizerPaste: return Tr("Use a friend's code");
+  case Kind::MoreShadows: return Tr("More Shadow Pokemon");
   case Kind::ShinyOdds: return Tr("Shiny odds");
   case Kind::ShinyShadow: return Tr("Shiny Shadow Pokemon");
   case Kind::ShinyGift: return Tr("Shiny gift Pokemon");
@@ -1781,6 +2533,9 @@ std::string RowInfo(const SRow& r) {
     return xd::pt::NeedsRestart(xd::pt::SetupOf(engine::playthrough::Engine::Faithful, {}))
                ? Tr("Faithful, no mods: exactly the GameCube game. Starts at once (the game first starts again without the mods it has loaded).")
                : Tr("Faithful, no mods: exactly the GameCube game. Starts at once.");
+  case Kind::RuleSet: return std::string(rp::tx::RuleSetInfo(s.choice.ruleSet)) + " " + Tr("A: open the list and its detail rows.");
+  case Kind::Pokemon: return std::string(rp::tx::PokemonInfo(rp::TopGen())) + (rp::FitNote().empty() ? "" : " " + rp::FitNote());
+  case Kind::Looks: return rp::YouWillSee() + ". " + Tr("Only pictures change, never a battle. A: open the Looks page.");
   case Kind::Engine:
     return Tr("Faithful: the game decides everything exactly as on the GameCube. Enhanced: speed-ups (text, fast-forward, "
               "battle animations) can be used.");
@@ -1826,6 +2581,9 @@ std::string RowInfo(const SRow& r) {
   case Kind::ShinySpot:
     return Tr("On: the Poke Spot visitors Bonsly and Munchlax, which are never shiny in the game, can be shiny, with the odds above. "
               "Other Poke Spot Pokemon already follow the odds. Off: as the game.");
+  case Kind::MoreShadows:
+    if (!s.moreShadowsNote.empty()) return s.moreShadowsNote;
+    return Tr("Trainers without a Shadow Pokemon get one (a species that is no Shadow yet), met after you have the Snag Machine. A few: about 15. Many: 44. All: greyed, this game holds 127 Shadow Pokemon.");
   case Kind::RandomizerPaste:
     return s.rMessage.empty() ? std::string(Tr("Copy a code (or a seed number) on the PC, then press A here to use it.")) : s.rMessage;
   case Kind::Challenges:
@@ -1834,6 +2592,10 @@ std::string RowInfo(const SRow& r) {
       return Fmt(Tr("Not available: %s. The Gen 4 Pokemon, moves, cries and models are made from your own Pokemon Battle "
                     "Revolution disc (launcher, Extra assets page)."),
                  s.gen4Why.c_str());
+    }
+    if (!s.gen57Why.empty() && std::strcmp(xd::challenges::Rules()[r.sw].id, "gen57_pokemon") == 0) {
+      return Fmt(Tr("Not available: %s. The Gen 5-7 Pokemon are made from your own Ultra Sun / Ultra Moon dump (launcher, Extra assets page)."),
+                 s.gen57Why.c_str());
     }
     if (const xd::challenges::Rule* need = NeededOff(r.sw)) {
       return Fmt(Tr("Greyed: switch \"%s\" on first. %s"), need->label(), xd::challenges::Rules()[r.sw].info());
@@ -1861,10 +2623,16 @@ void Open(void*) {
     for (xd::pt::ModChoice& m : s.defaults.mods) m.on = false;
   }
   s.engine = s.defaults.engine;
+  s.choice = s.defaults.rules;
+  s.view = 0;
   for (int w = 0; w < 4; w++) s.timer[w] = xd::speedrun::RowValue(w);
   if (!s.defaults.randomizer.empty()) {
     s.rCode = s.defaults.randomizer;
     s.rStyle = StyleIndexOf(CodeSettings(s.rCode));
+  }
+  if (!s.defaults.moreShadows.empty()) {
+    xd::randomizer::MoreShadowsPlan plan;
+    if (xd::randomizer::ParseMoreShadows(s.defaults.moreShadows, plan)) s.moreShadows = plan.amount, s.moreShadowsSeed = plan.seed;
   }
   s.shinyOdds = xd::shiny::OddsIndexOf(s.defaults.options);
   s.shinyUnlock = xd::shiny::UnlocksOf(s.defaults.options);
@@ -1873,6 +2641,7 @@ void Open(void*) {
   } else {
     s.gen4Why.clear();
   }
+  if (xd::gen57::PackPresent(&s.gen57Why)) s.gen57Why.clear();
   for (size_t i = 0; i < s.rules.size(); i++) {
     const std::vector<std::string>& had = s.defaults.challenges;
     s.rules[i] = std::find(had.begin(), had.end(), xd::challenges::Rules()[i].id) != had.end();
@@ -1925,6 +2694,8 @@ void Close(void*) {
     engine::playthrough::ApplyEngine(es::Global(), s.engine);
     for (xd::pt::ModChoice& m : s.defaults.mods) m.on = false;
     s.rStyle = 0;
+    s.choice = engine::rulesets::Default(xd::rulesets::Registry());
+    s.choice.looks.preset = "original_xd", s.choice.looks.sources = {"xd"};
     s.shinyOdds = 0, s.shinyUnlock = 0;
     s.rules.assign(s.rules.size(), false);
   }
@@ -1943,7 +2714,67 @@ void Close(void*) {
   xd::pt::Begin(setup, changed);
 }
 
+void RowValues(const SRow& r, std::string& left, std::string& right, std::string& value, int& set) {
+  if (r.kind == Kind::RuleSet) {
+    value = rp::RuleSetValue();
+  } else if (r.kind == Kind::Pokemon) {
+    value = rp::PokemonValue();
+  } else if (r.kind == Kind::Looks) {
+    value = rp::LooksValue();
+  } else if (r.kind == Kind::Engine) {
+    left = Tr("Faithful"), right = Tr("Enhanced");
+    set = s.engine == engine::playthrough::Engine::Faithful ? 0 : 1;
+  } else if (r.kind == Kind::Timer) {
+    value = Tr(xd::speedrun::RowName(r.sw, s.timer[r.sw]));
+  } else if (r.kind == Kind::Mod) {
+    left = Tr("On"), right = Tr("Off");
+    set = s.defaults.mods[r.mod].on ? 0 : 1;
+  } else if (r.kind == Kind::Challenges) {
+    left = Tr("On"), right = Tr("Off");
+    set = s.rules[r.sw] ? 0 : 1;
+  } else if (r.kind == Kind::Setting && TwoChoices(*r.setting)) {
+    set = ChoiceNames(*r.setting, left, right);
+  } else if (r.kind == Kind::Setting) {
+    value = ValueText(*r.setting);
+  } else if (r.kind == Kind::ShinyOdds) {
+    value = xd::shiny::kOdds[s.shinyOdds].name;
+  } else if (r.kind == Kind::ShinyShadow) {
+    left = "On", right = "Off";
+    set = (s.shinyUnlock & xd::shiny::kUnlockShadow) != 0 ? 0 : 1;
+  } else if (r.kind == Kind::ShinyGift) {
+    left = "On", right = "Off";
+    set = (s.shinyUnlock & xd::shiny::kUnlockGifts) != 0 ? 0 : 1;
+  } else if (r.kind == Kind::ShinySpot) {
+    left = "On", right = "Off";
+    set = (s.shinyUnlock & xd::shiny::kUnlockSpots) != 0 ? 0 : 1;
+  } else if (r.kind == Kind::Randomizer) {
+    value = RandomizerStyleName(s.rStyle);
+  } else if (r.kind == Kind::RandomizerSwitch) {
+    const auto& schema = xd::randomizer::GetSchema();
+    const auto& def = schema.switches[r.sw];
+    const uint32_t v = std::min(CodeSettings(s.rCode).Get(schema, def.id), def.Choices() - 1);
+    if (def.Choices() == 2 && def.choiceNames[0] == "off") {
+      left = ChoiceShown(def.choiceNames[1]), right = Tr("Off");
+      set = v != 0 ? 0 : 1;
+    } else if (def.Choices() == 2) {
+      left = ChoiceShown(def.choiceNames[0]), right = ChoiceShown(def.choiceNames[1]);
+      set = static_cast<int>(v);
+    } else {
+      value = ChoiceShown(def.choiceNames[v]);
+    }
+  } else if (r.kind == Kind::RandomizerCode) {
+    value = s.rCode;
+  } else if (r.kind == Kind::RandomizerPaste) {
+    value = Tr("Paste (A)");
+  } else if (r.kind == Kind::MoreShadows) {
+    value = s.moreShadows == 1 ? Tr("A few") : s.moreShadows == 2 ? Tr("Many") : s.moreShadows == 3 ? Tr("All") : Tr("Off");
+  }
+}
+
+void DrawNative(ImDrawList* dl, float dt);
 void Draw(ImDrawList* dl, float dt) {
+  if (PreviewOn()) { DrawNative(dl, dt); return; }
+  if (s.view != 0) { rp::DrawView(dl); return; }
   const Screen sc = ScreenNow();
   const int n = static_cast<int>(s.rows.size());
   FillWindow(dl, IM_COL32(0, 0, 0, 255));
@@ -1993,52 +2824,7 @@ void Draw(ImDrawList* dl, float dt) {
     const float boxY = mid - 12.f;
     std::string left, right, value;
     int set = -1;
-    if (r.kind == Kind::Engine) {
-      left = Tr("Faithful"), right = Tr("Enhanced");
-      set = s.engine == engine::playthrough::Engine::Faithful ? 0 : 1;
-    } else if (r.kind == Kind::Timer) {
-      value = xd::speedrun::RowName(r.sw, s.timer[r.sw]);
-    } else if (r.kind == Kind::Mod) {
-      left = Tr("On"), right = Tr("Off");
-      set = s.defaults.mods[r.mod].on ? 0 : 1;
-    } else if (r.kind == Kind::Challenges) {
-      left = Tr("On"), right = Tr("Off");
-      set = s.rules[r.sw] ? 0 : 1;
-    } else if (r.kind == Kind::Setting && TwoChoices(*r.setting)) {
-      set = ChoiceNames(*r.setting, left, right);
-    } else if (r.kind == Kind::Setting) {
-      value = ValueText(*r.setting);
-    } else if (r.kind == Kind::ShinyOdds) {
-      value = xd::shiny::kOdds[s.shinyOdds].name;
-    } else if (r.kind == Kind::ShinyShadow) {
-      left = "On", right = "Off";
-      set = (s.shinyUnlock & xd::shiny::kUnlockShadow) != 0 ? 0 : 1;
-    } else if (r.kind == Kind::ShinyGift) {
-      left = "On", right = "Off";
-      set = (s.shinyUnlock & xd::shiny::kUnlockGifts) != 0 ? 0 : 1;
-    } else if (r.kind == Kind::ShinySpot) {
-      left = "On", right = "Off";
-      set = (s.shinyUnlock & xd::shiny::kUnlockSpots) != 0 ? 0 : 1;
-    } else if (r.kind == Kind::Randomizer) {
-      value = RandomizerStyleName(s.rStyle);
-    } else if (r.kind == Kind::RandomizerSwitch) {
-      const auto& schema = xd::randomizer::GetSchema();
-      const auto& def = schema.switches[r.sw];
-      const uint32_t v = std::min(CodeSettings(s.rCode).Get(schema, def.id), def.Choices() - 1);
-      if (def.Choices() == 2 && def.choiceNames[0] == "off") {
-        left = ChoiceShown(def.choiceNames[1]), right = Tr("Off");
-        set = v != 0 ? 0 : 1;
-      } else if (def.Choices() == 2) {
-        left = ChoiceShown(def.choiceNames[0]), right = ChoiceShown(def.choiceNames[1]);
-        set = static_cast<int>(v);
-      } else {
-        value = ChoiceShown(def.choiceNames[v]);
-      }
-    } else if (r.kind == Kind::RandomizerCode) {
-      value = s.rCode;
-    } else if (r.kind == Kind::RandomizerPaste) {
-      value = Tr("Paste (A)");
-    }
+    RowValues(r, left, right, value, set);
     if (set >= 0) {
       DrawItem(dl, sc, set == 0 ? kOptChoice : kOptChoice2, set == 0 ? 321.f : 449.f, boxY, -1.f, -1.f, sel ? pulse : 255);
       DrawTextCentred(dl, sc, 321.f, boxY, 121.f, 24.f, left.c_str(), ink);
@@ -2053,6 +2839,7 @@ void Draw(ImDrawList* dl, float dt) {
       } else {
         DrawTextCentred(dl, sc, 321.f, boxY, 249.f, 24.f, value.c_str(), soon ? grey : white);
       }
+      if (r.kind == Kind::RuleSet || r.kind == Kind::Looks) DrawText(dl, sc, 579.f, std::floor(mid - static_cast<float>(sFontW + 1) / 2.f), "...", grey);
       if (sel && !soon && r.kind != Kind::RandomizerPaste) {
         DrawTriangle(dl, sc, 321.f + 20.f, mid, 12.f, 2, IM_COL32(0xF0, 0xF0, 0xF0, 0xFF));
         DrawTriangle(dl, sc, 321.f + 249.f - 20.f, mid, 12.f, 3, IM_COL32(0xF0, 0xF0, 0xF0, 0xFF));
@@ -2065,6 +2852,7 @@ void Draw(ImDrawList* dl, float dt) {
     const UseFont font(kScrInfoFont);
     const SRow& r = s.rows[s.cursor];
     const std::string summary =
+        r.kind == Kind::RuleSet || r.kind == Kind::Pokemon || r.kind == Kind::Looks ? Shown(engine::playthrough::DisplayLabel(Chosen())) :
         Shown(engine::playthrough::DisplayLabel(r.kind == Kind::Original ? xd::pt::SetupOf(engine::playthrough::Engine::Faithful, {})
                                                                   : Chosen()));
     const float summaryW = std::max(1.f, static_cast<float>(TextWidth(summary.c_str())));
@@ -2077,7 +2865,254 @@ void Draw(ImDrawList* dl, float dt) {
   if (s.age < 0.25f) FillWindow(dl, IM_COL32(0, 0, 0, std::clamp(static_cast<int>(255.f * (1.f - s.age / 0.25f)), 0, 255)));
 }
 
+std::vector<std::string> sNativeLines;
+int sNativeFirst = 0;
+float sNativeDescAge = 0.f;
+int sNativeLastCursor = -1, sNativeLastView = -1;
+
+kit::NRow MakeNRow(const SRow& r) {
+  kit::NRow n;
+    std::string left, right, value;
+    int set = -1;
+    RowValues(r, left, right, value, set);
+    n.label = RowLabel(r);
+    n.value = set >= 0 ? (set == 0 ? left : right) : value;
+    if (set < 0 && r.kind == Kind::Timer) n.shortValue = ShortOf(xd::speedrun::RowName(r.sw, s.timer[r.sw]));
+    if (set < 0 && r.kind == Kind::Setting) n.shortValue = ValueShort(*r.setting);
+    n.arrows = set >= 0 || (!value.empty() && r.kind != Kind::RuleSet && r.kind != Kind::Pokemon && r.kind != Kind::Looks &&
+                            r.kind != Kind::RandomizerPaste && r.kind != Kind::RandomizerCode);
+    n.action = r.kind == Kind::Start || r.kind == Kind::Original;
+    n.grey = r.kind == Kind::Challenges && (NeededOff(r.sw) != nullptr || !RuleBlockedWhy(xd::challenges::Rules()[r.sw].id).empty());
+    n.indent = r.kind == Kind::RandomizerSwitch ? (SwitchParent(r.sw) >= 0 ? 32.f : 16.f) : r.kind == Kind::RandomizerCode || r.kind == Kind::RandomizerPaste ? 16.f : 0.f;
+  return n;
+}
+
+void DrawNativeMain(ImDrawList* dl, const Screen& sc, float dt) {
+  std::vector<kit::NRow> rows;
+  for (const SRow& r : s.rows) rows.push_back(MakeNRow(r));
+  if (s.cursor != sNativeLastCursor || s.view != sNativeLastView) sNativeDescAge = 0.f, sNativeLastCursor = s.cursor, sNativeLastView = s.view;
+  kit::StageList(dl, sc, Tr("NEW GAME"), rows, s.cursor, s.first, RowInfo(s.rows[static_cast<size_t>(s.cursor)]), sNativeDescAge, dt);
+}
+
+bool ViewRows(int view, std::vector<kit::NRow>& rows, std::string& desc, std::string& title) {
+  using namespace rp;
+  if (view == kRuleSet) {
+    title = Tr("RULE SET");
+    const std::vector<std::string> ids = RuleSetIds();
+    for (const std::string& id : ids) {
+      const er::RuleSet* r = xd::rulesets::Registry().FindRuleSet(id);
+      const bool ok = r->available && (id != "gen4" || Gen4Ready());
+      kit::NRow n;
+      n.label = std::string(tx::RuleSetName(id));
+      n.mark = s.choice.ruleSet == id;
+      n.grey = !ok;
+      if (!r->available) n.value = Tr("later");
+      else if (id == "gen4" && !Gen4Ready()) n.value = Tr("needs the Gen 4 pack");
+      rows.push_back(n);
+    }
+    const std::vector<int> details = DetailRows();
+    for (size_t k = 0; k < details.size(); k++) {
+      kit::NRow n;
+      bool changeable = false;
+      const bool isSplit = details[k] == 5;
+      const std::string split = SplitValue(changeable);
+      const bool fairy = s.choice.MechanicOn(xd::rulesets::Registry(), xd::rulesets::kModernTypes);
+      n.label = isSplit ? Tr("Physical/special split") : Tr("Fairy type");
+      n.value = isSplit ? split : std::string(fairy ? Tr("On") : Tr("Off"));
+      n.arrows = !isSplit || changeable;
+      n.grey = isSplit && !changeable;
+      rows.push_back(n);
+    }
+    if (vCur < static_cast<int>(ids.size())) {
+      desc = std::string(tx::RuleSetInfo(ids[static_cast<size_t>(vCur)]));
+      if (ids[static_cast<size_t>(vCur)] == "gen4" && !Gen4Ready()) desc += " " + Gen4Why();
+    }
+    else desc = Tr("Moves are physical or special by the move, not by its type (Gen 4 and later). Free with XD original; part of Gen 4.");
+  } else if (view == kPokemon) {
+    title = Tr("POKEMON");
+    const int gens[5] = {3, 4, 5, 6, 7};
+    for (int g : gens) {
+      kit::NRow n;
+      n.label = std::string(tx::PokemonName(g));
+      n.mark = TopGen() == g;
+      const bool avail = g <= 4 && (g != 4 || Gen4Ready());
+      n.grey = !avail;
+      if (g > 4) n.value = Tr("later");
+      else if (g == 4 && !Gen4Ready()) n.value = Tr("needs the Gen 4 pack");
+      rows.push_back(n);
+    }
+    kit::NRow spots;
+    spots.label = Tr("Also at the Poke Spots");
+    spots.value = s.choice.HasGen(4) && s.choice.HasOption(xd::rulesets::kOptionSpots) ? Tr("On") : Tr("Off");
+    spots.arrows = true;
+    spots.grey = !s.choice.HasGen(4);
+    rows.push_back(spots);
+    desc = std::string(tx::PokemonInfo(vCur < 5 ? gens[vCur] : TopGen()));
+    if (vCur == 1 && !Gen4Ready()) desc += " " + Gen4Why();
+  } else if (view == kLooks) {
+    title = Tr("LOOKS");
+    const std::string cur0 = StyleOf(s.choice.looks);
+    for (int i = 0; i < 4; i++) {
+      kit::NRow n;
+      n.label = std::string(tx::StyleName(kStyles[i]));
+      n.mark = cur0 == kStyles[i];
+      rows.push_back(n);
+    }
+    const std::vector<std::string> src = SourceRows();
+    const std::vector<std::string> ranked = er::Ranked(s.choice.looks, xd::rulesets::Registry());
+    for (const std::string& id : src) {
+      kit::NRow n;
+      const bool listed = std::find(ranked.begin(), ranked.end(), id) != ranked.end();
+      const bool ready = id != "xy" && SourceReady(id);
+      n.label = std::string(tx::SourceName(id));
+      n.indent = 14.f;
+      n.value = id == "xy" ? Tr("later") : ready ? (listed ? Tr("ready") : Tr("off")) : std::string(tx::SourceAdd(id));
+      n.grey = !(ready && listed);
+      rows.push_back(n);
+    }
+    kit::NRow pins;
+    pins.label = Tr("Advanced: per Pokemon ...");
+    pins.value = Fmt(Tr("%d pinned"), static_cast<int>(s.choice.looks.overrides.size()));
+    rows.push_back(pins);
+    desc = vCur < 4 ? std::string(tx::StyleOrder(kStyles[vCur]))
+                    : Tr("For each Pokemon the game uses the first source in the list that has it, so there are never gaps. Grey sources are skipped until you add them in the launcher.");
+  } else {
+    return false;
+  }
+  return true;
+}
+
+void DrawNativeView(ImDrawList* dl, const Screen& sc, float dt) {
+  using namespace rp;
+  std::vector<kit::NRow> rows;
+  std::string desc, title;
+  const int cur = vCur;
+  if (!ViewRows(s.view, rows, desc, title)) {
+    DrawView(dl);
+    return;
+  }
+  if (vCur != sNativeLastCursor || s.view != sNativeLastView) sNativeDescAge = 0.f, sNativeLastCursor = vCur, sNativeLastView = s.view;
+  kit::StageList(dl, sc, title, rows, std::clamp(cur, 0, std::max(0, static_cast<int>(rows.size()) - 1)), vFirst, desc, sNativeDescAge, dt);
+}
+
+void DrawNative(ImDrawList* dl, float dt) {
+  const Screen sc = ScreenNow();
+  if (s.view != 0) DrawNativeView(dl, sc, dt);
+  else DrawNativeMain(dl, sc, dt);
+}
+
+using AuditRun = std::function<void(const std::string&, const std::function<void()>&)>;
+void Audit(const AuditRun& run, ImDrawList* dl, const Screen& sc) {
+  s = State();
+  s.engine = engine::playthrough::Engine::Enhanced;
+  s.rStyle = 4;
+  s.rCode = xd::randomizer::CodeFor(xd::randomizer::Style::Classic, 12345);
+  s.rules.assign(xd::challenges::Rules().size(), false);
+  for (const char* name : {"A mod", "A mod with a rather long name indeed: the Great Big Ultra Mod"}) {
+    xd::pt::ModChoice m;
+    m.id = name, m.name = name;
+    s.defaults.mods.push_back(m);
+  }
+  BuildRows();
+  for (size_t i = 0; i < s.rows.size(); i++) {
+    const SRow r = s.rows[i];
+    std::vector<kit::NRow> variants;
+    const kit::NRow base = MakeNRow(r);
+    auto add = [&](const std::string& value, const std::string& shortValue = "") {
+      kit::NRow n = base;
+      n.value = value, n.shortValue = shortValue;
+      n.arrows = base.arrows || !value.empty();
+      variants.push_back(n);
+    };
+    switch (r.kind) {
+    case Kind::Timer:
+      for (int k = 0; k < xd::speedrun::RowCount(r.sw); k++) add(Tr(xd::speedrun::RowName(r.sw, k)), ShortOf(xd::speedrun::RowName(r.sw, k)));
+      break;
+    case Kind::Setting:
+      for (const auto& f : RowValueForms(*r.setting)) add(f.first, f.second);
+      break;
+    case Kind::RuleSet:
+      for (const std::string& id : rp::RuleSetIds()) {
+        add(rp::tx::RuleSetShort(id));
+        add(std::string(rp::tx::RuleSetShort(id)) + " + " + Tr("Fairy type"));
+      }
+      break;
+    case Kind::Pokemon:
+      for (int g : {3, 4, 5, 6, 7}) {
+        add(rp::tx::PokemonShort(g));
+        add(std::string(rp::tx::PokemonShort(g)) + " + " + Tr("Poke Spots"));
+      }
+      break;
+    case Kind::Looks:
+      for (int k = 0; k < 4; k++) add(rp::tx::StyleName(rp::kStyles[k]));
+      add(Tr("Custom..."));
+      break;
+    case Kind::Randomizer:
+      for (int k = 0; k < 5; k++) add(RandomizerStyleName(k));
+      break;
+    case Kind::RandomizerSwitch: {
+      const auto& def = xd::randomizer::GetSchema().switches[r.sw];
+      for (uint32_t k = 0; k < def.Choices(); k++) add(ChoiceShown(def.choiceNames[k]));
+      break;
+    }
+    case Kind::MoreShadows:
+      for (const char* v : {Tr("Off"), Tr("A few"), Tr("Many"), Tr("All")}) add(v);
+      break;
+    case Kind::ShinyOdds:
+      for (int k = 0; k < xd::shiny::kOddsCount; k++) add(xd::shiny::kOdds[k].name);
+      break;
+    default:
+      variants.push_back(base);
+      break;
+    }
+    for (size_t v = 0; v < variants.size(); v++) {
+      for (int sel = 0; sel < 2; sel++) {
+        run("newgame row " + std::to_string(i) + " [" + base.label + "] = '" + variants[v].value + "' sel" + std::to_string(sel),
+            [&] { kit::StageRow(dl, sc, variants[v], 87.f, sel != 0, false); });
+      }
+    }
+    {
+      const std::string d = RowInfo(r);
+      const int pages = std::max(1, (kit::LinesOf(d, 530.f, 1.f, 0) + 1) / 2);
+      for (int pg = 0; pg < pages; pg++) run("newgame row " + std::to_string(i) + " desc page " + std::to_string(pg), [&] { kit::StageDesc(dl, sc, d, 0.f, pg); });
+    }
+  }
+  for (const char* t : {"NEW GAME", "RULE SET", "POKEMON", "LOOKS"}) {
+    run(std::string("newgame plate ") + t, [&] { kit::TextC(dl, sc, kit::kStageX0, 28.f, kit::kStageX1 - kit::kStageX0, Tr(t), kit::kText, 1.f, 1); });
+  }
+  for (int view : {rp::kRuleSet, rp::kPokemon, rp::kLooks}) {
+    for (int cur = 0; cur < 12; cur++) {
+      rp::vCur = cur;
+      std::vector<kit::NRow> rows;
+      std::string desc, title;
+      if (!ViewRows(view, rows, desc, title)) continue;
+      if (cur >= static_cast<int>(rows.size())) break;
+      bool marks = false;
+      for (const kit::NRow& n : rows) marks = marks || n.mark;
+      for (size_t k = 0; k < rows.size(); k++) {
+        for (int sel = 0; sel < 2; sel++) {
+          if (cur != 0 && sel == 0) continue;
+          run("newgame view " + std::to_string(view) + " row " + std::to_string(k) + " [" + rows[k].label + "] sel" + std::to_string(sel),
+              [&] { kit::StageRow(dl, sc, rows[k], 87.f, sel != 0, marks); });
+        }
+      }
+      run("newgame view " + std::to_string(view) + " desc " + std::to_string(cur), [&] { kit::StageDesc(dl, sc, desc, 0.f, 0); });
+    }
+  }
+}
+
 bool Frame(void*, const PortMenuInput* in) {
+  if (s.view != 0) {
+    const int ev = rp::FrameView(in);
+    if (ev != 0) PlayMenuSound(kTitleMenu, ev);
+    const auto now2 = std::chrono::steady_clock::now();
+    float dt2 = s.last.time_since_epoch().count() == 0 ? 1.f / 60.f : std::chrono::duration<float>(now2 - s.last).count();
+    s.last = now2;
+    s.age += std::clamp(dt2, 0.f, 0.1f);
+    if (PreviewOn()) DrawNative(ImGui::GetForegroundDrawList(), std::clamp(dt2, 0.f, 0.1f));
+    else rp::DrawView(ImGui::GetForegroundDrawList());
+    return true;
+  }
   const int n = static_cast<int>(s.rows.size());
   int event = 0;
   const int before = s.cursor;
@@ -2095,6 +3130,33 @@ bool Frame(void*, const PortMenuInput* in) {
                      : right ? engine::playthrough::Engine::Enhanced
                              : (s.engine == engine::playthrough::Engine::Faithful ? engine::playthrough::Engine::Enhanced
                                                                                   : engine::playthrough::Engine::Faithful));
+      event = kSoundMove;
+    }
+    break;
+  case Kind::RuleSet:
+    if (a) { s.view = rp::kRuleSet; rp::vCur = 0; event = kSoundChoose; }
+    else if (left || right) {
+      const std::vector<std::string> ids = rp::RuleSetIds();
+      size_t at = std::find(ids.begin(), ids.end(), s.choice.ruleSet) - ids.begin();
+      for (size_t k = 1; k < ids.size(); k++) {
+        const std::string& id = ids[(at + (left ? ids.size() - k : k)) % ids.size()];
+        const auto* rs = xd::rulesets::Registry().FindRuleSet(id);
+        if (rs != nullptr && rs->available && (id == "xd" || rp::Gen4Ready())) { rp::SetRuleSet(id); break; }
+      }
+      event = kSoundMove;
+    }
+    break;
+  case Kind::Pokemon:
+    if (a) { s.view = rp::kPokemon; rp::vCur = rp::TopGen() - 3; event = kSoundChoose; }
+    else if (left || right) { rp::SetGens(rp::NextTop(left)); event = kSoundMove; }
+    break;
+  case Kind::Looks:
+    if (a) { s.view = rp::kLooks; rp::vCur = 0; event = kSoundChoose; }
+    else if (left || right) {
+      const std::string cur = rp::StyleOf(s.choice.looks);
+      int at = 0;
+      for (int k = 0; k < 4; k++) if (cur == rp::kStyles[k]) at = k;
+      rp::SetStyle(rp::kStyles[(at + (left ? 3 : 1)) % 4]);
       event = kSoundMove;
     }
     break;
@@ -2128,6 +3190,21 @@ bool Frame(void*, const PortMenuInput* in) {
       event = kSoundMove;
     }
     break;
+  case Kind::MoreShadows:
+    if (left || right || a) {
+      const bool allOk = xd::randomizer::MoreShadowsRows() > 127;
+      const int top = allOk ? 3 : 2;
+      int to = a ? (s.moreShadows == 0 ? 1 : 0) : (s.moreShadows + (left ? top : 1)) % (top + 1);
+      s.moreShadowsNote.clear();
+      if (!allOk && !left && s.moreShadows == 2) {
+        to = 2;
+        s.moreShadowsNote = Tr("All is not possible yet: this game holds 127 Shadow Pokemon.");
+      }
+      if (to != 0 && s.moreShadowsSeed == 0) s.moreShadowsSeed = NewSeed() % 1000000000000ull + 1;
+      s.moreShadows = to;
+      event = kSoundMove;
+    }
+    break;
   case Kind::RandomizerSwitch:
     if (left || right || a) {
       const auto& schema = xd::randomizer::GetSchema();
@@ -2139,6 +3216,7 @@ bool Frame(void*, const PortMenuInput* in) {
         to = left ? (onLeft ? 1 : 0) : (onLeft ? 0 : 1);
       }
       SetRandomizerSwitch(r.sw, to);
+      s.rStyle = StyleIndexOf(CodeSettings(s.rCode));
       BuildRows();
       event = kSoundMove;
     }
@@ -2543,6 +3621,16 @@ void DrawNote() {
   if (noteText.empty() || std::chrono::steady_clock::now() > noteUntil) return;
   ImDrawList* dl = ImGui::GetForegroundDrawList();
   const Screen sc = ScreenNow();
+  if (PreviewOn()) {
+    kit::MessageWindow(dl, sc, 27.f, 316.f, 613.f, 440.f);
+    std::vector<std::string> lines;
+    {
+      const UseFont f(0);
+      lines = Wrap(noteText, 540.f);
+    }
+    for (size_t i = 0; i < std::min<size_t>(lines.size(), 3); i++) kit::Text(dl, sc, 52.f, 331.f + 33.f * static_cast<float>(i), lines[i], kit::kText, 1.f, 0.f, 0);
+    return;
+  }
   const UseFont font(0);
   const std::vector<std::string> lines = Wrap(noteText, 500.f / 0.85f);
   const float h = 16.f + 18.f * static_cast<float>(lines.size());
@@ -2551,13 +3639,24 @@ void DrawNote() {
   for (size_t i = 0; i < lines.size(); i++) DrawText(dl, sc, 44.f + kit::kInset + 4.f, 448.f - h + 18.f * i, lines[i].c_str(), white, 0.85f, 0.85f);
 }
 
+bool NoteFrame(void*, const PortMenuInput* in) {
+  if (in->pressed & (PAD_BUTTON_A | PAD_BUTTON_B)) return false;
+  if (noteText.empty()) noteText = Fmt(Tr("%s not found: the next source in this playthrough's list shows instead."), Tr("Ultra Sun / Ultra Moon"));
+  noteUntil = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+  DrawNote();
+  return true;
+}
+const PortMenuPage kNotePage{"continue note", nullptr, NoteFrame, nullptr, nullptr};
+
 }
 
 namespace mm {
 
 namespace em = engine::mods;
 
-enum class Kind { Mod, Broken, Apply, Exit };
+enum class Kind { Mod, Broken, Apply, Reload, Exit };
+extern "C" const char* PortXD_ModReloadMenu(void);
+extern "C" bool PortXD_ModReloadEnabled(void);
 struct PRow {
   Kind kind;
   int index = -1;
@@ -2575,7 +3674,8 @@ struct State {
   std::vector<std::string> loaded;
   std::vector<PRow> rows;
   int cursor = 0, first = 0;
-  std::vector<float> rowAlpha;
+  std::vector<float> rowAlpha, rowOff;
+  bool held = false;
   float titleTimer = 0.f, age = 0.f;
   std::chrono::steady_clock::time_point last{};
   std::string notice;
@@ -2599,6 +3699,7 @@ void Rebuild() {
   s.rows.clear();
   for (int i = 0; i < static_cast<int>(s.review.rows.size()); i++) s.rows.push_back({Kind::Mod, i});
   for (int i = 0; i < static_cast<int>(s.broken.size()); i++) s.rows.push_back({Kind::Broken, i});
+  s.rows.push_back({Kind::Reload});
   s.rows.push_back({Kind::Apply});
   s.rows.push_back({Kind::Exit});
   s.cursor = std::clamp(s.cursor, 0, static_cast<int>(s.rows.size()) - 1);
@@ -2621,7 +3722,7 @@ void Open(void*) {
   em::AddNewMods(s.list, s.found);
   s.original = s.list;
   const char* id = PortDisc_GameId();
-  s.gameId = id != nullptr ? id : "";
+  s.gameId = em::MakeTarget(id != nullptr ? id : "", xd::xg::Edition());
   s.worldFixed = xd::pt::WorldModsFixed(s.worldIds);
   s.loaded = xd::pt::LoadedModIds();
   Rebuild();
@@ -2645,6 +3746,7 @@ void Details(const PRow& r, std::string& summary, std::string& text) {
     }
     const em::Manifest& m = row.mod->manifest;
     summary = m.name + (m.version.empty() ? "" : "  " + m.version) + (m.author.empty() ? "" : "  " + Fmt(Tr("by %s"), m.author.c_str()));
+    if (const std::string tag = em::GameTag(m); !tag.empty() && !row.mod->texturePack) summary += "  [" + tag + "]";
     const auto add = [&](const std::string& part) {
       if (!part.empty()) text += (text.empty() ? "" : " ") + part;
     };
@@ -2672,8 +3774,8 @@ void Details(const PRow& r, std::string& summary, std::string& text) {
     if (v.Downgraded()) add(Fmt(Tr("(It says %s, but %s.)"), em::AppliesName(v.claimed), v.reason.c_str()));
     if (m.scripts) {
       const bool allowed = s.list.Active().scriptsOff.count(row.id) == 0;
-      add(allowed ? Tr("Runs scripts (Lua): allowed. They run in a locked box and cannot touch your files, but they can change how the game plays. Press Z to skip them (the rest of the mod stays).")
-                  : Tr("Runs scripts (Lua): skipped. The rest of the mod is still used. Press Z to allow them."));
+      add(allowed ? Tr("Runs scripts (Luau): allowed. They run in a locked box and cannot touch your files, but they can change how the game plays. Press Z to skip them (the rest of the mod stays).")
+                  : Tr("Runs scripts (Luau): skipped. The rest of the mod is still used. Press Z to allow them."));
     }
     if (InIds(s.loaded, row.id)) add(Tr("In use now."));
     return;
@@ -2694,6 +3796,16 @@ void Details(const PRow& r, std::string& summary, std::string& text) {
     } else {
       text = Tr("Nothing has changed yet. Switch mods on or off above (L / R, or X / Y, move one up or down the order: further down wins "
                 "when two mods change the same file).");
+    }
+    return;
+  case Kind::Reload:
+    summary = Tr("Reload mods");
+    if (!s.notice.empty()) {
+      text = s.notice;
+    } else if (!PortXD_ModReloadEnabled()) {
+      text = Tr("Off. For people who make mods: turn on \"Reload mods while playing\" on the SETTINGS page. It is never used in Original, in replays or in test runs.");
+    } else {
+      text = Tr("Loads changed script mods and texture packs again without restarting. Data values, text and replaced files need Apply and restart. It changes nothing in your game.");
     }
     return;
   default:
@@ -2735,88 +3847,154 @@ bool Apply() {
   return true;
 }
 
+constexpr uint32_t kBagArrows = 0x16BE;
+constexpr int kModRows = 4;
+constexpr float kModTop = 98.f, kModPitch = 48.f, kModBar = 44.f, kModButtonsMid = 290.f;
+
+bool IsButton(Kind k) { return k == Kind::Apply || k == Kind::Reload || k == Kind::Exit; }
+int FirstButton() {
+  for (int i = 0; i < static_cast<int>(s.rows.size()); i++) {
+    if (IsButton(s.rows[i].kind)) return i;
+  }
+  return static_cast<int>(s.rows.size());
+}
+int ApplyIndex() {
+  for (int i = 0; i < static_cast<int>(s.rows.size()); i++) {
+    if (s.rows[i].kind == Kind::Apply) return i;
+  }
+  return 0;
+}
+std::string RowName(const PRow& r) {
+  const em::ReviewRow& row = s.review.rows[r.index];
+  return row.mod != nullptr ? row.mod->manifest.name : row.id;
+}
+
+void DrawButton(ImDrawList* dl, const Screen& sc, float x, float w, float mid, const char* text, bool sel, uint8_t alpha, uint8_t pulse, const uint8_t* col) {
+  DrawItem(dl, sc, kOptExit, x, mid - 16.f, w, -1.f, alpha, 16.f);
+  if (sel) DrawItem(dl, sc, kOptExitCursor, x - 3.f, mid - 19.f, w + 6.f, -1.f, pulse, 16.f);
+  DrawTextCentred(dl, sc, x, mid - 16.f, w, 32.f, text, col);
+}
+
 void Draw(ImDrawList* dl, float dt) {
   const Screen sc = ScreenNow();
   const int n = static_cast<int>(s.rows.size());
+  const int nl = FirstButton();
   FillWindow(dl, IM_COL32(0, 0, 0, 255));
   kit::OptionsScreen(dl, sc);
   for (int i = kOptDescFirst; i <= kOptDescLast; i++) DrawItemAsIs(dl, sc, i);
-  const uint8_t white[4] = {0xF0, 0xF0, 0xF0, 0xFF}, grey[4] = {0xA0, 0xA0, 0xA0, 0xFF}, amber[4] = {0xFF, 0xD0, 0x60, 0xFF},
-                red[4] = {0xFF, 0x90, 0x90, 0xFF};
+  const uint8_t white[4] = {0xF0, 0xF0, 0xF0, 0xFF}, grey[4] = {0xA0, 0xA0, 0xA0, 0xFF}, dimgrey[4] = {0x80, 0x80, 0x80, 0xFF},
+                amber[4] = {0xFF, 0xD0, 0x60, 0xFF}, red[4] = {0xFF, 0x90, 0x90, 0xFF};
+  const PRow& cur = s.rows[s.cursor];
+  const bool onMod = cur.kind == Kind::Mod;
   {
     const UseFont font(kScrFont);
     DrawText(dl, sc, 82.f, 38.f + std::floor((22.f - static_cast<float>(sFontW + 1)) / 2.f), ModsText(), white);
-    const UseFont small(kScrInfoFont);
-    const char* orderHint = Tr("L / R: move up / down the order");
-    const float hintW = static_cast<float>(TextWidth(orderHint)) * 0.9f * 0.8f;
-    DrawText(dl, sc, 232.f, 41.f, orderHint, grey, hintW > 380.f ? 0.9f * 380.f / hintW : 0.9f, 0.8f);
   }
-  const int shown = std::min(n, kScrRows);
-  s.first = std::clamp(s.first, std::max(0, s.cursor - shown + 1), s.cursor);
-  s.first = std::clamp(s.first, 0, n - shown);
+  if (onMod) {
+    const char* word = s.held ? Tr("DROP") : Tr("MOVE");
+    const float w = kit::Width(word, 0.85f, 1);
+    kit::Prompt(dl, sc, 598.f - 32.f - w, 48.f, {"A"}, word);
+  }
+  const int shown = std::min(nl, kModRows);
+  if (onMod) s.first = std::clamp(s.first, std::max(0, s.cursor - shown + 1), s.cursor);
+  s.first = std::clamp(s.first, 0, std::max(0, nl - shown));
   if (static_cast<int>(s.rowAlpha.size()) != n) s.rowAlpha.assign(n, 0.f);
+  if (static_cast<int>(s.rowOff.size()) != n) s.rowOff.assign(n, 0.f);
   for (int i = 0; i < n; i++) {
     const float target = i == s.cursor ? 255.f : 0.f, step = 255.f * dt / 0.15f;
     float& a = s.rowAlpha[i];
     a = a < target ? std::min(target, a + step) : std::max(target, a - step);
+    float& o = s.rowOff[i];
+    const float slide = kModPitch * dt / 0.13f;
+    o = o > 0.f ? std::max(0.f, o - slide) : std::min(0.f, o + slide);
   }
   const uint8_t pulse = PulseAlpha(s.titleTimer);
+  const uint8_t others = s.held ? 110 : 255;
   for (int i = s.first; i < s.first + shown; i++) {
     const PRow& r = s.rows[i];
     const bool sel = i == s.cursor;
-    const float y = kScrRowTop + kScrPitch * static_cast<float>(i - s.first), mid = y + kScrBarH / 2.f;
-    DrawItem(dl, sc, kOptRowBar, 0.f, y, 640.f, kScrBarH, static_cast<uint8_t>(s.rowAlpha[i]));
+    const float mid = kModTop + kModPitch * static_cast<float>(i - s.first) + s.rowOff[i];
+    const bool held = s.held && sel;
+    DrawItem(dl, sc, kOptRowBar, 0.f, mid - kModBar / 2.f, 640.f, kModBar, static_cast<uint8_t>(s.rowAlpha[i]));
     const UseFont font(kScrFont);
-    if (r.kind == Kind::Apply) {
-      const uint8_t a = Changed() ? 255 : 150;
-      DrawItem(dl, sc, kOptExit, 120.f, mid - 16.f, 400.f, -1.f, a, 16.f);
-      if (sel) DrawItem(dl, sc, kOptExitCursor, 117.f, mid - 19.f, 406.f, -1.f, pulse, 16.f);
-      DrawTextCentred(dl, sc, 120.f, mid - 16.f, 400.f, 32.f, Tr("Apply and restart"), Changed() ? white : grey);
-      continue;
-    }
-    if (r.kind == Kind::Exit) {
-      DrawItem(dl, sc, kOptExit, 437.f, mid - 16.f);
-      if (sel) DrawItem(dl, sc, kOptExitCursor, 434.f, mid - 19.f, -1.f, -1.f, pulse);
-      DrawTextCentred(dl, sc, 437.f, mid - 16.f, 144.f, 32.f, Tr("EXIT"), white);
-      continue;
-    }
     std::string label, value;
-    const uint8_t* labelColour = white;
+    const uint8_t* labelColour = s.held && !held ? dimgrey : white;
     int set = -1;
     if (r.kind == Kind::Mod) {
       const em::ReviewRow& row = s.review.rows[r.index];
-      label = std::to_string(r.index + 1) + ". " + (row.mod != nullptr ? row.mod->manifest.name : row.id);
+      label = row.mod != nullptr ? row.mod->manifest.name : row.id;
       if (row.mod == nullptr) {
         value = Tr("Missing");
-        labelColour = red;
+        if (!s.held) labelColour = red;
       } else {
         set = row.on ? 0 : 1;
-        if (!row.problems.empty() && row.on) labelColour = red;
-        else if (!row.warnings.empty() && row.on) labelColour = amber;
+        if (!s.held) {
+          if (!row.problems.empty() && row.on) labelColour = red;
+          else if (!row.warnings.empty() && row.on) labelColour = amber;
+        }
       }
+      const std::string num = std::to_string(r.index + 1);
+      DrawText(dl, sc, 57.f - static_cast<float>(TextWidth(num.c_str())) / 2.f, std::floor(mid - static_cast<float>(sFontW + 1) / 2.f), num.c_str(),
+               s.held && !held ? dimgrey : white);
     } else {
       label = s.broken[r.index].folderName;
       value = Tr("Can't load");
-      labelColour = red;
+      labelColour = s.held ? dimgrey : red;
     }
-    const float labelW = static_cast<float>(TextWidth(label.c_str())), room = 321.f - 8.f - 74.f;
-    DrawText(dl, sc, 74.f, std::floor(mid - static_cast<float>(sFontW + 1) / 2.f), label.c_str(), labelColour, labelW > room ? room / labelW : 1.f);
+    const float labelW = static_cast<float>(TextWidth(label.c_str()));
+    if (held) {
+      const float pw = std::clamp(labelW + 44.f, 150.f, 232.f);
+      DrawButton(dl, sc, 70.f, pw, mid, label.c_str(), true, 255, pulse, white);
+      kit::Spr(dl, sc, kBagArrows, 23, 1, 13, 8, 20.f, mid - 20.f, 13, 8);
+      kit::Spr(dl, sc, kBagArrows, 23, 48, 13, 8, 20.f, mid + 12.f, 13, 8);
+    } else {
+      const float room = 321.f - 8.f - 82.f;
+      DrawText(dl, sc, 82.f, std::floor(mid - static_cast<float>(sFontW + 1) / 2.f), label.c_str(), labelColour, labelW > room ? room / labelW : 1.f);
+    }
     const float boxY = mid - 12.f;
     if (set >= 0) {
-      DrawItem(dl, sc, set == 0 ? kOptChoice : kOptChoice2, set == 0 ? 321.f : 449.f, boxY, -1.f, -1.f, sel ? pulse : 255);
-      DrawTextCentred(dl, sc, 321.f, boxY, 121.f, 24.f, Tr("On"), white);
-      DrawTextCentred(dl, sc, 449.f, boxY, 121.f, 24.f, Tr("Off"), white);
+      const uint8_t a = held ? 255 : others;
+      DrawItem(dl, sc, set == 0 ? kOptChoice : kOptChoice2, set == 0 ? 321.f : 449.f, boxY, -1.f, -1.f, sel && !s.held ? pulse : a);
+      DrawTextCentred(dl, sc, 321.f, boxY, 121.f, 24.f, Tr("On"), s.held && !held ? dimgrey : white);
+      DrawTextCentred(dl, sc, 449.f, boxY, 121.f, 24.f, Tr("Off"), s.held && !held ? dimgrey : white);
+      if (sel && !s.held) {
+        kit::Spr(dl, sc, kBagArrows, 2, 15, 10, 17, 304.f, mid - 8.5f, 10, 17);
+        kit::Spr(dl, sc, kBagArrows, 2, 15, 10, 17, 584.f, mid - 8.5f, -10, 17);
+      }
     } else {
       DrawItem(dl, sc, kOptChoice, 321.f, boxY, 249.f, -1.f, 110, 14.f);
       DrawTextCentred(dl, sc, 321.f, boxY, 249.f, 24.f, value.c_str(), grey);
     }
   }
-  if (s.first > 0) DrawTriangle(dl, sc, 320.f, 75.f, 16.f, 0, IM_COL32(0xF0, 0xF0, 0xF0, 0xE0));
-  if (s.first + shown < n) DrawTriangle(dl, sc, 320.f, 328.f, 16.f, 1, IM_COL32(0xF0, 0xF0, 0xF0, 0xE0));
+  if (s.first > 0) kit::Spr(dl, sc, kBagArrows, 23, 1, 13, 8, 313.f, 70.f, 13, 8);
+  if (s.first + shown < nl) kit::Spr(dl, sc, kBagArrows, 23, 48, 13, 8, 313.f, kModTop + kModPitch * static_cast<float>(shown) - 24.f, 13, 8);
+  {
+    const UseFont font(kScrFont);
+    const float mid = kModButtonsMid;
+    for (int i = nl; i < n; i++) {
+      const PRow& r = s.rows[i];
+      const bool sel = i == s.cursor;
+      if (r.kind == Kind::Reload) {
+        const bool on = PortXD_ModReloadEnabled();
+        DrawButton(dl, sc, 150.f, 140.f, mid, Tr("RELOAD"), sel && !s.held, static_cast<uint8_t>((on ? 255 : 150) * (s.held ? 110 : 255) / 255), pulse,
+                   on && !s.held ? white : grey);
+      } else if (r.kind == Kind::Apply) {
+        const bool on = Changed();
+        DrawButton(dl, sc, 303.f, 124.f, mid, Tr("APPLY"), sel && !s.held, static_cast<uint8_t>((on ? 255 : 150) * (s.held ? 110 : 255) / 255), pulse,
+                   on && !s.held ? white : grey);
+      } else {
+        DrawButton(dl, sc, 441.f, 136.f, mid, Tr("EXIT"), sel && !s.held, s.held ? 110 : 255, pulse, s.held ? grey : white);
+      }
+    }
+  }
   {
     const UseFont font(kScrInfoFont);
     std::string summary, text;
     Details(s.rows[s.cursor], summary, text);
+    if (s.held && onMod) {
+      summary = RowName(cur);
+      text = Fmt(Tr("Move %s up or down, then press A to put it down there."), RowName(cur).c_str());
+    }
     const float summaryW = std::max(1.f, static_cast<float>(TextWidth(summary.c_str())));
     DrawText(dl, sc, 90.f, 352.f, summary.c_str(), white, std::min(0.9f, 452.f / summaryW), 0.85f);
     struct Fit {
@@ -2844,56 +4022,93 @@ void Draw(ImDrawList* dl, float dt) {
 
 bool Frame(void*, const PortMenuInput* in) {
   const int n = static_cast<int>(s.rows.size());
+  const int nl = FirstButton();
   int event = 0;
   const int before = s.cursor;
-  if (in->repeat & PAD_BUTTON_UP) s.cursor = (s.cursor + n - 1) % n;
-  if (in->repeat & PAD_BUTTON_DOWN) s.cursor = (s.cursor + 1) % n;
-  if (s.cursor != before) {
-    event = kSoundMove;
-    s.notice.clear();
-  }
-  const PRow r = s.rows[s.cursor];
+  const bool up = (in->repeat & PAD_BUTTON_UP) != 0, down = (in->repeat & PAD_BUTTON_DOWN) != 0;
   const bool left = (in->repeat & PAD_BUTTON_LEFT) != 0, right = (in->repeat & PAD_BUTTON_RIGHT) != 0;
-  const bool a = (in->pressed & PAD_BUTTON_A) != 0;
+  const bool a = (in->pressed & PAD_BUTTON_A) != 0, b = (in->pressed & PAD_BUTTON_B) != 0;
   bool close = false;
-  if (r.kind == Kind::Mod) {
-    const em::ReviewRow& row = s.review.rows[r.index];
-    auto& entry = s.list.Active().mods[static_cast<size_t>(r.index)];
-    if (row.mod != nullptr && (left || right || a)) {
-      entry.second = left ? true : right ? false : !entry.second;
-      s.notice.clear();
-      Rebuild();
-      event = kSoundMove;
+  if (s.held) {
+    if (s.cursor >= nl || s.rows[s.cursor].kind != Kind::Mod) {
+      s.held = false;
+    } else if (up || down) {
+      const int dir = up ? -1 : 1;
+      if (em::MoveMod(s.list.Active(), static_cast<size_t>(s.rows[s.cursor].index), dir)) {
+        s.cursor += dir;
+        Rebuild();
+        if (s.rowOff.size() != s.rows.size()) s.rowOff.assign(s.rows.size(), 0.f);
+        s.rowOff[static_cast<size_t>(s.cursor)] = -static_cast<float>(dir) * kModPitch;
+        s.rowOff[static_cast<size_t>(s.cursor - dir)] = static_cast<float>(dir) * kModPitch;
+        s.notice.clear();
+        event = kSoundMove;
+        std::fprintf(stderr, "[mods menu] moved %s to place %d\n", RowName(s.rows[s.cursor]).c_str(), s.rows[s.cursor].index + 1);
+      }
     }
-    if (row.mod != nullptr && row.mod->manifest.scripts && (in->pressed & PAD_TRIGGER_Z) != 0) {
-      auto& off = s.list.Active().scriptsOff;
-      if (off.count(entry.first) != 0) off.erase(entry.first);
-      else off.insert(entry.first);
-      s.notice.clear();
-      Rebuild();
-      event = kSoundMove;
+    if (s.held && (a || b)) {
+      s.held = false;
+      event = a ? kSoundChoose : kSoundBack;
+      std::fprintf(stderr, "[mods menu] put down %s at place %d\n", RowName(s.rows[s.cursor]).c_str(), s.rows[s.cursor].index + 1);
     }
-    const int dir = (in->pressed & (PAD_TRIGGER_L | PAD_BUTTON_X)) != 0 ? -1 : (in->pressed & (PAD_TRIGGER_R | PAD_BUTTON_Y)) != 0 ? 1 : 0;
-    if (dir != 0 && em::MoveMod(s.list.Active(), static_cast<size_t>(r.index), dir)) {
-      s.cursor += dir;
-      s.notice.clear();
-      Rebuild();
-      event = kSoundMove;
+    if (event != 0) PlayMenuSound(kTitleMenu, event);
+  } else {
+    const PRow cr = s.rows[s.cursor];
+    if (IsButton(cr.kind)) {
+      if (up) s.cursor = nl > 0 ? nl - 1 : s.cursor;
+      else if (down) s.cursor = 0;
+      else if (left && s.cursor > nl) s.cursor--;
+      else if (right && s.cursor + 1 < n) s.cursor++;
+    } else {
+      if (up) s.cursor = s.cursor > 0 ? s.cursor - 1 : ApplyIndex();
+      if (down) s.cursor = s.cursor + 1 < nl ? s.cursor + 1 : ApplyIndex();
     }
-  } else if (r.kind == Kind::Apply && a) {
-    if (Apply()) close = true;
-    else event = kSoundBack;
-  } else if (r.kind == Kind::Exit && a) {
-    close = true;
+    if (s.cursor != before) {
+      event = kSoundMove;
+      s.notice.clear();
+    }
+    const PRow r = s.rows[s.cursor];
+    if (r.kind == Kind::Mod) {
+      const em::ReviewRow& row = s.review.rows[r.index];
+      auto& entry = s.list.Active().mods[static_cast<size_t>(r.index)];
+      if (row.mod != nullptr && (left || right) && entry.second != left) {
+        entry.second = left;
+        s.notice.clear();
+        Rebuild();
+        event = kSoundMove;
+        std::fprintf(stderr, "[mods menu] switched %s %s\n", RowName(r).c_str(), left ? "on" : "off");
+      }
+      if (a) {
+        std::fprintf(stderr, "[mods menu] picked up %s (place %d)\n", RowName(r).c_str(), r.index + 1);
+        s.held = true;
+        s.notice.clear();
+        event = kSoundChoose;
+      }
+      if (row.mod != nullptr && row.mod->manifest.scripts && (in->pressed & PAD_TRIGGER_Z) != 0) {
+        auto& off = s.list.Active().scriptsOff;
+        if (off.count(entry.first) != 0) off.erase(entry.first);
+        else off.insert(entry.first);
+        s.notice.clear();
+        Rebuild();
+        event = kSoundMove;
+      }
+    } else if (r.kind == Kind::Apply && a) {
+      if (Apply()) close = true;
+      else event = kSoundBack;
+    } else if (r.kind == Kind::Reload && a) {
+      s.notice = PortXD_ModReloadMenu();
+      event = PortXD_ModReloadEnabled() ? kSoundChoose : kSoundBack;
+    } else if (r.kind == Kind::Exit && a) {
+      close = true;
+    }
+    if (b) {
+      close = true;
+      event = kSoundBack;
+    } else if (close) {
+      event = kSoundChoose;
+    }
+    if (event != 0) PlayMenuSound(kTitleMenu, event);
+    if (close) return false;
   }
-  if (in->pressed & PAD_BUTTON_B) {
-    close = true;
-    event = kSoundBack;
-  } else if (close) {
-    event = kSoundChoose;
-  }
-  if (event != 0) PlayMenuSound(kTitleMenu, event);
-  if (close) return false;
   const auto now = std::chrono::steady_clock::now();
   float dt = s.last.time_since_epoch().count() == 0 ? 1.f / 60.f : std::chrono::duration<float>(now - s.last).count();
   s.last = now;
@@ -2906,15 +4121,15 @@ bool Frame(void*, const PortMenuInput* in) {
     const Screen sc = ScreenNow();
     const uint8_t white[4] = {0xF0, 0xF0, 0xF0, 0xFF};
     for (int i = 0; i < n; i++) {
-      std::string label = i == s.cursor ? "> " : "  ";
+      std::string label = i == s.cursor ? (s.held ? "* " : "> ") : "  ";
       const PRow& row = s.rows[i];
       if (row.kind == Kind::Mod) {
         const em::ReviewRow& rr = s.review.rows[row.index];
-        label += (rr.on ? "[on]  " : "[off] ") + (rr.mod != nullptr ? rr.mod->manifest.name : rr.id);
+        label += std::to_string(row.index + 1) + (rr.on ? " [on]  " : " [off] ") + (rr.mod != nullptr ? rr.mod->manifest.name : rr.id);
       } else if (row.kind == Kind::Broken) {
         label += Fmt(Tr("(can't load) %s"), s.broken[row.index].folderName.c_str());
       } else {
-        label += row.kind == Kind::Apply ? Tr("Apply and restart") : Tr("EXIT");
+        label += row.kind == Kind::Apply ? Tr("APPLY") : row.kind == Kind::Reload ? Tr("RELOAD") : Tr("EXIT");
       }
       DrawText(dl, sc, 80.f, 60.f + 30.f * i, label.c_str(), white);
     }
@@ -2957,6 +4172,30 @@ void RunSub(const PortMenuPage* page) {
   if (page->open) page->open(page->ctx);
 }
 
+bool PreviewBox(ImDrawList* dl, const Screen& sc, int cursor, float age) {
+  if (!sTitleShown.any) return false;
+  TitleCapture cap = sTitleShown;
+  cap.info.seen = false;
+  DrawTitleEntry(dl, cap, true);
+  const float bx = static_cast<float>(cap.box.offX + cap.box.sp.x + kTitleDx);
+  const float by = static_cast<float>(cap.box.offY + cap.box.sp.y);
+  const float bw = static_cast<float>(std::abs(cap.box.sp.w)), bh = static_cast<float>(std::abs(cap.box.sp.h));
+  const bool below = std::getenv("XD_PREVIEW_EXTRAS") != nullptr && std::strcmp(std::getenv("XD_PREVIEW_EXTRAS"), "below") == 0;
+  const char* names[3] = {Tr("ONLINE"), Tr("MODS"), Tr("SETTINGS")};
+  const float pitch = below ? 26.f : 31.f, full = 14.f + 3.f * pitch;
+  const float grow = std::min(1.f, age / 0.16f), t = 1.f - (1.f - grow) * (1.f - grow);
+  const float x0 = below ? bx - 6.f : bx - 30.f, x1 = std::max(x0 + 190.f, below ? bx + bw + 6.f : bx + bw + 22.f);
+  const float y0 = below ? by + bh + 3.f : by - 2.f, y1 = y0 + 14.f + (full - 14.f) * t + (below ? 0.f : 0.f);
+  kit::Nine(dl, sc, kit::kYesNoMenu, kit::kYesNoFirst, kit::kYesNoLast, x0, y0, x1, y1);
+  if (t < 0.7f) return true;
+  for (int i = 0; i < 3; i++) {
+    const float y = y0 + 7.f + pitch * static_cast<float>(i);
+    if (i == cursor) kit::ListPill(dl, sc, x0 + 14.f, x1 - 14.f, y, false);
+    const bool grey = (i == 0 && xd::xg::Off(xd::xg::Feature::Online) != nullptr) || (i == 1 && xd::xg::Off(xd::xg::Feature::Mods) != nullptr);
+    kit::Text(dl, sc, x0 + 14.f + 30.f, y + 4.f, names[i], grey ? kit::kDim : kit::kText, 1.f, 0.f, 1);
+  }
+  return true;
+}
 bool Frame(void*, const PortMenuInput* in) {
   const Screen sc = ScreenNow();
   ImDrawList* dl = ImGui::GetForegroundDrawList();
@@ -2970,7 +4209,8 @@ bool Frame(void*, const PortMenuInput* in) {
     return true;
   }
   const bool top = level == Level::Top;
-  const int n = top ? 4 : 4;
+  const bool preview = top && PreviewOn();
+  const int n = preview ? 3 : 4;
   if (in->repeat & PAD_BUTTON_UP) cursor = (cursor + n - 1) % n, PlayMenuSound(kTitleMenu, kSoundMove);
   if (in->repeat & PAD_BUTTON_DOWN) cursor = (cursor + 1) % n, PlayMenuSound(kTitleMenu, kSoundMove);
   if (in->pressed & PAD_BUTTON_B) {
@@ -3007,6 +4247,9 @@ bool Frame(void*, const PortMenuInput* in) {
     } else {
       PlayMenuSound(kTitleMenu, kSoundBack);
     }
+  }
+  if (preview) {
+    if (PreviewBox(dl, sc, cursor, age.Tick())) return true;
   }
   kit::Backdrop(dl, sc);
   kit::Header(dl, sc, top ? Tr("EXTRAS") : Tr("ONLINE"));
@@ -3122,6 +4365,7 @@ void Filter(PADStatus* status) {
   }
   const auto* w = static_cast<const WinWorkLayout*>(windowSearchID(windowGetActiveID()));
   if (ol::D.on) ol::Drive(status, w);
+  if (xd::replay::Watching() || xd::replay::KeysScripted()) xd::replay::PadPoll(status, IsTitleMenu(w) && w->state == 2 && w->pad_a4 == 0);
   if (ol::ResumeDue(w)) { sPageFromTitle = true; PortMenu_Open(&ol::kPage); }
   if (xd::picker::Current() != xd::picker::Intent::None) {
     const bool open = IsTitleMenu(w) && w->state == 2 && w->pad_a4 == 0 && w->cursor >= 0 && w->cursor < 5;
@@ -3295,19 +4539,28 @@ int Para(ImDrawList* dl, float x, float y, float w, const std::string& t, const 
   return kit::Para(dl, ScreenNow(), x, y, w, t, col, scale, pitch, maxLines);
 }
 float Width(const std::string& t, float scale, int font) { return kit::Width(t, scale, static_cast<uint16_t>(font)); }
+float Prompt(ImDrawList* dl, float x, float cy, std::initializer_list<const char*> keys, const std::string& word) { return kit::Prompt(dl, ScreenNow(), x, cy, keys, word); }
+int NpcPages(const std::string& title, const std::string& text) { return kit::NpcPages(title, text); }
+bool NpcMessage(ImDrawList* dl, const std::string& title, const std::string& text, int page) { return kit::NpcMessage(dl, ScreenNow(), title, text, page); }
+int ChoiceRowsFit() { return kit::ChoiceRowsFit(); }
+void ChoiceBox(ImDrawList* dl, const std::vector<std::string>& rows, int cursor, int top) { kit::ChoiceBox(dl, ScreenNow(), rows, cursor, top); }
 }
+
+void PortXD_TextFitAudit(const char* path);
 
 extern "C" {
 
 void PortXD_SettingsMenuInit(void) {
+  if (fit::On()) std::atexit(fit::Finish);
   const es::Registry& reg = es::Global();
   PortAudio_SetVolume(static_cast<float>(reg.Int("audio.master_volume").Get()) / 100.f);
   PortXD_AudioCategoriesInit();
   ApplyMenuSoundVolume();
-  PortMenu_SetScriptPage(EnvIs("XD_MENU_SCRIPT_PAGE", "online") ? &ot::kPage : EnvIs("XD_MENU_SCRIPT_PAGE", "battle") ? &ol::kPage : &kPage);
+  PortMenu_SetScriptPage(EnvIs("XD_MENU_SCRIPT_PAGE", "online") ? &ot::kPage : EnvIs("XD_MENU_SCRIPT_PAGE", "battle") ? &ol::kPage : EnvIs("XD_MENU_SCRIPT_PAGE", "mods") ? &mm::kModsPage : EnvIs("XD_MENU_SCRIPT_PAGE", "refusal") ? &ng::kRefusalPage : EnvIs("XD_MENU_SCRIPT_PAGE", "note") ? &ng::kNotePage : &kPage);
   PortXD_TrainerCardScriptPage();
   if (std::getenv("XD_LOADSCREEN_TEST") != nullptr) PortMenu_SetScriptPage(&ls::kPage);
   PortVideo_SetNoticeDrawer(&kit::Notice);
+  xd::replay::HookBattles();
   if (xd::picker::Current() == xd::picker::Intent::NewGame) ls::CoverStart(ls::Cover::NewGame, xd::pt::RestartLabel(), "started again for the New Game");
   if (xd::picker::Current() == xd::picker::Intent::Continue) ls::CoverStart(ls::Cover::Continue, "", "started again for the chosen save");
   if (const char* r = std::getenv("XD_ONLINE_ROOM_RESUME"); r != nullptr && r[0] != '\0') ls::CoverRoomResume();
@@ -3333,7 +4586,7 @@ void PortXD_SettingsMenuInit(void) {
     sOn = true;
   }
   if (sOn || xd::pt::ScreenEnabled() || xd::pt::ChallengesPossible() || xd::pt::EngineQuestionPossible() || xd::pt::TimerWatch() || xd::pt::PickerPossible() || std::getenv("XD_ONLINE_ROOM_RESUME") != nullptr ||
-      xd::picker::Current() != xd::picker::Intent::None) {
+      xd::picker::Current() != xd::picker::Intent::None || xd::replay::Watching() || xd::replay::KeysScripted()) {
     PortInput_SetPadFilter(Filter);
   }
   if (sOn) {
@@ -3352,9 +4605,10 @@ u8 PortXD_SndPushGroup(void* prj, u16 gid, void* samples, void* sampdir, void* p
 void PortXD_WideMenuSprite(const void* window, const void* sprite);
 void PortXD_WideMenuSpriteDone(void);
 static void MenuWinSpriteDraw(void* window, void* sprite);
+bool PortXD_MegaRowSprite(void* window, void* sprite, void (*draw)(void*, void*));
 void PortXD_MenuWinSpriteDraw(void* window, void* sprite) {
   PortXD_WideMenuSprite(window, sprite);
-  MenuWinSpriteDraw(window, sprite);
+  if (!PortXD_MegaRowSprite(window, sprite, &MenuWinSpriteDraw)) MenuWinSpriteDraw(window, sprite);
   PortXD_WideMenuSpriteDone();
 }
 static void MenuWinSpriteDraw(void* window, void* sprite) {
@@ -3439,7 +4693,15 @@ void PortXD_TitleMenuPrint2(s32 layer, s32 x, s32 y, s32 color, s32 msg) {
 }
 
 void PortXD_SettingsMenuOverlay(void) {
+  if (const char* a = std::getenv("XD_TEXT_FIT_AUDIT")) {
+    static bool done = false;
+    if (!done && a[0] != '\0' && ImGui::GetCurrentContext() != nullptr) {
+      done = true;
+      PortXD_TextFitAudit(a);
+    }
+  }
   ProbeItems();
+  xd::scriptext::DrawPage();
   if (const char* t = std::getenv("XD_SFX_GAME_TEST")) {
     static bool done = false;
     unsigned frame = 0, snd = 0;
@@ -3450,6 +4712,27 @@ void PortXD_SettingsMenuOverlay(void) {
       GSsndPlayNow(snd);
     }
   }
+  if (const char* t = std::getenv("XD_NOTICE_TEST")) {
+    static bool done = false;
+    unsigned frame = 0;
+    int at = 0;
+    if (!done && std::sscanf(t, "%u:%n", &frame, &at) == 1 && at > 0 && PortVI_GetFlipCount() >= frame) {
+      done = true;
+      PortVideo_Notice(t + at, 6.0);
+    }
+  }
+  if (const char* t = std::getenv("XD_NOTE_TEST")) {
+    static bool done = false;
+    unsigned frame = 0;
+    float seconds = 0.f;
+    int at = 0;
+    if (!done && std::sscanf(t, "%u:%f:%n", &frame, &seconds, &at) == 2 && at > 0 && PortVI_GetFlipCount() >= frame) {
+      done = true;
+      PortXD_ShowNote(t + at, seconds);
+    }
+  }
+  xd::replay::BarFrame();
+  if (xd::replay::BarView bar; xd::replay::BarGet(&bar)) xd::replay::DrawBar(bar);
   if (!PortMenu_Active()) ng::DrawNote();
   if (!PortMenu_Active()) ls::CoverDraw();
   if (!sOn || PortMenu_Active()) return;
@@ -3467,13 +4750,19 @@ void PortXD_SettingsMenuOverlay(void) {
     sShown.any = false;
     return;
   }
-  DrawEntry(ImGui::GetBackgroundDrawList(), sShown, sSelected);
+  Capture shown = sShown;
+  if (sFrozenValid && flip <= sClosedFlip + 1 && std::fabs(PortVideo_WideScale() - sFrozenWide) > 0.001f) {
+    const int d = sFrozenShift - shown.button.shift;
+    for (Shot* sh : {&shown.button, &shown.bar, &shown.flash, &shown.text, &shown.hand}) sh->offX = static_cast<s16>(sh->offX + d);
+  }
+  DrawEntry(ImGui::GetBackgroundDrawList(), shown, sSelected);
 }
 
 }
 
 void PortXD_RegisterOnlineBattlePage(const PortMenuPage* page) { ex::sBattle = page; }
 namespace xd::online {
+void SpectatorDriveVsMenus() { ::ol::D = ::ol::Driver(); ::ol::D.on = true; PortInput_SetPadFilter(Filter); }
 void LobbyBattleOver() { PortMenu_Open(&::ol::kResultPage); }
 }
 int PortXD_OnlineScreenKind() { return sOnlineKind; }
@@ -3504,6 +4793,10 @@ extern "C" int PortXD_ActiveWindowState(int* id) {
   return static_cast<int>(w->state) + 256 * static_cast<int>(w->pad_a4);
 }
 bool PortXD_OpenContinueQuestion() { return PortMenu_Open(&ng::kQuestionPage); }
+bool PortXD_OpenContinueRefusal(const std::string& head, const std::string& red, const std::string& soft, const std::string& who) {
+  ng::sRefusal = {head, red, soft, who};
+  return PortMenu_Open(&ng::kRefusalPage);
+}
 bool PortXD_OpenEngineQuestion() { return PortMenu_Open(&ng::kEnginePage); }
 bool PortXD_OpenStarterPick() { return PortMenu_Open(&ng::sk::kPage); }
 bool PortXD_ShowRuleMessage(const std::string& text) {
@@ -3517,3 +4810,194 @@ void PortXD_ShowNote(const std::string& text, float seconds) {
   ng::noteUntil = std::chrono::steady_clock::now() + std::chrono::milliseconds(static_cast<int>(seconds * 1000.f));
 }
 
+void DrawBarOn(ImDrawList* dl, const xd::replay::BarView& v);
+void xd::replay::DrawBar(const xd::replay::BarView& v) { DrawBarOn(ImGui::GetBackgroundDrawList(), v); }
+void DrawBarOn(ImDrawList* dl, const xd::replay::BarView& v) {
+  const Screen sc = ScreenNow();
+  const uint8_t amber[4] = {0xFF, 0xB8, 0x30, 0xFF};
+  float left = 0.f, right = 640.f;
+  kit::WideSpan(sc, left, right);
+  const bool edges = es::Global().Find("video.widescreen_edge_menus") != es::kNoSetting && es::Global().Bool("video.widescreen_edge_menus").Get() &&
+                     PortVideo_WideScale() > 1.001f;
+  const float x0 = (edges ? left : 0.f) + 17.f, x1 = (edges ? right : 640.f) - 17.f;
+  const auto glass = [&](float ax, float ay, float bx, float by) {
+    if (!kit::Nine(dl, sc, kit::kMsgMenu, kit::kMsgFirst, kit::kMsgLast, ax, ay, bx, by, 255, 120)) kit::Window(dl, sc, ax, ay, bx, by, false, 200);
+  };
+  std::string turnText = Fmt(Tr("TURN %d / %d"), std::max(1, v.turn), std::max(v.turns, std::max(1, v.turn)));
+  if (v.turns == 0) turnText = Fmt(Tr("TURN %d"), std::max(1, v.turn));
+  char speedText[16];
+  std::snprintf(speedText, sizeof speedText, v.speed < 1.f ? (v.speed < 0.3f ? "x0.25" : "x0.5") : "x%d", static_cast<int>(v.speed + 0.5f));
+  if (!v.full) {
+    std::string right2 = v.paused ? std::string(Tr("PAUSED")) : v.speed != 1.f ? std::string(speedText) : std::string();
+    const float w = kit::Width(turnText, 1.f, 1) + (right2.empty() ? 0.f : 22.f + kit::Width(right2, 1.f, 1)) + 44.f;
+    const float tx = 320.f - w / 2.f;
+    glass(tx, 4.f, tx + w, 38.f);
+    kit::Text(dl, sc, tx + 22.f, 9.f, turnText, kit::kText, 1.f, 0.f, 1);
+    if (!right2.empty()) kit::Text(dl, sc, tx + 22.f + kit::Width(turnText, 1.f, 1) + 22.f, 9.f, right2, v.paused ? kit::kText : amber, 1.f, 0.f, 1);
+    return;
+  }
+  const float oy = -64.f;
+  const std::string state = v.finished ? std::string(Tr("FINISHED")) : v.paused ? std::string(Tr("PAUSED")) : std::string(Tr("PLAYING"));
+  const float tabW = kit::Width(turnText, 1.f, 1) + 26.f + kit::Width(state, 1.f, 1) + 44.f;
+  glass(x0, 320.f + oy, x0 + tabW, 354.f + oy);
+  kit::Text(dl, sc, x0 + 22.f, 325.f + oy, turnText, kit::kText, 1.f, 0.f, 1);
+  kit::Text(dl, sc, x0 + 22.f + kit::Width(turnText, 1.f, 1) + 26.f, 325.f + oy, state, kit::kText, 1.f, 0.f, 1);
+  if (v.camera) kit::Text(dl, sc, x0 + tabW + 14.f, 326.f + oy, Tr("CAMERA"), amber, 0.85f, 0.f, 1);
+  glass(x0, 361.f + oy, x1, 440.f + oy);
+  const float tx0 = x0 + 38.f, tx1 = x1 - 38.f, ty0 = 369.f + oy, ty1 = 385.f + oy;
+  kit::Spr(dl, sc, 0x16BE, 2, 15, 10, 17, x0 + 16.f, 368.5f + oy, 10, 17);
+  kit::Spr(dl, sc, 0x16BE, 2, 15, 10, 17, x1 - 26.f, 368.5f + oy, -10, 17);
+  dl->AddRectFilled(sc.At(tx0 - 1.f, ty0 - 1.f), sc.At(tx1 + 1.f, ty1 + 1.f), IM_COL32(0xB8, 0xB8, 0xC0, 0xE0), 2.f * sc.s);
+  dl->AddRectFilled(sc.At(tx0, ty0), sc.At(tx1, ty1), IM_COL32(0x18, 0x18, 0x1C, 0xF0), 1.5f * sc.s);
+  const int turns = std::max(v.turns, std::max(1, v.turn));
+  const float seg = (tx1 - tx0) / static_cast<float>(turns);
+  const int cur = std::clamp(v.turn, 1, turns);
+  const float knobX = tx0 + seg * (static_cast<float>(cur) - 0.5f);
+  dl->AddRectFilled(sc.At(tx0, ty0 + 1.f), sc.At(std::min(tx1, knobX), ty1 - 1.f), IM_COL32(0x22, 0xE0, 0x22, 0xFF));
+  for (int i = 1; i < turns; i++) {
+    const float tx = tx0 + seg * static_cast<float>(i);
+    dl->AddLine(sc.At(tx, ty0 + 1.f), sc.At(tx, ty1 - 1.f), IM_COL32(0x10, 0x10, 0x14, 0xC0), std::max(1.f, 0.6f * sc.s));
+  }
+  kit::Spr(dl, sc, 0x16BD, 1, 144, 31, 31, knobX - 12.f, (ty0 + ty1) / 2.f - 13.f, 24, 24);
+  const bool all = seg >= 17.f;
+  for (int i = 1; i <= turns; i++) {
+    if (!all && i != 1 && i != turns && i != cur && i % 5 != 0) continue;
+    if (!all && i != cur && std::abs(i - cur) < 2) continue;
+    const std::string n = std::to_string(i);
+    const bool now = i == cur;
+    const float sz = now ? 0.62f : 0.5f;
+    const float w = kit::Width(n, sz, now ? 1 : 0);
+    kit::Text(dl, sc, tx0 + seg * (static_cast<float>(i) - 0.5f) - w / 2.f, 388.f + oy, n, now ? kit::kText : kit::kDim, sz, 0.f, now ? 1 : 0);
+  }
+  const float cy = 417.f + oy;
+  float px = x0 + 30.f;
+  px += kit::Key(dl, sc, px + 11.f, cy, "L", 1.f) + 6.f;
+  kit::Text(dl, sc, px, cy - 10.f, Tr("SPEED"), kit::kText, 0.85f, 0.f, 1);
+  px += kit::Width(Tr("SPEED"), 0.85f, 1) + 10.f;
+  kit::Text(dl, sc, px, cy - 10.f, speedText, amber, 0.85f, 0.f, 1);
+  px += kit::Width(speedText, 0.85f, 1) + 10.f;
+  kit::Key(dl, sc, px + 11.f, cy, "R", 1.f);
+  const std::string play = v.finished ? std::string() : v.paused ? std::string(Tr("PLAY")) : std::string(Tr("PAUSE"));
+  if (!play.empty()) {
+    const float pw = 26.f + kit::Width(play, 0.85f, 1);
+    const float cx = (x0 + x1) / 2.f - pw / 2.f;
+    kit::Key(dl, sc, cx + 11.f, cy, "A", 1.f);
+    kit::Text(dl, sc, cx + 29.f, cy - 10.f, play, kit::kText, 0.85f, 0.f, 1);
+  }
+  const float hw = 26.f + kit::Width(Tr("HIDE"), 0.85f, 1);
+  const float hx = x1 - 34.f - hw;
+  kit::Key(dl, sc, hx + 11.f, cy, "Y", 1.f);
+  kit::Text(dl, sc, hx + 29.f, cy - 10.f, Tr("HIDE"), kit::kText, 0.85f, 0.f, 1);
+}
+
+void PortXD_TextFitAudit(const char* path) {
+  FILE* out = std::fopen(path, "w");
+  if (out == nullptr) return;
+  fit::sFit.out = out;
+  ImDrawList tmp(ImGui::GetDrawListSharedData());
+  const Screen sc = ScreenNow();
+  long cases = 0, problems = 0, cuts = 0, narrowed = 0, shorts = 0;
+  std::string lang;
+  const std::function<void(const std::string&, const std::function<void()>&)> run = [&](const std::string& scene, const std::function<void()>& fn) {
+    tmp._ResetForNewFrame();
+    fit::sFit.scene = lang + " " + scene;
+    fit::sFit.noDraw = true;
+    fit::sFit.text.clear(), fit::sFit.art.clear(), fit::sFit.regions.clear(), fit::sFit.notes.clear();
+    fn();
+    fit::sFit.noDraw = false;
+    const std::vector<std::string> bad = fit::Check();
+    for (const std::string& n : fit::sFit.notes) {
+      if (n[0] == 'C') cuts++, std::fprintf(out, "[textfit] scrolled-or-cut %s: %s\n", fit::sFit.scene.c_str(), n.c_str() + 1);
+      else if (n[0] == 'N') narrowed++, std::fprintf(out, "[textfit] narrowed %s: %s\n", fit::sFit.scene.c_str(), n.c_str() + 1);
+      else shorts++;
+    }
+    for (const std::string& b : bad) std::fprintf(out, "[textfit] %s\n", b.c_str());
+    fit::sFit.scene.clear();
+    problems += static_cast<long>(bad.size());
+    cases++;
+  };
+  fit::sFit.audit = true;
+  fit::sFit.checked = 0;
+  for (const char* id : {"en", "fr", "de", "it", "es", "ja"}) {
+    engine::i18n::SetLanguage(id);
+    lang = id;
+    std::fprintf(out, "[textfit] language %s\n", id);
+    for (const Row& r : kRows) {
+      if (r.id == nullptr) continue;
+      const auto forms = RowValueForms(r);
+      for (const auto& f : forms) {
+        for (int sel = 0; sel < 2; sel++) {
+          run(std::string("bag ") + r.id + " = '" + f.first + "' sel" + std::to_string(sel), [&] {
+            bag::DrawRow(&tmp, sc, bag::kRowTop, r.label(), f.first, f.second, sel != 0,
+                         sel != 0 && !f.first.empty() && !IsSpecialRow(r) && !IsActionRow(r.id));
+          });
+        }
+      }
+      const std::string d = Description(r);
+      int pages = 1;
+      {
+        const UseFont f(1);
+        pages = std::max(1, (static_cast<int>(WrapPaged(d, 210.f, 196.f, 3).size()) + 2) / 3);
+      }
+      for (int pg = 0; pg < pages; pg++) run(std::string("bag desc ") + r.id + " page " + std::to_string(pg), [&] { bag::DrawDescription(&tmp, sc, d, 0.f, pg); });
+      if (TwoChoices(r)) {
+        std::string l, rt;
+        ChoiceNames(r, l, rt);
+        for (int set = 0; set < 2; set++) {
+          for (int sel = 0; sel < 2; sel++) {
+            run(std::string("title ") + r.id + " two choices set" + std::to_string(set) + " sel" + std::to_string(sel), [&] {
+              DrawScreenRow(&tmp, sc, 120.f, r.label(), sel != 0, 255, set, l, rt, "", "");
+            });
+          }
+        }
+      } else {
+        for (const auto& f : forms) {
+          for (int sel = 0; sel < 2; sel++) {
+            run(std::string("title ") + r.id + " = '" + f.first + "' sel" + std::to_string(sel),
+                [&] { DrawScreenRow(&tmp, sc, 120.f, r.label(), sel != 0, 255, -1, "", "", f.first, f.second); });
+          }
+        }
+      }
+      int tpages = 1;
+      {
+        const UseFont f(kScrInfoFont);
+        tpages = std::max(1, (static_cast<int>(WrapPaged(d, 446.f, 446.f, 2).size()) + 1) / 2);
+      }
+      for (int pg = 0; pg < tpages; pg++) run(std::string("title desc ") + r.id + " page " + std::to_string(pg), [&] { DrawScreenDesc(&tmp, sc, d, 0.f, pg); });
+    }
+    for (int sec = 0; sec < secs::kSections; sec++) {
+      run(std::string("bag plate ") + secs::SectionName(sec), [&] { bag::Plate(&tmp, sc, secs::SectionName(sec)); });
+      run(std::string("title header ") + secs::SectionName(sec), [&] { DrawScreenHeader(&tmp, sc, secs::SectionName(sec)); });
+    }
+    run("bag plate MODS", [&] { bag::Plate(&tmp, sc, Tr("MODS")); });
+    run("bag prompt", [&] { kit::Prompt(&tmp, sc, 380.f, 44.f, {"L", "R"}, Tr("PAGE")); });
+    for (const char* label : {"DEX HELPER", "Quick heal", "An action with a really long name that goes on and on and on for ever"}) {
+      for (int sel = 0; sel < 2; sel++) run(std::string("mods list '") + label + "' sel" + std::to_string(sel), [&] { bag::DrawRow(&tmp, sc, bag::kRowTop, label, "", "", sel != 0, false); });
+    }
+    run("mods list desc", [&] { bag::DrawDescription(&tmp, sc, Fmt(Tr("From the mod %s. Press A to use it."), "A mod with a rather long name indeed"), 0.f, 0); });
+    ng::Audit(run, &tmp, sc);
+    for (int turns : {0, 3, 22, 99}) {
+      for (int full = 0; full < 2; full++) {
+        for (int st = 0; st < 4; st++) {
+          xd::replay::BarView v;
+          v.turn = turns == 0 ? 7 : std::max(1, turns / 2), v.turns = turns, v.full = full != 0, v.paused = st == 1, v.finished = st == 2, v.camera = st == 3;
+          v.speed = st == 1 ? 0.25f : 16.f;
+          run("replay bar turns " + std::to_string(turns) + " full" + std::to_string(full) + " state" + std::to_string(st), [&] { DrawBarOn(&tmp, v); });
+        }
+      }
+    }
+  }
+  fit::sFit.audit = false;
+  std::fprintf(out, "[textfit] AUDIT: %ld cases, %ld problems (%ld cut, %ld narrowed, %ld short forms used)\n", cases, problems, cuts, narrowed, shorts);
+  std::fclose(out);
+  std::fprintf(stderr, "[textfit] audit written to %s: %ld cases, %ld problems\n", path, cases, problems);
+  std::fflush(stderr);
+  std::_Exit(problems == 0 ? 0 : 3);
+}
+
+extern "C" float PortXD_GameTextWidth(const char* text, float scale) { return kit::Width(text, scale, 0); }
+extern "C" void PortXD_GameText(float x, float y, const char* text, uint8_t r, uint8_t g, uint8_t b, uint8_t a, float scale) {
+  const Screen sc = ScreenNow();
+  const uint8_t col[4] = {r, g, b, a};
+  kit::Text(ImGui::GetForegroundDrawList(), sc, x, y, text, col, scale, 0.f, 0);
+}

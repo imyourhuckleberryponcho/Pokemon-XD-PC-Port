@@ -4,7 +4,9 @@
 #include <imgui.h>
 
 #include <cstdint>
+#include <initializer_list>
 #include <string>
+#include <vector>
 
 namespace xd::ui {
 
@@ -34,6 +36,12 @@ void Text(ImDrawList* dl, float x, float y, const std::string& t, const uint8_t*
 void TextC(ImDrawList* dl, float x, float y, float w, const std::string& t, const uint8_t* col, float scale = 1.f, int font = 0);
 int Para(ImDrawList* dl, float x, float y, float w, const std::string& t, const uint8_t* col, float scale, float pitch, int maxLines);
 float Width(const std::string& t, float scale = 1.f, int font = 0);
+float Prompt(ImDrawList* dl, float x, float cy, std::initializer_list<const char*> keys, const std::string& word);
+
+int NpcPages(const std::string& title, const std::string& text);
+bool NpcMessage(ImDrawList* dl, const std::string& title, const std::string& text, int page);
+int ChoiceRowsFit();
+void ChoiceBox(ImDrawList* dl, const std::vector<std::string>& rows, int cursor, int top);
 
 }
 

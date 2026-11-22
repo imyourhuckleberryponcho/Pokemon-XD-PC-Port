@@ -1,7 +1,9 @@
 #include "xd_challenges.h"
 #include "xd_gen4.h"
+#include "xd_gen_rules.h"
 #include "xd_gen4_abilities.h"
 #include "xd_xg.h"
+#include "xd_mod_battle.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -173,16 +175,25 @@ void PortXD_CalcHarness(void* attacker, void* defender, void* attackSide);
 int32_t fightSeqWazaDamageCalc(void* attacker, void* defender, void* attackSide, uint16_t waza, uint16_t iryoku, int32_t zokusei) {
   PortXD_CalcHarness(attacker, defender, attackSide);
   xd::gen4::StageGuard stages(attacker, defender);
+  xd::modbattle::DamageGuard modStages(attacker, defender, waza);
+  if (xd::modbattle::Active() && attacker != nullptr && defender != nullptr) {
+    if (const uint16_t p = xd::modbattle::PowerOf(waza, iryoku, attacker, defender)) iryoku = p;
+  }
   if (Gen4On() && attacker != nullptr && defender != nullptr) {
     if (const uint16_t p = PowerOverride(waza, attacker, defender)) iryoku = p;
   }
   int32_t damage = PortXD_RealDamageCalc(attacker, defender, attackSide, waza, iryoku, zokusei);
+  if (xd::modbattle::Active() && attacker != nullptr && defender != nullptr && damage > 2) {
+    const uint16_t modType = zokusei < 0 ? wazaDB_GetZokuseiDataId(waza) : static_cast<uint16_t>(zokusei);
+    damage = xd::modbattle::Damage(attacker, defender, waza, modType, damage);
+  }
   if (!Gen4On() || attacker == nullptr || defender == nullptr || damage <= 2) {
     return damage;
   }
+  damage = xd::rulegen::DamageRules(attacker, defender, waza, zokusei < 0 ? wazaDB_GetZokuseiDataId(waza) : static_cast<uint16_t>(zokusei), damage);
   const uint16_t atk = fightOutPokemonGetTokuseiDataId(attacker);
   uint16_t def = fightOutPokemonGetTokuseiDataId(defender);
-  if (atk == 104) def = 0;
+  if (atk == 104 || atk == 163 || atk == 164) def = 0;
   if (atk < 77 && def < 77) {
     return damage;
   }
@@ -251,6 +262,7 @@ uint16_t PortXD_Gen4TypeJoutai(uint16_t wazaType, uint16_t defenderType) {
 
 uint8_t PortXD_Gen4GetAvg(uint16_t waza) {
   uint8_t avg = wazaDB_GetAvg(waza);
+  avg = xd::modbattle::Accuracy(waza, avg);
   if (Gen4On()) {
     if (GravityActive() && avg != 0 && avg < 100) avg = static_cast<uint8_t>(avg * 5 / 3 > 100 ? 100 : avg * 5 / 3);
     void* attacker = fightTargetGetPtrAsNowFightType(0x11, 0);
@@ -260,7 +272,7 @@ uint8_t PortXD_Gen4GetAvg(uint16_t waza) {
       return 255;
     }
     if (defender != nullptr && avg != 0 && avg < 255 && fightOutPokemonGetTokuseiDataId(defender) == kSnowCloak &&
-        fightFloorGetNowTenkouDataId(nullptr, 1) == 4 && (attacker == nullptr || fightOutPokemonGetTokuseiDataId(attacker) != 104)) {
+        fightFloorGetNowTenkouDataId(nullptr, 1) == 4 && (attacker == nullptr || (fightOutPokemonGetTokuseiDataId(attacker) != 104 && fightOutPokemonGetTokuseiDataId(attacker) != 163 && fightOutPokemonGetTokuseiDataId(attacker) != 164))) {
       std::fprintf(stderr, "[gen4] ability: Snow Cloak in hail: accuracy %d -> %d\n", avg, avg * 4 / 5);
       return static_cast<uint8_t>(avg * 4 / 5);
     }
@@ -1323,10 +1335,12 @@ extern "C" {
 
 uint32_t PortXD_Gen4NowNimbleness(void* fop, uint8_t useBadge, uint8_t weather, uint16_t rnd, void* hero) {
   uint32_t speed = fightOutPokemonGetNowNimbleness(fop, useBadge, weather, rnd, hero);
+  if (xd::modbattle::Active()) speed = xd::modbattle::Speed(fop, speed);
   if (!Gen4On()) return speed;
   EnsureInstalled();
   Tick();
   if (fop != nullptr && TailwindActive(fop)) speed *= 2;
+  speed = xd::rulegen::ParalysisSpeed(fop, speed);
   speed = xd::gen4::AbilitySpeed(fop, speed);
   if (!TrickRoomActive()) return speed;
   return 65535u - (speed > 65535u ? 65535u : speed);
@@ -1334,6 +1348,10 @@ uint32_t PortXD_Gen4NowNimbleness(void* fop, uint8_t useBadge, uint8_t weather, 
 
 void PortXD_Gen4CallWazaSeq(void* floor, void* script, uint32_t flag) {
   if (!Gen4On() && xd::gen4::Loaded() && !xd::xg::On()) script = RulesOffScript(script);
+  if (xd::modbattle::Active()) {
+    xd::modbattle::EnsureInstalled();
+    if (void* mover = fightTargetGetPtrAsNowFightType(0x11, 0)) xd::modbattle::MoveStarting(mover, fightOutPokemon_GetUseWazaDataId(mover));
+  }
   if (Gen4On()) {
     EnsureInstalled();
     Tick();
@@ -1371,12 +1389,20 @@ void PortXD_Gen4CallWazaSeq(void* floor, void* script, uint32_t flag) {
 }
 
 uint16_t PortXD_Gen4GetType(void* fop, uint8_t index) {
-  const uint16_t t = fightOutPokemonGetZokuseiDataId(fop, index);
+  uint16_t t = fightOutPokemonGetZokuseiDataId(fop, index);
+  if (xd::modbattle::Active()) t = xd::modbattle::TypeOf(fop, index, t);
   if (t == 2 && fop == sRoostMon && fop != nullptr && Gen4On() && fightFloor_GetTurnCount(nullptr) == sRoostTurn) return 9;
   return t;
 }
 
 void PortXD_Gen4ReshuffleEnd(void) {
+  {
+    const auto* modCmd = static_cast<const uint8_t*>(fightSeq_GetWazaSeq());
+    if (modCmd != nullptr && modCmd[1] == 0xF1 && xd::modbattle::Active()) {
+      if (!xd::modbattle::PortCommand(modCmd[2])) fightSeq_NextWazaSeq(5);
+      return;
+    }
+  }
   if (Gen4On()) {
     Tick();
     const auto* cmd = static_cast<const uint8_t*>(fightSeq_GetWazaSeq());
@@ -1419,6 +1445,7 @@ uint32_t PortXD_Gen4SoubiKind(void* fop) {
 }
 
 void PortXD_Gen4SetCritical(void* fw, uint32_t value) {
+  value = xd::modbattle::CriticalValue(value);
   if (value == 2 && Gen4On()) {
     void* def = fightTargetGetPtrAsNowFightType(0x12, 0);
     if (def != nullptr && LuckyChantOn(def)) value = 1;
@@ -1433,6 +1460,7 @@ static bool PowerTricked(void* pokemon) {
   return false;
 }
 uint16_t PortXD_Gen4PhyAtk(void* pokemon) {
+  if (const uint16_t foul = xd::modbattle::PhyAtkRead(pokemon)) return foul;
   if (Gen4On() && PowerTricked(pokemon)) {
     static int shown = 0;
     if (shown++ < 4) std::fprintf(stderr, "[gen4] Power Trick: Attack read as Defense (%u instead of %u)\n", pokemon_GetPhyDef(pokemon), pokemon_GetPhyAtk(pokemon));
@@ -1440,6 +1468,7 @@ uint16_t PortXD_Gen4PhyAtk(void* pokemon) {
   }
   return pokemon_GetPhyAtk(pokemon);
 }
+uint16_t PortXD_ModSpeDef(void* pokemon) { return xd::modbattle::SpeDefRead(pokemon); }
 uint16_t PortXD_Gen4PhyDef(void* pokemon) {
   if (Gen4On() && PowerTricked(pokemon)) {
     static int shown = 0;
@@ -1475,7 +1504,10 @@ void PortXD_Gen4Counter(void) {
 void PortXD_Gen4MoveTexts(void (*add)(void* ctx, uint32_t id, const char* text), void* ctx) {
   if (xd::xg::On()) return;
   if (!Gen4On() && !xd::gen4::Loaded()) return;
-  for (const MoveText& t : kMoveTexts) add(ctx, t.id, t.text);
+  for (const MoveText& t : kMoveTexts) {
+    const char* m = xd::gen4::LangText("message", t.text);
+    add(ctx, t.id, m != nullptr ? m : t.text);
+  }
 }
 
 void PortXD_Gen4Renzoku(void) {
@@ -1492,6 +1524,10 @@ void PortXD_Gen4Renzoku(void) {
 }
 
 uint8_t fightSeqFightOutPokemonTokuseiCheckWazaHit(void* attacker, void* defender, uint16_t waza) {
+  if (xd::modbattle::Active() && defender != nullptr) {
+    uint8_t absorbed = 0;
+    if (xd::modbattle::AbsorbHit(attacker, defender, waza, &absorbed)) return absorbed;
+  }
   if (Gen4On() && defender != nullptr) {
     uint8_t motor = 0;
     if (xd::gen4::MotorDriveHit(attacker, defender, waza, &motor)) return motor;

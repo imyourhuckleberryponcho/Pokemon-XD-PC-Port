@@ -60,6 +60,7 @@ struct GameRules {
   std::vector<std::string> scriptHooks;
   std::vector<std::string> gameOnlyLua;
   std::function<bool(const std::string& text, std::string& why)> checkMessageText;
+  engine::mods::LooksOrSound looksOrSound;
   std::function<void(const std::string& path, const std::vector<uint8_t>& data, Report& report)> checkEntryFile;
   struct ExtraFolder {
     std::string name;

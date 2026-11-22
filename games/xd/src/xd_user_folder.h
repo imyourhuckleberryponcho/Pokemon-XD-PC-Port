@@ -35,6 +35,7 @@ inline std::filesystem::path SettingsFolder() {
 std::filesystem::path CardRoot();
 inline std::filesystem::path SaveDataFolder(bool xg) { return xg ? UserFolder() / L"xg" : UserFolder(); }
 void UseXGSaves(bool xg);
+std::string MissingSave(std::string& have);
 bool UsingXGSaves();
 std::string ActiveSaveName();
 bool SaveSlotsInUse();

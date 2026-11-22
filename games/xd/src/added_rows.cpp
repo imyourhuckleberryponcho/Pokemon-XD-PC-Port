@@ -1,5 +1,8 @@
 #include "xd_added_rows.h"
 #include "xd_gen4_abilities.h"
+#include "xd_mod_battle.h"
+#include "xd_gen57.h"
+#include "xd_forms.h"
 #include "xd_modern_types.h"
 #include "xd_pc_trade.h"
 
@@ -66,8 +69,8 @@ void Install(const engine::mods::LoadResult& result) {
   pc_metronome_first_mod_move = firstMove;
   if (firstMove != 0) std::fprintf(stderr, "[mods] Metronome: moves %u and up can be picked, %zu never (metronome: false)\n", firstMove, never.size());
   for (const auto& r : sRows) {
-    std::fprintf(stderr, "[mods] added: %s \"%s\" = %s #%u (from the mod %s, copy of #%u)\n", r.table.c_str(), r.key.c_str(),
-                 r.table == "pokemon_data" ? "species" : r.table == "waza_data" ? "move" : r.table == "poke_face" ? "face row" : r.table == "flag_data" ? "story flag" : r.table == "floordata" ? "room (floor)" : r.table == "floor_door_list" ? "door row" : r.table == "floor_tresure_list" ? "chest row" : r.table == "floor_event_list" ? "event zone row" : r.table == "floorsoundTbl" ? "music row" : r.table == "floor_chars" ? "room people" : r.table == "floor_zone" ? "area zone" : "item", r.id, r.mod.c_str(), r.copyOf);
+    std::fprintf(stderr, "[mods] added: %s \"%s\" = %s #%u (from the mod %s, copy of #%u)%s%s\n", r.table.c_str(), r.key.c_str(),
+                 r.table == "pokemon_data" ? "species" : r.table == "waza_data" ? "move" : r.table == "poke_face" ? "face row" : r.table == "pokemon_pkx_data" ? "model row" : r.table == "snd_file" ? "cry file row" : r.table == "snd_data" ? "cry sound row" : r.table == "waza_wzx_data" ? "move animation row" : r.table == "pokemon_nakigoe_data" ? "cry waveform row" : r.table == "flag_data" ? "story flag" : r.table == "floordata" ? "room (floor)" : r.table == "floor_door_list" ? "door row" : r.table == "floor_tresure_list" ? "chest row" : r.table == "floor_event_list" ? "event zone row" : r.table == "floorsoundTbl" ? "music row" : r.table == "floor_chars" ? "room people" : r.table == "floor_zone" ? "area zone" : "item", r.id, r.mod.c_str(), r.copyOf, r.label.empty() ? "" : " label ", r.label.c_str());
   }
   if (!xd::PlayerFilesReadOnly()) {
     std::ofstream out(xd::SettingsFolder() / L"added_ids.json", std::ios::binary | std::ios::trunc);
@@ -84,10 +87,14 @@ extern "C" void* GSmsgOpen(void* bank);
 extern "C" void PortXD_Gen4MoveTexts(void (*add)(void* ctx, uint32_t id, const char* text), void* ctx);
 
 extern "C" void* PortXD_LanguageBank(void* bank);
+extern "C" const char* PortXD_GetLanguageCode(void);
 extern "C" void* PortXD_MsgOpen(void* bank) {
   void* result = GSmsgOpen(PortXD_LanguageBank(bank));
   std::vector<std::pair<uint32_t, std::string>> extra;
   xd::gen4::AppendAbilityTexts(extra);
+  xd::modbattle::AppendTexts(extra);
+  xd::gen57::AppendAbilityTexts(extra);
+  xd::forms::AppendTexts(extra);
   xd::modern::AppendTexts(extra);
   PortXD_Gen4MoveTexts(
       [](void* ctx, uint32_t id, const char* text) {
@@ -98,10 +105,16 @@ extern "C" void* PortXD_MsgOpen(void* bank) {
   if ((!sTexts.empty() || !extra.empty()) && !sBankOpened) {
     sBankOpened = true;
     std::vector<std::pair<uint32_t, std::string>> texts;
-    for (const auto& t : sTexts) texts.emplace_back(t.key, t.text);
+    const char* lang = PortXD_GetLanguageCode();
+    for (const auto& t : sTexts) {
+      const auto l = lang != nullptr ? t.lang.find(lang) : t.lang.end();
+      texts.emplace_back(t.key, l != t.lang.end() ? l->second : t.text);
+    }
     for (auto& t : extra) texts.push_back(std::move(t));
     std::stable_sort(texts.begin(), texts.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
     xd::gen4::InstallAbilityRows();
+    xd::modbattle::InstallAbilityRows();
+    xd::gen57::InstallAbilityRows();
     std::vector<uint8_t> bytes;
     std::string error;
     const uint8_t* like = PortXD_GetDolTable("common_tbl");

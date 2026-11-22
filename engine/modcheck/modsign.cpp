@@ -209,6 +209,16 @@ bool ParseUpdateFile(std::string_view text, UpdateFile& out, std::string& error)
       message.append(text.substr(begin, end - begin));
       out.signatureValid = eu::VerifyEd25519(key.data(), sig.data(), message);
     }
+    const auto changes = root.fields.find("key_changes");
+    if (changes != root.fields.end() && changes->second.kind == em::json::Value::Kind::Array) {
+      for (const em::json::Value& v : changes->second.items) {
+        KeyChange c;
+        if (v.kind == em::json::Value::Kind::Object && Str(v, "old_key", c.oldKey) && Str(v, "new_key", c.newKey) && Str(v, "signature", c.signature) &&
+            out.keyChanges.size() < 16) {
+          out.keyChanges.push_back(std::move(c));
+        }
+      }
+    }
   }
   return true;
 }
@@ -230,13 +240,23 @@ std::string UpdateManifestText(const UpdateFile& f) {
   return out;
 }
 
-std::string SignedUpdateText(const UpdateFile& fields, const uint8_t seed[32], std::string& publicKeyHex) {
+std::string SignedUpdateText(const UpdateFile& fields, const uint8_t seed[32], std::string& publicKeyHex,
+                             const std::vector<KeyChange>& keyChanges) {
   const std::string manifest = UpdateManifestText(fields);
   uint8_t sig[64], pub[32];
   eu::SignEd25519(seed, std::string(kUpdateSignedPrefix) + manifest, sig, pub);
   publicKeyHex = eu::HexEncode(pub, 32);
+  std::string changes;
+  if (!keyChanges.empty()) {
+    changes = ",\n\"key_changes\": [";
+    for (size_t i = 0; i < keyChanges.size(); i++) {
+      changes += std::string(i ? ",\n  " : "\n  ") + "{\"old_key\": \"" + keyChanges[i].oldKey + "\", \"new_key\": \"" + keyChanges[i].newKey +
+                 "\", \"signature\": \"" + keyChanges[i].signature + "\"}";
+    }
+    changes += "\n]";
+  }
   return "{\n\"signature\": \"" + eu::HexEncode(sig, 64) + "\",\n\"public_key\": \"" + publicKeyHex + "\",\n\"manifest\": " + manifest +
-         "\n}\n";
+         changes + "\n}\n";
 }
 
 bool ReadKeyFile(const fs::path& file, uint8_t seed[32], std::string& publicKeyHex, std::string& error) {
@@ -290,6 +310,108 @@ bool MakeKeyFile(const fs::path& file, std::string& publicKeyHex, std::string& e
     error = "could not write " + PathText(file);
     return false;
   }
+  return true;
+}
+
+bool MakeKeyChange(const uint8_t oldSeed[32], const std::string& newPublicHex, KeyChange& out, std::string& error) {
+  std::vector<uint8_t> newKey;
+  if (!eu::HexDecode(newPublicHex, newKey) || newKey.size() != 32) {
+    error = "the new public key is not 64 hex digits";
+    return false;
+  }
+  uint8_t probe[64], oldPub[32];
+  eu::SignEd25519(oldSeed, "x", probe, oldPub);
+  out.oldKey = eu::HexEncode(oldPub, 32);
+  out.newKey = newPublicHex;
+  uint8_t sig[64], pub[32];
+  eu::SignEd25519(oldSeed, std::string(kKeyChangePrefix) + out.oldKey + "\n" + out.newKey, sig, pub);
+  out.signature = eu::HexEncode(sig, 64);
+  return true;
+}
+
+bool VerifyKeyChange(const KeyChange& c) {
+  std::vector<uint8_t> oldKey, newKey, sig;
+  if (!eu::HexDecode(c.oldKey, oldKey) || oldKey.size() != 32 || !eu::HexDecode(c.newKey, newKey) || newKey.size() != 32 ||
+      !eu::HexDecode(c.signature, sig) || sig.size() != 64 || c.oldKey == c.newKey) {
+    return false;
+  }
+  return eu::VerifyEd25519(oldKey.data(), sig.data(), std::string(kKeyChangePrefix) + c.oldKey + "\n" + c.newKey);
+}
+
+bool KeyChainReaches(const std::vector<KeyChange>& changes, const std::string& from, const std::string& to) {
+  std::string cur = from;
+  for (int step = 0; step <= 8; step++) {
+    if (cur == to) return true;
+    bool moved = false;
+    for (const KeyChange& c : changes) {
+      if (c.oldKey == cur && VerifyKeyChange(c)) {
+        cur = c.newKey;
+        moved = true;
+        break;
+      }
+    }
+    if (!moved) return false;
+  }
+  return false;
+}
+
+std::vector<KeyChange> ReadKeyChanges(const fs::path& file) {
+  std::vector<KeyChange> out;
+  std::ifstream in(file, std::ios::binary);
+  std::string line;
+  while (std::getline(in, line)) {
+    while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.pop_back();
+    if (line.rfind("change:", 0) != 0) continue;
+    std::string rest = line.substr(7);
+    while (!rest.empty() && rest.front() == ' ') rest.erase(rest.begin());
+    const size_t a = rest.find(':'), b = a == std::string::npos ? a : rest.find(':', a + 1);
+    if (b == std::string::npos) continue;
+    KeyChange c{rest.substr(0, a), rest.substr(a + 1, b - a - 1), rest.substr(b + 1)};
+    if (VerifyKeyChange(c)) out.push_back(std::move(c));
+  }
+  return out;
+}
+
+bool RotateKeyFile(const fs::path& oldFile, const fs::path& newFile, std::string& message, std::string& error) {
+  uint8_t oldSeed[32];
+  std::string oldPub;
+  if (!ReadKeyFile(oldFile, oldSeed, oldPub, error)) return false;
+  std::error_code ec;
+  std::string newPub;
+  bool made = false;
+  if (!fs::exists(newFile, ec)) {
+    if (!MakeKeyFile(newFile, newPub, error)) return false;
+    made = true;
+  }
+  uint8_t newSeed[32];
+  if (!ReadKeyFile(newFile, newSeed, newPub, error)) return false;
+  if (newPub == oldPub) {
+    error = "the new key file holds the same key as the old one; a key change needs a different key";
+    return false;
+  }
+  KeyChange change;
+  if (!MakeKeyChange(oldSeed, newPub, change, error)) return false;
+  const std::vector<KeyChange> have = ReadKeyChanges(newFile);
+  std::vector<KeyChange> add = ReadKeyChanges(oldFile);
+  add.push_back(change);
+  std::ofstream out(newFile, std::ios::binary | std::ios::app);
+  int written = 0;
+  for (const KeyChange& c : add) {
+    const bool dup = std::any_of(have.begin(), have.end(), [&](const KeyChange& h) { return h.oldKey == c.oldKey && h.newKey == c.newKey; });
+    if (dup) continue;
+    out << "change: " << c.oldKey << ":" << c.newKey << ":" << c.signature << "\r\n";
+    written++;
+  }
+  out.close();
+  if (!out) {
+    error = "could not write " + PathText(newFile);
+    return false;
+  }
+  message = std::string(made ? "Made the new key " : "Used the new key ") + PathText(newFile) + " (public key " + newPub + ", fingerprint " + KeyFingerprint(newPub) +
+            ").\nThe old key (fingerprint " + KeyFingerprint(oldPub) + ") signed \"the new key is " + KeyFingerprint(newPub) + "\"; " + std::to_string(written) +
+            " statement(s) were written into the new key file.\nFrom now on pack with --key " + PathText(newFile) +
+            ": launchers that trust the old key follow the change by themselves. Put the new public key in mod.json's \"author_key\".\n"
+            "Keep the old key file until every player has updated once.";
   return true;
 }
 

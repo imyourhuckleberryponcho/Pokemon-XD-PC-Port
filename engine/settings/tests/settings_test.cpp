@@ -59,8 +59,8 @@ void test_presets() {
   const IntSetting music = r.Int("audio.music_volume");
 
   check(sWarnings.empty(), "standard settings register without warnings");
-  if (r.Count() != 59) std::printf("     (%zu registered)\n", r.Count());
-  check(r.Count() == 60, "58 standard settings + 2 test ones registered");
+  if (r.Count() != 68) std::printf("     (%zu registered)\n", r.Count());
+  check(r.Count() == 68, "66 standard settings + 2 test ones registered");
   check(widescreen.Valid() && aa.Valid() && music.Valid(), "handles found");
   check(!r.Bool("video.anti_aliasing").Valid() && !r.Bool("no.such").Valid(), "wrong type / unknown id: no handle");
   check(!r.Bool("no.such").Get(), "an invalid handle reads as off");
@@ -78,10 +78,10 @@ void test_presets() {
   const uint32_t before = r.Changes();
   r.ApplyPreset(Preset::Enhanced);
   check(r.CurrentPreset() == Preset::Enhanced && !r.IsOriginal(), "Enhanced is not Original");
-  check(widescreen.Get() && aa.Get() == r.ChoiceIndex("video.anti_aliasing", "4x"), "Enhanced: widescreen, 4x AA");
+  check(widescreen.Get() && aa.Get() == r.ChoiceIndex("video.anti_aliasing", "off"), "Enhanced: widescreen, AA off (Best looks turns it on)");
   check(r.Changes() != before, "change counter moved");
 
-  check(r.SetEnum("video.anti_aliasing", "8x"), "set AA to 8x");
+  check(r.SetEnum("video.anti_aliasing", "msaa4"), "set AA to MSAA 4x");
   check(r.CurrentPreset() == Preset::Custom && r.BasePreset() == Preset::Enhanced, "now Custom, based on Enhanced");
   check(widescreen.Get(), "other values kept from Enhanced");
   check(r.DefaultOf(r.Find("video.widescreen"), Preset::Custom).i == 1, "Custom's defaults are its base preset's");
@@ -89,7 +89,7 @@ void test_presets() {
   check(!r.SetInt("video.resolution_scale", 99) && !r.SetEnum("video.anti_aliasing", "3x") &&
             !r.SetFloat("game.walk_speed", 0.0f) && !r.SetBool("video.anti_aliasing", true),
         "out-of-range / unknown-choice / wrong-type values refused");
-  check(aa.Get() == r.ChoiceIndex("video.anti_aliasing", "8x"), "refused value left the old one");
+  check(aa.Get() == r.ChoiceIndex("video.anti_aliasing", "msaa4"), "refused value left the old one");
 
   r.ApplyPreset(Preset::Original);
   check(r.CurrentPreset() == Preset::Original && r.IsOriginal() && !widescreen.Get(), "Original preset restores all");
@@ -244,7 +244,7 @@ void test_bad_values(const fs::path& dir) {
   check(sWarnings.size() == 8, "one warning per bad line");
   check(r.CurrentPreset() == Preset::Custom && r.BasePreset() == Preset::Enhanced, "preset read (BOM, CRLF ok)");
   check(r.Bool("video.widescreen").Get() && r.Int("video.resolution_scale").Get() == 0 &&
-            r.Enum("video.anti_aliasing").Get() == r.ChoiceIndex("video.anti_aliasing", "4x") &&
+            r.Enum("video.anti_aliasing").Get() == r.ChoiceIndex("video.anti_aliasing", "off") &&
             r.Float("game.walk_speed").Get() == 1.0f && r.Int("game.level_cap").Get() == 100 &&
             r.Enum("gameplay.text_speed").Get() == r.ChoiceIndex("gameplay.text_speed", "2x"),
         "bad values fell back to the Enhanced defaults");

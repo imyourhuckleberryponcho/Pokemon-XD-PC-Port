@@ -15,6 +15,7 @@ bool BuildDataCatalog(const engine::mods::EntryReader& read, engine::mods::DataC
 
 bool CheckModEntry(int fsysType, const std::string& mod, std::vector<uint8_t>& data, const std::vector<engine::mods::AddedRow>& rows,
                    std::string& why);
+bool CheckModScript(const std::string& mod, std::vector<uint8_t>& data, const std::vector<engine::mods::AddedRow>& rows, std::string& why);
 void BuildRooms(engine::mods::RowsJob& job);
 bool CheckMessageText(const std::string& text, std::string& why);
 void SetFlagRowsTaken(uint32_t count);

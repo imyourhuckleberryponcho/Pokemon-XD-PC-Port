@@ -31,6 +31,7 @@ struct Value {
 
 struct Limits {
   uint32_t callInstructions = 200000;
+  uint32_t frameInstructions = 1000000;
   uint32_t loadInstructions = 2000000;
   size_t memoryBytes = 16u << 20;
   uint32_t logLinesPerCall = 16;
@@ -70,6 +71,12 @@ public:
 
   bool HasFunction(const std::string& name) const;
   bool CallFunction(const std::string& name, const std::vector<Value>& args, int64_t& result, std::string& error);
+
+  void SetFrameClock(std::function<uint64_t()> clock);
+  struct BudgetStats {
+    uint64_t cut = 0, skipped = 0;
+  };
+  BudgetStats Budget() const;
 
   bool HasHandlers(const std::string& hook) const;
 

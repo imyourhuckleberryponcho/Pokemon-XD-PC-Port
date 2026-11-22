@@ -5,6 +5,9 @@ namespace xd::battle_models {
 
 inline constexpr const char* kLayerId = "pbr";
 inline constexpr const char* kManifestId = "battle-revolution-models";
+inline constexpr const char* kUsumLayerId = "usum";
+inline constexpr const char* kRuleBr = "models_br";
+inline constexpr const char* kRuleUsum = "models_usum";
 inline constexpr const char* kSetting = "video.battle_revolution_models";
 
 }

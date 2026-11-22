@@ -1,17 +1,22 @@
 #include <launcher.h>
 #include <mods.h>
 
+#include "cli_options.h"
+#include <mod_layout.h>
 #include "disc_verify.h"
 #include "dol_tables.h"
 #include "xd_extra_sources.h"
 #include "xd_mod_rules.h"
 #include "xd_colosseum_page.h"
+#include "xd_modextract_page.h"
 #include "xd_gba_page.h"
 #include "xd_languages.h"
 #include "xd_presence.h"
 #include "xd_settings.h"
 #include "xd_user_folder.h"
 #include "xd_playthrough_files.h"
+#include "xd_rulesets.h"
+#include "xd_ruleset_texts.h"
 
 #include <card_sources.h>
 #include <gc_memcard.h>
@@ -45,6 +50,7 @@
 #if defined(__APPLE__)
 #include <unistd.h>
 #endif
+#include <SDL3/SDL_messagebox.h>
 
 #include <algorithm>
 #include <cctype>
@@ -525,6 +531,14 @@ void ReadSetup(const std::vector<uint8_t>& data, SaveSummary& out) {
   out.setup.push_back({Tr("Mods"), world.empty() ? std::string(Tr("none")) : world});
   if (!looks.empty()) {
     out.setup.push_back({Tr("Looks and sound"), looks});
+  }
+  if (setup.rules.present) {
+    namespace tx = xd::rulesets::text;
+    const std::string style = setup.rules.looks.Says() ? (setup.rules.looks.preset.empty() ? std::string("custom") : setup.rules.looks.preset) : std::string();
+    out.setup.push_back({Tr("Looks"), style.empty() ? std::string(Tr("your own setting")) : style == "custom" ? std::string(Tr("Custom...")) : std::string(tx::StyleName(style))});
+    out.setupFile = file;
+    out.looksStyle = style;
+    for (const char* sid : {"original_xd", "most_modern", "br_first"}) out.looksStyles.push_back({sid, tx::StyleName(sid)});
   }
   if (!setup.randomizer.empty()) {
     const std::string& code = setup.seed;
@@ -1138,11 +1152,87 @@ bool RenderPictures(const std::string& discPath, const std::string& discId, cons
   return RenderTrainerPortraits(discPath, id, stop, error) && RenderOfferPictures(discPath, id, starting, stop, error);
 }
 
+void ConsoleText(bool error, const std::string& text) {
+#ifdef _WIN32
+  AttachConsole(ATTACH_PARENT_PROCESS);
+  HANDLE out = GetStdHandle(error ? STD_ERROR_HANDLE : STD_OUTPUT_HANDLE);
+  if (out == nullptr || out == INVALID_HANDLE_VALUE) {
+    out = CreateFileW(L"CONOUT$", GENERIC_WRITE, FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr);
+  }
+  if (out != nullptr && out != INVALID_HANDLE_VALUE) {
+    DWORD written = 0;
+    WriteFile(out, text.data(), static_cast<DWORD>(text.size()), &written, nullptr);
+  }
+#else
+  std::fputs(text.c_str(), error ? stderr : stdout);
+#endif
+}
+
+void ErrorWindow(const std::string& text) {
+  const char* none = std::getenv("XD_NO_MESSAGE_BOXES");
+  if ((none != nullptr && none[0] == '1') || std::getenv("XD_LAUNCHER_SCRIPT") != nullptr) {
+    return;
+  }
+  SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Pokemon XD", text.c_str(), nullptr);
+}
+
+int RunGameNow(const fs::path& program, int argc, char** argv) {
+  sys::StartRequest request;
+  request.program = program;
+  for (int i = 1; i < argc; i++) {
+    if (std::strcmp(argv[i], "--no-launcher") != 0 && std::strncmp(argv[i], "-psn_", 5) != 0) {
+      request.arguments.push_back(argv[i]);
+    }
+  }
+  request.folder = program.parent_path();
+  request.shareOutput = true;
+  request.toFront = true;
+  std::string why;
+  sys::Process* game = sys::StartProgram(request, why);
+  if (game == nullptr) {
+    const std::string text = "The game couldn't be started (" + program.string() + ", " + why + ").";
+    ConsoleText(true, text + "\n");
+    ErrorWindow(text);
+    return 1;
+  }
+  while (!sys::Ended(game, 250)) {
+  }
+  const int code = sys::ExitCode(game);
+  sys::Close(game);
+  return code;
+}
+
 }
 
 int main(int argc, char** argv) {
+  xd::cli::Options options = xd::cli::Parse(argc, argv);
+  if (options.help) {
+    ConsoleText(false, xd::cli::HelpText());
+    return 0;
+  }
+  if (options.version) {
+    std::string version = engine::update::FolderVersion(ProgramFolder());
+    if (version.empty()) {
+      version = XD_PORT_VERSION;
+    }
+    ConsoleText(false, "Pokemon XD PC " + version + "\n");
+    return 0;
+  }
+  if (options.error.empty()) {
+    options.error = xd::cli::Apply(options);
+  }
+  if (!options.error.empty()) {
+    const std::string text = options.error + "\n\nUse --help to see the options.";
+    ConsoleText(true, text + "\n");
+    ErrorWindow(text);
+    return 2;
+  }
+  const bool noLauncher = options.noLauncher || [] {
+    const char* none = std::getenv("XD_NO_LAUNCHER");
+    return none != nullptr && std::strcmp(none, "1") == 0;
+  }();
 #if defined(__APPLE__)
-  if (const char* none = std::getenv("XD_NO_LAUNCHER"); none != nullptr && std::strcmp(none, "1") == 0) {
+  if (noLauncher) {
     const std::string game = (sys::ProgramFolder() / "xd").string();
     std::vector<char*> args{const_cast<char*>(game.c_str())};
     for (int i = 1; i < argc; i++) {
@@ -1175,6 +1265,10 @@ int main(int argc, char** argv) {
   const auto Tr = [](const char* english) { return english; };
   launcher::GameInfo game;
   game.title = "Pokemon XD";
+  game.discOverride = options.disc;
+  for (int i = 1; i < argc; i++) {
+    game.restartArguments.push_back(argv[i]);
+  }
   game.windowTitle = "Pok\xC3\xA9mon XD";
   game.subtitle = "Gale of Darkness - PC";
   game.gameId = xd_settings::kGameId;
@@ -1184,7 +1278,7 @@ int main(int argc, char** argv) {
          "image file (.iso, .rvz, .gcm, ...). Nothing from the game comes with this program.");
   const fs::path settings = xd::SettingsFolder();
   game.settingsFolder = settings;
-  engine::mods::SetTexturePackSource(settings / "textures", "GXXE01");
+  engine::mods::SetTexturePackSource(settings / "textures", "GXXE01", {engine::mods::MakeTarget("GXXE01", "xg")});
   game.modsFolder = settings / L"mods";
   game.modListFile = settings / L"mods.ini";
   game.playerFilesReadOnly = xd::PlayerFilesReadOnly();
@@ -1249,6 +1343,15 @@ int main(int argc, char** argv) {
     game.saves.tradeDo = xd::gbapage::Trade;
     game.saves.monsOpen = xd::colosseumpage::Open;
     game.saves.monsDo = xd::colosseumpage::Import;
+    game.saves.monsOpen2 = xd::modextractpage::Open;
+    game.saves.monsDo2 = xd::modextractpage::Import;
+    game.saves.monsName2 = Tr("Take a Pokemon out of a mod");
+    game.saves.monsHelp2 = Tr("Copy Pokemon out of a MODDED Pokemon XD save into the PC boxes of this save, made fit for the plain game. The modded save is only read. "
+                              "Look at what each Pokemon loses on the way before you confirm; Pokemon that can't come say why.");
+    game.saves.monsChoose2 = Tr("Choose a modded save...");
+    game.saves.monsSaveLabel2 = Tr("Modded save of");
+    game.saves.monsStays2 = Tr("Stays in the modded save:");
+    game.saves.monsCopy2 = Tr("Copy the ticked Pokemon into the PC boxes");
     game.saves.exportName = "01-GXXE-PokemonXD.gci";
     if (const fs::path bin = sys::EnvPath("XD_SAVE_BIN_DIR"); !bin.empty()) {
       game.saves.binFolder = bin;
@@ -1282,8 +1385,28 @@ int main(int argc, char** argv) {
   game.registerSettings = [](engine::settings::Registry& r) { xd_settings::Register(r); };
   game.checkDisc = CheckDisc;
   game.readSave = ReadSave;
+  game.changeLooks = [](const fs::path& file, const std::string& style, std::string& error) {
+    namespace ep = engine::playthrough;
+    ep::Setup setup;
+    if (!ep::ReadFile(file, setup, error)) return false;
+    const engine::rulesets::LooksPreset* preset = xd::rulesets::Registry().FindPreset(style);
+    if (preset == nullptr || !setup.rules.present) {
+      error = engine::i18n::Tr("This playthrough has no looks choice to change.");
+      return false;
+    }
+    setup.rules.looks.preset = preset->id;
+    setup.rules.looks.sources = preset->sources;
+    setup.rules = engine::rulesets::Normalize(setup.rules, xd::rulesets::Registry());
+    if (!ep::WriteFile(file, setup)) {
+      error = engine::i18n::Tr("The setup file could not be written.");
+      return false;
+    }
+    return true;
+  };
   static const engine::modcheck::GameRules modRules = xd::modrules::Rules();
   game.modRules = &modRules;
+  game.openModDisc = xd::modrules::OpenDisc;
+  game.closeModDisc = xd::modrules::CloseDisc;
   game.modLooks = xd::playthrough::LooksOrSound;
   game.extra.sources = xd::ExtraSources();
   game.extra.identifyDisc = IdentifyDisc;
@@ -1305,5 +1428,8 @@ int main(int argc, char** argv) {
     return cached;
   };
   SetUpUpdates(game.updates, own);
+  if (noLauncher) {
+    return RunGameNow(game.program, argc, argv);
+  }
   return launcher::Run(game);
 }

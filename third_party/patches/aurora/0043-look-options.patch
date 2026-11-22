@@ -1,0 +1,194 @@
+diff --git a/include/aurora/gfx.h b/include/aurora/gfx.h
+--- a/include/aurora/gfx.h
++++ b/include/aurora/gfx.h
+@@ -42,6 +42,18 @@
+ void aurora_enable_vsync(bool enabled);
+ 
+ /**
++ * Anisotropic filtering for every texture the game samples with linear filters (video.texture_filtering): the
++ * most taps along the long axis of the footprint, 1 (the default) = as the game asks. Applies from the next draw.
++ */
++void aurora_set_forced_anisotropy(uint16_t level);
++
++/**
++ * Post-process anti-aliasing of the finished picture, in the present resample pass (video.anti_aliasing "fxaa"):
++ * 0 = off (the default), 1 = FXAA (edge-directed blur along luma edges, at the picture's own resolution).
++ */
++void aurora_set_post_aa(uint32_t mode);
++
++/**
+  * Frame pacing hooks, called on the render worker for the primary surface: `before` right before a picture is
+  * handed to the window (it may wait, to present at an even rhythm), `after` right after Present returned (for
+  * measuring). Either may be NULL. Keep them short: they run on every present.
+diff --git a/lib/gfx/texture.cpp b/lib/gfx/texture.cpp
+--- a/lib/gfx/texture.cpp
++++ b/lib/gfx/texture.cpp
+@@ -9,6 +9,7 @@
+ #include "../gx/gx_fmt.hpp"
+ 
+ #include <algorithm>
++#include <atomic>
+ #include <cstdint>
+ #include <memory>
+ #include <utility>
+@@ -23,6 +24,8 @@
+ 
+ namespace {
+ constexpr Module Log{"aurora::gfx"};
++// aurora_set_forced_anisotropy: the sample count the port asks for every linear-filtered texture (1 = the game's own).
++std::atomic<uint16_t> g_forcedAnisotropy{1};
+ 
+ wgpu::Extent3D physical_size(wgpu::Extent3D size, TextureFormatInfo info) {
+   const uint32_t width = ((size.width + info.blockWidth - 1) / info.blockWidth) * info.blockWidth;
+@@ -327,6 +330,15 @@
+     minFilter = wgpu::FilterMode::Linear;
+     mipFilter = wgpu::MipmapFilterMode::Linear;
+   }
++  // Anisotropic filtering the player asked for (video.texture_filtering): only for textures the game itself samples
++  // with linear filters (a nearest-filtered texture is pixel art on purpose), and not for ones with their own mip
++  // levels set by hand. A texture without mip levels still gets the taps along the long axis of its footprint.
++  if (const u16 forced = g_forcedAnisotropy.load(std::memory_order_relaxed);
++      forced > 1 && !(ref && ref->hasArbitraryMips) && minFilter == wgpu::FilterMode::Linear &&
++      magFilter == wgpu::FilterMode::Linear) {
++    maxAnisotropy = std::max(maxAnisotropy, forced);
++    mipFilter = wgpu::MipmapFilterMode::Linear;
++  }
+   return {
+       .label = "Generated Filtering Sampler",
+       .addressModeU = wgpu_address_mode(texObj.wrap_s()),
+@@ -341,3 +353,7 @@
+   };
+ }
+ } // namespace aurora::gfx
++
++extern "C" void aurora_set_forced_anisotropy(uint16_t level) {
++  aurora::gfx::g_forcedAnisotropy.store(level < 1 ? 1 : level > 16 ? 16 : level, std::memory_order_relaxed);
++}
+diff --git a/lib/webgpu/gpu.cpp b/lib/webgpu/gpu.cpp
+--- a/lib/webgpu/gpu.cpp
++++ b/lib/webgpu/gpu.cpp
+@@ -51,6 +51,7 @@
+ static wgpu::BindGroupLayout g_CopyBindGroupLayout;
+ static std::map<wgpu::TextureFormat, std::array<wgpu::RenderPipeline, 2>> g_CopyPipelines;
+ static std::atomic g_Resampler = SAMPLER_BILINEAR;
++static std::atomic<uint32_t> g_postAa{0}; // aurora_set_post_aa
+ static wgpu::BindGroupLayout g_ResampleBindGroupLayout;
+ static wgpu::RenderPipeline g_ResamplePipeline;
+ 
+@@ -91,6 +92,7 @@
+     sampler_mode: u32,
+     frame_width: f32,
+     frame_height: f32,
++    post_aa: u32,
+ };
+ 
+ struct VertexOutput {
+@@ -170,11 +172,54 @@
+ 
+ // END AREA SAMPLER REGION
+ 
++// FXAA (post-process anti-aliasing): the classic edge-directed blur. Looks at the luma of the four diagonal
++// neighbours, finds the direction of the edge, and averages samples along it; falls back to the shorter blur when
++// the wider one leaves the local luma range. The picture's own texel size is the step.
++fn fxaa_luma(c: vec3<f32>) -> f32 {
++    return dot(c, vec3<f32>(0.299, 0.587, 0.114));
++}
++
++fn fxaa(uv: vec2<f32>) -> vec3<f32> {
++    let px = vec2<f32>(1.0, 1.0) / vec2<f32>(textureDimensions(t));
++    let rgbNW = textureSampleLevel(t, s, uv + vec2<f32>(-1.0, -1.0) * px, 0.0).rgb;
++    let rgbNE = textureSampleLevel(t, s, uv + vec2<f32>(1.0, -1.0) * px, 0.0).rgb;
++    let rgbSW = textureSampleLevel(t, s, uv + vec2<f32>(-1.0, 1.0) * px, 0.0).rgb;
++    let rgbSE = textureSampleLevel(t, s, uv + vec2<f32>(1.0, 1.0) * px, 0.0).rgb;
++    let rgbM = textureSampleLevel(t, s, uv, 0.0).rgb;
++    let lNW = fxaa_luma(rgbNW);
++    let lNE = fxaa_luma(rgbNE);
++    let lSW = fxaa_luma(rgbSW);
++    let lSE = fxaa_luma(rgbSE);
++    let lM = fxaa_luma(rgbM);
++    let lMin = min(lM, min(min(lNW, lNE), min(lSW, lSE)));
++    let lMax = max(lM, max(max(lNW, lNE), max(lSW, lSE)));
++    if (lMax - lMin < max(0.0312, lMax * 0.125)) {
++        return rgbM; // no edge here
++    }
++    var dir = vec2<f32>(-((lNW + lNE) - (lSW + lSE)), (lNW + lSW) - (lNE + lSE));
++    let dirReduce = max((lNW + lNE + lSW + lSE) * 0.25 * 0.125, 1.0 / 128.0);
++    let rcpDirMin = 1.0 / (min(abs(dir.x), abs(dir.y)) + dirReduce);
++    dir = clamp(dir * rcpDirMin, vec2<f32>(-8.0, -8.0), vec2<f32>(8.0, 8.0)) * px;
++    let rgbA = 0.5 * (textureSampleLevel(t, s, uv + dir * (1.0 / 3.0 - 0.5), 0.0).rgb +
++                      textureSampleLevel(t, s, uv + dir * (2.0 / 3.0 - 0.5), 0.0).rgb);
++    let rgbB = rgbA * 0.5 + 0.25 * (textureSampleLevel(t, s, uv + dir * -0.5, 0.0).rgb +
++                                    textureSampleLevel(t, s, uv + dir * 0.5, 0.0).rgb);
++    let lB = fxaa_luma(rgbB);
++    if (lB < lMin || lB > lMax) {
++        return rgbA;
++    }
++    return rgbB;
++}
++
+ @fragment
+ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+     var color = textureSample(t, s, in.uv);
+     if (uniforms.sampler_mode == 1u) {
+         color = sample_area(in.position);
++    }
++    if (uniforms.post_aa == 1u) {
++        let smoothed = fxaa(in.uv);
++        color = vec4<f32>(smoothed, 1.0);
+     }
+     return vec4(color.rgb, 1.0);
+ }
+@@ -289,6 +334,8 @@
+     return;
+   }
+ }
++
++void set_post_aa(uint32_t mode) noexcept { g_postAa.store(mode == 1 ? 1u : 0u, std::memory_order_release); }
+ 
+ AuroraSampler get_resampler() noexcept { return g_Resampler; }
+ 
+@@ -633,6 +680,7 @@
+       .samplerMode = sampler_mode(g_Resampler.load(std::memory_order_acquire)),
+       .frameWidth = static_cast<float>(width),
+       .frameHeight = static_cast<float>(height),
++      .postAa = g_postAa.load(std::memory_order_acquire),
+   };
+ }
+ 
+diff --git a/lib/webgpu/gpu.hpp b/lib/webgpu/gpu.hpp
+--- a/lib/webgpu/gpu.hpp
++++ b/lib/webgpu/gpu.hpp
+@@ -67,6 +67,7 @@
+ bool enable_normal_buffer();
+ wgpu::BindGroup create_copy_bind_group(const TextureWithSampler& source);
+ void set_resampler(AuroraSampler sampler) noexcept;
++void set_post_aa(uint32_t mode) noexcept;
+ AuroraSampler get_resampler() noexcept;
+ Viewport calculate_present_viewport(uint32_t surface_width, uint32_t surface_height, uint32_t content_width,
+                                     uint32_t content_height) noexcept;
+@@ -74,7 +75,7 @@
+   uint32_t samplerMode = 0;
+   float frameWidth = 0.f;
+   float frameHeight = 0.f;
+-  uint32_t padding = 0;
++  uint32_t postAa = 0;
+ };
+ ResampleUniformBlock resample_uniform(uint32_t width, uint32_t height) noexcept;
+ void resample(const wgpu::CommandEncoder& encoder, const TextureWithSampler& source,
+diff --git a/lib/aurora.cpp b/lib/aurora.cpp
+--- a/lib/aurora.cpp
++++ b/lib/aurora.cpp
+@@ -419,6 +419,13 @@
+   (void)sampler;
+ #endif
+ }
++void aurora_set_post_aa(uint32_t mode) {
++#ifdef AURORA_ENABLE_GX
++  aurora::webgpu::set_post_aa(mode);
++#else
++  (void)mode;
++#endif
++}
+ void aurora_set_timescale(float scale) { aurora::time::set_scale(scale); }
+ float aurora_get_timescale() { return aurora::time::scale(); }
+ 

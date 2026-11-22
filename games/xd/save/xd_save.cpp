@@ -1,4 +1,7 @@
 #include <xd_save.h>
+#include <xd_save_write.h>
+
+#include <algorithm>
 
 #include <cstdio>
 #include <cstring>
@@ -408,6 +411,99 @@ std::vector<std::string> UnknownIds(const Save& save, const TableCounts& counts)
     out.push_back("... and " + std::to_string(more) + " more");
   }
   return out;
+}
+
+bool RemapIds(std::vector<uint8_t>& file, const IdRemap& map, size_t& changed, std::string& error) {
+  changed = 0;
+  if (file.size() != kFileSize) {
+    error = "not a Pokemon XD save: " + std::to_string(file.size()) + " bytes";
+    return false;
+  }
+  if (map.Empty()) return true;
+  std::vector<uint8_t> out = file;
+  size_t total = 0;
+  size_t slotsDone = 0;
+  for (int s = 0; s < kSlotCount; s++) {
+    const uint8_t* slot = file.data() + SlotOffset(s);
+    if (!(slot[0] == 1 && slot[1] == 1 && slot[2] == 1)) continue;
+    std::vector<uint8_t> copy;
+    ByteOrder order = ByteOrder::GameCube;
+    bool ok = false;
+    for (ByteOrder o : {ByteOrder::GameCube, ByteOrder::PC}) {
+      copy.assign(slot, slot + kSlotSize);
+      if (DecryptSaveData(copy.data() + kSlotHeaderSize, o)) {
+        ok = true;
+        order = o;
+        break;
+      }
+    }
+    if (!ok) continue;
+    uint8_t* data = copy.data() + kSlotHeaderSize;
+    const auto section = [&](int id) -> uint8_t* {
+      for (const SectionDesc& d : kSections) {
+        if (d.id != id) continue;
+        const uint32_t off = static_cast<uint32_t>(kSectionBase) + (Read16(data + d.offsetAt, order) | static_cast<uint32_t>(Read16(data + d.offsetAt + 2, order)) << 16);
+        if (off + d.expected > kDataSize) return nullptr;
+        return data + off;
+      }
+      return nullptr;
+    };
+    size_t here = 0;
+    const auto fix = [&](uint8_t* p, const std::map<uint16_t, uint16_t>& m) {
+      if (m.empty()) return;
+      const auto it = m.find(Read16(p, order));
+      if (it != m.end()) {
+        Write16(p, it->second, order);
+        here++;
+      }
+    };
+    const auto pokemon = [&](uint8_t* p) {
+      if (Read16(p, order) == 0) return;
+      fix(p + 0x00, map.species);
+      fix(p + 0x02, map.items);
+      for (int i = 0; i < 4; i++) fix(p + 0x80 + i * 4, map.moves);
+    };
+    const auto pocket = [&](uint8_t* base, Pocket pk) {
+      for (int i = 0; i < pk.count; i++) {
+        uint8_t* e = base + pk.offset + static_cast<size_t>(i) * 4;
+        if (Read16(e + 2, order) != 0) fix(e, map.items);
+      }
+    };
+    if (uint8_t* h = section(2)) {
+      for (int i = 0; i < kPartySize; i++) pokemon(h + kHeroParty + static_cast<size_t>(i) * kPokemonSize);
+      for (Pocket pk : {kItems, kKeyItems, kBalls, kTmHm, kBerries, kColognes, kBattleCds}) pocket(h, pk);
+    }
+    if (uint8_t* b = section(3)) {
+      for (int i = 0; i < kBoxCount; i++) {
+        for (int j = 0; j < kBoxSlots; j++) pokemon(b + static_cast<size_t>(i) * kBoxStride + kBoxPokemon + static_cast<size_t>(j) * kPokemonSize);
+      }
+      pocket(b, Pocket{kPcItems, kPcItemCount});
+    }
+    if (uint8_t* d = section(11)) pokemon(d + 8);
+    if (uint8_t* c = section(21)) {
+      for (size_t i = 0; i < 9; i++) {
+        for (size_t j = 0; j < 5; j++) pokemon(c + i * kChamberStride + j * kPokemonSize);
+      }
+    }
+    if (uint8_t* sh = section(15)) {
+      for (int i = 0; i < kShadowEntries; i++) {
+        uint8_t* e = sh + static_cast<size_t>(i) * kShadowEntrySize + 0x1A;
+        if (Read16(e, order) != 0) fix(e, map.species);
+      }
+    }
+    slotsDone++;
+    if (here == 0) continue;
+    EncryptSaveData(data, order);
+    std::copy(copy.begin(), copy.end(), out.begin() + static_cast<std::ptrdiff_t>(SlotOffset(s)));
+    total += here;
+  }
+  if (slotsDone == 0) {
+    error = "the file holds no save slot that passes its checks";
+    return false;
+  }
+  file = std::move(out);
+  changed = total;
+  return true;
 }
 
 }

@@ -1,0 +1,168 @@
+diff --git a/lib/gfx/frame.hpp b/lib/gfx/frame.hpp
+--- a/lib/gfx/frame.hpp
++++ b/lib/gfx/frame.hpp
+@@ -7,7 +7,9 @@
+ 
+ namespace aurora::gfx::detail {
+ 
+-inline constexpr size_t FrameSlotCount = 2;
++// 3 slots exist; one is held back (set_frame_slots) unless a frame rate above 60 asks for it: the in-between pictures of
++// one game picture are queued as several frames at once.
++inline constexpr size_t FrameSlotCount = 3;
+ inline constexpr size_t StagingBufferCount = FrameSlotCount + 3;
+ inline constexpr uint64_t StagingBufferSize = UniformBufferSize + VertexBufferSize + IndexBufferSize +
+                                               StorageBufferSize + (UseTextureBuffer ? TextureUploadSize : 0);
+@@ -36,6 +38,7 @@
+ bool begin_frame();
+ void end_frame(EndFrameCallback callback);
+ uint32_t current_frame() noexcept;
++void set_frame_slots(uint32_t count) noexcept; // aurora_set_frame_slots
+ void gpu_synchronize();
+ void before_present() noexcept; // aurora_set_present_hooks
+ void after_present() noexcept;
+diff --git a/lib/gfx/frame.cpp b/lib/gfx/frame.cpp
+--- a/lib/gfx/frame.cpp
++++ b/lib/gfx/frame.cpp
+@@ -78,6 +78,10 @@
+   render_worker::free_retired();
+ }
+ render_worker::FrameSlotPool g_frameSlots{FrameSlotCount};
++bool g_slotHoldStarted = false; // the first frame took one slot out of use (see aurora_set_frame_slots)
++bool g_slotHeld = false;
++size_t g_heldSlot = 0;
++bool g_wantThreeSlots = false;
+ render_worker::FrameSlotPool g_stagingSlots{StagingBufferCount};
+ 
+ struct RuntimeDrawType {
+@@ -703,6 +707,19 @@
+ 
+ bool begin_frame() {
+   ZoneScoped;
++  if (!g_slotHoldStarted) {
++    g_slotHoldStarted = true;
++    if (!g_wantThreeSlots) {
++      if (const auto slot = g_frameSlots.try_acquire()) {
++        g_heldSlot = *slot;
++        g_slotHeld = true;
++      }
++    }
++  }
++  if (g_wantThreeSlots && g_slotHeld) {
++    g_slotHeld = false;
++    g_frameSlots.release(g_heldSlot);
++  }
+   // pace_frame_start();
+   const size_t frameSlot = acquire_frame_slot();
+   const auto stagingSlot = acquire_mapped_staging_buffer();
+@@ -799,6 +816,16 @@
+ 
+ uint32_t current_frame() noexcept { return g_frameIndex; }
+ 
++void set_frame_slots(uint32_t count) noexcept {
++  // Called by the game thread between frames. Three slots: the extra one is let go at the next begin_frame; two: the
++  // extra one is taken out of use again (waits until it is free).
++  g_wantThreeSlots = count >= 3;
++  if (!g_wantThreeSlots && g_slotHoldStarted && !g_slotHeld) {
++    g_slotHeld = true;
++    g_heldSlot = g_frameSlots.acquire();
++  }
++}
++
+ void gpu_synchronize() { render_worker::synchronize(); }
+ 
+ void synchronize() { render_worker::synchronize(); }
+@@ -845,6 +872,7 @@
+ }
+ } // namespace aurora::gfx
+ 
++void aurora_set_frame_slots(uint32_t count) { aurora::gfx::set_frame_slots(count); }
+ const AuroraStats* aurora_get_stats() { return &aurora::gfx::detail::resources().stats; }
+ float aurora_get_fps() { return aurora::gfx::calculate_fps(); }
+ void aurora_set_present_hooks(void (*before)(void), void (*after)(void)) {
+diff --git a/include/aurora/gfx.h b/include/aurora/gfx.h
+--- a/include/aurora/gfx.h
++++ b/include/aurora/gfx.h
+@@ -54,6 +54,12 @@
+ void aurora_set_post_aa(uint32_t mode);
+ 
+ /**
++ * How many frames may be in flight at once: 2 (the default) or 3 (frame rates above 60: the in-between pictures of one
++ * game picture are queued as several frames). Between frames, from the game thread.
++ */
++void aurora_set_frame_slots(uint32_t count);
++
++/**
+  * Frame pacing hooks, called on the render worker for the primary surface: `before` right before a picture is
+  * handed to the window (it may wait, to present at an even rhythm), `after` right after Present returned (for
+  * measuring). Either may be NULL. Keep them short: they run on every present.
+diff --git a/lib/gfx/recording.hpp b/lib/gfx/recording.hpp
+--- a/lib/gfx/recording.hpp
++++ b/lib/gfx/recording.hpp
+@@ -47,6 +47,9 @@
+ namespace aurora::gfx {
+ // (in-between pictures, AuroraGetFrameBufferUse) How full the frame being recorded is, 0..1.
+ float frame_buffer_use() noexcept;
++// Hands the picture shown by the last display copy to the window now, as its own present (in-between pictures:
++// several pictures of one game picture leave in one frame). Without the overlay of the frame's own present.
++bool present_extra_picture();
+ struct ColorPassDescriptor {
+   const char* label = nullptr;
+   wgpu::TextureView colorView;
+diff --git a/lib/gfx/recording.cpp b/lib/gfx/recording.cpp
+--- a/lib/gfx/recording.cpp
++++ b/lib/gfx/recording.cpp
+@@ -654,6 +654,28 @@
+   };
+ }
+ } // namespace
++
++// A present of the picture the last display copy made, in the middle of the frame: its own resample (a copy of the
++// XFB as it is now) and its own request, in the order of the frame's operations. The frame's last picture is presented
++// at frame end as always.
++bool present_extra_picture() {
++  gx::fifo::drain();
++  if (!g_recorder.active() || g_recorder.currentRenderPass == UINT32_MAX || g_recorder.inOffscreen) {
++    return false;
++  }
++  auto& frame = current_frame_packet();
++  if (!frame.efb.xfb.state || !g_xfb.view) {
++    return false;
++  }
++  auto& pass = current_render_passes()[g_recorder.currentRenderPass];
++  pass.discardable = false;
++  enqueue_pass(frame, g_recorder.currentRenderPass);
++  auto request = record_present(frame.efb.xfb, g_xfb, true);
++  request.primary = true;
++  frame.presents.push_back(std::move(request));
++  resume_pass_loading(pass);
++  return true;
++}
+ 
+ // How full the frame being recorded is: the fullest of its vertex, uniform, index and storage buffers (0..1).
+ float frame_buffer_use() noexcept {
+diff --git a/include/dolphin/gx/GXAurora.h b/include/dolphin/gx/GXAurora.h
+--- a/include/dolphin/gx/GXAurora.h
++++ b/include/dolphin/gx/GXAurora.h
+@@ -344,6 +344,10 @@
+  * full one stops the program). Before drawing a kept picture again in the same frame. Waits for the commands
+  * written so far. */
+ f32 AuroraGetFrameBufferUse(void);
++/** In-between pictures: the picture the last display copy made is handed to the window now as its own present
++ * (it must have been drawn: waits for the commands written so far); the frame's last picture is still presented
++ * when the frame ends. False when there is nothing to present. */
++GXBool AuroraPresentPicture(void);
+ 
+ /**
+  * Sets the actual render viewport in native framebuffer coordinates.
+diff --git a/lib/dolphin/gx/GXAurora.cpp b/lib/dolphin/gx/GXAurora.cpp
+--- a/lib/dolphin/gx/GXAurora.cpp
++++ b/lib/dolphin/gx/GXAurora.cpp
+@@ -114,6 +114,8 @@
+   // drawn again in the same frame uses them again instead of filling the frame's buffers twice.)
+   aurora::gx::g_gxState.dirty = aurora::gx::DirtyAll;
+ }
++
++GXBool AuroraPresentPicture(void) { return aurora::gfx::present_extra_picture() ? GX_TRUE : GX_FALSE; }
+ 
+ f32 AuroraGetFrameBufferUse(void) {
+   aurora::gx::fifo::drain();

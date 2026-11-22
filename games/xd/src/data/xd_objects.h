@@ -61,6 +61,7 @@ struct Music {
   bool none = false;
   std::string like;
   long bgm = -1, volume = 127, fade = 0, envFade = 0;
+  std::string bgmName;
   std::string flag;
 };
 
@@ -81,6 +82,7 @@ struct Lookups {
   std::function<bool(const std::string&, uint32_t&)> flag;
   std::function<bool(const std::string&, uint32_t&)> item;
   std::function<bool(long, std::vector<uint8_t>&)> doorRow;
+  std::function<long(const std::string&)> song;
   std::function<bool(const std::string&, std::vector<std::vector<uint8_t>>&)> musicOf;
 };
 

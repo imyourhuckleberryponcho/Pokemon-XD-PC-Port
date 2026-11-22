@@ -695,6 +695,15 @@ void stop_timer_at_exit() {
 }
 #define TIMER_QUIT() gTimerQuit.load()
 
+bool timer_relaxed_wait_ok() {
+  static const bool spin = [] {
+    const char* v = std::getenv("XD_TIMER_SPIN");
+    return v != nullptr && v[0] == '1';
+  }();
+  if (spin) return false;
+  return gRunning != nullptr && !gRunning->idle && !gYieldWaiting && !gBusyWaiting && !gIdleHandlersRunning;
+}
+
 void timer_main() {
   init_time();
   std::unique_lock<SchedMutex> lock(gSched);
@@ -730,8 +739,15 @@ void timer_main() {
     }
     const float scale = aurora::time::scale();
     const int64_t remainingUs = static_cast<int64_t>((next - now) * 8 / 324 / (scale > 0.0f ? scale : 1.0f));
-    if (remainingUs > 2000) {
-      gTimerCv.wait_for(lock, std::chrono::microseconds(remainingUs - 1500));
+#ifdef _WIN32
+    constexpr int64_t kSpinUs = 1500;
+#else
+    constexpr int64_t kSpinUs = 400;
+#endif
+    if (remainingUs > kSpinUs + 500) {
+      gTimerCv.wait_for(lock, std::chrono::microseconds(remainingUs - kSpinUs));
+    } else if (scale > 1.0f && timer_relaxed_wait_ok()) {
+      gTimerCv.wait_for(lock, std::chrono::microseconds(remainingUs > 50 ? remainingUs : 50));
     } else {
       lock.unlock();
       while (!TIMER_QUIT() && OSGetTime() < next) {
@@ -802,6 +818,7 @@ void PortOS_BusyLater(int64_t ticks) {
 }
 
 int PortOS_InHandler(void) { return tInHandler ? 1 : 0; }
+int PortOS_ThreadKnown(void) { return (tSelf != nullptr || tInHandler) ? 1 : 0; }
 
 int PortOS_OnGameThread(void) { return tSelf != nullptr ? 1 : 0; }
 

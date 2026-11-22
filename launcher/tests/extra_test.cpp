@@ -87,6 +87,31 @@ static void TestLines() {
   CHECK_EQ(ex::ParseVersionOutput(""), "");
 }
 
+
+static void TestGen57Pieces(const fs::path& root) {
+  using K = ex::Line::Kind;
+  ex::Line l = ex::ParseLine("stage faces 56 80\n");
+  CHECK(l.kind == K::Stage && l.name == "faces" && l.done == 56 && l.total == 80);
+  CHECK(ex::ParseLine("stage faces 56").kind == K::None);
+  CHECK(ex::ParseLine("stage 12 56 80").kind == K::Stage);
+  launcher::GameInfo::ExtraSource s = PbrSource();
+  s.converterArguments = {"--gen57-pack", "{out3}", "--xd-exe", "{game_program}", "--data-folder", "{data}", "--out", "{out}"};
+  const auto args = ex::ConverterArguments(s, "d", "g", fs::path("O1"), fs::path("O2"), fs::path("O3"), "C:\game\xd.exe", fs::path("C:\data"));
+  CHECK(args.size() == 8 && args[1] == "O3" && args[3] == "C:\game\xd.exe" && args[5] == "C:\data" && args[7] == "O1");
+  const fs::path out = root / "extra_assets" / "usum_gen57";
+  CHECK(!ex::HasUnfinishedWork(out));
+  Write(fs::path(out.string() + ".work") / "state.json", "{}");
+  CHECK(ex::HasUnfinishedWork(out));
+  fs::remove_all(fs::path(out.string() + ".work"));
+
+  Write(out / "gen57.json", "{\"id\": \"ultra-sun-moon-gen57\", \"version\": 1, \"species\": 314}");
+  ex::SecondStatus st = ex::ComputeSecondStatus(out, "gen57.json", "ultra-sun-moon-gen57", 1, "Gen 5-7 Pokemon", false);
+  CHECK(st.kind == ex::SecondStatus::Kind::Ready && st.species == 314);
+  st = ex::ComputeSecondStatus(out, "gen57.json", "ultra-sun-moon-gen57", 1, "Gen 5-7 Pokemon", true);
+  CHECK(st.kind == ex::SecondStatus::Kind::OutOfDate);
+  fs::remove_all(out);
+}
+
 static void TestTable() {
   const launcher::GameInfo::ExtraSource s = PbrSource();
   std::vector<launcher::GameInfo::ExtraSource> table{s};
@@ -176,6 +201,23 @@ static void TestSecond(const fs::path& root) {
   s.converterArguments.push_back("{out2}");
   const auto args = ex::ConverterArguments(s, "p.iso", "x.iso", fs::path("C:\\data\\extra_assets\\pbr"), fs::path("C:\\data\\extra_assets\\pbr_gen4"));
   CHECK(args.size() == 8 && args[6] == "--gen4-pack" && args[7] == "C:\\data\\extra_assets\\pbr_gen4");
+}
+
+
+static void TestGameDisc() {
+  launcher::GameInfo::ExtraSource s = PbrSource();
+  const auto there = [](const std::string& p) { return p != "gone.iso"; };
+  auto c = ex::ChooseGameDisc(s, "xg.iso", "XG", "xd.iso", there);
+  CHECK(c.disc == "xg.iso" && c.message.empty());
+  s.needsPlainGameDisc = true;
+  c = ex::ChooseGameDisc(s, "xd.iso", "", "other.iso", there);
+  CHECK(c.disc == "xd.iso" && c.message.empty());
+  c = ex::ChooseGameDisc(s, "xg.iso", "XG", "xd.iso", there);
+  CHECK(c.disc == "xd.iso" && c.message.empty());
+  c = ex::ChooseGameDisc(s, "xg.iso", "XG", "gone.iso", there);
+  CHECK(c.disc.empty() && c.message.find("plain Pokemon XD disc") != std::string::npos);
+  c = ex::ChooseGameDisc(s, "xg.iso", "XG", "", there);
+  CHECK(c.disc.empty() && !c.message.empty());
 }
 
 static void TestDiscCheck() {
@@ -332,8 +374,10 @@ int main(int argc, char** argv) {
 #endif
   TestLines();
   TestTable();
+  TestGen57Pieces(root);
   TestStatus(root);
   TestSecond(root);
+  TestGameDisc();
   TestDiscCheck();
   if (fs::is_regular_file(standin, ec)) {
     TestMake(standin, root);

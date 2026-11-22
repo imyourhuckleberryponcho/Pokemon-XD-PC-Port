@@ -15,6 +15,7 @@ constexpr const char* CONVERTER_VERSION = "1.2.1";
 constexpr const char* MOD_ID = "battle-revolution-models";
 constexpr const char* PBR_ID = "RPBE01";
 constexpr const char* XD_ID = "GXXE01";
+constexpr const char* XG_MAIN_DOL_SHA1 = "6b756e98b18c27aa8f8995ad27ad1ea6f3508acd";
 
 class Fail : public std::runtime_error {
  public:
@@ -29,6 +30,7 @@ class DiscSource {
   virtual std::vector<std::pair<std::string, uint32_t>> files() const = 0;
   virtual std::vector<uint8_t> read(const std::string& path) const = 0;
   virtual void activate() const {}
+  virtual std::string main_dol_sha1() const { return std::string(); }
 };
 using DiscOpener = std::function<std::unique_ptr<DiscSource>(const std::string& path, const char* what)>;
 
@@ -57,6 +59,7 @@ struct RunArgs {
   int jobs = 0;
   std::string gen4_out;
   std::string gen4_pack;
+  std::string gen4_source;
 };
 class XdTables;
 using XdTablesFactory = std::function<std::unique_ptr<XdTables>(const DiscSource& xd)>;

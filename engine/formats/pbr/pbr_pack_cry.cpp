@@ -181,6 +181,21 @@ decoded:
 }
 
 std::vector<CryOut> gen4_cries(const DiscSource& pbr) {
+  if (pbr.game_id() == "GEN4SRC") {
+    std::vector<CryOut> out;
+    std::set<std::string> have;
+    for (const auto& f : pbr.files()) have.insert(f.first);
+    for (int dex = 387; dex <= 493; dex++) {
+      const std::string base = "cries/" + std::to_string(dex);
+      if (!have.count(base + ".hdr") || !have.count(base + ".body")) continue;
+      CryOut c;
+      c.dex = dex;
+      c.hdr = pbr.read(base + ".hdr");
+      c.body = pbr.read(base + ".body");
+      out.push_back(std::move(c));
+    }
+    return out;
+  }
   std::map<int, std::string> files;
   for (const auto& f : pbr.files()) {
     const std::string& k = f.first;

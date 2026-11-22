@@ -13,8 +13,7 @@ What we know and what we don't
 - Fixed since: 0.3.5 stopped after a few minutes of play ("no memory below 2 GB for a task's stack"), and
   quitting ended in a crash message; 0.5.5 fixed the launcher closing at once when you had a save. If the game
   still stops after some minutes, please send the logs folder (below).
-- Not known: how the game holds up over hours, and on Intel Macs; none of 0.6.0's new parts (Pokemon XG, the
-  Japanese pack, save import, Discord) has been tried on a real Mac yet.
+- Less tested so far: long sessions and Intel Macs. If something doesn't work, please tell us (below).
 - The Windows version is the tested one.
 
 Controllers
@@ -167,8 +166,85 @@ Discord presence
   "Story mode", "In a battle", "Online battle") and for how long, next to your name in Discord. It is on by default,
   talks only to the Discord app on this same PC, and shows no save name, trainer name or place.
 - To turn it off: Settings page of the launcher, or SETTINGS in the game, "Discord presence".
+- If nothing shows up while Discord is open, check that Discord is not running as administrator: a program started normally cannot reach it.
 
-New in 0.6.1: Gen 4 Pokemon and the Gen 4 rules are now two separate choices (with the rules off, the Gen 3 abilities work as before), and Gen 4 Pokemon also work in Pokemon XG; a Performance option (Settings) and smoother play on weak PCs (the sound chip runs on its own thread); Magmortar's colours are fixed (re-make the Battle Revolution models in the launcher); and Deoxys is no longer invisible with the Spanish language pack (re-make the language pack).
+Start options (for other launchers, Steam shortcuts, scripts)
+-------------------------------------------------------------
+Another launcher (RecompLauncher, a Steam shortcut, Steam Deck / Bazzite) can start the game with options written after
+the program's name. The launcher takes the same options and hands them to the game. Every option is for that one
+start only and is never saved (a disc that loads is remembered, as always).
+- --disc <file>        use this disc image. Just the file after the program's name still works too.
+- --fullscreen         full screen; --windowed: a window.
+- --data-folder <folder>   keep saves, settings, logs, cache and mods in that folder for this start. A new folder starts
+                       empty (it is a clean copy of the game), so your normal saves are not touched.
+- --preset original    or --preset enhanced: play with that preset (Original is exactly the GameCube game).
+- --save <name>        load the save with that name (the names on the launcher's Save page). A name that does not exist is
+                       reported and the game does not start.
+- --no-launcher        go straight into the game with the remembered disc (or --disc); the program you started stays
+                       open until the game ends, so a Steam shortcut follows the game itself.
+- --help and --version.
+Example: open -a "Pokemon XD" --args --fullscreen   (in Terminal; --no-launcher works the same way, or run "Pokemon XD.app/Contents/MacOS/xd_launcher" --no-launcher directly)
+
+Where your data is kept
+-----------------------
+Saves, settings, mods, logs and bug reports live in one data folder: ~/Library/Application Support/Pokemon XD.
+- The first time the launcher starts it asks once where it should be: your user folder (recommended: it survives deleting or
+  updating the game folder) or next to the game (portable: for a USB stick or one folder; the folder "portable" next to the app, which needs the app to sit in a folder you can write to).
+- Launcher, Save page, "Where your data is kept": "Open data folder"; "Move my data..." (user folder <-> portable: it
+  copies everything, checks the copy, switches, and puts the old folder in the Trash so nothing is lost; the launcher then
+  starts again); "Remove all game data..." (asks first, names the folder, offers to export your saves first).
+
+New in 0.7.0
+------------
+This is the big one. Parts that need a game disc or dump of your own are marked.
+New:
+- Gen 5, 6 and 7 Pokemon (314 of them, Victini to Zeraora), made from your own Pokemon Ultra Sun / Ultra Moon (3DS)
+  dump: species, moves (261 new ones), abilities (about 110 new ones), cries, models and round face pictures. Alolan
+  forms, Mega Evolution (a Z button row in the move menu; Mega Stones at the Poke Coupon desk) and Primal Groudon /
+  Kyogre. Battle forms change in battle (Aegislash, Mimikyu, Wishiwashi, Minior, Darmanitan, Meloetta, Greninja).
+  Not everything is complete: some new abilities and moves say so in their text, and Z-moves only do damage.
+- Pokemon Ultra Sun / Ultra Moon models can also be used for the Gen 1-4 Pokemon, and the Gen 4 Pokemon can be made
+  from that dump alone (no Battle Revolution disc needed). Gen 4 moves, abilities and items now show in French, German,
+  Italian, Spanish and Japanese too.
+- Rule sets on the New Game screen and in online rooms: XD, Gen 4, Gen 5, Gen 6, Gen 7 (each with its generation's
+  numbers and mechanics), the Pokemon generations you want, and "Looks" (which models to show: XD, Battle Revolution or
+  Ultra Sun / Ultra Moon, in your own order, with a pick per Pokemon). Each player sees his own Looks online.
+- Pokedex (Enhanced): the PDA's Strategy Memo opens a real Pokedex for all 807 Pokemon: list, details, stats, moves,
+  evolutions, where to find each one (Poke Spots, Shadow Pokemon, trainers) and Ultra Sun / Moon entry texts. Original
+  keeps the game's own Memo.
+- Native-looking menus: SETTINGS in the field menu looks like the bag, the title SETTINGS like OPTIONS, the EXTRAS
+  box, the New Game window, the MODS page (switch on / off, pick up and move), a mod's question as a person talking.
+- Battle replays: keep your battles (setting), play them back with Space (pause), [ and ] (speed), a replay bar and a
+  free camera you can move while it plays. Online battles save a file on both PCs too.
+- Online formats: six formats, Sleep clause, team preview, a battle clock, and plain refusal screens that say why a room
+  cannot be joined. 0.6.1 players can still join a classic room.
+- More Shadow Pokemon (New Game option, Enhanced): Off / A few / Many.
+- Modding is much bigger: new moves, abilities and battle rules without code, sounds, textures and music, scripts
+  (now Luau), stories and bigger Pokemon / move / item lists, a check-and-pack page in the launcher, and "Reload mods"
+  to see changes without restarting. The Modding Guide and a guide for AI helpers are in the public repository.
+- Smoother and faster: the graphics work is cheaper, fast-forward is lighter, fast-forward can keep the music at
+  normal speed, frame rates above 60 and optional FXAA / MSAA / texture filtering (all off by default).
+- Start options (--disc, --fullscreen, --data-folder, --save, --no-launcher...) and a clear choice of where your data
+  is kept.
+- Japanese text for all of the port's own screens (machine-made: corrections welcome).
+Fixed:
+- The thin grey line down the battle menu in widescreen.
+- A rare crash while taking a save picture, and the picture maker for the launcher's icons no longer stops on a model that loads late.
+Also: a battle rule that sets a level cap (rule sets, mods) never changes your real Pokemon's level or experience.
+
+New in 0.6.1
+------------
+New:
+- Gen 4 Pokemon and the Gen 4 rules are now two separate choices: you can have the Gen 4 Pokemon (made from your own
+  Battle Revolution disc) without the Gen 4 rules, and with the rules off the Gen 3 abilities work as before.
+- Gen 4 Pokemon also work in Pokemon XG.
+- A Performance option (Settings) for weaker PCs.
+- Smoother play on weak PCs: the sound chip now runs on its own thread.
+Fixed:
+- Magmortar's colours: its body was all red. Re-make the Battle Revolution models in the launcher (Extra assets says
+  "Out of date: make again").
+- Deoxys was invisible with the Spanish language pack. Re-make the language pack in the launcher (Extra assets says
+  "Out of date: make again").
 
 New in 0.6.0
 ------------
@@ -325,12 +401,12 @@ If it does not work
 
 Updates: the launcher asks once whether it may check, shows what is new and asks before downloading; the new app is
 unpacked beside this one and put in place when you press "Restart now" (the app must sit in a folder you can write
-to, such as Applications, not on a disk image). Not tried on a real Mac yet.
+to, such as Applications, not on a disk image).
 
 Questions, bug reports, other players: https://discord.gg/XVbDVXH4Pn
 
 Not in this build yet (they exist on Windows): the launcher's icon chooser and shortcut buttons, the window icon
-made from your disc. F10 (bug report) and F12 (screenshot) are in the game but have not been tried on a real Mac.
+made from your disc. F10 (bug report) and F12 (screenshot) are in the game.
 Settings can be changed in the game's own SETTINGS page (field menu: SETTINGS after EXIT; title screen: EXTRAS, then
 SETTINGS), or in settings.ini in the folder above.
 

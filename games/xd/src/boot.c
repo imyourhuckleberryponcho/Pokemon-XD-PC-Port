@@ -99,6 +99,7 @@ void PortXD_SettingsSwitchesUpdate(void);
 void PortXD_LoadSettings(void);
 bool PortXD_LoadMods(void);
 void PortXD_Gen4MainTables(void);
+void PortXD_ModSpeciesMainTables(void);
 void PortXD_ReadTrainerLevels(void);
 void PortXD_PlaythroughBoot(void);
 void PortXD_PlaythroughFrame(void);
@@ -135,6 +136,8 @@ void PortInput_SetCheckValue(const char* name, uint32_t (*value)(void), uint32_t
 bool PortXD_DevMenuInit(void);
 void PortXD_DevMenuToggle(void);
 void PortXD_DevMenuFrame(void);
+void PortXD_ModReloadKey(void);
+void PortXD_ModReloadFrame(void);
 void PortXD_PcTradeFrame(void);
 void PortXD_HeapCheckFrame(void);
 void PortXD_ShadersFrame(void);
@@ -165,6 +168,7 @@ static void reset_shutdown(void) {
   aurora_dvd_close();
   aurora_shutdown();
 }
+extern void PortXD_BattleReplayHandleEvent(const void* sdlEvent);
 static void handle_events(void) {
   if (sBugReportAt != 0 && VIGetRetraceCount() >= sBugReportAt) {
     sBugReportAt = 0;
@@ -179,6 +183,7 @@ static void handle_events(void) {
     if (event->type == AURORA_SDL_EVENT) {
       PortVideo_HandleEvent(&event->sdl);
       PortPhoto_HandleEvent(&event->sdl);
+      PortXD_BattleReplayHandleEvent(&event->sdl);
       PortSpeedups_HandleEvent(&event->sdl);
       PortInput_ControlsHandleEvent(&event->sdl);
     }
@@ -199,6 +204,10 @@ static void handle_events(void) {
     if (event->type == AURORA_SDL_EVENT && event->sdl.type == SDL_EVENT_KEY_DOWN && !event->sdl.key.repeat &&
         event->sdl.key.scancode == SDL_SCANCODE_F9) {
       PortXD_DevMenuToggle();
+    }
+    if (event->type == AURORA_SDL_EVENT && event->sdl.type == SDL_EVENT_KEY_DOWN && !event->sdl.key.repeat &&
+        event->sdl.key.scancode == SDL_SCANCODE_F6) {
+      PortXD_ModReloadKey();
     }
   }
   PortXD_BugReportPoll();
@@ -285,24 +294,47 @@ static void take_due_shots(void) {
   }
 }
 
+static void present_extra(void) {
+  aurora_end_frame();
+  PortCapture_Field();
+  begin_frame();
+}
+
+static bool overlay_hold_wanted(void) {
+  static int wanted = -1;
+  if (wanted < 0) {
+    const char* v = getenv("XD_OVERLAY_FIX");
+    wanted = v != NULL && v[0] == '0' ? 0 : 1;
+  }
+  return wanted != 0;
+}
+
 static void frame_hook(void) {
   PortGX_EndOfFrame();
   PortXD_SettingsMenuOverlay();
   PortFps_Frame(PortVI_GetFlipCount(), VIGetRetraceCount());
   PortSpeedrun_Draw();
-  PortFrameRate_BeforePresent();
+  const bool overlayHold = overlay_hold_wanted();
+  if (overlayHold) aurora_hold_overlay(true);
+  if (!PortPhoto_LiveBefore()) {
+    PortFrameRate_BeforePresent();
+  }
   aurora_end_frame();
+  if (overlayHold) aurora_hold_overlay(false);
   PortCapture_Field();
   if (sShotCount > 0) {
     take_due_shots();
   }
   handle_events();
   begin_frame();
-  PortFrameRate_AfterBegin();
+  if (!PortPhoto_LiveAfter()) {
+    PortFrameRate_AfterBegin();
+  }
   PortXD_GamePictureFrame();
   PortXD_HeapCheckFrame();
   PortXD_ShadersFrame();
   PortXD_DevMenuFrame();
+  PortXD_ModReloadFrame();
   PortXD_PcTradeFrame();
   PortPhoto_Frame(handle_events);
   PortFocusPause_Frame();
@@ -318,6 +350,13 @@ static void frame_hook(void) {
 #ifndef XD_SNAPSHOT_ID
 #define XD_SNAPSHOT_ID "unknown"
 #endif
+const char* PortXD_PortCommit(void) { return XD_PORT_COMMIT; }
+const char* PortXD_SnapshotId(void) { return XD_SNAPSHOT_ID; }
+#ifndef XD_PORT_VERSION
+#define XD_PORT_VERSION "unknown"
+#endif
+const char* PortXD_PortVersion(void) { return XD_PORT_VERSION; }
+#define XD_VERSION_LINE "Pokemon XD PC " XD_PORT_VERSION " (port " XD_PORT_COMMIT ", game code " XD_SNAPSHOT_ID ")"
 static void start_input_recording(const char* discPath) {
   const char* replay = getenv("XD_REPLAY");
   const bool replaying = replay != NULL && replay[0] != '\0';
@@ -498,7 +537,31 @@ int aurora_main(int argc, char** argv) {
 static
 #endif
 int aurora_main(int argc, char** argv) {
+  {
+    extern int PortXD_CommandLine(int argc, char** argv, const char* versionText, const char** message);
+    const char* optionError = NULL;
+    const int optionExit = PortXD_CommandLine(argc, argv, XD_VERSION_LINE, &optionError);
+    if (optionExit >= 0) {
+      if (optionError != NULL) {
+        fprintf(stderr, "XD: %s\n", optionError);
+        fflush(stderr);
+        {
+          const char* noBoxes = getenv("XD_NO_MESSAGE_BOXES");
+          const char* script = getenv("XD_INPUT_SCRIPT");
+          if ((noBoxes != NULL && noBoxes[0] == '1') || (script != NULL && script[0] != '\0')) {
+            PortMessage_SetWindows(false);
+          }
+        }
+        PortMessage_Show(PORT_MESSAGE_ERROR, "Pok\xC3\xA9mon XD", optionError);
+      }
+      return optionExit;
+    }
+  }
   PortCrash_Install();
+  extern int PortXD_BattleReplayPrepare(void);
+  if (!PortXD_BattleReplayPrepare()) {
+    return 2;
+  }
   const bool renderIcon = PortXD_RenderIconPrepare();
   const bool prepareShaders = PortXD_ShadersPrepareMode();
   {
@@ -588,7 +651,9 @@ int aurora_main(int argc, char** argv) {
     }
   }
 
-  const char* discPath = PortXD_ChooseDisc(argc >= 2 ? argv[1] : getenv("XD_DISC"), interactive);
+  extern const char* PortXD_CommandLineDisc(void);
+  const char* givenDisc = PortXD_CommandLineDisc();
+  const char* discPath = PortXD_ChooseDisc(givenDisc[0] != '\0' ? givenDisc : getenv("XD_DISC"), interactive);
   if (discPath != NULL && discPath[0] == '\0') {
     return 0;
   }
@@ -615,6 +680,14 @@ int aurora_main(int argc, char** argv) {
       fprintf(stderr, "[xg] XG mode: the Pokemon XG romhack disc; its own saves; Gen 4 rules, Fairy types, language packs and data-mod add rows are off; mods, randomizer, challenges and online (XG players only) are on\n");
     }
   }
+  {
+    extern const char* PortXD_SaveChoiceProblem(void);
+    const char* saveProblem = PortXD_SaveChoiceProblem();
+    if (saveProblem != NULL) {
+      PortDisc_Close();
+      return fail(saveProblem);
+    }
+  }
   if (interactive) {
     PortXD_RememberDisc(discPath);
   }
@@ -631,6 +704,7 @@ int aurora_main(int argc, char** argv) {
     return 1;
   }
   PortXD_Gen4MainTables();
+  PortXD_ModSpeciesMainTables();
   char gameId[8];
   snprintf(gameId, sizeof gameId, "%s", PortDisc_GameId());
   PortDisc_Close();
@@ -794,6 +868,7 @@ int aurora_main(int argc, char** argv) {
   PortVideo_Start();
   PortPhoto_Init("Pokemon XD", PortVI_GetFlipCount);
   PortMenu_Init("Pokemon XD", PortVI_GetFlipCount);
+  PortFrameRate_SetPresenter(present_extra);
   PortFrameRate_Init(VIGetRetraceCount);
   PortCapture_Init(PortVI_GetFlipCount, VIGetRetraceCount);
   PortXD_SettingsMenuInit();

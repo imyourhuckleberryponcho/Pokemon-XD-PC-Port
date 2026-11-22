@@ -19,6 +19,7 @@ struct GSgfxLayer : public GSgfxLayerData {};
 
 #include <port_disc.h>
 #include "xd_gen4.h"
+extern "C" int PortXD_SpeciesIndexOfNational(int national);
 #include <port_user_folder.h>
 
 #include <algorithm>
@@ -75,6 +76,16 @@ void* Sequence_LoadTrainer(u16 id);
 _GSmodel* Sequence_GetGSmodel(void* seq);
 void Sequence_SetVisibility(void* seq, bool visible);
 void Sequence_DoAnimation(void* seq, int index);
+void Sequence_Free(void* seq);
+void GSfsysFreeCache(s32 group);
+}
+
+extern "C" {
+struct IconPkxEntry {
+  u32 a, b;
+};
+extern IconPkxEntry pokemon_pkx_data[];
+extern u32 pokemon_pkx_data_number;
 }
 
 namespace {
@@ -90,12 +101,18 @@ struct Job {
   int number = 0;
   bool shiny = false;
   int anim = -1;
+  bool face = false;
+  float faceAt[6] = {0.f, 0.f, 0.f, 1.f, 18.f, 6.f};
   std::string name;
   void* sequence = nullptr;
   _GSmodel* model = nullptr;
   bool refined = false;
+  bool species = false;
   bool offer = false;
+  bool row = false;
   bool failed = false;
+  bool retried = false;
+  u32 fileGroup = 0;
   std::string note;
   std::vector<uint8_t> rgba;
   int width = 0, height = 0;
@@ -104,6 +121,8 @@ struct Job {
 std::vector<Job> sJobs;
 void WriteOfferPicture(Job& job);
 size_t sCurrent = 0;
+u32 sFreeCacheGroup = 0;
+void* sFreeLater = nullptr;
 std::string sIconDir, sBgDir, sOfferDir;
 int sSize = 1024;
 void (*sPrevious)(uint32_t) = nullptr;
@@ -307,9 +326,23 @@ void ApplyView() {
   GSlightSetTarget(sLights[2], at);
 }
 
+bool ReadBounds(_GSmodel* model, Vec* mn, Vec* mx) {
+#if defined(_WIN32)
+  __try {
+    GSboundGetMinMax(GSmodelGetBound(model), mn, mx, true, true, true, false);
+  } __except (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH) {
+    return false;
+  }
+#else
+  GSboundGetMinMax(GSmodelGetBound(model), mn, mx, true, true, true, false);
+#endif
+  return true;
+}
+int sBoundsRetries = 0;
+
 bool AimAtBounds(_GSmodel* model, Vec dir) {
   Vec mn, mx;
-  GSboundGetMinMax(GSmodelGetBound(model), &mn, &mx, true, true, true, false);
+  if (!ReadBounds(model, &mn, &mx)) return false;
   const float dx = mx.x - mn.x, dy = mx.y - mn.y, dz = mx.z - mn.z;
   if (!(mx.x >= mn.x) || dx + dy + dz < 1e-4f) return false;
   sView.target = Vec{(mn.x + mx.x) * 0.5f, (mn.y + mx.y) * 0.5f, (mn.z + mx.z) * 0.5f};
@@ -343,7 +376,22 @@ void UseOwnLights(bool on) {
 
 s32 LoadThread() {
   Job& job = sJobs[sCurrent];
-  const u16 id = job.offer ? (u16)pokemonGetStatus(nullptr, (u16)job.number, 0x66, 0) : (u16)job.number;
+  if (sFreeLater != nullptr) {
+    Sequence_Free(sFreeLater);
+    if (sFreeCacheGroup != 0) GSfsysFreeCache((s32)sFreeCacheGroup);
+    sFreeCacheGroup = 0;
+    sFreeLater = nullptr;
+  }
+  u16 id = (job.offer || job.row) ? (u16)pokemonGetStatus(nullptr, (u16)job.number, 0x66, 0) : (u16)job.number;
+  if (job.species) {
+    const int index = PortXD_SpeciesIndexOfNational(job.number);
+    id = index > 0 ? (u16)pokemonGetStatus(nullptr, (u16)index, 0x66, 0) : (u16)0;
+  }
+  if (job.row && id == 0) {
+    sLoader = nullptr;
+    return 1;
+  }
+  if (job.kind == Kind::Pokemon && id != 0 && id < pokemon_pkx_data_number && !job.shiny) job.fileGroup = pokemon_pkx_data[id].a;
   job.sequence = job.kind == Kind::Pokemon ? Sequence_LoadPokemon(id, 0, job.shiny)
                                            : Sequence_LoadTrainer((u16)job.number);
   if (job.sequence != nullptr) job.model = Sequence_GetGSmodel(job.sequence);
@@ -581,6 +629,18 @@ void Collect(uint32_t frame) {
   const auto premul = Unblend(sPixels[0], sPixels[1], (int)(width * height));
   // The logo: only the top of the title picture (PRESS START and the copyright lines are below it).
   const int rows = job.kind == Kind::Logo ? (int)(height * 0.53f) : (int)height;
+  if (job.face && !screen) {
+    job.width = job.height = sSize;
+    job.rgba = Resample(premul, (int)width, (int)height, width * 0.5f, height * 0.5f, (float)width, (float)height, sSize, sSize);
+    const std::string file = sIconDir + kSep + job.name + ".png";
+    if (WritePng(file, sSize, sSize, job.rgba)) {
+      job.note = "face";
+      std::fprintf(stderr, "[render icon] wrote %s (face)\n", file.c_str());
+    } else {
+      job.failed = true, job.note = "could not write " + file;
+    }
+    return;
+  }
   if (!screen && !job.refined) {
     const Rect r = Covered(premul, (int)width, rows);
     if (r.x1 < 0) {
@@ -753,7 +813,24 @@ void OnFrame(uint32_t frame) {
       const float yaw = 32.f * 3.14159265f / 180.f, pitch = 12.f * 3.14159265f / 180.f;
       const Vec dir{std::sin(yaw) * std::cos(pitch), std::sin(pitch), std::cos(yaw) * std::cos(pitch)};
       StopPose(job.model);
+      if (job.face) {
+        if (GSmodelCanAnimate(job.model) != 0) GSmodelSetAnimFrame(job.model, 0.f);
+        const float yawF = job.faceAt[4] * 3.14159265f / 180.f, pitchF = job.faceAt[5] * 3.14159265f / 180.f;
+        sView.target = Vec{job.faceAt[0], job.faceAt[1], job.faceAt[2]};
+        sView.dir = Vec{std::sin(yawF) * std::cos(pitchF), std::sin(pitchF), std::cos(yawF) * std::cos(pitchF)};
+        sView.r = std::max(job.faceAt[3], 0.01f);
+        sView.fov = 30.f;
+        sView.dist = sView.r / std::sin(sView.fov * 0.5f * 3.14159265f / 180.f);
+        ApplyView();
+        sStep = Step::Armed;
+        sStepFrame = frame;
+        break;
+      }
       if (!AimAtBounds(job.model, dir)) {
+        if (++sBoundsRetries <= 30) {
+          sStepFrame = frame - 10;
+          break;
+        }
         job.failed = true, job.note = "the model has no size";
         sStep = Step::Next;
         break;
@@ -772,19 +849,29 @@ void OnFrame(uint32_t frame) {
     Collect(frame);
     break;
   case Step::Next: {
-    Job& job = sJobs[sCurrent];
-    if (job.failed) {
+    if (sJobs[sCurrent].failed && sJobs[sCurrent].kind == Kind::Pokemon && !sJobs[sCurrent].retried) {
+      Job copy = sJobs[sCurrent];
+      std::fprintf(stderr, "[render icon] %s: %s; will be tried once more at the end\n", copy.name.c_str(), copy.note.c_str());
+      copy.failed = false, copy.retried = true, copy.note.clear(), copy.sequence = nullptr, copy.model = nullptr, copy.refined = false;
+      sJobs[sCurrent].failed = false, sJobs[sCurrent].retried = true, sJobs[sCurrent].note = "retried";
+      sJobs.push_back(copy);
+    } else if (sJobs[sCurrent].failed) {
       sFailed++;
-      std::fprintf(stderr, "[render icon] %s FAILED: %s\n", job.name.c_str(), job.note.c_str());
-    } else {
+      std::fprintf(stderr, "[render icon] %s FAILED: %s\n", sJobs[sCurrent].name.c_str(), sJobs[sCurrent].note.c_str());
+    } else if (!sJobs[sCurrent].retried || sJobs[sCurrent].note != "retried") {
       sMade++;
     }
+    Job& job = sJobs[sCurrent];
     if (sReport != nullptr) {
       std::fprintf(sReport, "%s %s %s\n", job.name.c_str(), job.failed ? "failed" : "ok", job.note.c_str());
       std::fflush(sReport);
     }
     if (job.sequence != nullptr) Sequence_SetVisibility(job.sequence, false);
+    sFreeLater = job.sequence;
+    sFreeCacheGroup = job.fileGroup;
+    job.sequence = nullptr, job.model = nullptr;
     if (++sCurrent >= sJobs.size()) finish(sFailed == 0 ? 0 : 2);
+    sBoundsRetries = 0;
     sStep = Step::Load;
     break;
   }
@@ -814,6 +901,21 @@ bool AddItem(const std::string& item) {
     }
     return true;
   }
+  if (item.rfind("row:", 0) == 0) {
+    const int row = (int)std::strtol(item.c_str() + 4, nullptr, 10);
+    const bool shiny = item.size() > 6 && item.compare(item.size() - 6, 6, ":shiny") == 0;
+    if (row < 1) return false;
+    add(Kind::Pokemon, row, shiny, "pokemon_" + std::to_string(row) + (shiny ? "_shiny" : ""));
+    sJobs.back().row = true;
+    return true;
+  }
+  if (item.rfind("species:", 0) == 0) {
+    const int nat = (int)std::strtol(item.c_str() + 8, nullptr, 10);
+    if (nat < 1 || nat > 493) return false;
+    add(Kind::Pokemon, nat, false, "looks_" + std::to_string(nat));
+    sJobs.back().species = true;
+    return true;
+  }
   if (item == "logo") return add(Kind::Logo, 0, false, "logo");
   if (item == "title_scene") return add(Kind::Scene, 0, false, "title_scene");
   if (item == "lugia_sky") return add(Kind::LugiaSky, 0, false, "lugia_sky");
@@ -836,16 +938,28 @@ bool AddItem(const std::string& item) {
   const int number = (int)std::strtol(parts[1].c_str(), nullptr, 0);
   bool shiny = false;
   int anim = -1;
+  bool face = false;
+  float faceAt[6] = {0.f, 0.f, 0.f, 1.f, 18.f, 6.f};
   std::string name;
   for (size_t i = 2; i < parts.size(); i++) {
     if (parts[i] == "shiny") shiny = true;
     else if (parts[i].rfind("anim", 0) == 0) anim = std::atoi(parts[i].c_str() + 4);
-    else name = parts[i];
+    else if (parts[i].rfind("face=", 0) == 0) {
+      face = true;
+      const char* q = parts[i].c_str() + 5;
+      for (int k = 0; k < 6 && *q != '\0'; k++) {
+        char* end = nullptr;
+        faceAt[k] = std::strtof(q, &end);
+        q = *end == '/' ? end + 1 : end;
+      }
+    } else name = parts[i];
   }
   if (name.empty()) name = parts[0] + "_" + parts[1] + (shiny ? "_shiny" : "") + (anim >= 0 ? "_anim" + std::to_string(anim) : "");
   if (parts[0] == "pokemon" || parts[0] == "trainer") {
     add(parts[0] == "pokemon" ? Kind::Pokemon : Kind::Trainer, number, shiny, name);
     sJobs.back().anim = anim;
+    sJobs.back().face = face && parts[0] == "pokemon";
+    for (int k = 0; k < 6; k++) sJobs.back().faceAt[k] = faceAt[k];
     return true;
   }
   if (parts[0] == "title") return add(Kind::Title, number, false, name);

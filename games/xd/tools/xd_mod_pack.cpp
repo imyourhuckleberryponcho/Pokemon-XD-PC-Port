@@ -18,6 +18,8 @@ void Usage() {
                "                   [--notes <text>] [--allow-same-size-textures] [--strict] [--key <key file>]\n"
                "  --key: sign the update file with your key (the private key stays in that file, outside the mod).\n"
                "  xd_mod_pack --make-key <key file> makes a new key (never overwrites one).\n"
+               "  xd_mod_pack --rotate-key <old key file> <new key file> plans a key change: the old key signs \"the new key is X\" (the new key file\n"
+               "  is made when missing); pack with --key <new key file> from then on and launchers follow by themselves.\n"
                "  Makes <id>-<version>.zip next to the mod folder (or in --out). With --disc, files that are unchanged copies of the disc's are\n"
                "  refused too, and the deeper checks run. --refuse-hashes: a text file with one SHA-256 per line of game files that must never ship.\n"
                "  --url-base: where you will upload the zip (the update file's \"url\"); --notes: release notes for the update file.\n");
@@ -37,6 +39,16 @@ int main(int argc, char** argv) {
     else if (a == "--allow-same-size-textures") options.allowSameSizeTextures = true;
     else if (a == "--strict") options.strict = true;
     else if (a == "--key" && i + 1 < argc) options.signKey = fs::path(argv[++i]);
+    else if (a == "--rotate-key" && i + 2 < argc) {
+      std::string message, error;
+      const fs::path oldKey = fs::path(argv[i + 1]), newKey = fs::path(argv[i + 2]);
+      if (!mc::RotateKeyFile(oldKey, newKey, message, error)) {
+        std::fprintf(stderr, "%s\n", error.c_str());
+        return 3;
+      }
+      std::printf("%s\n", message.c_str());
+      return 0;
+    }
     else if (a == "--make-key" && i + 1 < argc) {
       std::string pub, error;
       if (!mc::MakeKeyFile(fs::path(argv[++i]), pub, error)) {

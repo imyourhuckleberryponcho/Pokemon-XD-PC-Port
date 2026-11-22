@@ -233,7 +233,8 @@ void make_gen4_pack(const std::string& out_folder, const DiscSource& pbr, const 
   for (const PackModel& m : models) {
     PlanIn p;
     p.model = m.name;
-    if (!m.standin.empty()) {
+    if (m.standin_nat) p.standin_nat = m.standin_nat;
+    else if (!m.standin.empty()) {
       auto it = nat_of_name.find(m.standin);
       if (it != nat_of_name.end()) p.standin_nat = it->second;
     }
@@ -261,6 +262,10 @@ void make_gen4_pack(const std::string& out_folder, const DiscSource& pbr, const 
   const std::vector<CryOut> cry_all = gen4_cries(pbr);
   const std::vector<FaceOut> face_all = gen4_faces(pbr, xd);
   const std::vector<IconOut> icon_all = gen4_icons(pbr, xd);
+  std::set<int> has_cry, has_face, has_icon;
+  for (const CryOut& c : cry_all) has_cry.insert(c.dex);
+  for (const FaceOut& f : face_all) has_face.insert(f.dex);
+  for (const IconOut& i : icon_all) has_icon.insert(i.dex);
 
   struct CryRef { int dex, voice_from, n, hdr_id, body_id; };
   struct PkxRef { int row, group; uint32_t res; std::string model; int dex; };
@@ -287,21 +292,25 @@ void make_gen4_pack(const std::string& out_folder, const DiscSource& pbr, const 
     } else {
       setfl("pkxDataId", 418);
     }
-    if (s.dex != 438) {
+    if (s.dex != 438 && has_face.count(s.dex)) {
       Json sp = Json::array();
       sp.push(kFaceCount + 2 * face_k(s.dex));
       sp.push(kFaceCount + 2 * face_k(s.dex) + 1);
       setfl("cgData.spriteId", sp);
     }
     if (s.dex != 438) {
-      const int j = (int)cries.size();
-      cries.push_back({s.dex, be16(s.rec, 0x0C), j, 0, 0});
-      Json pb = Json::array();
-      pb.push((int64_t)((((uint32_t)kIconFirstId + 2 * face_k(s.dex)) << 16) | 0x3200u));
-      pb.push((int64_t)((((uint32_t)kIconFirstId + 2 * face_k(s.dex) + 1) << 16) | 0x3200u));
-      setfl("cgData.pokebodyId", pb);
-      setfl("nakigoeId", kWaveOld + j);
-      setfl("voice", kSndDataCount + j);
+      if (has_icon.count(s.dex)) {
+        Json pb = Json::array();
+        pb.push((int64_t)((((uint32_t)kIconFirstId + 2 * face_k(s.dex)) << 16) | 0x3200u));
+        pb.push((int64_t)((((uint32_t)kIconFirstId + 2 * face_k(s.dex) + 1) << 16) | 0x3200u));
+        setfl("cgData.pokebodyId", pb);
+      }
+      if (has_cry.count(s.dex)) {
+        const int j = (int)cries.size();
+        cries.push_back({s.dex, be16(s.rec, 0x0C), j, 0, 0});
+        setfl("nakigoeId", kWaveOld + j);
+        setfl("voice", kSndDataCount + j);
+      }
     } else {
       setfl("voice", 1269);
     }
@@ -324,6 +333,10 @@ void make_gen4_pack(const std::string& out_folder, const DiscSource& pbr, const 
         for (char& c : up) c = (char)std::toupper((unsigned char)c);
         t.set("typeName", up);
       }
+      if (cat != kCategory.end())
+        gen4_add_lang_fields(t, {{"name", gen4_lang_row("species_name", name)}, {"typeName", gen4_lang_row("species_category", name)}});
+      else
+        gen4_add_lang_fields(t, {{"name", gen4_lang_row("species_name", name)}});
       d.set("text", t);
       s.key = name;
       add.set(name, d);
@@ -517,7 +530,7 @@ void make_gen4_pack(const std::string& out_folder, const DiscSource& pbr, const 
     for (const IconOut& i : icon_all) icon_by_dex[i.dex] = &i;
     for (int dex : dexes) {
       auto it = icon_by_dex.find(dex);
-      if (it == icon_by_dex.end()) throw Fail("No PC box picture for Pokemon " + std::to_string(dex));
+      if (it == icon_by_dex.end()) continue;
       for (int shiny = 0; shiny < 2; shiny++) {
         const uint32_t id = (uint32_t)(kIconFirstId + 2 * face_k(dex) + shiny);
         if (used.count(id)) throw Fail("poke_dance member id clash");
@@ -664,13 +677,14 @@ void make_gen4_pack(const std::string& out_folder, const DiscSource& pbr, const 
   }
   {
     Json g = Json::object();
-    g.set("id", "battle-revolution-gen4");
+    const bool from_source = pbr.game_id() == "GEN4SRC";
+    g.set("id", from_source ? "usum-gen4" : "battle-revolution-gen4");
     g.set("version", kPackVersion);
     g.set("species", ss.species.size());
     g.set("models", pkx.size());
     g.set("cries", cries.size());
     g.set("game", "GXXE01");
-    g.set("generated_from", "RPBE01");
+    g.set("generated_from", from_source ? "CTR-P-A2A" : "RPBE01");
     write_text(tmp / "gen4.json", g.dump(1));
   }
   fs::path old = pack;

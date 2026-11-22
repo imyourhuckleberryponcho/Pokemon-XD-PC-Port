@@ -104,6 +104,7 @@ struct Recording {
   uint32_t tickCount = 0;
   std::vector<Change> changes;
   std::vector<Mark> marks;
+  std::vector<uint32_t> modReloads;
   std::vector<DevMenuLine> devMenu;
   std::vector<DevMenuLine> settings;
   bool settingsSinceMenu = false;
@@ -130,6 +131,7 @@ std::string FormatEnhanced(uint32_t frame, uint32_t field, const std::string& wh
 std::string FormatMenu(uint32_t frame, uint32_t field, const std::string& what);
 std::string FormatSettings(uint32_t frame, uint32_t field, const std::string& list);
 std::string FormatPlaythrough(uint32_t frame, uint32_t field, const std::string& what);
+std::string FormatMods(uint32_t frame, uint32_t field, const std::string& what);
 std::string FormatEnd(uint32_t frame, uint32_t field);
 std::string FormatClockSite(const ClockSite& site);
 std::string FormatPadState(const PadState& state);

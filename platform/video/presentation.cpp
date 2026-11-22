@@ -26,6 +26,7 @@
 #include <atomic>
 #include <cmath>
 #include <cstdint>
+#include <deque>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -54,6 +55,9 @@ struct Choices {
   bool performance = false;
   bool fullscreen = false;
   bool borderless = false;
+  bool fxaa = false;
+  bool msaa = false;
+  int32_t anisotropy = 1;
 };
 
 std::atomic<float> sWideScale{1.f};
@@ -81,7 +85,7 @@ Choices read_settings() {
     c.pacing = Pacing::Auto;
   } else if (pacing == r.ChoiceIndex("video.frame_pacing", "low_latency")) {
     c.pacing = Pacing::LowLatency;
-  } else if (r.Enum("video.frame_rate").Get() == r.ChoiceIndex("video.frame_rate", "60") &&
+  } else if (r.Enum("video.frame_rate").Get() != r.ChoiceIndex("video.frame_rate", "original") &&
              !r.Bool("video.performance").Get()) {
     c.pacing = Pacing::Auto;
   }
@@ -89,6 +93,15 @@ Choices read_settings() {
   c.performance = r.Bool("video.performance").Get();
   c.fullscreen = r.Bool("video.fullscreen").Get();
   c.borderless = r.Bool("video.borderless_window").Get();
+  const int32_t aa = r.Enum("video.anti_aliasing").Get();
+  c.fxaa = aa == r.ChoiceIndex("video.anti_aliasing", "fxaa") || aa == r.ChoiceIndex("video.anti_aliasing", "msaa4_fxaa");
+  c.msaa = aa == r.ChoiceIndex("video.anti_aliasing", "msaa4") || aa == r.ChoiceIndex("video.anti_aliasing", "msaa4_fxaa");
+  const int32_t filter = r.Enum("video.texture_filtering").Get();
+  c.anisotropy = filter == r.ChoiceIndex("video.texture_filtering", "2x")    ? 2
+                 : filter == r.ChoiceIndex("video.texture_filtering", "4x")  ? 4
+                 : filter == r.ChoiceIndex("video.texture_filtering", "8x")  ? 8
+                 : filter == r.ChoiceIndex("video.texture_filtering", "16x") ? 16
+                                                                             : 1;
   return c;
 }
 
@@ -203,6 +216,27 @@ void apply_resolution(SDL_Window* window, const char* when, bool always) {
                                                              : "scaled up: bilinear");
   } else {
     std::fprintf(stderr, "[video] %s: resolution: the window's size (%dx%d window)\n", when, w, h);
+  }
+}
+
+bool sMsaaOn = false;
+void apply_look(const char* when) {
+  static int sLastFxaa = -1, sLastAniso = -1;
+  if (sLastFxaa != (sChoices.fxaa ? 1 : 0)) {
+    aurora_set_post_aa(sChoices.fxaa ? 1u : 0u);
+    sLastFxaa = sChoices.fxaa ? 1 : 0;
+    std::fprintf(stderr, "[video] %s: anti-aliasing: %s%s%s\n", when, sMsaaOn ? "MSAA 4x" : "no MSAA",
+                 sChoices.fxaa ? " + FXAA" : "", sChoices.msaa != sMsaaOn ? " (MSAA changes at the next start)" : "");
+  }
+  if (sLastAniso != sChoices.anisotropy) {
+    aurora_set_forced_anisotropy(static_cast<uint16_t>(sChoices.anisotropy));
+    sLastAniso = sChoices.anisotropy;
+    if (sChoices.anisotropy > 1) {
+      std::fprintf(stderr, "[video] %s: texture filtering: anisotropic %dx on every linear-filtered texture\n", when,
+                   sChoices.anisotropy);
+    } else {
+      std::fprintf(stderr, "[video] %s: texture filtering: as the game asks\n", when);
+    }
   }
 }
 
@@ -416,6 +450,11 @@ struct Pacer {
 };
 Pacer sPacer;
 bool sStatsOn = false;
+struct PresentMarks {
+  std::mutex mutex;
+  std::deque<bool> pace;
+};
+PresentMarks sMarks;
 
 double wrap_half(double x, double period) {
   x = std::fmod(x, period);
@@ -447,6 +486,16 @@ void wait_until(int64_t when) {
 void before_present_hook() {
   if (!sPacer.on || sFastForward.load(std::memory_order_relaxed)) {
     return;
+  }
+  {
+    std::lock_guard lock{sMarks.mutex};
+    if (!sMarks.pace.empty()) {
+      const bool pace = sMarks.pace.front();
+      sMarks.pace.pop_front();
+      if (!pace) {
+        return;
+      }
+    }
   }
   LARGE_INTEGER qpc;
   QueryPerformanceCounter(&qpc);
@@ -482,6 +531,10 @@ extern "C" {
 
 void PortVideo_Configure(AuroraConfig* config) {
   sChoices = read_settings();
+  if (sChoices.msaa) {
+    config->msaa = 4;
+    sMsaaOn = true;
+  }
   sVsyncAllowed = config->vsync;
   sVsyncOn = config->vsync;
   if (sChoices.widescreen && config->windowWidth == 0 && config->windowHeight == 0) {
@@ -496,6 +549,18 @@ void PortVideo_UseWindowResolution(void) { sWindowResolution = true; }
 float PortVideo_ResolutionScale(void) { return resolution_scale(); }
 
 float PortVideo_WideScale(void) { return sWideScale.load(std::memory_order_relaxed); }
+
+float PortVideo_MonitorHz(void) { return sMonitorHz; }
+
+void PortVideo_PresentsComing(unsigned count, bool firstPaced) {
+  std::lock_guard lock{sMarks.mutex};
+  for (unsigned i = 0; i < count; ++i) {
+    sMarks.pace.push_back(i == 0 && firstPaced);
+  }
+  while (sMarks.pace.size() > 64) {
+    sMarks.pace.pop_front();
+  }
+}
 
 void PortVideo_ApplySettings(void) {
   const Choices before = sChoices;
@@ -513,6 +578,7 @@ void PortVideo_ApplySettings(void) {
   }
   apply_window_mode(window, "settings");
   apply_resolution(window, "settings", false);
+  apply_look("settings");
 }
 
 void PortVideo_SetSettingsSaver(void (*save)(void)) { sSaveSettings = save; }
@@ -543,6 +609,7 @@ void PortVideo_Start(void) {
   apply_pacing(window, "start");
   if (sChoices.fullscreen || sChoices.borderless) apply_window_mode(window, "start");
   apply_resolution(window, "start", true);
+  apply_look("start");
 
   const char* stats = std::getenv("XD_PRESENT_STATS");
   if (stats != nullptr && stats[0] != '\0' && std::atof(stats) > 0.0) {

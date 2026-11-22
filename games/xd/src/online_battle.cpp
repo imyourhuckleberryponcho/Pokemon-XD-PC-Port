@@ -1,8 +1,12 @@
 #include "online_battle.h"
+#include "xd_ruleset_texts.h"
+#include "xd_rulesets.h"
+#include "xd_forms.h"
 
 #include "i18n.h"
 
 #include "online_commit.h"
+#include "battle_replay.h"
 #include "online_draft_game.h"
 #include "online_room.h"
 #include "online_team.h"
@@ -10,6 +14,10 @@
 #include "data/common_rel.h"
 #include "xd_challenges.h"
 #include "xd_gen4.h"
+#include "xd_mod_battle.h"
+#include "xd_gen_rules.h"
+#include "xd_modern_types.h"
+#include "xd_gen57.h"
 #include "xd_xg.h"
 #include "xd_playthrough.h"
 
@@ -23,6 +31,7 @@
 #include <settings.h>
 
 #include <algorithm>
+#include <limits>
 #include <array>
 #include <chrono>
 #include <system_error>
@@ -99,6 +108,7 @@ uint8_t fightFloorSetFightResultId(void* floor, uint16_t id);
 void* fightFloorGetFightOutPokemonPtrToFightTrainerPtr(void* floor, void* fop);
 uint32_t fightFloorGetStatus(void* floor, uint16_t dataId, uint16_t status, uint16_t arg);
 void fightPokemonCreate(void* trainer, void* fightPokemon, void* pokemon, int16_t entryId);
+void* fightPokemon_GetPokemonBuffPtr(void* fp);
 uint8_t pokemonBiosGetLevel(void* poke);
 uint8_t pokemonCheckValid(void* poke);
 uint8_t pokemonCheckFightOut(void* poke);
@@ -209,6 +219,10 @@ struct State {
   bool timing = false;
   bool choosing = false, startRequested = false;
   bool timeUpDone = false;
+  int64_t bankMs = -1;
+  std::chrono::steady_clock::time_point choiceStart;
+  bool bankOn = false;
+  uint32_t timeouts[2] = {0, 0};
   int lastCount = 1 << 30;
   bool human = false;
   xd::online::RoomRules rules;
@@ -227,11 +241,16 @@ struct State {
   std::string lobbySave;
   std::vector<xd::online::Pick> lobbyPicks;
   std::vector<uint16_t> lobbySpecies;
+  std::vector<uint16_t> friendPreview;
   bool battleOver = false;
   unsigned lastResult = 0;
   bool lastDesync = false;
+  bool spectator = false;
+  xd::online::SpectatorFeed* feed = nullptr;
 };
 State S;
+std::map<uint32_t, uint32_t> sEntrySeed;
+std::vector<std::pair<uint32_t, uint64_t>> sSpecPending;
 bool sLobbyPending = false;
 xd::online::LobbyHandOver sLobbyIn;
 
@@ -254,6 +273,8 @@ xd::online::Capabilities MyCapabilities() {
   xd::online::Capabilities c;
   c.disc = "GXXE01";
   c.edition = xd::xg::Edition();
+  for (const engine::rulesets::Format& f : xd::rulesets::Formats()) c.knownFormats += (c.knownFormats.empty() ? "" : ",") + f.id + ":" + xd::rulesets::FormatDigest(f);
+  c.formatsDigest = xd::online::Hex(xd::online::Fnv64(c.knownFormats.data(), c.knownFormats.size()));
   if (xd::xg::Off(xd::xg::Feature::Gen4Pokemon) == nullptr && (xd::gen4::Loaded() || xd::gen4::PackPresent())) {
     if (xd::gen4::Loaded()) c.ruleSet = "gen4";
     std::string text;
@@ -267,12 +288,21 @@ xd::online::Capabilities MyCapabilities() {
     } else {
       c.gen4Pack = "unknown";
     }
+    if (xd::gen57::Loaded()) {
+      std::ifstream in57(xd::gen57::PackFolder() / L"gen57.json", std::ios::binary);
+      std::ostringstream o57;
+      if (in57) o57 << in57.rdbuf();
+      const std::string t57 = o57.str();
+      c.gen4Pack += "+g57" + (in57 ? xd::online::Hex(xd::online::Fnv64(t57.data(), t57.size())) : std::string("unknown"));
+    }
     if (xd::xg::On()) c.gen4Pack += "+xg1";
   }
   std::vector<std::string> ids = xd::pt::LoadedModIds();
   std::sort(ids.begin(), ids.end());
   for (const std::string& id : ids) c.mods += (c.mods.empty() ? "" : ",") + id;
   c.randomizer = xd::pt::LoadedRandomizer();
+  c.tables = xd::modbattle::Digest();
+  c.numbers = std::to_string(xd::rulegen::NumbersLoaded()) + (xd::modern::Loaded() && xd::rulegen::NumbersLoaded() >= 6 ? "f" : "");
   return c;
 }
 
@@ -323,6 +353,7 @@ void EndEarly(const std::string& why) {
 }
 
 void Send(const std::string& text) {
+  if (!S.link) return;
   if (!S.link->Send(reinterpret_cast<const uint8_t*>(text.data()), text.size())) {
     S.dead = true;
     Log("send failed");
@@ -338,7 +369,9 @@ uint64_t Mix(uint64_t h, uint32_t v) {
 }
 
 uint64_t Digest(uint32_t turn) {
+  const bool dlog = std::getenv("XD_DIGEST_LOG") != nullptr;
   uint64_t h = 1469598103934665603ull;
+  if (dlog) Log("digest %u: seed %08x weather %u result %u", turn, __hsd_rand_seed_hold ? *__hsd_rand_seed_hold : 0u, static_cast<unsigned>(fightFloorGetNowTenkouDataId(nullptr, 0)), static_cast<unsigned>(fightGetFightResultId()));
   h = Mix(h, turn);
   h = Mix(h, __hsd_rand_seed_hold ? *__hsd_rand_seed_hold : 0u);
   h = Mix(h, fightFloorGetNowTenkouDataId(nullptr, 0));
@@ -352,6 +385,7 @@ uint64_t Digest(uint32_t turn) {
     h = Mix(h, p ? pokemon_GetMaxHp(p) : 0u);
     h = Mix(h, p ? pokemonGetTokuseiDataId(p) : 0u);
     h = Mix(h, p ? pokemonGetSoubiItemDataId(p) : 0u);
+    if (dlog) Log("digest %u: banme %u species %u hp %u/%u ability %u item %u", turn, b, static_cast<unsigned>(figthOutPokemonGetPokemonDataId(fop)), p ? pokemon_GetHp(p) : 0u, p ? pokemon_GetMaxHp(p) : 0u, p ? static_cast<unsigned>(pokemonGetTokuseiDataId(p)) : 0u, p ? static_cast<unsigned>(pokemonGetSoubiItemDataId(p)) : 0u);
   }
   for (uint16_t b = 0; b < 4; b += 2) {
     void* fop = fightFloorGetFightOutBanmeToValidFightOutPokemon(nullptr, b);
@@ -360,9 +394,168 @@ uint64_t Digest(uint32_t turn) {
       void* fp = fightTrainerBiosGetFightPokemonPtr(tr, slot);
       void* pk = fp ? fightPokemonGetPokemonPtr(fp) : nullptr;
       h = Mix(h, pk ? pokemon_GetHp(pk) : 0xFFFFFFFFu);
+      if (dlog) Log("digest %u: side %u bench slot %u hp %d", turn, b, slot, pk ? static_cast<int>(pokemon_GetHp(pk)) : -1);
     }
   }
+  if (xd::online::NeedsExtras(S.rules)) {
+    for (uint16_t b = 0; b < 4; b++) {
+      void* fop = fightFloorGetFightOutBanmeToValidFightOutPokemon(nullptr, b);
+      h = Mix(h, fop ? static_cast<uint32_t>(fightOutPokemonIsJoutaiDataId(fop, 8)) : 0xFFFFFFFFu);
+    }
+    h = Mix(h, S.timeouts[0]);
+    h = Mix(h, S.timeouts[1]);
+  }
   return h;
+}
+
+enum class SpecDelay { None, Seconds, Turn1, Turn2 };
+constexpr SpecDelay kSpectatorDelayDefault = SpecDelay::Seconds;
+constexpr int kSpectatorDelaySeconds = 5;
+constexpr int kMaxSpectators = 2;
+std::vector<std::string> SplitList(const char* text);
+std::string WatchCode(const std::string& room, int place) {
+  static const char* alphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+  uint64_t h = 1469598103934665603ull;
+  const std::string text = "XDWATCH/" + room + "/" + std::to_string(place);
+  for (char c : text) { h ^= static_cast<uint8_t>(c); h *= 1099511628211ull; }
+  std::string out;
+  for (int i = 0; i < 6; i++) { out += alphabet[h % 31]; h /= 31; h ^= h >> 7; h *= 0x9E3779B97F4A7C15ull; }
+  return out;
+}
+struct SpecPeer {
+  std::unique_ptr<xdnet::Connection> conn;
+  bool joined = false;
+  size_t sent = 0;
+  int place = 0;
+};
+struct SpecHub {
+  bool on = false;
+  SpecDelay mode = kSpectatorDelayDefault;
+  int seconds = kSpectatorDelaySeconds;
+  std::vector<std::chrono::steady_clock::time_point> turnEnded;
+  std::string room;
+  std::vector<SpecPeer> peers;
+  std::vector<std::string> head;
+  struct Item { uint32_t turn; std::string text; };
+  std::vector<Item> items;
+  uint32_t turnsDone = 0;
+  bool ended = false;
+  bool partySent = false;
+};
+SpecHub H;
+bool HubSend(SpecPeer& p, const std::string& text) { return p.conn->send(reinterpret_cast<const uint8_t*>(text.data()), text.size(), true); }
+void HubOpen(int place) {
+  xdnet::ConnectionConfig cfg = xdnet::Connection::defaultConfig();
+  xd::online::Fingerprint f;
+  f.caps = MyCapabilities();
+  cfg.session.fingerprint = xd::online::Encode(f);
+  if (const char* d = Env("XD_ONLINE_WATCH_DIRECT")) cfg.directPeers = SplitList(d);
+  if (Env("XD_ONLINE_NO_GO_BETWEEN")) cfg.useGoBetween = false;
+  if (const char* lp = Env("XD_ONLINE_WATCH_PORT")) cfg.localPort = static_cast<uint16_t>(std::atoi(lp) + place);
+  SpecPeer p;
+  p.place = place;
+  p.conn.reset(new xdnet::Connection());
+  if (!p.conn->start(WatchCode(H.room, place), cfg)) { Log("spectating: place %d could not be opened", place); return; }
+  H.peers.push_back(std::move(p));
+}
+void HubRelease() {
+  for (SpecPeer& p : H.peers) {
+    if (!p.conn || !p.joined) continue;
+    while (p.sent < H.items.size()) {
+      const uint32_t n = H.items[p.sent].turn;
+      bool ok = H.ended;
+      if (!ok && H.turnsDone > n) {
+        const auto since = std::chrono::steady_clock::now() - H.turnEnded[n];
+        switch (H.mode) {
+        case SpecDelay::None: ok = true; break;
+        case SpecDelay::Seconds: ok = since >= std::chrono::seconds(H.seconds); break;
+        case SpecDelay::Turn1: ok = H.turnsDone >= n + 2; break;
+        case SpecDelay::Turn2: ok = H.turnsDone >= n + 3; break;
+        }
+      }
+      if (!ok || !HubSend(p, H.items[p.sent].text)) break;
+      Log("spectating: record %zu (turn index %u) released to place %d (the host has finished %u turns)", p.sent, n, p.place, H.turnsDone);
+      p.sent++;
+    }
+  }
+}
+void HubTick() {
+  if (!H.on) return;
+  std::vector<int> freed;
+  for (SpecPeer& p : H.peers) {
+    if (!p.conn) continue;
+    const xdnet::Phase ph = p.conn->status().phase;
+    if (ph == xdnet::Phase::Connected && !p.joined) {
+      p.joined = true;
+      Log("spectating: a spectator joined place %d (%zu records so far, %u turns done)", p.place, H.items.size(), H.turnsDone);
+      for (const std::string& h : H.head) HubSend(p, h);
+      PortVideo_Notice("Someone is watching this battle.", 4.0);
+    }
+    std::vector<uint8_t> junk;
+    while (p.conn->receive(junk)) {}
+    if (ph == xdnet::Phase::Closed || ph == xdnet::Phase::Failed) {
+      Log("spectating: place %d is free again", p.place);
+      freed.push_back(p.place);
+      p.conn.reset();
+    }
+  }
+  for (size_t i = 0; i < H.peers.size();) {
+    if (!H.peers[i].conn) H.peers.erase(H.peers.begin() + static_cast<long>(i)); else i++;
+  }
+  if (!H.ended) for (int place : freed) HubOpen(place);
+  HubRelease();
+}
+void HubBegin(const std::string& rulesKey, const std::vector<std::string>& hostTeam, const std::vector<std::string>& guestTeam, uint32_t seed) {
+  H = SpecHub();
+  const char* on = Env("XD_ONLINE_SPECTATE");
+  if (!on || std::string(on) == "0" || !S.host || S.code.empty()) return;
+  H.on = true;
+  H.room = S.code;
+  if (const char* d = Env("XD_SPECTATOR_DELAY")) {
+    const std::string v = d;
+    if (v == "none") H.mode = SpecDelay::None;
+    else if (v == "1") H.mode = SpecDelay::Turn1;
+    else if (v == "2") H.mode = SpecDelay::Turn2;
+    else if (v.compare(0, 8, "seconds:") == 0) { H.mode = SpecDelay::Seconds; H.seconds = std::atoi(v.c_str() + 8); }
+    else H.mode = SpecDelay::Seconds;
+  }
+  auto join = [](const std::vector<std::string>& v) { std::string o; for (const std::string& x : v) o += (o.empty() ? "" : ",") + x; return o; };
+  H.head = {"WH " + rulesKey, "WT host " + join(hostTeam), "WT guest " + join(guestTeam), "WZ " + std::to_string(seed)};
+  int places = kMaxSpectators;
+  if (const char* n = Env("XD_ONLINE_SPECTATORS")) places = std::atoi(n);
+  for (int i = 0; i < places; i++) HubOpen(i);
+  Log("spectating: %d place(s) open on the watch code of this room, delay mode %d (0 none, 1 seconds: %d, 2 one turn, 3 two turns); only resolved turns are sent", places, static_cast<int>(H.mode), H.seconds);
+}
+void HubSeed(uint32_t seq, uint32_t seed) {
+  if (H.on) { char b[32]; std::snprintf(b, sizeof b, "WK %u %08x", seq, seed); H.items.push_back({H.turnsDone, b}); }
+}
+void HubSwitchSeed(uint32_t seq, uint32_t seed) {
+  if (H.on) { char b[32]; std::snprintf(b, sizeof b, "WX %u %08x", seq, seed); H.items.push_back({H.turnsDone, b}); }
+}
+void HubChoice(uint32_t seq, const std::string& line) {
+  if (H.on) { H.items.push_back({H.turnsDone, "WC " + std::to_string(seq) + " " + line}); HubRelease(); }
+}
+void HubSwitch(uint32_t seq, int r) {
+  if (H.on) { H.items.push_back({H.turnsDone, "WW " + std::to_string(seq) + " " + std::to_string(r)}); HubRelease(); }
+}
+void HubTurn(uint32_t turn, uint64_t digest) {
+  if (!H.on) return;
+  if (!H.partySent) {
+    H.partySent = true;
+    H.items.push_back({0, "WP " + std::to_string(S.created[0]) + " " + std::to_string(S.created[1])});
+  }
+  char buf[48];
+  std::snprintf(buf, sizeof buf, "WD %u %llx", turn, static_cast<unsigned long long>(digest));
+  H.items.push_back({H.turnsDone, buf});
+  H.turnEnded.push_back(std::chrono::steady_clock::now());
+  H.turnsDone++;
+  HubRelease();
+}
+void HubEnd(uint32_t result) {
+  if (!H.on) return;
+  H.items.push_back({H.turnsDone, "WE " + std::to_string(result)});
+  H.ended = true;
+  HubRelease();
 }
 
 std::deque<std::string> sPending;
@@ -495,6 +688,13 @@ void ApplyRoomRules() {
   std::vector<std::string> room;
   if (xd::online::RoomGen4Pokemon(S.rules.ruleSet)) room.push_back("gen4_pokemon");
   if (xd::online::RoomGen4Rules(S.rules.ruleSet)) room.push_back("gen4_rules");
+  const std::string roomRs = xd::online::RoomRuleSetId(S.rules);
+  if (roomRs == "gen5" || roomRs == "gen6" || roomRs == "gen7") {
+    room.push_back("gen4_pokemon");
+    room.push_back("gen4_rules");
+    room.push_back(roomRs + "_rules");
+    if (roomRs != "gen5") room.push_back("mega_evolution");
+  }
   xd::challenges::SetActive(room, "online battle: the room's rules");
   Log("the room's rules are in force for this battle (split %s, Gen 4 Pokemon %s, Gen 4 rules %s, own challenge rules off: %zu)", S.rules.split ? "on" : "off",
       xd::online::RoomGen4Pokemon(S.rules.ruleSet) ? "on" : "off", xd::online::RoomGen4Rules(S.rules.ruleSet) ? "on" : "off", sSavedChallenges.size());
@@ -726,6 +926,26 @@ bool ExchangeTeams() {
   S.teamsDone = true;
   S.teamMine.clear();
   S.teamFriend.clear();
+  if (S.spectator) {
+    for (int sideNo = 0; sideNo < 2; sideNo++) {
+      std::vector<xd::save::Pokemon>& team = sideNo == 0 ? S.teamMine : S.teamFriend;
+      for (const std::string& hex : sideNo == 0 ? S.feed->hostTeam : S.feed->guestTeam) {
+        std::string bytes;
+        if (!xd::online::FromHex(hex, bytes) || bytes.size() != xd::save::kPokemonSize) { EndEarly("The replay's team records are damaged."); return false; }
+        team.push_back(xd::save::ParsePokemon(reinterpret_cast<const uint8_t*>(bytes.data()), xd::save::ByteOrder::PC));
+      }
+    }
+    if (!sRules) {
+      xd::legality::DiscRules rules;
+      std::string error;
+      if (!MakeRunningRules(rules, error)) { EndEarly(Tr("The rules for the safety check could not be made.")); return false; }
+      sRules.reset(new xd::legality::DiscRules(rules));
+    }
+    S.created[0] = S.created[1] = 0;
+    sBagDone[0] = sBagDone[1] = false;
+    Log("spectator: teams from the feed: host side %zu Pokemon, guest side %zu", S.teamMine.size(), S.teamFriend.size());
+    return true;
+  }
   if (S.lobby && !S.lobbySave.empty()) {
     std::string why;
     if (!LoadPicksFromSave(S.lobbySave, S.lobbyPicks, S.teamMine, why)) { EndEarly(Fmt(Tr("Your team could not be read: %s"), why.c_str())); return false; }
@@ -754,6 +974,14 @@ bool ExchangeTeams() {
   }
   if (Env("XD_ONLINE_TEST_NOSHADOWID")) {
     for (xd::save::Pokemon& m : S.teamMine) { m.raw[0xBA] = 0; m.raw[0xBB] = 0; m = xd::save::ParsePokemon(m.raw.data(), xd::save::ByteOrder::PC); }
+  }
+  if (const char* fm = Env("XD_ONLINE_TEST_FIRST_MOVE")) {
+    const unsigned mv = static_cast<unsigned>(std::atoi(fm));
+    for (xd::save::Pokemon& m : S.teamMine) {
+      m.raw[0x80] = static_cast<uint8_t>(mv & 0xFF); m.raw[0x81] = static_cast<uint8_t>(mv >> 8); m.raw[0x82] = 15; m.raw[0x83] = 0;
+      m = xd::save::ParsePokemon(m.raw.data(), xd::save::ByteOrder::PC);
+    }
+    Log("test: move slot 1 of every member of my team is move %u", mv);
   }
   std::vector<uint16_t> draftFriend;
   const bool drafted = S.rules.team == "draft" || S.rules.team == "offer";
@@ -821,6 +1049,12 @@ bool ExchangeTeams() {
     for (size_t i = 0; same && i < draftFriend.size(); i++) same = S.teamFriend[i].species == draftFriend[i];
     if (!same) { EndEarly(Tr("Your friend's team is not the team he drafted.")); return false; }
   }
+  if (!S.friendPreview.empty()) {
+    bool same = S.teamFriend.size() == S.friendPreview.size();
+    for (size_t i = 0; same && i < S.friendPreview.size(); i++) same = S.teamFriend[i].species == S.friendPreview[i];
+    if (!same) { EndEarly(Tr("Your friend's team is not the one they picked in the team preview. The battle was not started.")); return false; }
+    Log("team preview: the friend's %zu Pokemon are the ones they picked, in their order", S.friendPreview.size());
+  }
   if (!S.teamFriend.empty()) {
     if (!sRules) {
       xd::legality::DiscRules rules;
@@ -868,6 +1102,24 @@ bool ExchangeTeams() {
     }
     Log("both sides hold the same records for the battle (digest %016llx; fight type 0x%x, encounter %u)", static_cast<unsigned long long>(d), static_cast<unsigned>(fightFloor_GetFightType(nullptr)), static_cast<unsigned>(fightGetFightEncountDataId()));
   }
+  {
+    const std::vector<xd::save::Pokemon>& ht = S.host ? S.teamMine : S.teamFriend;
+    const std::vector<xd::save::Pokemon>& gt = S.host ? S.teamFriend : S.teamMine;
+    std::vector<std::string> hh, gh;
+    for (const xd::save::Pokemon& m : ht) hh.push_back(ToHex(m.raw.data(), m.raw.size()));
+    for (const xd::save::Pokemon& m : gt) gh.push_back(ToHex(m.raw.data(), m.raw.size()));
+    xd::replay::OnlineBegin(S.host, RulesText(S.rules), hh, gh, __hsd_rand_seed_hold ? *__hsd_rand_seed_hold : 0u);
+    xd::replay::OnlineRulesKey(xd::online::RulesKeyText(S.rules));
+    {
+      std::string pv;
+      if (S.rules.preview) {
+        auto list = [](const std::vector<xd::save::Pokemon>& t) { std::string o; for (const xd::save::Pokemon& m : t) o += (o.empty() ? "" : ",") + std::to_string(m.species); return o; };
+        pv = "host " + list(ht) + " guest " + list(gt);
+      }
+      xd::replay::OnlineExtras(xd::online::NeedsExtras(S.rules) ? xd::online::kBattleProtocol : 0, pv);
+    }
+    HubBegin(xd::online::RulesKeyText(S.rules), hh, gh, __hsd_rand_seed_hold ? *__hsd_rand_seed_hold : 0u);
+  }
   S.created[0] = S.created[1] = 0;
   sBagDone[0] = sBagDone[1] = false;
   Log("teams exchanged and checked: mine %zu Pokemon, the friend's %zu", S.teamMine.size(), S.teamFriend.size());
@@ -895,6 +1147,10 @@ bool ConnectRoom() {
   if (S.host) {
     const char* text = Env("XD_ONLINE_RULES");
     if (!ParseRules(text ? text : "", mine.rules, &why)) {
+      EndEarly(Fmt(Tr("The room's rules are not valid: %s"), why.c_str()));
+      return false;
+    }
+    if (!mine.rules.format.empty() && mine.rules.formatHash.empty() && !ApplyFormat(mine.rules, &why)) {
       EndEarly(Fmt(Tr("The room's rules are not valid: %s"), why.c_str()));
       return false;
     }
@@ -978,6 +1234,16 @@ bool ConnectRoom() {
 
 bool Begin() {
   if (S.dead) return false;
+  if (S.spectator) {
+    if (!S.seeded) {
+      S.seeded = true;
+      if (__hsd_rand_seed_hold) *__hsd_rand_seed_hold = S.feed->seed;
+      Log("spectator: the logic stream starts from the players' seed %08x", static_cast<unsigned>(S.feed->seed));
+    }
+    ApplyRoomRules();
+    if (!S.dead && !ExchangeTeams()) return false;
+    return !S.dead;
+  }
   if (!S.connected && !ConnectRoom()) return false;
   if (S.lobby) ApplyRoomRules();
   if (!S.seeded) {
@@ -998,6 +1264,7 @@ bool Begin() {
 }
 
 bool Mine(void* trainer) {
+  if (S.spectator) return false;
   const bool hostSide = fightTargetIsHostSide(trainer, fightFloor_GetFightType(nullptr)) != 0;
   return hostSide == S.host;
 }
@@ -1043,12 +1310,14 @@ bool Active() {
     S.lobbyFriend = sLobbyIn.friendCount;
     S.lobbyPicks = sLobbyIn.picks;
     S.lobbySpecies = sLobbyIn.freeSpecies;
+    S.friendPreview = sLobbyIn.friendPreview;
     S.link.reset(new NetTransport(sLobbyIn.conn));
     sLobbyIn.conn = nullptr;
     Log("lobby room taken over: %s, rules: %s", S.host ? "hosting" : "joined", RulesText(S.rules).c_str());
   }
   return S.active;
 }
+bool Spectating() { return S.spectator && S.active; }
 void SetLobbyRoom(LobbyHandOver& h) {
   sLobbyIn = h;
   h.conn = nullptr;
@@ -1074,6 +1343,38 @@ PcInfo LobbyPcInfo() {
   if (const char* why = xd::xg::Off(xd::xg::Feature::Gen4Pokemon)) p.gen4Off = why;
   p.gen4PackPresent = xd::gen4::PackPresent() && p.gen4Off.empty();
   p.gen4Loaded = xd::gen4::Loaded();
+  for (const engine::rulesets::Format& f : xd::rulesets::Formats()) {
+    PcInfo::FormatChoice c;
+    c.id = f.id;
+    c.name = xd::rulesets::text::FormatName(f.id, f.name);
+    const bool needs4 = f.ruleSet == "gen4" || std::find(f.gens.begin(), f.gens.end(), 4) != f.gens.end();
+    if (needs4 && !p.gen4PackPresent) c.enabled = false, c.why = "Needs the Gen 4 pack: add your Battle Revolution disc in the launcher (Extra assets page).";
+    p.formats.push_back(c);
+  }
+  p.applyFormat = [](RoomRules& r) { std::string why; return ApplyFormat(r, &why); };
+  p.formatLine = [](const RoomRules& r, const char* what) -> std::string {
+    const engine::rulesets::Format* f = xd::rulesets::FindFormat(r.format);
+    if (f == nullptr) return Tr("none");
+    namespace tx = xd::rulesets::text;
+    const std::string w = what;
+    std::string out;
+    if (w == "clauses") {
+      for (const char* c : {"species", "item", "sleep", "ohko", "evasion"}) { if (f->clauses.count(c)) out += (out.empty() ? "" : ", ") + std::string(tx::ClauseName(c)); }
+      return out.empty() ? std::string(Tr("none")) : out;
+    }
+    if (w == "bans") {
+      for (const std::string& c : f->bannedCategories) out += (out.empty() ? "" : ", ") + std::string(Tr("No")) + " " + tx::CategoryName(c);
+      const size_t n = f->bannedSpecies.size() + f->bannedItems.size() + f->bannedMoves.size() + f->bannedAbilities.size();
+      if (n > 0) out += (out.empty() ? "" : ", ") + Fmt(Tr("%d on the ban list"), static_cast<int>(n));
+      return out.empty() ? std::string(Tr("none")) : out;
+    }
+    if (w == "preview") {
+      if (!f->teamPreview) return Tr("Off");
+      return Fmt(Tr("Bring %d, pick %d"), f->teamMax, f->pick > 0 ? f->pick : f->teamMax);
+    }
+    if (f->timerPerChoice == 0 && f->timerPerBattle == 0) return Tr("No limit");
+    return Fmt(Tr("%d s a turn, %d min each"), f->timerPerChoice, f->timerPerBattle / 60);
+  };
   return p;
 }
 bool InFight() { return fightIsFight() != 0; }
@@ -1086,8 +1387,10 @@ void LobbyRematchReset() {
   std::string code = S.code, save = S.lobbySave;
   std::vector<Pick> picks = S.lobbyPicks;
   std::vector<uint16_t> species = S.lobbySpecies;
+  std::vector<uint16_t> friendPreview = S.friendPreview;
   const int lm = S.lobbyMine, lf = S.lobbyFriend;
   S = State();
+  S.friendPreview = friendPreview;
   S.lobbyMine = lm;
   S.lobbyFriend = lf;
   S.room = S.lobby = S.active = S.connected = true;
@@ -1162,6 +1465,7 @@ int LobbyStartBattle() {
     if (n == want && type == 0) type = t, state = k;
   }
   if (type == 0) { Log("no fight type for a %s battle: not started", want == 2 ? "double" : "single"); return -1; }
+  if (S.spectator) { S.lobbyMine = S.feed->partyHost > 0 ? S.feed->partyHost : static_cast<int>(S.feed->hostTeam.size()); S.lobbyFriend = S.feed->partyGuest > 0 ? S.feed->partyGuest : static_cast<int>(S.feed->guestTeam.size()); }
   if (S.lobbyMine < want || S.lobbyFriend < want) { Log("a %s battle needs at least %d Pokemon a side", want == 2 ? "double" : "single", want); return -1; }
   if (!xd::online::MakePlaceholderHero(sHero[0], S.host ? S.lobbyMine : S.lobbyFriend) || !xd::online::MakePlaceholderHero(sHero[1], S.host ? S.lobbyFriend : S.lobbyMine)) {
     Log("the heroes for the battle could not be made");
@@ -1212,6 +1516,113 @@ bool LobbyStartBattleThread() {
   return t != nullptr;
 }
 
+bool SpectatorStart(SpectatorFeed* feed, std::string* why) {
+  EnsureInit();
+  RoomRules rules;
+  std::string err;
+  if (!feed || !feed->haveStart || !ParseRules(feed->rulesKey, rules, &err)) {
+    if (why) *why = "The room's rules in this replay are not readable" + (err.empty() ? std::string(".") : ": " + err);
+    return false;
+  }
+  if (feed->hostTeam.empty() || feed->guestTeam.empty()) {
+    if (why) *why = "This replay holds no teams.";
+    return false;
+  }
+  S = State();
+  sSpecPending.clear();
+  S.room = S.lobby = S.active = S.connected = true;
+  S.host = true;
+  S.spectator = true;
+  S.feed = feed;
+  S.rules = rules;
+  Log("spectator: the room's rules: %s; %zu + %zu Pokemon", RulesText(S.rules).c_str(), feed->hostTeam.size(), feed->guestTeam.size());
+  const bool direct = std::getenv("XD_ONLINE_DIRECT_START") != nullptr;
+  if (!direct) SpectatorDriveVsMenus();
+  if (direct && !LobbyStartBattleThread()) {
+    S.active = S.spectator = false;
+    if (why) *why = "The battle could not be started.";
+    return false;
+  }
+  return true;
+}
+
+namespace {
+struct SpecClient {
+  std::unique_ptr<xdnet::Connection> conn;
+  std::string room;
+  int place = 0, tries = 0;
+  bool everConnected = false;
+  std::chrono::steady_clock::time_point startedAt = std::chrono::steady_clock::now();
+};
+void SpecClientOpen(SpecClient& c) {
+  xdnet::ConnectionConfig cfg = xdnet::Connection::defaultConfig();
+  xd::online::Fingerprint f;
+  f.caps = MyCapabilities();
+  cfg.session.fingerprint = xd::online::Encode(f);
+  if (const char* d = Env("XD_ONLINE_DIRECT")) cfg.directPeers = SplitList(d);
+  if (Env("XD_ONLINE_NO_GO_BETWEEN")) cfg.useGoBetween = false;
+  if (const char* lp = Env("XD_ONLINE_LOCAL_PORT")) cfg.localPort = static_cast<uint16_t>(std::atoi(lp));
+  cfg.connectTimeoutMs = 8000;
+  c.conn.reset(new xdnet::Connection());
+  const std::string code = WatchCode(c.room, c.place);
+  c.tries++;
+  if (!c.conn->start(code, cfg)) Log("spectator: could not start looking for the room (try %d)", c.tries);
+}
+std::vector<std::string> SplitCommaList(const std::string& t) {
+  std::vector<std::string> v;
+  std::string cur;
+  for (char ch : t) { if (ch == ',') { v.push_back(cur); cur.clear(); } else cur += ch; }
+  if (!cur.empty()) v.push_back(cur);
+  return v;
+}
+void SpecClientPoll(SpecClient& c, xd::online::SpectatorFeed& F) {
+  if (F.complete && F.lost) return;
+  const xdnet::Phase ph = c.conn ? c.conn->status().phase : xdnet::Phase::Closed;
+  if (ph == xdnet::Phase::Connected && !c.everConnected) { c.everConnected = true; Log("spectator: connected to the host's watch place %d", c.place); }
+  std::vector<uint8_t> m;
+  while (c.conn && c.conn->receive(m)) {
+    const std::string line(m.begin(), m.end());
+    std::istringstream in(line);
+    std::string w;
+    in >> w;
+    if (w == "WH") { F.rulesKey = line.size() > 3 ? line.substr(3) : std::string(); }
+    else if (w == "WT") { std::string who, list; in >> who >> list; (who == "host" ? F.hostTeam : F.guestTeam) = SplitCommaList(list); }
+    else if (w == "WZ") { unsigned long long v = 0; in >> v; F.seed = static_cast<uint32_t>(v); F.haveStart = !F.rulesKey.empty() && !F.hostTeam.empty() && !F.guestTeam.empty() && (!F.needParty || F.haveParty); }
+    else if (w == "WP") { in >> F.partyHost >> F.partyGuest; F.haveParty = true; F.haveStart = !F.rulesKey.empty() && !F.hostTeam.empty() && !F.guestTeam.empty() && F.seed != 0; }
+    else if (w == "WC") { uint32_t seq = 0; in >> seq; std::string rest; std::getline(in, rest); while (!rest.empty() && rest.front() == ' ') rest.erase(0, 1); F.choices[seq] = rest; }
+    else if (w == "WK" || w == "WX") { uint32_t seq = 0; std::string hex; in >> seq >> hex; (w == "WK" ? F.choiceSeeds : F.switchSeeds)[seq] = static_cast<uint32_t>(std::strtoul(hex.c_str(), nullptr, 16)); }
+    else if (w == "WW") { uint32_t seq = 0; int r = 0; in >> seq >> r; F.switches[seq] = r; }
+    else if (w == "WD") { uint32_t t = 0; std::string hex; in >> t >> hex; F.digests[t] = std::strtoull(hex.c_str(), nullptr, 16); }
+    else if (w == "WE") { in >> F.result; F.complete = true; }
+  }
+  if (ph == xdnet::Phase::Closed || ph == xdnet::Phase::Failed) {
+    if (c.everConnected) { if (!F.complete) Log("spectator: the connection to the host ended"); F.lost = true; }
+    else if (std::chrono::steady_clock::now() - c.startedAt < std::chrono::seconds(600)) {
+      const char* np = Env("XD_ONLINE_SPECTATORS");
+      c.place = (c.place + 1) % (np ? std::max(1, std::atoi(np)) : kMaxSpectators);
+      SpecClientOpen(c);
+    } else {
+      F.lost = true;
+    }
+  }
+}
+}
+
+bool SpectatorJoin(SpectatorFeed* feed, const std::string& roomCode, std::string* why) {
+  const std::string code = xdnet::normalizeRoomCode(roomCode);
+  if (code.empty()) {
+    if (why) *why = "The room code is not valid.";
+    return false;
+  }
+  feed->needParty = true;
+  std::shared_ptr<SpecClient> c(new SpecClient());
+  c->room = code;
+  SpecClientOpen(*c);
+  feed->poll = [c](SpectatorFeed& f) { SpecClientPoll(*c, f); };
+  Log("spectator: looking for room %s (its watch places)", xdnet::formatRoomCode(code).c_str());
+  return true;
+}
+
 void LobbyLeave() {
   LobbyRestoreVsStyle();
   if (S.link) {
@@ -1259,17 +1670,136 @@ bool WaitMap(std::map<uint32_t, std::string>& m, uint32_t key) {
   return true;
 }
 
+bool ApplyChoiceLine(void* trainer, const std::string& line, uint32_t seq, int* rOut, int side) {
+  std::istringstream in(line);
+  char t;
+  uint32_t got = 0;
+  int r = 0, count = 0;
+  in >> t >> got >> r >> count;
+  if (got != seq) { Log("choice number %u, expected %u: out of step", got, seq); S.dead = true; return false; }
+  std::vector<std::string> rest;
+  for (std::string w; in >> w;) rest.push_back(w);
+  const size_t numeric = rest.size() - ((!rest.empty() && rest.back() == "TO") ? 1 : 0);
+  const size_t width = count > 0 && numeric == static_cast<size_t>(count) * 9 ? 9 : 8;
+  if (numeric < static_cast<size_t>(count) * width) { Log("choice %u: the record is cut short", seq); S.dead = true; return false; }
+  for (int i = 0; i < count; i++) {
+    unsigned j, kind, target, item, ibuff, mega = 0;
+    int buff, banme, autoMake;
+    auto num = [&](size_t k) { return std::strtoll(rest[static_cast<size_t>(i) * width + k].c_str(), nullptr, 10); };
+    j = static_cast<unsigned>(num(0)), kind = static_cast<unsigned>(num(1)), buff = static_cast<int>(num(2)), target = static_cast<unsigned>(num(3));
+    banme = static_cast<int>(num(4)), autoMake = static_cast<int>(num(5)), item = static_cast<unsigned>(num(6)), ibuff = static_cast<unsigned>(num(7));
+    if (width == 9) mega = static_cast<unsigned>(num(8));
+    void* fop = fightTrainerGetValidFightOutPokemonPtr(trainer, static_cast<uint16_t>(j));
+    if (!fop) { Log("no Pokemon %u to give an action to", j); S.dead = true; return false; }
+    fightOutPokemonInitFightActionBuff(fop);
+    if (kind == 0x13) {
+      xd::forms::SetFriendApplying(true);
+      fightOutPokemonCreateFightActionAttackWaza(fop, 0, 0x13, 0, fight_action_data_waza, buff, static_cast<uint16_t>(target),
+                                                 static_cast<int8_t>(banme), static_cast<uint8_t>(autoMake));
+      xd::forms::SetFriendApplying(false);
+      if (mega) xd::forms::FriendMega(fop);
+    } else if (kind == 0x12) {
+      fightOutPokemonCreateFightActionUseItem(fop, 0, 0x12, 0, fight_action_data_item, item, static_cast<uint16_t>(target), banme, static_cast<int32_t>(ibuff));
+      if (void* hero = fightTrainerBiosGetHeroPtr(trainer)) heroItemDecItemDataId(hero, item, 1, banme);
+      ApplyFriendItemEffect(trainer, item, target);
+      {
+        void* act = fightOutPokemon_GetFightActionBuffPtr(fop);
+        void* fi = fightOutPokemon_GetFightItemPtr(fop);
+        Log("the friend's item %u replayed (target %u, bag slot %d, buff %u); action valid %d kind %u, item %u target %u slot %d buff %u", item, target, banme, ibuff,
+            act ? static_cast<int>(fightActionCheckValid(act)) : -1, act ? static_cast<unsigned>(fightActionGetKindDataId(act)) : 0u,
+            fi ? static_cast<unsigned>(fightItem_GetItemDataId(fi)) : 0u, fi ? static_cast<unsigned>(fightItem_GetTargetDataId(fi)) : 0u,
+            fi ? static_cast<int>(fightItem_GetCount(fi)) : -9, fi ? static_cast<unsigned>(fightItem_GetBuff(fi)) : 0u);
+      }
+    } else if (kind == 8 || kind == 9 || kind == 0xA) {
+      fightOutPokemonCreateFightAction(fop, 0, static_cast<int32_t>(kind), 0, fight_action_data_turn, buff);
+    } else {
+      Log("action kind %u not carried by the prototype", kind);
+      S.dead = true;
+      return 0;
+    }
+  }
+  {
+    const std::string tail = rest.size() > numeric ? rest.back() : std::string();
+    if (tail == "TO") { S.timeouts[side]++; Log("choice %u was a time-out on side %d (their clock ended it)", seq, side); }
+  }
+  *rOut = r;
+  return true;
+}
+
+void SpectatorCompare() {
+  xd::online::SpectatorFeed& F = *S.feed;
+  if (F.poll) F.poll(F);
+  for (size_t i = 0; i < sSpecPending.size();) {
+    auto it = F.digests.find(sSpecPending[i].first);
+    if (it == F.digests.end()) { i++; continue; }
+    if (it->second == sSpecPending[i].second) { F.turnsMatched++; Log("spectator: turn %u check number %016llx = the players': OK", sSpecPending[i].first, static_cast<unsigned long long>(it->second)); }
+    else { F.turnsDifferent++; Log("spectator: turn %u DIFFERENT: mine %016llx, the players' %016llx", sSpecPending[i].first, static_cast<unsigned long long>(sSpecPending[i].second), static_cast<unsigned long long>(it->second)); }
+    sSpecPending.erase(sSpecPending.begin() + static_cast<long>(i));
+  }
+}
+template <class Ready> bool SpectatorWait(Ready ready) {
+  xd::online::SpectatorFeed& F = *S.feed;
+  for (;;) {
+    if (F.poll) F.poll(F);
+    if (ready()) return true;
+    if (F.lost || S.dead || F.complete) return false;
+    fightMainWaitFrame(1);
+  }
+}
+uint8_t SpectatorSelect(void* trainer) {
+  xd::online::SpectatorFeed& F = *S.feed;
+  const int sideNo = fightTargetIsHostSide(trainer, fightFloor_GetFightType(nullptr)) != 0 ? 0 : 1;
+  const uint32_t seq = 2 * S.cnt[sideNo] + static_cast<uint32_t>(sideNo);
+  SeedKeep keepWait;
+  fightTrainerAllInitFightActionBuff(trainer);
+  if (fightGetFightResultId() == 1) return 0;
+  if (!SpectatorWait([&] { return F.choices.count(seq) != 0; })) {
+    Log("spectator: the stream ended before choice %u", seq);
+    S.dead = true;
+    EndWithError();
+    return 0;
+  }
+  if (auto it = F.choiceSeeds.find(seq); it != F.choiceSeeds.end() && it->second != 0) keepWait.v = it->second;
+  int r = 0;
+  if (!ApplyChoiceLine(trainer, F.choices[seq], seq, &r, sideNo)) { EndWithError(); return 0; }
+  S.applied++;
+  S.cnt[sideNo]++;
+  Log("spectator: choice %u (side %d) applied", seq, sideNo);
+  return static_cast<uint8_t>(r);
+}
+int16_t SpectatorSwitch(uint32_t seq) {
+  xd::online::SpectatorFeed& F = *S.feed;
+  SeedKeep keepWait;
+  if (!SpectatorWait([&] { return F.switches.count(seq) != 0; })) {
+    Log("spectator: the stream ended before switch %u", seq);
+    S.dead = true;
+    EndWithError();
+    return -2;
+  }
+  if (auto it = F.switchSeeds.find(seq); it != F.switchSeeds.end() && it->second != 0) keepWait.v = it->second;
+  S.applied++;
+  Log("spectator: switch %u applied: %d", seq, F.switches[seq]);
+  return static_cast<int16_t>(F.switches[seq]);
+}
+
 void LocalChoose(void* trainer, uint32_t side, uint32_t seq) {
     sMine.busy = true;
     sMine.consumed = false;
     uint8_t r;
     {
       SeedKeep keep;
-      if (S.rules.timerSeconds > 0) {
-        S.deadline = std::chrono::steady_clock::now() + std::chrono::seconds(S.rules.timerSeconds);
+      S.choiceStart = std::chrono::steady_clock::now();
+      S.bankOn = S.rules.bankSeconds > 0;
+      if (S.rules.timerSeconds > 0 || S.bankOn) {
+        if (S.bankOn && S.bankMs < 0) S.bankMs = static_cast<int64_t>(Env("XD_ONLINE_TEST_BANK_MS") ? std::atoi(Env("XD_ONLINE_TEST_BANK_MS")) : S.rules.bankSeconds * 1000);
+        int64_t limit = S.rules.timerSeconds > 0 ? static_cast<int64_t>(S.rules.timerSeconds) * 1000 : (std::numeric_limits<int64_t>::max)() / 4;
+        if (S.rules.timerSeconds > 0 && Env("XD_ONLINE_TEST_TIMER_MS")) limit = std::atoi(Env("XD_ONLINE_TEST_TIMER_MS"));
+        if (S.bankOn) limit = std::min<int64_t>(limit, std::max<int64_t>(1, S.bankMs));
+        S.deadline = S.choiceStart + std::chrono::milliseconds(limit);
         S.timing = true;
         S.timeUpDone = false;
         S.lastCount = 1 << 30;
+        Log("choice %u: the limit is %lld ms%s", seq, static_cast<long long>(limit), S.bankOn ? " (the battle clock counts)" : "");
       }
       if (const char* pr = Env("XD_ONLINE_TEST_PRESSES")) {
         std::string all = pr;
@@ -1355,10 +1885,19 @@ void LocalChoose(void* trainer, uint32_t side, uint32_t seq) {
       }
       S.timing = false;
     }
+    const bool timedOut = S.timeUpDone && (S.rules.timerSeconds > 0 || S.bankOn);
+    if (S.bankOn) {
+      const int64_t spent = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - S.choiceStart).count();
+      S.bankMs = std::max<int64_t>(0, S.bankMs - spent);
+      Log("battle clock: %lld ms left after choice %u", static_cast<long long>(S.bankMs), seq);
+    }
+    S.timeUpDone = false;
     std::ostringstream m;
     m << "A " << seq;
     int count = 0;
-    std::ostringstream recs;
+    std::vector<std::string> recList;
+    bool anyMega = false;
+    std::vector<int> megaList;
     for (uint16_t j = 0; j < 2; j++) {
       void* fop = fightTrainerGetValidFightOutPokemonPtr(trainer, j);
       if (!fop) continue;
@@ -1382,30 +1921,44 @@ void LocalChoose(void* trainer, uint32_t side, uint32_t seq) {
         ibuff = fightItem_GetBuff(fi);
         Log("item choice: item %u, target %u, bag slot %d, buff %u", item, target, banme, ibuff);
       }
-      recs << ' ' << j << ' ' << kind << ' ' << buff << ' ' << target << ' ' << banme << ' ' << autoMake << ' ' << item << ' ' << ibuff;
+      {
+        std::ostringstream one;
+        one << ' ' << j << ' ' << kind << ' ' << buff << ' ' << target << ' ' << banme << ' ' << autoMake << ' ' << item << ' ' << ibuff;
+        recList.push_back(one.str());
+        const int mega = xd::forms::TakeChoiceMega(fop) ? 1 : 0;
+        megaList.push_back(mega);
+        anyMega = anyMega || mega != 0;
+      }
       count++;
     }
     {
       const uint16_t res = fightGetFightResultId();
       if ((res == 4 || res == 5) && count == 0) {
         const unsigned jq = fightTrainerGetValidFightOutPokemonPtr(trainer, 0) ? 0u : 1u;
-        recs << ' ' << jq << " 8 0 0 0 0 0 0";
+        recList.push_back(" " + std::to_string(jq) + " 8 0 0 0 0 0 0");
+        megaList.push_back(0);
         count = 1;
         Log("this player quits: the RUN choice is sent");
       }
     }
-    m << ' ' << static_cast<int>(r) << ' ' << count << recs.str();
+    std::string recsText;
+    for (size_t i = 0; i < recList.size(); i++) recsText += recList[i] + (anyMega ? " " + std::to_string(megaList[i]) : std::string());
+    m << ' ' << static_cast<int>(r) << ' ' << count << recsText;
+    if (timedOut) { m << " TO"; Log("choice %u ended by the clock: the game's time-out choice (the first usable move) is what is sent", seq); }
     sMine.have = true;
     sMine.busy = false;
     sMine.seq = seq;
     sMine.r = r;
     sMine.record = m.str();
+    xd::replay::OnlineChoice(seq, sMine.record);
+    xd::replay::OnlineSeed(seq, sEntrySeed.count(seq) ? sEntrySeed[seq] : 0u);
     sMine.revealed = false;
     unsigned char nonce[kNonceBytes];
     xdnet::randomBytes(nonce, sizeof nonce);
     sMine.nonceHex = ToHex(nonce, sizeof nonce);
     Send("C " + std::to_string(seq) + " " + Commit(sMine.nonceHex, sMine.record));
     S.sent++;
+    if (timedOut) S.timeouts[S.host ? 0 : 1]++;
     Log("choice %u made here and COMMITTED (%d action(s)); nothing else of it has left this PC", seq, count);
 }
 }
@@ -1414,14 +1967,16 @@ extern "C" {
 
 uint8_t PortXD_NetSelectAction(void* trainer, uint32_t side) {
   EnsureInit();
-  if (!S.active) return fightTrainerSelectFightAction(trainer, side);
+  if (!S.active) return xd::replay::SelectAction(trainer, side, fightTrainerSelectFightAction);
   S.began = true;
   if (!Begin()) { EndWithError(); return 0; }
+  if (S.spectator) return SpectatorSelect(trainer);
   const bool mine = Mine(trainer);
   const int ownSide = S.host ? 0 : 1, frSide = 1 - ownSide;
   const int sideNo = mine ? ownSide : frSide;
   const uint32_t seq = 2 * S.cnt[sideNo] + static_cast<uint32_t>(sideNo);
   const uint32_t ownSeq = 2 * S.cnt[ownSide] + static_cast<uint32_t>(ownSide);
+  { const uint32_t es = __hsd_rand_seed_hold ? *__hsd_rand_seed_hold : 0u; sEntrySeed.emplace(seq, es); sEntrySeed.emplace(ownSeq, es); }
   Log("choice asked for: the %s trainer (side %d), choice number %u (this PC's own would be %u)", mine ? "local" : "friend's", sideNo, seq, ownSeq);
   if (mine) {
     while (sMine.busy && !S.dead) fightMainWaitFrame(1);
@@ -1450,6 +2005,8 @@ uint8_t PortXD_NetSelectAction(void* trainer, uint32_t side) {
     if (Env("XD_ONLINE_TEST_TAMPER") && !S.host && !rec.empty()) rec.back() = rec.back() == '0' ? '1' : '0';
     Send("V " + std::to_string(sMine.seq) + " " + sMine.nonceHex + " " + rec);
     sMine.revealed = true;
+    HubSeed(sMine.seq, sEntrySeed.count(sMine.seq) ? sEntrySeed[sMine.seq] : 0u);
+    HubChoice(sMine.seq, sMine.record);
   }
   if (!WaitMap(sPeerReveal, seq)) { EndWithError(); return 0; }
   const std::string reveal = sPeerReveal[seq];
@@ -1469,44 +2026,14 @@ uint8_t PortXD_NetSelectAction(void* trainer, uint32_t side) {
     return 0;
   }
   Log("choice %u from the friend revealed and verified against his commitment", seq);
-  std::istringstream in(line);
-  char t;
-  uint32_t got = 0;
-  int r = 0, count = 0;
-  in >> t >> got >> r >> count;
-  if (got != seq) { Log("choice number %u, expected %u: out of step", got, seq); S.dead = true; return 0; }
-  for (int i = 0; i < count; i++) {
-    unsigned j, kind, target, item, ibuff;
-    int buff, banme, autoMake;
-    in >> j >> kind >> buff >> target >> banme >> autoMake >> item >> ibuff;
-    void* fop = fightTrainerGetValidFightOutPokemonPtr(trainer, static_cast<uint16_t>(j));
-    if (!fop) { Log("no Pokemon %u to give an action to", j); S.dead = true; return 0; }
-    fightOutPokemonInitFightActionBuff(fop);
-    if (kind == 0x13) {
-      fightOutPokemonCreateFightActionAttackWaza(fop, 0, 0x13, 0, fight_action_data_waza, buff, static_cast<uint16_t>(target),
-                                                 static_cast<int8_t>(banme), static_cast<uint8_t>(autoMake));
-    } else if (kind == 0x12) {
-      fightOutPokemonCreateFightActionUseItem(fop, 0, 0x12, 0, fight_action_data_item, item, static_cast<uint16_t>(target), banme, static_cast<int32_t>(ibuff));
-      if (void* hero = fightTrainerBiosGetHeroPtr(trainer)) heroItemDecItemDataId(hero, item, 1, banme);
-      ApplyFriendItemEffect(trainer, item, target);
-      {
-        void* act = fightOutPokemon_GetFightActionBuffPtr(fop);
-        void* fi = fightOutPokemon_GetFightItemPtr(fop);
-        Log("the friend's item %u replayed (target %u, bag slot %d, buff %u); action valid %d kind %u, item %u target %u slot %d buff %u", item, target, banme, ibuff,
-            act ? static_cast<int>(fightActionCheckValid(act)) : -1, act ? static_cast<unsigned>(fightActionGetKindDataId(act)) : 0u,
-            fi ? static_cast<unsigned>(fightItem_GetItemDataId(fi)) : 0u, fi ? static_cast<unsigned>(fightItem_GetTargetDataId(fi)) : 0u,
-            fi ? static_cast<int>(fightItem_GetCount(fi)) : -9, fi ? static_cast<unsigned>(fightItem_GetBuff(fi)) : 0u);
-      }
-    } else if (kind == 8 || kind == 9 || kind == 0xA) {
-      fightOutPokemonCreateFightAction(fop, 0, static_cast<int32_t>(kind), 0, fight_action_data_turn, buff);
-    } else {
-      Log("action kind %u not carried by the prototype", kind);
-      S.dead = true;
-      return 0;
-    }
-  }
+  xd::replay::OnlineChoice(seq, line);
+  xd::replay::OnlineSeed(seq, sEntrySeed.count(seq) ? sEntrySeed[seq] : 0u);
+  HubSeed(seq, sEntrySeed.count(seq) ? sEntrySeed[seq] : 0u);
+  HubChoice(seq, line);
+  int r = 0;
+  if (!ApplyChoiceLine(trainer, line, seq, &r, frSide)) return 0;
   S.applied++;
-  Log("choice %u from the friend applied (%d action(s))", seq, count);
+  Log("choice %u from the friend applied", seq);
   S.cnt[frSide]++;
   if (sMine.have && sMine.consumed) sMine.have = false;
   return static_cast<uint8_t>(r);
@@ -1514,9 +2041,11 @@ uint8_t PortXD_NetSelectAction(void* trainer, uint32_t side) {
 
 int16_t PortXD_NetSelectIrekae(void* trainer, uint32_t a, uint32_t b, uintptr_t c) {
   EnsureInit();
-  if (!S.active) return fightTrainerSelectIrekaeFightPokemon(trainer, a, b, c);
+  if (!S.active) return xd::replay::SelectIrekae(trainer, a, b, c, fightTrainerSelectIrekaeFightPokemon);
   if (!Begin()) { EndWithError(); return -2; }
   const uint32_t seq = S.swSeq++;
+  if (S.spectator) return SpectatorSwitch(seq);
+  { const uint32_t es = __hsd_rand_seed_hold ? *__hsd_rand_seed_hold : 0u; xd::replay::OnlineSwitchSeed(seq, es); HubSwitchSeed(seq, es); }
   if (Mine(trainer)) {
     int16_t r;
     {
@@ -1526,6 +2055,8 @@ int16_t PortXD_NetSelectIrekae(void* trainer, uint32_t a, uint32_t b, uintptr_t 
     Send("S " + std::to_string(seq) + " " + std::to_string(r));
     S.sent++;
     Log("switch choice %u made here: %d", seq, r);
+    xd::replay::OnlineSwitch(seq, r);
+    HubSwitch(seq, r);
     return r;
   }
   SeedKeep keepWait;
@@ -1537,6 +2068,8 @@ int16_t PortXD_NetSelectIrekae(void* trainer, uint32_t a, uint32_t b, uintptr_t 
   if (got != seq) { Log("switch number %u, expected %u: out of step", got, seq); S.dead = true; return -2; }
   S.applied++;
   Log("switch choice %u from the friend applied: %d", seq, r);
+  xd::replay::OnlineSwitch(seq, r);
+  HubSwitch(seq, r);
   return static_cast<int16_t>(r);
 }
 
@@ -1556,9 +2089,16 @@ void PortXD_OnlineTurnEnd(void) {
       void* fop = fightFloorGetFightOutBanmeToValidFightOutPokemon(nullptr, b);
       void* p = fop ? fightOutPokemonGetPokemonPtr(fop) : nullptr;
       n += std::snprintf(dbg + n, sizeof dbg - static_cast<size_t>(n), " | %u/%u/%u%s", fop ? figthOutPokemonGetPokemonDataId(fop) : 0u,
-                         p ? pokemon_GetHp(p) : 0u, p ? pokemon_GetMaxHp(p) : 0u, fop && fightOutPokemonIsJoutaiDataId(fop, 0x3E) == 1 ? " HYPER" : "");
+                         p ? pokemon_GetHp(p) : 0u, p ? pokemon_GetMaxHp(p) : 0u, fop && fightOutPokemonIsJoutaiDataId(fop, 0x3E) == 1 ? " HYPER" : (fop && fightOutPokemonIsJoutaiDataId(fop, 8) == 1 ? " ASLEEP" : ""));
     }
     Log("%s", dbg);
+  }
+  if (S.spectator) {
+    S.feed->turnsSeen++;
+    sSpecPending.emplace_back(turn, d);
+    xd::replay::NoteTurn(turn);
+    SpectatorCompare();
+    return;
   }
   if (const char* ft = Env("XD_ONLINE_TEST_FAINT")) {
     if (turn == static_cast<uint32_t>(std::atoi(ft))) {
@@ -1575,6 +2115,9 @@ void PortXD_OnlineTurnEnd(void) {
   if (const char* q = Env("XD_ONLINE_TEST_QUIT_TURN")) {
     if (!S.host && turn == static_cast<uint32_t>(std::atoi(q))) { Log("test: this program stops now"); std::fflush(stderr); std::_Exit(0); }
   }
+  xd::replay::OnlineParty(S.created[0], S.created[1]);
+  xd::replay::OnlineTurn(turn, d);
+  HubTurn(turn, d);
   S.mine.emplace_back(turn, d);
   char buf[64];
   std::snprintf(buf, sizeof buf, "D %u %llx", turn, static_cast<unsigned long long>(d));
@@ -1621,10 +2164,19 @@ void PortXD_OnlineBattleEnd(uint32_t result) {
   }
   Log("battle over: result %u, turn digests equal %u, different %u, choices sent %u, applied %u%s", result, S.digestsOk, S.digestsBad,
       S.sent, S.applied, S.dead ? " (connection ended early / out of step)" : "");
+  xd::replay::OnlineEnd(result, S.dead || S.digestsBad > 0);
+  HubEnd(result);
+  sEntrySeed.clear();
   S.cnt[0] = S.cnt[1] = 0;
   S.swSeq = 0;
   S.mine.clear();
-  if (S.lobby) {
+  if (S.spectator) {
+    SpectatorCompare();
+    S.feed->ended = true;
+    S.feed->endResult = result;
+    S.battleOver = true;
+    if (S.feed->onEnd) S.feed->onEnd(*S.feed);
+  } else if (S.lobby) {
     S.battleOver = true;
     S.lastResult = result;
     S.lastDesync = S.digestsBad > 0;
@@ -1635,9 +2187,10 @@ void PortXD_OnlineBattleEnd(uint32_t result) {
 }
 
 extern "C" {
+uint32_t PortXD_RawRand(void);
+float PortXD_RawRandf(void);
+int32_t PortXD_RawRandi(int32_t max);
 uint32_t HSD_Rand(void);
-float HSD_Randf(void);
-int32_t HSD_Randi(int32_t max);
 }
 namespace {
 uint32_t sCosSeed = 0x2545F491u;
@@ -1651,17 +2204,26 @@ int32_t PortXD_VsRand(void) {
   return static_cast<int32_t>(h & 0x7FFF);
 }
 uint32_t PortXD_CosRand(void) {
-  if (!xd::online::Active()) return HSD_Rand();
+  if (!xd::online::Active() && !xd::replay::SplitOn()) {
+    xd::replay::CosmeticDrawn();
+    return PortXD_RawRand();
+  }
   CosNext();
   return sCosSeed >> 16;
 }
 float PortXD_CosRandf(void) {
-  if (!xd::online::Active()) return HSD_Randf();
+  if (!xd::online::Active() && !xd::replay::SplitOn()) {
+    xd::replay::CosmeticDrawn();
+    return PortXD_RawRandf();
+  }
   CosNext();
   return static_cast<float>(sCosSeed >> 16) / 65536.0f;
 }
 int32_t PortXD_CosRandi(int32_t max) {
-  if (!xd::online::Active()) return HSD_Randi(max);
+  if (!xd::online::Active() && !xd::replay::SplitOn()) {
+    xd::replay::CosmeticDrawn();
+    return PortXD_RawRandi(max);
+  }
   CosNext();
   return max * static_cast<int32_t>(sCosSeed >> 16) / 65536;
 }
@@ -1722,13 +2284,20 @@ void GiveInTestTick() {
   }
 }
 void TimerTick() {
+  HubTick();
   if (S.timing && fightIsFight() != 0) {
     const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(S.deadline - std::chrono::steady_clock::now()).count();
     const int sec = left <= 0 ? 0 : static_cast<int>((left + 999) / 1000);
     if (sec != S.lastCount && sec > 0 && (sec <= 10 || sec % 10 == 0)) {
       S.lastCount = sec;
-      char t[48];
-      std::snprintf(t, sizeof t, Tr("Time left: %d s"), sec);
+      char t[96];
+      if (S.bankOn) {
+        const int64_t bankLeft = std::max<int64_t>(0, S.bankMs - std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - S.choiceStart).count());
+        const int bs = static_cast<int>((bankLeft + 999) / 1000);
+        std::snprintf(t, sizeof t, Tr("Time left: %d s - battle clock %d:%02d"), sec, bs / 60, bs % 60);
+      } else {
+        std::snprintf(t, sizeof t, Tr("Time left: %d s"), sec);
+      }
       PortVideo_Notice(t, 1.2);
     }
   }
@@ -1831,6 +2400,28 @@ uint8_t PortXD_HyperFlag(void* floor) {
   return S.rules.shadowAllowed && S.rules.shadowObey != "purified" ? 1 : 0;
 }
 
+uint8_t fightFloor_GetFightKindRegulationFlag(void* floor);
+uint8_t menuCBRule_EnableSbToSleep(void);
+uint8_t menuCBRule_EnableSbToIceed(void);
+uint8_t menuCBRule_EnableSkillSwap(void);
+uint8_t menuCBRule_EnableSkill_Michidure(void);
+uint8_t menuCBRule_EnableSkill_SonicBoom(void);
+}
+namespace {
+bool SleepClauseOn() { return S.active && S.connected && S.rules.sleepClause && fightIsFight() != 0; }
+void SleepClauseNote(const char* what) {
+  static int logged = 0;
+  if (logged < 6) { logged++; Log("Sleep clause: the game's regulation question \"%s\" is answered by the room's rule", what); }
+}
+}
+extern "C" {
+uint8_t PortXD_SleepClauseFlag(void* floor) { if (SleepClauseOn()) { SleepClauseNote("regulation on"); return 1; } return fightFloor_GetFightKindRegulationFlag(floor); }
+uint8_t PortXD_SleepClauseSleep(void) { return SleepClauseOn() ? 0 : menuCBRule_EnableSbToSleep(); }
+uint8_t PortXD_SleepClauseIce(void) { return SleepClauseOn() ? 1 : menuCBRule_EnableSbToIceed(); }
+uint8_t PortXD_SleepClauseSwap(void) { return SleepClauseOn() ? 1 : menuCBRule_EnableSkillSwap(); }
+uint8_t PortXD_SleepClauseMichidure(void) { return SleepClauseOn() ? 1 : menuCBRule_EnableSkill_Michidure(); }
+uint8_t PortXD_SleepClauseSonic(void) { return SleepClauseOn() ? 1 : menuCBRule_EnableSkill_SonicBoom(); }
+
 uint8_t pokemonGetDarkPokemonHyperJoutaiKakuritu(void* pokemon);
 uint8_t PortXD_HyperChance(void* pokemon) {
   const uint8_t real = pokemonGetDarkPokemonHyperJoutaiKakuritu(pokemon);
@@ -1903,6 +2494,8 @@ void PortXD_NetPokemonCreate(void* trainer, void* fightPokemon, void* pokemon, i
     }
   }
   fightPokemonCreate(trainer, fightPokemon, pokemon, entryId);
+  if (fightPokemon != nullptr) xd::modbattle::ForgetCopy(fightPokemon_GetPokemonBuffPtr(fightPokemon));
+  if (xd::modbattle::Rules() && fightPokemon != nullptr) xd::modbattle::RuleLevel(fightPokemon_GetPokemonBuffPtr(fightPokemon));
 }
 
 uint32_t PortXD_MenuStatus(void* floor, uint16_t dataId, uint16_t status, uint16_t arg) {
@@ -1972,4 +2565,106 @@ uint16_t* PortXD_ResultMsg(uint32_t id) {
   }
   return GSmsgGetGSchar(id);
 }
+}
+
+extern "C" {
+uint16_t fightTrainer_GetFightTrainerDataId(void* trainer);
+uint16_t fightTrainerDB_GetAiDataId(uint16_t id);
+int32_t fightTrainer_GetControllerId(void* trainer);
+}
+namespace xd::online {
+
+uint64_t BattleDigest(uint32_t turn) { return Digest(turn); }
+
+bool TrainerIsAi(void* trainer) {
+  return fightTrainerDB_GetAiDataId(fightTrainer_GetFightTrainerDataId(trainer)) != 0 && fightTrainer_GetControllerId(trainer) == 0;
+}
+
+int TrainerSide(void* trainer) { return fightTargetIsHostSide(trainer, fightFloor_GetFightType(nullptr)) != 0 ? 0 : 1; }
+
+std::string DescribeActions(void* trainer) {
+  std::vector<std::string> recList;
+  std::vector<int> megaList;
+  bool anyMega = false;
+  int count = 0;
+  for (uint16_t j = 0; j < 2; j++) {
+    void* fop = fightTrainerGetValidFightOutPokemonPtr(trainer, j);
+    if (!fop) continue;
+    void* act = fightOutPokemon_GetFightActionBuffPtr(fop);
+    if (!act || !fightActionCheckValid(act)) continue;
+    const unsigned kind = fightActionGetKindDataId(act);
+    const int buff = fightActionBiosGetBuffDataId(act);
+    unsigned target = 0;
+    int banme = 0, autoMake = 0;
+    unsigned item = 0, ibuff = 0;
+    if (kind == 0x13) {
+      void* w = fightOutPokemon_GetFightWazaPtr(fop);
+      target = fightWaza_GetTargetDataId(w);
+      banme = fightWaza_GetWazaBanme(w);
+      autoMake = fightWaza_GetAutoMakeFlag(w);
+    } else if (kind == 0x12) {
+      void* fi = fightOutPokemon_GetFightItemPtr(fop);
+      item = fightItem_GetItemDataId(fi);
+      target = fightItem_GetTargetDataId(fi);
+      banme = fightItem_GetCount(fi);
+      ibuff = fightItem_GetBuff(fi);
+    }
+    std::ostringstream one;
+    one << ' ' << j << ' ' << kind << ' ' << buff << ' ' << target << ' ' << banme << ' ' << autoMake << ' ' << item << ' ' << ibuff;
+    const int mega = xd::forms::TakeChoiceMega(fop) ? 1 : 0;
+    anyMega = anyMega || mega != 0;
+    recList.push_back(one.str());
+    megaList.push_back(mega);
+    count++;
+  }
+  const uint16_t res = fightGetFightResultId();
+  if ((res == 4 || res == 5) && count == 0) {
+    const unsigned jq = fightTrainerGetValidFightOutPokemonPtr(trainer, 0) ? 0u : 1u;
+    recList.push_back(" " + std::to_string(jq) + " 8 0 0 0 0 0 0");
+    megaList.push_back(0);
+    count = 1;
+  }
+  std::string recs;
+  for (size_t i = 0; i < recList.size(); i++) recs += recList[i] + (anyMega ? " " + std::to_string(megaList[i]) : std::string());
+  return std::to_string(count) + recs;
+}
+
+bool ApplyActions(void* trainer, const std::string& text) {
+  std::istringstream in(text);
+  int count = 0;
+  in >> count;
+  const int perAction = ActionNumbers(text);
+  if (perAction == 0 || count < 0) return false;
+  const bool withMega = perAction == 9;
+  for (int i = 0; i < count; i++) {
+    unsigned j, kind, target, item, ibuff, mega = 0;
+    int buff, banme, autoMake;
+    in >> j >> kind >> buff >> target >> banme >> autoMake >> item >> ibuff;
+    if (withMega) in >> mega;
+    if (!in) return false;
+    void* fop = fightTrainerGetValidFightOutPokemonPtr(trainer, static_cast<uint16_t>(j));
+    if (!fop) return false;
+    fightOutPokemonInitFightActionBuff(fop);
+    if (kind == 0x13) {
+      xd::forms::SetFriendApplying(true);
+      fightOutPokemonCreateFightActionAttackWaza(fop, 0, 0x13, 0, fight_action_data_waza, buff, static_cast<uint16_t>(target), static_cast<int8_t>(banme), static_cast<uint8_t>(autoMake));
+      xd::forms::SetFriendApplying(false);
+      if (mega) xd::forms::FriendMega(fop);
+    } else if (kind == 0x12) {
+      fightOutPokemonCreateFightActionUseItem(fop, 0, 0x12, 0, fight_action_data_item, item, static_cast<uint16_t>(target), banme, static_cast<int32_t>(ibuff));
+      if (void* hero = fightTrainerBiosGetHeroPtr(trainer)) heroItemDecItemDataId(hero, item, 1, banme);
+      ApplyFriendItemEffect(trainer, item, target);
+    } else if (kind == 8 || kind == 9 || kind == 0xA) {
+      fightOutPokemonCreateFightAction(fop, 0, static_cast<int32_t>(kind), 0, fight_action_data_turn, buff);
+    } else {
+      return false;
+    }
+  }
+  return true;
+}
+
+}
+
+namespace xd::online {
+void CosmeticSeedReset() { sCosSeed = 0x2545F491u; }
 }

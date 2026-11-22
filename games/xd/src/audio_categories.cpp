@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <mutex>
+#include <string>
 #include <vector>
 
 extern "C" u32 _sndStreamCallback(void* buf1, u32 len1, void* buf2, u32 len2, u32 user);
@@ -134,8 +135,41 @@ extern "C" {
 
 void PortMusyX_GhostInstall(void);
 
+struct WorkHead {
+  u8 used, vol, pan, b3, pushCount, push[3];
+  u32 voice;
+};
+
+uint32_t PortXD_MusicSignature(void) {
+  if (snd_data == nullptr || snd_data_number == nullptr) return 0;
+  uint32_t h = 2166136261u;
+  const uint32_t n = *snd_data_number;
+  static const bool dbg = std::getenv("XD_FF_MUSIC_DEBUG") != nullptr;
+  std::string list;
+  for (uint32_t id = 0; id < n; id++) {
+    const SndData* d = static_cast<const SndData*>(snd_data) + id;
+    if (d->se || d->env || d->work == nullptr) continue;
+    const WorkHead* w = reinterpret_cast<const WorkHead*>(d->work);
+    if (!w->used || w->voice == 0xFFFFFFFFu) continue;
+    h = (h ^ id) * 16777619u;
+    h = (h ^ w->voice) * 16777619u;
+    if (dbg) list += " " + std::to_string(id) + (d->stream ? "s" : "q") + ":" + std::to_string(w->voice);
+  }
+  if (dbg) {
+    static uint32_t last = 0;
+    if (h != last) {
+      last = h;
+      std::fprintf(stderr, "[ff debug] music signature now:%s\n", list.c_str());
+    }
+  }
+  return h;
+}
+
+void PortFfMusic_SetSignature(uint32_t (*fn)(void));
+
 void PortXD_AudioCategoriesInit(void) {
   PortAudio_SetCategoryClassifiers(ClassifyFx, ClassifyStream);
+  PortFfMusic_SetSignature(PortXD_MusicSignature);
   PortMusyX_GhostInstall();
   for (const VolumeSetting& v : kVolumes) {
     PortAudio_SetCategoryVolume(v.category, static_cast<float>(engine::settings::Global().Int(v.id).Get()) / 100.f);

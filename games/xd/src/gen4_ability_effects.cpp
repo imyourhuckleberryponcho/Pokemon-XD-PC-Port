@@ -1,5 +1,8 @@
 #include "xd_challenges.h"
+#include "xd_forms.h"
 #include "xd_gen4_abilities.h"
+#include "xd_mod_battle.h"
+#include "xd_gen_rules.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -104,6 +107,7 @@ constexpr uint16_t kTangledFeet = 77, kMotorDrive = 78, kRivalry = 79, kSteadfas
                    kQuickFeet = 95, kKlutz = 103, kMoldBreaker = 104, kSuperLuck = 105, kAftermath = 106, kAnticipation = 107,
                    kUnaware = 109, kSlowStart = 112, kIceBody = 115, kSnowWarning = 117, kFlowerGift = 122, kBadDreams = 123,
                    kInert = 77;
+inline bool IsMold(uint32_t ability) { return ability == kMoldBreaker || ability == 163 || ability == 164; }
 constexpr uint32_t kBlock = 0x8F001000u;
 constexpr uint32_t kWazaEnd = 0x8041410Fu, kKasoku = 0x80417957u, kAmeukezara = 0x8041791Cu, kDokudoku = 0x804174FDu;
 constexpr uint32_t kBank = 0x7D0u << 20;
@@ -387,7 +391,7 @@ int32_t AbilityDamage(void* attacker, void* defender, uint16_t waza, uint16_t ty
   default:
     break;
   }
-  if (d == kFlowerGift && kind == 2 && Weather() == 1 && a != kMoldBreaker) damage = scale(damage, 2, 3);
+  if (d == kFlowerGift && kind == 2 && Weather() == 1 && !IsMold(a)) damage = scale(damage, 2, 3);
   std::fprintf(stderr, "[gen4] damage question: attacker ability %u, defender ability %u, weather %d, %s move, number %d\n", a, d,
                Weather(), kind == 1 ? "physical" : kind == 2 ? "special" : "other", damage);
   return damage;
@@ -422,7 +426,7 @@ uint32_t AbilitySpeed(void* fop, uint32_t speed) {
 
 uint8_t AbilityAccuracy(void* attacker, void* defender, uint8_t avg) {
   if (!On() || defender == nullptr || avg == 0 || avg == 255) return avg;
-  if (attacker != nullptr && Ab(attacker) == kMoldBreaker) return avg;
+  if (attacker != nullptr && IsMold(Ab(attacker))) return avg;
   if (Ab(defender) == kTangledFeet && fightOutPokemonIsJoutaiDataId(defender, 9) == 1) {
     std::fprintf(stderr, "[gen4] ability: Tangled Feet while confused: accuracy %d -> %d\n", avg, avg / 2);
     return static_cast<uint8_t>(avg / 2);
@@ -432,7 +436,7 @@ uint8_t AbilityAccuracy(void* attacker, void* defender, uint8_t avg) {
 
 bool MotorDriveHit(void* attacker, void* defender, uint16_t waza, uint8_t* result) {
   if (!On() || attacker == nullptr || defender == nullptr || attacker == defender || Ab(defender) != kMotorDrive) return false;
-  if (Ab(attacker) == kMoldBreaker || waza == 0 || waza == 0x176 || !Alive(defender)) return false;
+  if (IsMold(Ab(attacker)) || waza == 0 || waza == 0x176 || !Alive(defender)) return false;
   if (fightOutPokemonGetWazaZokuseiDataId(attacker) != 0xD || wazaDB_GetIryoku(waza) == 0) return false;
   Install();
   const bool raised = Raise(defender, 3, 1);
@@ -446,7 +450,7 @@ bool MotorDriveHit(void* attacker, void* defender, uint16_t waza, uint8_t* resul
 }
 
 MoldScope::MoldScope(void* attacker, void* defender) {
-  if (!On() || attacker == nullptr || defender == nullptr || attacker == defender || Ab(attacker) != kMoldBreaker) return;
+  if (!On() || attacker == nullptr || defender == nullptr || attacker == defender || !IsMold(Ab(attacker))) return;
   def_ = defender;
   old_ = fightOutPokemonGetTokuseiDataId(defender);
   fightOutPokemonSetTokuseiDataId(defender, kInert);
@@ -472,17 +476,19 @@ void MagicGuardHpDec() {
   void* target = cmd != nullptr ? fightTargetGetPtrAsNowFightType(cmd[1], 0) : nullptr;
   if (attacker == nullptr || target == nullptr) return;
   const uint16_t tab = Ab(target);
-  if (tab != kMagicGuard && tab != kHeatproof) return;
+  const bool burnOnly = fightOutPokemonIsJoutaiDataId(target, 6) == 1 && fightOutPokemonIsJoutaiDataId(target, 3) == 0 &&
+                        fightOutPokemonIsJoutaiDataId(target, 4) == 0 && fightOutPokemonIsJoutaiDataId(target, 0x1C) == 0 &&
+                        fightOutPokemonIsJoutaiDataId(target, 0x17) == 0 && fightOutPokemonIsJoutaiDataId(target, 0x18) == 0;
+  if (tab != kMagicGuard && tab != kHeatproof && !(burnOnly && xd::rulegen::AtLeast(7))) return;
   void* fw = fightOutPokemon_GetFightWazaPtr(attacker);
   if (tab == kMagicGuard) {
     fightWaza_SetDamage(fw, 0);
     std::fprintf(stderr, "[gen4] ability: Magic Guard: indirect damage turned into 0\n");
-  } else if (fightOutPokemonIsJoutaiDataId(target, 6) == 1 && fightOutPokemonIsJoutaiDataId(target, 3) == 0 &&
-             fightOutPokemonIsJoutaiDataId(target, 4) == 0 && fightOutPokemonIsJoutaiDataId(target, 0x1C) == 0 &&
-             fightOutPokemonIsJoutaiDataId(target, 0x17) == 0 && fightOutPokemonIsJoutaiDataId(target, 0x18) == 0) {
-    const int32_t half = static_cast<int32_t>(fightOutPokemonMaxHpWaruValue(target, 16));
+  } else if (burnOnly) {
+    const bool gen7 = xd::rulegen::AtLeast(7);
+    const int32_t half = static_cast<int32_t>(fightOutPokemonMaxHpWaruValue(target, tab == kHeatproof ? (gen7 ? 32 : 16) : 16));
     fightWaza_SetDamage(fw, half < 1 ? 1 : half);
-    std::fprintf(stderr, "[gen4] ability: Heatproof: burn damage halved to %d\n", half);
+    std::fprintf(stderr, tab == kHeatproof ? "[gen4] ability: Heatproof: burn damage halved to %d\n" : "[rules] gen 7: burn takes a sixteenth: %d\n", half);
   }
 }
 
@@ -519,7 +525,8 @@ uint32_t PortXD_Gen4WazaZokusei(void* fw) {
   return t;
 }
 uint8_t PortXD_Gen4WazaType(void* fop) {
-  const uint8_t t = fightOutPokemonGetWazaZokuseiDataId(fop);
+  uint8_t t = fightOutPokemonGetWazaZokuseiDataId(fop);
+  if (xd::modbattle::Active()) t = xd::modbattle::WazaType(fop, t);
   return (On() && fop != nullptr && Ab(fop) == kNormalize) ? 0 : t;
 }
 
@@ -556,6 +563,7 @@ void PortXD_TokuseiCheckTurnExtra(void* p, uint16_t tokusei) {
 }
 
 int PortXD_StatusBlockedByAbility(void* p, uint8_t effect) {
+  if (xd::modbattle::Active() && p != nullptr && xd::modbattle::StatusBlocked(p, effect)) return 1;
   if (!On() || p == nullptr) return 0;
   sStatusHookSeen = true;
   const uint8_t e = effect & 0x3F;
@@ -569,13 +577,14 @@ int PortXD_StatusBlockedByAbility(void* p, uint8_t effect) {
 
 uint16_t PortXD_DamageDefenderTokusei(void* attacker, void* defender, uint16_t tokusei) {
   (void)defender;
-  if (On() && attacker != nullptr && Ab(attacker) == kMoldBreaker) return kInert;
+  if (On() && attacker != nullptr && IsMold(Ab(attacker))) return kInert;
   return tokusei;
 }
 
 void PortXD_Gen4SideCheck(void) {
   if (!On()) {
     fightSeqSideJoutaiCheck();
+    xd::modbattle::EndOfTurn();
     return;
   }
   Install();
@@ -585,11 +594,13 @@ void PortXD_Gen4SideCheck(void) {
   fightSeqSideJoutaiCheck();
   t.phase = 1;
   fightFloorLoopValidFightOutPokemon(nullptr, EachMon, &t, 0);
+  xd::modbattle::EndOfTurn();
 }
 
 extern "C" uint32_t PortXD_Gen4SoubiKind(void* fop);
 uint16_t PortXD_Gen4GetSoubi(void* fop) {
-  const uint16_t item = fightOutPokemonGetSoubiItemSoubiDataId(fop);
+  uint16_t item = fightOutPokemonGetSoubiItemSoubiDataId(fop);
+  if (xd::modbattle::Rules()) item = xd::modbattle::SoubiKind(fop, item);
   if (!On() || fop == nullptr) return item;
   const bool embargo = PortXD_Gen4SoubiKind(fop) == 0 && item != 0;
   const uint16_t ab = Ab(fop);
@@ -617,6 +628,7 @@ int32_t fightSeqFightOutPokemonTokuseiCheckWazaHitBefore(void* attacker, void* d
 }
 
 int32_t fightSeqFightOutPokemonTokuseiCheckWazaHitAfter(void* attacker, void* defender) {
+  if (xd::modbattle::Active()) xd::modbattle::HitAfter(attacker, defender);
   if (!On() || attacker == nullptr || defender == nullptr || attacker == defender) return PortXD_RealWazaHitAfter(attacker, defender);
   const uint16_t d = Ab(defender);
   if (d == kAngerPoint || d == kAftermath) {
@@ -648,7 +660,9 @@ int32_t fightSeqFightOutPokemonTokuseiCheckWazaHitAfter(void* attacker, void* de
 }
 
 void fightSeqFightOutPokemonTokuseiCheckAppear(void* p) {
+  xd::forms::EntryPrimal(p);
   PortXD_RealAppear(p);
+  if (xd::modbattle::Active()) xd::modbattle::Appear(p);
   if (!On() || !Alive(p)) return;
   Install();
   Tick();
@@ -738,9 +752,11 @@ void fightSeqFightOutPokemonTokuseiCheckAppear(void* p) {
 }
 
 void PortXD_Gen4CriticalCheck(void) {
+  if (On()) xd::rulegen::SetCritTable();
   void* attacker = fightTargetGetPtrAsNowFightType(0x11, 0);
   if (!On() || attacker == nullptr || Ab(attacker) != kSuperLuck) {
     WS_CRITICAL_CHECK();
+    if (xd::modbattle::Active()) xd::modbattle::AfterCritical();
     return;
   }
   void* target = fightTargetGetPtrAsNowFightType(0x12, 0);

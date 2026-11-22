@@ -46,6 +46,7 @@ template <class GetEnv>
 bool PlayerFilesReadOnly(GetEnv get) {
   const char* own = get("XD_SETTINGS_DIR");
   if (own != nullptr && own[0] != '\0') return false;
+  if (const char* replay = get("XD_BATTLE_REPLAY"); replay != nullptr && replay[0] != '\0') return true;
   return TestRunSwitchSet(get) != nullptr;
 }
 

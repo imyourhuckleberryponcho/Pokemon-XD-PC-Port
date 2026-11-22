@@ -271,6 +271,18 @@ int list_tables(const em::DataCatalog& cat) {
   return 0;
 }
 
+int list_labels(const em::DataCatalog& cat, const char* kind) {
+  const em::NameList* list = cat.FindList(kind);
+  if (list == nullptr) {
+    std::fprintf(stderr, "no name list %s (species, move, item)\n", kind);
+    return 2;
+  }
+  const em::BaseLabels base(kind, list->names);
+  for (const auto& [slug, number] : base.Slugs()) std::printf("%s:%s/%s %u\n", kind, em::kBaseNamespace, slug.c_str(), number);
+  std::fprintf(stderr, "%zu of %zu names have a label\n", base.Size(), list->names.size());
+  return 0;
+}
+
 int list_fields(const em::DataCatalog& cat, const char* name) {
   const em::DataTable* t = cat.FindTable(name);
   if (t == nullptr) {
@@ -332,7 +344,11 @@ int show_names(const em::DataCatalog& cat, const char* name) {
     std::fprintf(stderr, "no name list %s (--tables lists them)\n", name);
     return 1;
   }
-  for (const auto& [n, v] : l->names) std::printf("%5u  %s\n", v, n.c_str());
+  for (size_t i = 0; i < l->names.size(); i++) {
+    const auto& [n, v] = l->names[i];
+    if (i < l->notes.size() && !l->notes[i].empty()) std::printf("%5u  %s    (check: %s)\n", v, n.c_str(), l->notes[i].c_str());
+    else std::printf("%5u  %s\n", v, n.c_str());
+  }
   return 0;
 }
 
@@ -387,8 +403,8 @@ int run_mods(const fs::path& modsFolder, const fs::path& listFile, bool printIds
     std::printf("%zu row(s) added by data mods (the mod -> numbers map: --ids):\n", result.addedRows.size());
     std::vector<XDAddedRow> rows;
     for (const em::AddedRow& r : result.addedRows) {
-      std::printf("  %s \"%s\" = %s #%u (entry %u, a copy of #%u)   [%s, %s]\n", r.table.c_str(), r.key.c_str(),
-                  r.table == "pokemon_data" ? "species" : r.table == "waza_data" ? "move" : r.table == "poke_face" ? "face" : r.table == "item_data_prime" ? "item" : "row", r.id, r.row, r.copyOf, r.mod.c_str(),
+      std::printf("  %s \"%s\" = %s #%u (entry %u, a copy of #%u)%s%s   [%s, %s]\n", r.table.c_str(), r.key.c_str(),
+                  r.table == "pokemon_data" ? "species" : r.table == "waza_data" ? "move" : r.table == "poke_face" ? "face" : r.table == "item_data_prime" ? "item" : "row", r.id, r.row, r.copyOf, r.label.empty() ? "" : "  label ", r.label.c_str(), r.mod.c_str(),
                   r.where.c_str());
       if (!r.inFile) rows.push_back({r.table.c_str(), r.id, r.row, r.copyOf, r.bytes.data(), r.bytes.size()});
     }
@@ -618,7 +634,7 @@ int main(int argc, char** argv) {
   if (argc < 3) {
     std::fprintf(stderr,
                  "Usage: %s <disc> --tables | --fields <table> | --show <table> <entry> | --names <list> |\n"
-                 "                 --mods [mods folder] [mods.ini] | --selftest\n",
+                 "                 --mods [mods folder] [mods.ini] | --labels <species|move|item> | --selftest\n",
                  argv[0]);
     return 2;
   }
@@ -644,6 +660,16 @@ int main(int argc, char** argv) {
   if (mode == "--tables") return list_tables(*cat);
   if (mode == "--fields" && argc >= 4) return list_fields(*cat, argv[3]);
   if (mode == "--show" && argc >= 5) return show_entry(*cat, argv[3], argv[4]);
+  if (mode == "--labels" && argc >= 4) return list_labels(*cat, argv[3]);
+  if (mode == "--show-range" && argc >= 6) {
+    int rc = 0;
+    for (long i = std::strtol(argv[4], nullptr, 10), last = std::strtol(argv[5], nullptr, 10); i <= last; i++) {
+      char entry[24];
+      std::snprintf(entry, sizeof entry, "#%ld", i);
+      rc |= show_entry(*cat, argv[3], entry);
+    }
+    return rc;
+  }
   if (mode == "--names" && argc >= 4) return show_names(*cat, argv[3]);
   if (mode == "--text" && argc >= 4) return show_text(*cat, argv[3], argc >= 5 ? argv[4] : nullptr);
   if (mode == "--selftest") return selftest(*cat);

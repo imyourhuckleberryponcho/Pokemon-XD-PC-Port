@@ -276,6 +276,7 @@ MovesOut gen4_moves(const PbrData& pbr, XdTables& xd) {
       Json t = Json::object();
       t.set("name", gen4_move_name_text(r.name));
       t.set("doc", "Not built yet: does nothing.");
+      gen4_add_lang_fields(t, {{"name", gen4_lang_row("move_name", r.name)}, {"doc", gen4_lang_row("sys", "Not built yet: does nothing.")}});
       row.set("text", t);
     } else {
       row.set("copy", d.xd.at(r.donor).name);
@@ -284,6 +285,7 @@ MovesOut gen4_moves(const PbrData& pbr, XdTables& xd) {
       Json t = Json::object();
       t.set("name", gen4_move_name_text(r.name));
       t.set("doc", gen4_move_doc(r.name));
+      gen4_add_lang_fields(t, {{"name", gen4_lang_row("move_name", r.name)}, {"doc", gen4_lang_row("move_doc", r.name)}});
       row.set("text", t);
     }
     table.set(r.name, row);

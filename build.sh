@@ -19,7 +19,7 @@ PRESET="linux-${1:-release}"
 LINUX_TARGETS="settings_test controls_test memcard_test save_backups_test gen3_save_test randomizer_test
   gsthread_test xd_save_test xd_save_convert_test xd_gba_test xd_settings_test
   dsp_decode_test dsp_core_test
-  disc_check_test mods_test data_mods_test playthrough_test disc_overlay_test gc_fused_test disc_drive_test
+  disc_check_test mods_test mod_layout_test labels_test script_test data_mods_test playthrough_test disc_overlay_test gc_fused_test disc_drive_test
   xd_disc_list xd_dsp_test xd_dsp_run
   platform_compat platform_sdk platform_os platform_audio platform_input platform_video
   xd_disc_check xd_data_dump xd_save_dump xd_randomize xd_gba_trade xd_rel_link_test
@@ -58,7 +58,7 @@ EXTRA_ARGS=""
 # Aurora gets its own clone in the build root (XD_AURORA_DIR). It is checked out with core.autocrlf=true, the same
 # CRLF files the Windows checkout has: patch 0004 holds CRLF lines and only applies to CRLF files (an LF clone fails there). The shared third_party/aurora checkout (junctioned into every Windows worktree, CRLF files) must never be
 # reset from here: that breaks the Windows builds. The clone is of the shared checkout's committed commit.
-AURORA_SHARED="$PWD/third_party/aurora"
+AURORA_SHARED="${XD_AURORA_SHARED:-$PWD/third_party/aurora}" # (XD_AURORA_SHARED=<a git checkout of Aurora>: a worktree without the junction)
 AURORA_CLONE="$BUILD_ROOT/aurora"
 AURORA_WANT="$(git -c safe.directory='*' -C "$AURORA_SHARED" rev-parse HEAD)"
 if [ ! -d "$AURORA_CLONE/.git" ]; then

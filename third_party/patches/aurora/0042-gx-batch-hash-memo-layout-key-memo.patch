@@ -1,0 +1,102 @@
+diff --git a/lib/gx/command_processor.cpp b/lib/gx/command_processor.cpp
+--- a/lib/gx/command_processor.cpp
++++ b/lib/gx/command_processor.cpp
+@@ -197,8 +197,33 @@ struct ArrayUploadKeyHash {
+ };
+ absl::flat_hash_map<ArrayUploadKey, gfx::Range, ArrayUploadKeyHash> sArrayUploads; // (patch 0040: was std::unordered_map, a heap node per new upload)
+ 
++// (patch 0042) The contents hash of an array is kept for the rest of the command batch being decoded. While a
++// batch is decoded (one top-level process() call) the game is not running (its thread waits in drain(), or the
++// decoder runs on the game's own thread), so the memory the commands point at cannot change; a draw that
++// names the same array again used to hash all of it again. A new batch (process() entered at the top) or a
++// new frame starts again from nothing.
++u64 sArrayHashEpoch = 1;
++struct ArrayHashMemo {
++  const void* data = nullptr;
++  u32 length = 0;
++  u64 epoch = 0;
++  u64 hash = 0;
++};
++std::array<ArrayHashMemo, 256> sArrayHashMemos;
++
++u64 array_hash(const void* data, u32 length) noexcept {
++  const auto slot = static_cast<size_t>((reinterpret_cast<uintptr_t>(data) >> 4) ^ length ^ (length >> 8)) & 255;
++  auto& memo = sArrayHashMemos[slot];
++  if (memo.epoch == sArrayHashEpoch && memo.data == data && memo.length == length) {
++    return memo.hash;
++  }
++  const u64 hash = xxh3_hash_s(data, length);
++  memo = {data, length, sArrayHashEpoch, hash};
++  return hash;
++}
++
+ gfx::Range push_array(const void* data, u32 length) {
+-  const ArrayUploadKey key{data, length, xxh3_hash_s(data, length)};
++  const ArrayUploadKey key{data, length, array_hash(data, length)};
+   if (const auto it = sArrayUploads.find(key); it != sArrayUploads.end()) {
+     return it->second;
+   }
+@@ -291,6 +316,9 @@ bool take_display_copy_flag() noexcept {
+ ProcessResult process(const u8* data, u32 size) noexcept {
+   ZoneScoped;
+   ByteReader reader{{data, size}};
++  if (sProcessDepth == 0) {
++    ++sArrayHashEpoch; // (patch 0042: a new batch: nothing remembered about the memory's contents)
++  }
+   struct Depth {
+     Depth() { ++sProcessDepth; }
+     ~Depth() { --sProcessDepth; }
+@@ -1308,6 +1336,7 @@ void handle_aurora(ByteReader& reader) noexcept {
+ }
+ 
+ void clear_draw_cache(bool keepArrays) noexcept {
++  ++sArrayHashEpoch;
+   sDrawCache.bindGeneration = 0;
+   sDrawCache.uniformRange = {};
+   sDrawCache.fogRange = {};
+diff --git a/lib/gfx/frame_packet.hpp b/lib/gfx/frame_packet.hpp
+--- a/lib/gfx/frame_packet.hpp
++++ b/lib/gfx/frame_packet.hpp
+@@ -135,6 +135,32 @@ struct RenderPass {
+ };
+ 
+ inline void finalize_render_target_layout(RenderTargetLayout& layout) noexcept {
++  // (patch 0042) The key is a hash of the layout's attachment count, each attachment's semantic and format, the
++  // depth format and the sample count. A draw asks for it twice (the draw cache and the pipeline lookup) and the
++  // answer rarely changes, so the last one is kept per thread and given back when those fields are the same.
++  struct Sig {
++    uint32_t count;
++    uint32_t depth;
++    uint32_t samples;
++    std::array<ColorAttachmentSemantic, MaxColorAttachments> semantic;
++    std::array<wgpu::TextureFormat, MaxColorAttachments> format;
++  };
++  thread_local Sig lastSig{};
++  thread_local uint64_t lastKey = 0;
++  thread_local bool lastValid = false;
++  Sig sig{layout.colorAttachmentCount, static_cast<uint32_t>(layout.depthStencilFormat), layout.sampleCount, {}, {}};
++  for (uint32_t i = 0; i < layout.colorAttachmentCount; ++i) {
++    sig.semantic[i] = layout.colorAttachments[i].semantic;
++    sig.format[i] = layout.colorAttachments[i].format;
++  }
++  bool same = lastValid && lastSig.count == sig.count && lastSig.depth == sig.depth && lastSig.samples == sig.samples;
++  for (uint32_t i = 0; same && i < layout.colorAttachmentCount; ++i) {
++    same = lastSig.semantic[i] == sig.semantic[i] && lastSig.format[i] == sig.format[i];
++  }
++  if (same) {
++    layout.key = lastKey;
++    return;
++  }
+   Hasher hasher{};
+   hasher.update(layout.colorAttachmentCount);
+   for (uint32_t i = 0; i < layout.colorAttachmentCount; ++i) {
+@@ -144,6 +170,9 @@ inline void finalize_render_target_layout(RenderTargetLayout& layout) noexcept {
+   hasher.update(static_cast<uint32_t>(layout.depthStencilFormat));
+   hasher.update(layout.sampleCount);
+   layout.key = hasher.digest();
++  lastSig = sig;
++  lastKey = layout.key;
++  lastValid = true;
+ }
+ 
+ inline RenderTargetLayout RenderPass::target_layout() const noexcept {

@@ -42,11 +42,13 @@ struct KeyStore {
 KeyStore LoadKeys(const Folders& f);
 bool SaveKeys(const Folders& f, const KeyStore& store);
 
-enum class Trust { Trusted, FirstUse, Refused };
+enum class Trust { Trusted, FirstUse, KeyChanged, NeedsConfirm, Refused };
 struct TrustVerdict {
   Trust trust = Trust::Refused;
   std::string text;
+  std::string oldKey, newKey;
 };
+inline bool PinsKey(Trust t) { return t == Trust::Trusted || t == Trust::FirstUse || t == Trust::KeyChanged; }
 TrustVerdict EvaluateTrust(const engine::modcheck::UpdateFile& file, const std::string& expectedId, const std::string& pinned,
                            const std::string& authorKey);
 
@@ -96,6 +98,7 @@ struct Playthrough {
   std::string save;
   std::string label;
   std::string version;
+  bool keepsNumbers = false;
 };
 std::vector<Playthrough> PlaythroughsUsing(const std::vector<std::pair<std::string, std::filesystem::path>>& cardRoots, const std::string& id);
 

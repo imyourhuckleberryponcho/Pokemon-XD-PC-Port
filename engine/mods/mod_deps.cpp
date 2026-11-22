@@ -264,7 +264,7 @@ Touch TouchOf(const ModFolder& mod, std::string_view gameId) {
   if (mod.manifest.scripts) {
     for (const LayoutFile& f : LayoutFiles(mod.folder, gameId, "scripts", false)) {
       std::string text;
-      if (Lower(fs::path(f.rel).extension().string()) == ".lua" && ReadSmall(f.path, text, 512u << 10)) HookNames(text, t.hooks);
+      if ((Lower(fs::path(f.rel).extension().string()) == ".luau" || Lower(fs::path(f.rel).extension().string()) == ".lua") && ReadSmall(f.path, text, 512u << 10)) HookNames(text, t.hooks);
     }
   }
   return t;

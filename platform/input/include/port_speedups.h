@@ -12,9 +12,13 @@ void PortSpeedups_HandleEvent(const void* sdlEvent);
 
 uint32_t PortSpeedups_BreakPresses(void);
 
+uint32_t PortSpeedups_ReplayBarPresses(void);
+
 void PortSpeedups_Frame(bool gameWants);
 
 void PortSpeedups_Field(uint32_t field);
+
+void PortSpeedups_SetReplayFactor(float factor);
 
 bool PortSpeedups_FastForwarding(void);
 

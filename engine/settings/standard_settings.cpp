@@ -31,12 +31,20 @@ std::vector<Definition> StandardSettings() {
               false, false)
           .OriginalNote("the GameCube's own picture, drawn at its own size.")
           .Implemented(),
-      D::Enum("video.anti_aliasing", C::Video, "Anti-aliasing", "Smooths the jagged edges of 3D models.",
-              {{"off", "Off"}, {"2x", "2x"}, {"4x", "4x"}, {"8x", "8x"}}, "off", "4x"),
+      D::Enum("video.anti_aliasing", C::Video, "Anti-aliasing",
+              "Smooths the jagged edges of 3D models. FXAA: a smoothing pass over the finished picture (cheap; also "
+              "softens some text a little). MSAA 4x: the 3D is drawn with four samples per pixel (cleaner edges, uses "
+              "more of the graphics card; takes effect the next time the game starts). Only how the picture is drawn "
+              "changes.",
+              {{"off", "Off"}, {"fxaa", "FXAA"}, {"msaa4", "MSAA 4x"}, {"msaa4_fxaa", "MSAA 4x + FXAA"}}, "off", "off")
+          .OriginalNote("no smoothing, as on the console.")
+          .Implemented(),
       D::Enum("video.texture_filtering", C::Video, "Texture filtering",
-              "Keeps textures sharp when seen at an angle (anisotropic filtering).",
-              {{"original", "Original"}, {"2x", "2x"}, {"4x", "4x"}, {"8x", "8x"}, {"16x", "16x"}}, "original", "16x")
-          .OriginalNote("the filtering the game itself asks for, as on the console."),
+              "Keeps textures sharp when seen at a slant (anisotropic filtering: the ground and walls far away). "
+              "Applies at once; only how textures are sampled changes.",
+              {{"original", "Original"}, {"2x", "2x"}, {"4x", "4x"}, {"8x", "8x"}, {"16x", "16x"}}, "original", "original")
+          .OriginalNote("the filtering the game itself asks for, as on the console.")
+          .Implemented(),
       D::Bool("video.battle_revolution_models", C::Video, "Battle Revolution models",
               "Shows Pokemon Battle Revolution's models for the Pokemon in battle instead of XD's, where there is one "
               "(from the models you made on the launcher's Extra assets page, with your own Battle Revolution disc; built in, not a mod). "
@@ -72,7 +80,7 @@ std::vector<Definition> StandardSettings() {
               "exactly even 59.94 Hz rhythm, so on a 120/144/180 Hz monitor each stays on screen as evenly as "
               "the monitor allows; on monitors slower than 59.94 Hz (50 Hz TVs) a picture that can't be shown "
               "in time is skipped instead of holding the game up. Lowest delay: never waits for the monitor "
-              "(the newest picture is shown at each refresh). With Frame rate at 60, Original behaves as Matched "
+              "(the newest picture is shown at each refresh). With Frame rate above 30, Original behaves as Matched "
               "to the monitor (the in-between pictures need the even rhythm).",
               {{"original", "Original"}, {"auto", "Matched to the monitor"}, {"low_latency", "Lowest delay"}},
               "original", "auto")
@@ -80,14 +88,24 @@ std::vector<Definition> StandardSettings() {
                         "own rhythm.")
           .Implemented(),
       D::Enum("video.frame_rate", C::Video, "Frame rate",
-              "30: the game's own pictures, as on the GameCube (most of the game draws 30 a second). 60: between "
-              "two of the game's pictures the port shows an in-between picture, with the camera and every 3D "
-              "object half way, so movement looks smoother. The game itself still runs exactly as before (same "
-              "speed, same timing, same random numbers: it can be used in a Faithful playthrough); menus, text and "
-              "effects that can't be matched stay at the game's own rate. While it is on the game's picture is "
-              "shown 1/60 s later, frame pacing is matched to the monitor, and each picture is drawn three times: "
-              "on a PC that can't afford that the in-between pictures are left out by themselves. Applies at once.",
-              {{"original", "30 (original)"}, {"60", "60"}}, "original", "original")
+              "30: the game's own pictures, as on the GameCube (most of the game draws 30 a second). 60 and up: "
+              "between two of the game's pictures the port shows in-between pictures, with the camera and every 3D "
+              "object part of the way, so movement looks smoother: one picture at 60, more at 120, 144, 165, 180 or "
+              "240 (pick the number your monitor shows; \"Match the monitor\" counts it for you). The game itself "
+              "still runs exactly as before (same speed, same timing, same random numbers: it can be used in a "
+              "Faithful playthrough); menus, text and effects that can't be matched stay at the game's own rate. "
+              "While it is on the game's picture is shown 1/60 s later, frame pacing is matched to the monitor, and "
+              "each picture is drawn once for every refresh: on a PC that can't afford that the in-between pictures "
+              "are left out by themselves. Applies at once.",
+              {{"original", "30 (original)"},
+               {"60", "60"},
+               {"120", "120"},
+               {"144", "144"},
+               {"165", "165"},
+               {"180", "180"},
+               {"240", "240"},
+               {"monitor", "Match the monitor"}},
+              "original", "original")
           .OriginalNote("the game's own pictures only.")
           .Implemented(),
       D::Bool("video.original_fog_bloom", C::Video, "Original fog and glow",
@@ -328,6 +346,26 @@ std::vector<Definition> StandardSettings() {
               false, true)
           .OriginalNote("only the machine's number (the bag's TM case shows the move as it always did).")
           .Implemented(),
+      D::Bool("gameplay.pokedex", C::Gameplay, "Pokédex",
+              "The PDA's Strategy Memo becomes a Pokédex: National numbers, what you have seen and caught, sorting and "
+              "filters, and a page each for Details, Stats, Moves, Evolution and Where, next to the game's own View, "
+              "Size and Matchup. It only shows things and never changes the game or your save. Pokemon you have not "
+              "met are only a number.",
+              false, true)
+          .OriginalNote("the Strategy Memo exactly as the GameCube game has it.")
+          .Implemented(),
+      D::Bool("gameplay.pokedex_show_all", C::Gameplay, "Pokédex: show everything",
+              "The Pokédex shows every Pokemon, every evolution, every trainer and every shiny colour from the start, "
+              "like a reference book, instead of only what you have met.",
+              false, false)
+          .Preference()
+          .Implemented(),
+      D::Bool("gameplay.pokedex_moon_entries", C::Gameplay, "Pokédex: Ultra Moon entries",
+              "The Pokédex entry texts come from the Ultra Sun or Ultra Moon you added on the Extra assets page. With "
+              "both added it uses Ultra Sun's; turn this on for Ultra Moon's.",
+              false, false)
+          .Preference()
+          .Implemented(),
       D::Bool("gameplay.fast_forward", C::Gameplay, "Fast-forward key",
               "While the fast-forward key is held (Tab at first, or the right stick pressed in; Controls page), the "
               "whole game runs faster (Fast-forward speed) and its sound plays sped up. Only the waiting gets "
@@ -342,6 +380,20 @@ std::vector<Definition> StandardSettings() {
       D::Int("gameplay.fast_forward_speed", C::Gameplay, "Fast-forward speed",
              "How many times faster the game runs while fast-forwarding (the key, and Fast battle animations).", 2,
              16, 4, 4)
+          .Preference()
+          .Implemented(),
+      D::Enum("gameplay.keep_battle_replays", C::Gameplay, "Keep battle replays",
+              "After a battle, the game keeps it as a small replay file (the starting state, every choice of both "
+              "sides and a check number per turn) in the replays folder of the data folder; watch it later with "
+              "xd.exe --replay <file>. Online and important battles: online battles and every trainer battle, "
+              "not the wild ones. Every battle: all. The game plays exactly the same with it on or off.",
+              {{"off", "Off"}, {"important", "Online and important battles"}, {"every", "Every battle"}}, "off", "important")
+          .Preference()
+          .Implemented(),
+      D::Int("gameplay.battle_replays_kept", C::Gameplay, "Battle replays kept",
+             "How many automatically kept battle replays stay in the replays folder: the newest ones; older ones are deleted. "
+             "A replay you saved with the replay key (F7) is never deleted by this.",
+             1, 500, 50, 50)
           .Preference()
           .Implemented(),
       D::Bool("gameplay.skip_intro_movies", C::Gameplay, "Skip the logo movies",
@@ -380,6 +432,23 @@ std::vector<Definition> StandardSettings() {
           .Implemented(),
       D::Int("audio.cry_volume", C::Audio, "Pokemon cry volume", "Volume of the Pokemon cries, in percent.", 0, 100,
              100, 100)
+          .Preference()
+          .Implemented(),
+      D::Enum("audio.ff_music", C::Audio, "Music while fast-forwarding",
+              "While fast-forward is held, the music plays at normal speed (new), played by a second copy of the "
+              "sound engine, or sped up with the rest of the sound (old). The game itself plays out the same.",
+              {{"sped", "Sped up (old)"}, {"realtime", "Normal speed (new)"}}, "realtime", "realtime")
+          .Preference()
+          .Implemented(),
+      D::Enum("audio.ff_effects", C::Audio, "Sound effects while fast-forwarding",
+              "With the music at normal speed: the sound effects and cries while fast-forwarding are sped up as "
+              "before (Sped up), left out (Muted) or played with a higher pitch (Tape).",
+              {{"sped", "Sped up"}, {"muted", "Muted"}, {"tape", "Tape (higher pitch)"}}, "sped", "sped")
+          .Preference()
+          .Implemented(),
+      D::Int("audio.ff_music_fade", C::Audio, "Fast-forward music crossfade",
+             "Milliseconds the music takes to blend back into the game's own when fast-forward is let go.", 50,
+             2000, 400, 400)
           .Preference()
           .Implemented(),
       D::Enum("audio.menu_music", C::Audio, "Music in menus",

@@ -1,4 +1,5 @@
 #include <cctype>
+#include <cstdio>
 #include <map>
 #include <string>
 #include <vector>
@@ -171,6 +172,38 @@ const std::string& doc_of(const std::string& name) {
   return it->second;
 }
 
+struct LangRow { const char* kind; const char* key; const char* v[kGen4Langs]; };
+const LangRow kLangRows[] = {
+#include "pbr_pack_text_i18n.inc"
+};
+const char* const kLangCodes[kGen4Langs] = {"sp", "fr", "ge", "it", "jp"};
+
+}
+
+const char* const* gen4_lang_row(const char* kind, const std::string& key) {
+  for (const LangRow& r : kLangRows)
+    if (key == r.key && std::string(kind) == r.kind) return r.v;
+  throw Fail(std::string("no translation row ") + kind + " " + key);
+}
+
+void gen4_add_lang_fields(Json& text, const std::vector<std::pair<std::string, const char* const*>>& fields) {
+  for (int l = 0; l < kGen4Langs; l++)
+    for (const auto& f : fields) text.set(f.first + "." + kLangCodes[l], f.second[l]);
+}
+
+std::string gen4_tm_name(int lang, int number) {
+  std::string out = gen4_lang_row("tm_label", "TM")[lang];
+  char two[8];
+  std::snprintf(two, sizeof two, "%02d", number);
+  for (const char* c = two; *c; c++) {
+    if (lang == 4) {
+      out += "\357\274";
+      out += (char)(0x90 + (*c - '0'));
+    } else {
+      out += *c;
+    }
+  }
+  return out;
 }
 
 std::string gen4_move_name_text(const std::string& name) {

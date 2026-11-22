@@ -1,12 +1,17 @@
 #include "i18n.h"
 #include "xd_added_rows.h"
+#include "xd_forms.h"
 #include "xd_gen4_abilities.h"
+#include "xd_mod_battle.h"
 #include "xd_scripts.h"
+#include "script_teams.h"
+#include "script_ext.h"
 
 #include <mods.h>
 #include <script_host.h>
 #include <script_names.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -24,6 +29,8 @@ uint16_t fightFloor_GetTurnCount(void* floor);
 uint16_t fightGetFightResultId(void);
 void PortXD_OnlineTurnActions(void);
 void PortXD_OnlineTurnEnd(void);
+void PortXD_BattleReplayTurnEnd(void);
+void PortXD_BattleReplayBattleEnd(uint32_t result);
 void PortXD_OnlineBattleEnd(uint32_t result);
 uint8_t fightFloorIsGcHeroWin(void* floor, uint16_t result);
 void PortVideo_Notice(const char* text, double seconds);
@@ -47,6 +54,34 @@ extern void (*PortXD_OnBattleStart)(uint32_t battleID);
 extern void (*PortXD_OnBattleEnd)(uint32_t battleID, uint32_t result, int32_t lost);
 extern int32_t (*(*PortXD_FieldItemUseFunc)(uint32_t item))(uint16_t, int*);
 extern void (*PortXD_OnHeroStep)(void);
+int32_t PortXD_GiftShadow(int32_t shadowId, int32_t level);
+int32_t PortXD_ShadowSpecies(int32_t shadowId);
+uint32_t PortXD_WildRowOfSpot(int32_t spot);
+int PortXD_WildArm(int32_t species, int32_t level);
+extern "C" uint32_t* __hsd_rand_seed_hold;
+void PortXD_WildDisarm(void);
+extern void (*PortXD_ScriptOnFlag)(uint32_t id, uint32_t oldValue, uint32_t newValue);
+extern void (*PortXD_ScriptOnMoney)(int32_t oldValue, int32_t newValue);
+extern void (*PortXD_ScriptOnCaught)(void* pokemon, int32_t slot);
+extern void (*PortXD_ScriptOnMenu)(int32_t which);
+uint32_t pokemonBiosGetDarkFlag(void* pokemon);
+extern uint32_t* pokemon_data_number;
+extern uint32_t* waza_data_number;
+uint16_t pokemonDB_GetBasisMaxHp(uint16_t);
+uint16_t pokemonDB_GetBasisPhyAtk(uint16_t);
+uint16_t pokemonDB_GetBasisPhyDef(uint16_t);
+uint16_t pokemonDB_GetBasisSpeAtk(uint16_t);
+uint16_t pokemonDB_GetBasisSpeDef(uint16_t);
+uint16_t pokemonDB_GetBasisNimbleness(uint16_t);
+uint16_t pokemonDB_GetGiveExp(uint16_t);
+int8_t pokemonDB_GetTokuseiDataId(uint16_t, uint16_t);
+uint8_t pokemonDB_GetZokuseiDataId(uint16_t, uint32_t);
+int16_t wazaDB_GetIryoku(uint16_t);
+int32_t wazaDB_GetRangeId(uint16_t);
+int8_t wazaDB_GetPri(uint16_t);
+uint8_t wazaDB_GetZokuseiDataId(uint16_t);
+uint8_t wazaDB_GetPp(uint16_t);
+uint8_t wazaDB_GetAvg(uint16_t);
 void* peopleGet(uint32_t group, uint32_t id);
 void peopleGetPos(int32_t group, int32_t id, PortGSvec* out);
 }
@@ -70,6 +105,14 @@ constexpr const char* kHookFieldBattleStart = "field.battle_start";
 constexpr const char* kHookFieldBattleEnd = "field.battle_end";
 constexpr const char* kHookFieldItemUse = "field.item_use";
 constexpr const char* kHookFieldStep = "field.step";
+constexpr const char* kHookFieldFlag = "field.flag_changed";
+constexpr const char* kHookFieldMoney = "field.money_changed";
+constexpr const char* kHookFieldCaught = "field.pokemon_caught";
+constexpr const char* kHookFieldMenu = "field.menu_open";
+constexpr const char* kHookAbility = "battle.ability";
+constexpr const char* kHookAiSwitch = "battle.ai_switch";
+constexpr const char* kHookAiItem = "battle.ai_item";
+constexpr const char* kHookReplayKept = "field.replay_kept";
 
 constexpr const char* kPrelude =
     "local on = on\n"
@@ -78,7 +121,14 @@ constexpr const char* kPrelude =
     "function on_battle_start(f) on('field.battle_start', function(e) f(e.battle) end) end\n"
     "function on_battle_end(f) on('field.battle_end', function(e) f(e.battle, e.result, e.lost) end) end\n"
     "function on_item_use(f) on('field.item_use', function(e) return f(e.item) end) end\n"
-    "function on_step(f) on('field.step', function(e) f() end) end\n";
+    "function on_step(f) on('field.step', function(e) f() end) end\n"
+    "function on_flag_changed(f) on('field.flag_changed', function(e) f(e.flag, e.old, e.new) end) end\n"
+    "function on_money_changed(f) on('field.money_changed', function(e) f(e.old, e.new) end) end\n"
+    "function on_pokemon_caught(f) on('field.pokemon_caught', function(e) f(e.species, e.level, e.slot, e.shadow) end) end\n"
+    "MENU = {FIELD = 0}\n"
+    "function on_menu_open(f) on('field.menu_open', function(e) f(e.menu) end) end\n"
+    "AI = {ALLOW = 0, VETO = 1}\n"
+    "function on_replay_kept(f) on('field.replay_kept', function(e) f(e.label, e.battle, e.won) end) end\n";
 
 struct LastBattle {
   bool known = false;
@@ -273,6 +323,175 @@ Value ApiGivePokemon(const std::string& mod, const std::vector<Value>& args, std
   return out;
 }
 
+Value ApiSpeciesInfo(const std::string&, const std::vector<Value>& args, std::string& error) {
+  if (args.size() != 1 || args[0].kind != Value::Kind::Int) { error = "species_info(species): one whole number (SPECIES.EEVEE)"; return Value(); }
+  if (pokemon_data_number == nullptr || args[0].integer < 1 || args[0].integer >= static_cast<int64_t>(*pokemon_data_number)) return Value();
+  const uint16_t n = static_cast<uint16_t>(args[0].integer);
+  Value v = Value::Table();
+  v.Set("hp", static_cast<int64_t>(pokemonDB_GetBasisMaxHp(n))).Set("attack", static_cast<int64_t>(pokemonDB_GetBasisPhyAtk(n)));
+  v.Set("defense", static_cast<int64_t>(pokemonDB_GetBasisPhyDef(n))).Set("sp_attack", static_cast<int64_t>(pokemonDB_GetBasisSpeAtk(n)));
+  v.Set("sp_defense", static_cast<int64_t>(pokemonDB_GetBasisSpeDef(n))).Set("speed", static_cast<int64_t>(pokemonDB_GetBasisNimbleness(n)));
+  v.Set("base_exp", static_cast<int64_t>(pokemonDB_GetGiveExp(n)));
+  Value types = Value::List(), abilities = Value::List();
+  for (uint16_t i = 0; i < 2; i++) {
+    types.Add(Value::Int(static_cast<int64_t>(pokemonDB_GetZokuseiDataId(n, i) & 0xFF)));
+    abilities.Add(Value::Int(static_cast<int64_t>(pokemonDB_GetTokuseiDataId(n, i) & 0xFF)));
+  }
+  v.Set("types", types).Set("abilities", abilities);
+  return v;
+}
+
+Value ApiMoveInfo(const std::string&, const std::vector<Value>& args, std::string& error) {
+  if (args.size() != 1 || args[0].kind != Value::Kind::Int) { error = "move_info(move): one whole number (MOVE.TACKLE)"; return Value(); }
+  if (waza_data_number == nullptr || args[0].integer < 1 || args[0].integer >= static_cast<int64_t>(*waza_data_number)) return Value();
+  const uint16_t n = static_cast<uint16_t>(args[0].integer);
+  Value v = Value::Table();
+  v.Set("power", static_cast<int64_t>(wazaDB_GetIryoku(n))).Set("type", static_cast<int64_t>(wazaDB_GetZokuseiDataId(n) & 0xFF));
+  v.Set("pp", static_cast<int64_t>(wazaDB_GetPp(n))).Set("priority", static_cast<int64_t>(wazaDB_GetPri(n)));
+  v.Set("accuracy", static_cast<int64_t>(wazaDB_GetAvg(n))).Set("range", static_cast<int64_t>(wazaDB_GetRangeId(n)));
+  return v;
+}
+
+Value ApiGiveShadow(const std::string& mod, const std::vector<Value>& args, std::string& error) {
+  if (args.empty() || args.size() > 2 || args[0].kind != Value::Kind::Int || (args.size() == 2 && args[1].kind != Value::Kind::Int)) {
+    error = "give_shadow_pokemon(shadow [, level]): whole numbers";
+    return Value();
+  }
+  const int32_t r = PortXD_GiftShadow(static_cast<int32_t>(args[0].integer), args.size() == 2 ? static_cast<int32_t>(args[1].integer) : 0);
+  Value out = Value::Table();
+  out.Set("status", Value::Text(r >= 0 ? "party" : r == -2 ? "no_room" : r == -4 ? "already_have" : "bad")).Set("slot", static_cast<int64_t>(r >= 0 ? r + 1 : 0));
+  std::fprintf(stderr, "[script %s] give_shadow_pokemon(%lld): %s\n", mod.c_str(), static_cast<long long>(args[0].integer),
+               r >= 0 ? "party" : r == -2 ? "no room in the party" : r == -4 ? "the player already has this Shadow" : "no such Shadow row or level");
+  return out;
+}
+
+Value ApiShadowSpecies(const std::string&, const std::vector<Value>& args, std::string& error) {
+  if (args.size() != 1 || args[0].kind != Value::Kind::Int) { error = "shadow_species(shadow): one whole number"; return Value(); }
+  const int32_t s = PortXD_ShadowSpecies(static_cast<int32_t>(args[0].integer));
+  return s > 0 ? Value::Int(s) : Value();
+}
+
+Value ApiWildBattle(const std::string& mod, const std::vector<Value>& args, std::string& error) {
+  if (args.size() != 3 || args[0].kind != Value::Kind::Int || args[1].kind != Value::Kind::Int || args[2].kind != Value::Kind::Int) {
+    error = "wild_battle(spot, species, level): three whole numbers (spot 1, 2 or 3; SPECIES.EEVEE; 5)";
+    return Value();
+  }
+  const uint32_t row = PortXD_WildRowOfSpot(static_cast<int32_t>(args[0].integer));
+  if (row == 0 || !PortXD_WildArm(static_cast<int32_t>(args[1].integer), static_cast<int32_t>(args[2].integer))) {
+    std::fprintf(stderr, "[script %s] wild_battle(%lld, %lld, %lld): not started (spot 1 to 3, a real species, level 1 to 100)\n", mod.c_str(), static_cast<long long>(args[0].integer),
+                 static_cast<long long>(args[1].integer), static_cast<long long>(args[2].integer));
+    return Value::Bool(false);
+  }
+  sPendingBattle = row;
+  std::fprintf(stderr, "[script %s] wild_battle(%lld, %lld, %lld): queued as battle row %u\n", mod.c_str(), static_cast<long long>(args[0].integer), static_cast<long long>(args[1].integer),
+               static_cast<long long>(args[2].integer), row);
+  return Value::Bool(true);
+}
+
+static const Value* Field(const Value& table, const char* name) {
+  if (table.kind != Value::Kind::Table) return nullptr;
+  for (size_t i = 0; i < table.fieldNames.size(); i++) {
+    if (table.fieldNames[i] == name) return &table.fieldValues[i];
+  }
+  return nullptr;
+}
+static bool ReadSix(const Value* v, uint8_t* out, int64_t lo, int64_t hi, const char* what, std::string& why) {
+  if (v == nullptr || v->kind == Value::Kind::Nil) return true;
+  if (v->kind == Value::Kind::Int) {
+    if (v->integer < lo || v->integer > hi) { why = std::string(what) + " must be " + std::to_string(lo) + " to " + std::to_string(hi); return false; }
+    for (int i = 0; i < 6; i++) out[i] = static_cast<uint8_t>(v->integer);
+    return true;
+  }
+  if (v->kind != Value::Kind::List || v->fieldValues.size() != 6) { why = std::string(what) + " must be one number or a list of 6 (HP, Atk, Def, SpA, SpD, Spe)"; return false; }
+  for (int i = 0; i < 6; i++) {
+    const Value& e = v->fieldValues[i];
+    if (e.kind != Value::Kind::Int || e.integer < lo || e.integer > hi) { why = std::string(what) + " entries are whole numbers " + std::to_string(lo) + " to " + std::to_string(hi); return false; }
+    out[i] = static_cast<uint8_t>(e.integer);
+  }
+  return true;
+}
+static bool ReadTeam(const Value& list, xd::teams::Team& team, std::string& why) {
+  if (list.kind != Value::Kind::List || list.fieldValues.empty()) { why = "the team must be a list of members: {{species = SPECIES.EEVEE, level = 50, moves = {MOVE.TACKLE}}, ...}"; return false; }
+  for (const Value& m : list.fieldValues) {
+    if (m.kind != Value::Kind::Table) { why = "every member of the team is a table: {species = ..., level = ..., moves = {...}}"; return false; }
+    static const char* const kKnown[] = {"species", "level", "item", "moves", "nature", "ability", "friendship", "ivs", "evs"};
+    for (const std::string& k : m.fieldNames) {
+      if (std::find_if(std::begin(kKnown), std::end(kKnown), [&](const char* n) { return k == n; }) == std::end(kKnown)) {
+        why = "a member has a field called \"" + k + "\" that the game does not know (species, level, item, moves, nature, ability, friendship, ivs, evs)";
+        return false;
+      }
+    }
+    xd::teams::Member out;
+    const auto whole = [&](const char* name, int64_t lo, int64_t hi, int64_t& dest, bool required) {
+      const Value* v = Field(m, name);
+      if (v == nullptr || v->kind == Value::Kind::Nil) { if (required) why = std::string(name) + " is needed"; return !required; }
+      if (v->kind != Value::Kind::Int || v->integer < lo || v->integer > hi) { why = std::string(name) + " must be a whole number " + std::to_string(lo) + " to " + std::to_string(hi); return false; }
+      dest = v->integer;
+      return true;
+    };
+    int64_t species = 0, level = 50, item = 0, nature = 0, ability = 0, friendship = 0;
+    if (!whole("species", 1, 0xFFFF, species, true) || !whole("level", 1, 100, level, false) || !whole("item", 0, 0xFFFF, item, false) || !whole("nature", 0, 24, nature, false) ||
+        !whole("ability", 0, 1, ability, false) || !whole("friendship", 0, 255, friendship, false)) return false;
+    out.species = static_cast<uint16_t>(species), out.level = static_cast<uint8_t>(level), out.item = static_cast<uint16_t>(item), out.nature = static_cast<uint8_t>(nature);
+    out.ability = static_cast<uint8_t>(ability), out.friendship = static_cast<uint8_t>(friendship);
+    if (const Value* mv = Field(m, "moves"); mv != nullptr && mv->kind != Value::Kind::Nil) {
+      if (mv->kind != Value::Kind::List || mv->fieldValues.empty() || mv->fieldValues.size() > 4) { why = "moves is a list of 1 to 4 moves"; return false; }
+      for (size_t i = 0; i < mv->fieldValues.size(); i++) {
+        if (mv->fieldValues[i].kind != Value::Kind::Int || mv->fieldValues[i].integer < 0 || mv->fieldValues[i].integer > 0xFFFF) { why = "moves entries are move numbers (MOVE.TACKLE)"; return false; }
+        out.moves[i] = static_cast<uint16_t>(mv->fieldValues[i].integer);
+      }
+    }
+    if (!ReadSix(Field(m, "ivs"), out.iv, 0, 31, "ivs", why) || !ReadSix(Field(m, "evs"), out.ev, 0, 255, "evs", why)) return false;
+    team.members.push_back(out);
+  }
+  return true;
+}
+
+Value ApiSetTrainerTeam(const std::string& mod, const std::vector<Value>& args, std::string& error) {
+  if (args.size() < 2 || args.size() > 3 || args[0].kind != Value::Kind::Int) { error = "set_trainer_team(slot, members [, options]): slot 1 to 3, a list of members"; return Value(); }
+  xd::teams::Team team;
+  std::string why;
+  if (!ReadTeam(args[1], team, why)) { error = "set_trainer_team: " + why; return Value(); }
+  if (args.size() == 3) {
+    if (const Value* items = Field(args[2], "ai_items"); items != nullptr) {
+      if (items->kind != Value::Kind::List || items->fieldValues.size() > 4) { error = "set_trainer_team: ai_items is a list of up to 4 items"; return Value(); }
+      team.hasAiItems = true;
+      for (size_t i = 0; i < items->fieldValues.size(); i++) {
+        if (items->fieldValues[i].kind != Value::Kind::Int || items->fieldValues[i].integer < 0 || items->fieldValues[i].integer > 0xFFFF) { error = "set_trainer_team: ai_items entries are item numbers"; return Value(); }
+        team.aiItems[i] = static_cast<uint16_t>(items->fieldValues[i].integer);
+      }
+    }
+  }
+  why = xd::teams::SetFoeTeam(static_cast<int>(args[0].integer), team);
+  if (!why.empty()) std::fprintf(stderr, "[script %s] set_trainer_team(%lld): refused: %s\n", mod.c_str(), static_cast<long long>(args[0].integer), why.c_str());
+  else std::fprintf(stderr, "[script %s] set_trainer_team(%lld): armed, %zu member(s)\n", mod.c_str(), static_cast<long long>(args[0].integer), team.members.size());
+  return Value::Bool(why.empty());
+}
+
+Value ApiLendTeam(const std::string& mod, const std::vector<Value>& args, std::string& error) {
+  if (args.size() != 1) { error = "lend_team(members): a list of members"; return Value(); }
+  xd::teams::Team team;
+  std::string why;
+  if (!ReadTeam(args[0], team, why)) { error = "lend_team: " + why; return Value(); }
+  why = xd::teams::LendTeam(team);
+  if (!why.empty()) std::fprintf(stderr, "[script %s] lend_team: refused: %s\n", mod.c_str(), why.c_str());
+  else std::fprintf(stderr, "[script %s] lend_team: armed, %zu member(s)\n", mod.c_str(), team.members.size());
+  return Value::Bool(why.empty());
+}
+
+Value ApiRandomInt(const std::string& mod, const std::vector<Value>& args, std::string& error) {
+  static std::map<std::string, uint64_t> counters;
+  int64_t lo = 1, hi = 0;
+  if (args.size() == 1 && args[0].kind == Value::Kind::Int) hi = args[0].integer;
+  else if (args.size() == 2 && args[0].kind == Value::Kind::Int && args[1].kind == Value::Kind::Int) lo = args[0].integer, hi = args[1].integer;
+  else { error = "random_int(n) or random_int(lo, hi): whole numbers"; return Value(); }
+  if (hi < lo || hi - lo >= (int64_t{1} << 31)) { error = "random_int: the range is empty or too big"; return Value(); }
+  uint64_t x = (__hsd_rand_seed_hold != nullptr ? *__hsd_rand_seed_hold : 0) * 0x9E3779B97F4A7C15ull + (counters[mod]++ + 1) * 0xD1B54A32D192ED03ull;
+  for (const char c : mod) x = (x ^ static_cast<uint8_t>(c)) * 0x100000001B3ull;
+  x ^= x >> 30, x *= 0xBF58476D1CE4E5B9ull, x ^= x >> 27, x *= 0x94D049BB133111EBull, x ^= x >> 31;
+  return Value::Int(lo + static_cast<int64_t>(x % static_cast<uint64_t>(hi - lo + 1)));
+}
+
 Value ApiStartBattle(const std::string& mod, const std::vector<Value>& args, std::string& error) {
   if (args.size() != 1) { error = "start_battle(battle): a battle number or the name of one of this mod's battles"; return Value(); }
   uint32_t id = 0;
@@ -308,10 +527,29 @@ Value ApiBattleResult(const std::string&, const std::vector<Value>&, std::string
   return v;
 }
 
+Value ApiBattleRules(const std::string& mod, const std::vector<Value>& args, std::string& error) {
+  if (args.size() == 1 && args[0].kind == Value::Kind::Table) return xd::scriptext::BattleRulesTable(mod, args, error);
+  if (args.size() > 1 || (args.size() == 1 && args[0].kind != Value::Kind::String)) { error = "battle_rules(\"name\"): the name of a rule set (battle/*.json \"rule_sets\")"; return Value(); }
+  const std::string name = args.empty() ? std::string() : args[0].text;
+  if (!xd::modbattle::SetRules(name)) { error = "battle_rules(\"" + name + "\"): no rule set of that name"; return Value(); }
+  return Value::Bool(true);
+}
+
 Value ApiNotice(const std::string&, const std::vector<Value>& args, std::string& error) {
   if (args.size() != 1 || args[0].kind != Value::Kind::String) { error = "notice(\"text\")"; return Value(); }
   PortVideo_Notice(args[0].text.substr(0, 120).c_str(), 4.0);
   return Value();
+}
+
+void ReportFailures();
+bool StoryCaller(const std::string& mod, const std::string& name, const std::vector<engine::script::Value>& args) {
+  if (!sHost) return false;
+  int64_t result = 0;
+  std::string error;
+  const bool ok = sHost->CallFunction(mod + ":" + name, args, result, error);
+  ReportFailures();
+  if (!ok) std::fprintf(stderr, "[script] story call %s:%s: %s\n", mod.c_str(), name.c_str(), error.c_str());
+  return ok;
 }
 
 void ReportFailures() {
@@ -333,11 +571,15 @@ void FieldRoomReady(uint32_t floorId, int32_t mode) {
 void FieldBattleStart(uint32_t battle) {
   sLastBattle = LastBattle{};
   sLastBattle.battle = battle;
-  if (!sHost || !sHost->HasHandlers(kHookFieldBattleStart)) return;
-  Value e = Value::Table();
-  e.Set("battle", static_cast<int64_t>(battle));
-  sHost->CallInt(kHookFieldBattleStart, e, "ignored", 0);
-  ReportFailures();
+  xd::scriptext::SetArming(true);
+  if (sHost && sHost->HasHandlers(kHookFieldBattleStart)) {
+    Value e = Value::Table();
+    e.Set("battle", static_cast<int64_t>(battle));
+    sHost->CallInt(kHookFieldBattleStart, e, "ignored", 0);
+    ReportFailures();
+  }
+  xd::scriptext::BattleStarted();
+  xd::scriptext::SetArming(false);
 }
 
 void FieldBattleEnd(uint32_t battle, uint32_t result, int32_t lost) {
@@ -346,12 +588,45 @@ void FieldBattleEnd(uint32_t battle, uint32_t result, int32_t lost) {
   sLastBattle.result = result;
   sLastBattle.lost = lost;
   sLastBattle.won = fightFloorIsGcHeroWin(nullptr, static_cast<uint16_t>(result)) ? 1 : 0;
+  PortXD_WildDisarm();
+  xd::teams::Clear();
+  xd::scriptext::BattleEnded();
   std::fprintf(stderr, "[script] battle %u ended: result %u, %s%s\n", battle, result, sLastBattle.won ? "the player's side won" : "the player's side did not win",
                lost ? " (a must-win battle: sent back to the Pokemon Center)" : "");
   if (!sHost || !sHost->HasHandlers(kHookFieldBattleEnd)) return;
   Value e = Value::Table();
   e.Set("battle", static_cast<int64_t>(battle)).Set("result", static_cast<int64_t>(result)).Set("lost", static_cast<int64_t>(lost != 0 ? 1 : 0)).Set("won", sLastBattle.won);
   sHost->CallInt(kHookFieldBattleEnd, e, "ignored", 0);
+  ReportFailures();
+}
+
+void FieldFlagChanged(uint32_t id, uint32_t oldValue, uint32_t newValue) {
+  if (!sHost) return;
+  Value e = Value::Table();
+  e.Set("flag", static_cast<int64_t>(id)).Set("old", static_cast<int64_t>(oldValue)).Set("new", static_cast<int64_t>(newValue));
+  sHost->CallInt(kHookFieldFlag, e, "ignored", 0);
+  ReportFailures();
+}
+void FieldMoneyChanged(int32_t oldValue, int32_t newValue) {
+  if (!sHost) return;
+  Value e = Value::Table();
+  e.Set("old", static_cast<int64_t>(oldValue)).Set("new", static_cast<int64_t>(newValue));
+  sHost->CallInt(kHookFieldMoney, e, "ignored", 0);
+  ReportFailures();
+}
+void FieldPokemonCaught(void* pokemon, int32_t slot) {
+  if (!sHost || pokemon == nullptr) return;
+  Value e = Value::Table();
+  e.Set("species", static_cast<int64_t>(pokemonBiosGetPokemonDataId(pokemon) & 0xFFFF)).Set("level", static_cast<int64_t>(pokemonBiosGetLevel(pokemon)));
+  e.Set("slot", static_cast<int64_t>(slot >= 0 ? slot + 1 : 0)).Set("shadow", static_cast<int64_t>((pokemonBiosGetDarkFlag(pokemon) & 0xFF) ? 1 : 0));
+  sHost->CallInt(kHookFieldCaught, e, "ignored", 0);
+  ReportFailures();
+}
+void FieldMenuOpen(int32_t which) {
+  if (!sHost) return;
+  Value e = Value::Table();
+  e.Set("menu", static_cast<int64_t>(which));
+  sHost->CallInt(kHookFieldMenu, e, "ignored", 0);
   ReportFailures();
 }
 
@@ -385,12 +660,24 @@ int32_t (*FieldItemUse(uint32_t item))(uint16_t, int*) {
 
 void WireFieldHooks(const engine::mods::LoadResult& result) {
   PortXD_OnFloorReady = nullptr, PortXD_OnBattleStart = nullptr, PortXD_OnBattleEnd = nullptr, PortXD_FieldItemUseFunc = nullptr, PortXD_OnHeroStep = nullptr;
+  PortXD_ScriptOnFlag = nullptr, PortXD_ScriptOnMoney = nullptr, PortXD_ScriptOnCaught = nullptr, PortXD_ScriptOnMenu = nullptr;
   if (!sHost) return;
   bool wantResult = false;
   for (const auto& f : result.scripts) wantResult = wantResult || f.text.find("battle_result") != std::string::npos;
   std::string wired;
   const auto note = [&](const char* name) { wired += (wired.empty() ? "" : ", ") + std::string(name); };
   if (sHost->HasHandlers(kHookFieldRoomReady)) PortXD_OnFloorReady = FieldRoomReady, note("room_ready");
+  bool wantsWild = false;
+  for (const auto& f : result.scripts) wantsWild = wantsWild || f.text.find("wild_battle") != std::string::npos;
+  bool wantsTeams = false;
+  for (const auto& f : result.scripts) wantsTeams = wantsTeams || f.text.find("set_trainer_team") != std::string::npos || f.text.find("lend_team") != std::string::npos ||
+                                                    f.text.find("battle_rules") != std::string::npos || f.text.find("battle_tables") != std::string::npos;
+  if (wantsTeams) wantResult = true;
+  if (wantsWild) wantResult = true;
+  if (sHost->HasHandlers(kHookFieldFlag)) PortXD_ScriptOnFlag = FieldFlagChanged, note("flag_changed");
+  if (sHost->HasHandlers(kHookFieldMoney)) PortXD_ScriptOnMoney = FieldMoneyChanged, note("money_changed");
+  if (sHost->HasHandlers(kHookFieldCaught)) PortXD_ScriptOnCaught = FieldPokemonCaught, note("pokemon_caught");
+  if (sHost->HasHandlers(kHookFieldMenu)) PortXD_ScriptOnMenu = FieldMenuOpen, note("menu_open");
   if (wantResult || sHost->HasHandlers(kHookFieldBattleStart) || sHost->HasHandlers(kHookFieldBattleEnd)) {
     PortXD_OnBattleStart = FieldBattleStart, PortXD_OnBattleEnd = FieldBattleEnd;
     note("battle_start/end");
@@ -404,19 +691,31 @@ void WireFieldHooks(const engine::mods::LoadResult& result) {
 
 namespace xd::scripts {
 
+namespace { std::string sLoadProblems; }
+
 void Install(const engine::mods::LoadResult& result) {
   sHost.reset();
+  sLoadProblems.clear();
   sNames = engine::script::Names();
   sActiveText.clear();
   sPendingBattle = 0, sLastBattle = LastBattle{};
   PortXD_OnFloorReady = nullptr, PortXD_OnBattleStart = nullptr, PortXD_OnBattleEnd = nullptr, PortXD_FieldItemUseFunc = nullptr, PortXD_OnHeroStep = nullptr;
+  PortXD_ScriptOnFlag = nullptr, PortXD_ScriptOnMoney = nullptr, PortXD_ScriptOnCaught = nullptr, PortXD_ScriptOnMenu = nullptr;
+  PortXD_WildDisarm();
+  xd::teams::Clear();
+  xd::scriptext::Reset();
+  {
+    std::map<std::string, std::string> versions;
+    for (const engine::mods::Manifest& m : result.active) versions[m.id] = m.version;
+    xd::scriptext::SetVersions(versions);
+  }
   if (result.scripts.empty()) {
     return;
   }
   using engine::script::Value;
   sHost = std::make_unique<engine::script::Host>(
       std::vector<std::string>{kHookDamage, kHookPredict, kHookMoveUsed, kHookTurnStart, kHookTurnEnd, kHookBattleEnd, kHookFieldRoomReady, kHookFieldBattleStart,
-                               kHookFieldBattleEnd, kHookFieldItemUse, kHookFieldStep},
+                               kHookFieldBattleEnd, kHookFieldItemUse, kHookFieldStep, kHookFieldFlag, kHookFieldMoney, kHookFieldCaught, kHookFieldMenu, kHookAbility, kHookAiSwitch, kHookAiItem, kHookReplayKept},
       engine::script::Limits{},
       [](const std::string& line) { std::fprintf(stderr, "%s\n", line.c_str()); });
   sNames = BuildNames(result);
@@ -432,10 +731,21 @@ void Install(const engine::mods::LoadResult& result) {
   sHost->SetApi("give_item", ApiGiveItem);
   sHost->SetApi("have_item", ApiHaveItem);
   sHost->SetApi("give_pokemon", ApiGivePokemon);
+  sHost->SetApi("species_info", ApiSpeciesInfo);
+  sHost->SetApi("move_info", ApiMoveInfo);
+  sHost->SetApi("give_shadow_pokemon", ApiGiveShadow);
+  sHost->SetApi("shadow_species", ApiShadowSpecies);
+  sHost->SetApi("wild_battle", ApiWildBattle);
+  sHost->SetApi("set_trainer_team", ApiSetTrainerTeam);
+  sHost->SetApi("lend_team", ApiLendTeam);
+  sHost->SetApi("random_int", ApiRandomInt);
   sHost->SetApi("start_battle", ApiStartBattle);
   sHost->SetApi("battle_id", ApiBattleId);
   sHost->SetApi("battle_result", ApiBattleResult);
   sHost->SetApi("notice", ApiNotice);
+  sHost->SetApi("battle_rules", ApiBattleRules);
+  xd::scriptext::RegisterApis(*sHost);
+  xd::scriptext::SetStoryCaller(StoryCaller);
   sHost->SetPrelude(kPrelude);
   std::string last;
   std::vector<engine::script::Source> sources;
@@ -447,6 +757,7 @@ void Install(const engine::mods::LoadResult& result) {
           std::fprintf(stderr, "[script] %s: %zu file(s) loaded\n", last.c_str(), sources.size());
         } else {
           std::fprintf(stderr, "[script] %s: not used: %s\n", last.c_str(), error.c_str());
+          sLoadProblems += last + ": not used: " + error + "\n";
         }
         sources.clear();
       }
@@ -467,6 +778,15 @@ void Install(const engine::mods::LoadResult& result) {
 
 std::string ActiveText() { return sActiveText; }
 
+void NotifyReplayKept(const char* label, uint32_t battle, int won) {
+  if (!sHost || !sHost->HasHandlers(kHookReplayKept)) return;
+  Value e = Value::Table();
+  e.Set("label", Value::Text(label != nullptr ? label : "")).Set("battle", static_cast<int64_t>(battle)).Set("won", static_cast<int64_t>(won != 0 ? 1 : 0));
+  sHost->CallInt(kHookReplayKept, e, "ignored", 0);
+  ReportFailures();
+}
+std::string LoadProblems() { return sLoadProblems; }
+
 }
 
 extern "C" {
@@ -480,6 +800,7 @@ int32_t PortXD_ScriptLuaCall(const char* name, int32_t a, int32_t b, int32_t c, 
   if (!sHost) return 0;
   int64_t result = 0;
   std::string error;
+  xd::scriptext::SetInStoryCall(true);
   const bool ok = sHost->CallFunction(name, {Value::Int(a), Value::Int(b), Value::Int(c)}, result, error);
   ReportFailures();
   if (!ok) {
@@ -510,7 +831,25 @@ bool fightWazaIsHit(void* waza);
 uint16_t fightWaza_GetIryoku(void* waza);
 uint16_t fightWaza_GetZokusei(void* waza);
 
+void PortXD_WsHpDecInner(void);
 void PortXD_WsHpDec(void) {
+  if (xd::modbattle::Active()) {
+    const uint8_t* cmd = static_cast<const uint8_t*>(fightSeq_GetWazaSeq());
+    void* a = fightTargetGetPtrAsNowFightType(0x11, 0);
+    void* d = fightTargetGetPtrAsNowFightType(0x12, 0);
+    void* t = cmd != nullptr ? fightTargetGetPtrAsNowFightType(cmd[1], 0) : nullptr;
+    void* pk = d != nullptr ? fightOutPokemonGetPokemonPtr(d) : nullptr;
+    if (a != nullptr && d != nullptr && a != d && t == d && pk != nullptr) {
+      const int32_t before = pokemon_GetHp(pk);
+      PortXD_WsHpDecInner();
+      xd::modbattle::NoteDamage(a, d, before - static_cast<int32_t>(pokemon_GetHp(pk)));
+      return;
+    }
+  }
+  PortXD_WsHpDecInner();
+}
+
+void PortXD_WsHpDecInner(void) {
   xd::gen4::MagicGuardHpDec();
   if (sHost && sHost->HasHandlers(kHookDamage)) {
     const uint8_t* seq = static_cast<const uint8_t*>(fightSeq_GetWazaSeq());
@@ -542,6 +881,40 @@ void PortXD_WsHpDec(void) {
     }
   }
   WS_HP_DEC();
+}
+
+uint32_t PortXD_RealTokusei(void* fop);
+uint32_t fightOutPokemonGetTokuseiDataId(void* fop) {
+  const uint32_t real = PortXD_RealTokusei(fop);
+  const uint32_t game = xd::modbattle::ActsAs(real);
+  static bool inside = false;
+  if (!sHost || fop == nullptr || inside || !sHost->HasHandlers(kHookAbility)) return game;
+  inside = true;
+  using engine::script::Value;
+  Value event = Battler(fop);
+  event.Set("game_ability", static_cast<int64_t>(game));
+  const int64_t answer = sHost->CallInt(kHookAbility, event, "ability", static_cast<int64_t>(game));
+  ReportFailures();
+  inside = false;
+  if (answer < 0 || answer > 0xFF) return game;
+  return static_cast<uint32_t>(answer);
+}
+
+int32_t PortXD_RealAiSwitch(void* trainer, void* pokemon, void* target);
+uint8_t PortXD_RealAiItem(void* trainer, void* pokemon, void* target);
+static bool AiVeto(const char* hook, void* pokemon) {
+  if (!sHost || pokemon == nullptr || !sHost->HasHandlers(hook)) return false;
+  const int64_t answer = sHost->CallInt(hook, Battler(pokemon), "veto", 0);
+  ReportFailures();
+  return answer == 1;
+}
+int32_t fightTrainerAiSelectFightActionIrekae(void* trainer, void* pokemon, void* target) {
+  if (AiVeto(kHookAiSwitch, pokemon)) return 0;
+  return PortXD_RealAiSwitch(trainer, pokemon, target);
+}
+uint8_t fightTrainerAiSelectFightActionItem(void* trainer, void* pokemon, void* target) {
+  if (AiVeto(kHookAiItem, pokemon)) return 0;
+  return PortXD_RealAiItem(trainer, pokemon, target);
 }
 
 int32_t PortXD_AiWazaDamageReal(void* trainer, void* pokemon, uint16_t waza, void* target, uint8_t dispatch);
@@ -605,6 +978,7 @@ static void NotifyTurn(const char* hook, int64_t turn) {
 
 uint32_t PortXD_FlowDoFightAction(void* action) {
   PortXD_OnlineTurnActions();
+  xd::forms::TurnStart();
   if (sHost && sHost->HasHandlers(kHookTurnStart)) {
     const int turn = fightFloor_GetTurnCount(nullptr);
     if (turn != sLastTurnStart) {
@@ -620,6 +994,7 @@ uint32_t PortXD_FlowOneTurnPost(void* action) {
   const bool over = listening && fightGetFightResultId() != 0;
   const uint32_t r = fightActionFlowOneTurnPost(action);
   PortXD_OnlineTurnEnd();
+  PortXD_BattleReplayTurnEnd();
   if (listening && !over) {
     NotifyTurn(kHookTurnEnd, fightFloor_GetTurnCount(nullptr));
   }
@@ -634,6 +1009,9 @@ uint32_t PortXD_FlowSyuuryou(void* action) {
   const uint16_t onlineResult = fightGetFightResultId();
   const uint32_t r = fightActionFlowSyuuryou(action);
   PortXD_OnlineBattleEnd(onlineResult);
+  PortXD_BattleReplayBattleEnd(onlineResult);
+  xd::modbattle::BattleEnded();
+  xd::forms::BattleEnded();
   sLastTurnStart = -1;
   if (listening) {
     using engine::script::Value;

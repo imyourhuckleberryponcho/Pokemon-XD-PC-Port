@@ -95,6 +95,7 @@ int main(int argc, char** argv) {
   WriteFile(data / "USA" / "Card A" / file, Gci(0x11));
   WriteFile(data / "USA" / "Card A" / "MC_SYSTEM_AREA", std::vector<uint8_t>(0x2000, 0x22));
   WriteText(data / "playthroughs" / "Card A" / "pt_1.json", "{\"engine\": \"faithful\"}");
+  WriteText(data / "playthroughs" / "Card A" / "pt_1.ext", "XDEX save extension stand-in");
   WriteFile(data / "save_backups" / "Card A" / "2026-11-01_10-00-00" / file, Gci(0x10));
   WriteText(data / "settings.ini", "format = 1\n");
   WriteText(data / "recordings" / "play.cards" / "start-card" / "USA" / "Card A" / "x.gci", "not a region folder");
@@ -152,6 +153,7 @@ int main(int argc, char** argv) {
   Check(ReadFile(s4 / "USA" / "Card A" / file) == Gci(0x11) && fs::exists(s4 / "USA" / "Card A" / "MC_SYSTEM_AREA"),
         "the card's files copied");
   Check(fs::exists(s4 / "playthroughs" / "Card A" / "pt_1.json"), "the setup file copied");
+  Check(fs::exists(s4 / "playthroughs" / "Card A" / "pt_1.ext"), "the save extension file copied with the setup file (a copied save keeps its extension)");
   Check(!fs::exists(s4 / "save_backups"), "the backups not copied");
   Check(!fs::exists(s4 / "settings.ini") && !fs::exists(s4 / "recordings") && !fs::exists(s4 / "saves"),
         "nothing else of the data folder copied");
