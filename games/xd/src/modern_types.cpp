@@ -19,7 +19,7 @@ namespace {
 
 bool sLoaded = false;
 constexpr uint32_t kFairy = 18;
-constexpr uint32_t kText = 0xB000;
+constexpr uint32_t kText = 0xBE00;
 constexpr uint32_t kSprite = 2000;
 constexpr uint32_t kSmallSprite = 2001;
 constexpr uint32_t kKindSpecial = 2;

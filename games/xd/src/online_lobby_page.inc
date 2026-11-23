@@ -101,8 +101,9 @@ void UnsetResume() {
 #endif
 }
 bool ResumeDue(const WinWorkLayout* w) {
+  if (w == nullptr || !IsTitleMenu(w) || w->state != 2 || w->pad_a4 != 0 || PortMenu_Active() || PortMenu_Pending()) return false;
   const char* r = std::getenv("XD_ONLINE_ROOM_RESUME");
-  return r != nullptr && r[0] != '\0' && w != nullptr && IsTitleMenu(w) && w->state == 2 && w->pad_a4 == 0 && !PortMenu_Active() && !PortMenu_Pending();
+  return r != nullptr && r[0] != '\0';
 }
 
 void Open(void*) {

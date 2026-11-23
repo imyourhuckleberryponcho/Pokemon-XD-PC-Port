@@ -41,18 +41,21 @@ class Garc:
         return sum(1 for s in self.entries[i] if s)
 
 
-def lz11(b):
-    """Nintendo LZ11 (type byte 0x11) decompression."""
+def lz11(b, limit=None):
+    """Nintendo LZ11 (type byte 0x11) decompression. `limit`: only the first `limit` bytes or so are wanted (the caller reads a header):
+    decoding stops once that many are made and the bytes so far are returned (the whole file when it is shorter). Back references are
+    copied in slices (about 8 times faster than a byte at a time; the bytes made are the same)."""
     assert b[0] == 0x11
     size = b[1] | b[2] << 8 | b[3] << 16
     p = 4
     if size == 0:
         size = int.from_bytes(b[4:8], 'little'); p = 8
+    want = size if limit is None or limit > size else limit
     out = bytearray()
-    while len(out) < size:
+    while len(out) < want:
         flags = b[p]; p += 1
         for bit in range(7, -1, -1):
-            if len(out) >= size:
+            if len(out) >= want:
                 break
             if not (flags >> bit & 1):
                 out.append(b[p]); p += 1
@@ -70,9 +73,15 @@ def lz11(b):
                     b1 = b[p + 1]; p += 2
                     ln = ind + 1
                     disp = ((b0 & 15) << 8 | b1) + 1
-                for _ in range(ln):
-                    out.append(out[-disp])
-    return bytes(out[:size])
+                n = len(out)
+                if disp > n:
+                    raise IndexError('LZ11 back reference before the start')
+                if disp >= ln:
+                    out += out[n - disp:n - disp + ln]
+                else:
+                    seg = out[n - disp:]
+                    out += (seg * (ln // disp + 1))[:ln]
+    return bytes(out[:want])
 
 def maybe(b):
     if b and b[0] == 0x11:

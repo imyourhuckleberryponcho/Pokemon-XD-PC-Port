@@ -516,6 +516,13 @@ void PortInput_DevMenuNote(const char* action) {
   std::fprintf(stderr, "[input record] %s%s\n", FormatDevMenu(d).c_str(), sFile != nullptr ? "" : " (not recording)");
 }
 
+void PortInput_CheatNote(const char* action) {
+  std::lock_guard<std::mutex> lock(sLock);
+  const DevMenuLine d{PortVI_GetFlipCount(), VIGetRetraceCount(), action != nullptr ? action : ""};
+  WriteLine(FormatCheat(d));
+  std::fprintf(stderr, "[input record] %s%s\n", FormatCheat(d).c_str(), sFile != nullptr ? "" : " (not recording)");
+}
+
 void PortInput_PhotoNote(const char* what) {
   std::lock_guard<std::mutex> lock(sLock);
   const std::string line = FormatPhoto(PortVI_GetFlipCount(), VIGetRetraceCount(), what != nullptr ? what : "");
@@ -619,6 +626,19 @@ const char* PortInput_ReplayDevMenuAt(size_t index, uint32_t* frame) {
     return nullptr;
   }
   const DevMenuLine& d = rec->devMenu[index];
+  if (frame != nullptr) {
+    *frame = d.frame;
+  }
+  return d.action.c_str();
+}
+
+const char* PortInput_ReplayCheatAt(size_t index, uint32_t* frame) {
+  std::lock_guard<std::mutex> lock(sLock);
+  const Recording* rec = sPlayer != nullptr ? &sPlayer->recording() : sTicks != nullptr ? sTickRec : nullptr;
+  if (rec == nullptr || index >= rec->cheats.size()) {
+    return nullptr;
+  }
+  const DevMenuLine& d = rec->cheats[index];
   if (frame != nullptr) {
     *frame = d.frame;
   }

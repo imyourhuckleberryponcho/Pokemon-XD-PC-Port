@@ -334,7 +334,7 @@ struct Reserve {
   uint64_t lastArrivalNs = 0;
   uint64_t bucketStartNs = 0;
   double bucketMaxMs = 0, prevBucketMaxMs = 0;
-  uint64_t lastUnderrunNs = 0;
+  uint64_t lastUnderrunNs = 0, lastShrinkNs = 0;
   uint32_t starvedSeen = 0;
   std::atomic<uint32_t> targetNow{kTargetQueuedMs}, longestWait{0}, grown{0};
 } sReserve;
@@ -397,20 +397,22 @@ int reserve_on_block(int queuedBytes, bool counted) {
   if (now - r.bucketStartNs > 10'000'000'000ull) {
     const double longest = r.bucketMaxMs > r.prevBucketMaxMs ? r.bucketMaxMs : r.prevBucketMaxMs;
     r.longestWait = static_cast<uint32_t>(longest);
-    if (r.adaptive && r.targetMs > kTargetQueuedMs && now - r.lastUnderrunNs > 30'000'000'000ull) {
-      const double wanted = reserve_wanted(longest);
-      if (wanted < r.targetMs) {
-        const double next = r.targetMs - 10.0 > wanted ? r.targetMs - 10.0 : wanted;
-        if (r.log) {
-          std::fprintf(stderr, "[platform/audio] sound reserve %.0f -> %.0f ms (blocks on time again)\n", r.targetMs,
-                       next);
-        }
-        r.targetMs = next;
-      }
-    }
     r.prevBucketMaxMs = r.bucketMaxMs;
     r.bucketMaxMs = 0;
     r.bucketStartNs = now;
+  }
+  if (r.adaptive && r.targetMs > kTargetQueuedMs && now - r.lastUnderrunNs > 8'000'000'000ull &&
+      now - r.lastShrinkNs > 3'000'000'000ull) {
+    const double longest = r.bucketMaxMs > r.prevBucketMaxMs ? r.bucketMaxMs : r.prevBucketMaxMs;
+    const double wanted = reserve_wanted(longest);
+    if (wanted < r.targetMs) {
+      const double next = r.targetMs - 10.0 > wanted ? r.targetMs - 10.0 : wanted;
+      if (r.log) {
+        std::fprintf(stderr, "[platform/audio] sound reserve %.0f -> %.0f ms (blocks on time again)\n", r.targetMs, next);
+      }
+      r.targetMs = next;
+      r.lastShrinkNs = now;
+    }
   }
   r.targetNow = static_cast<uint32_t>(r.targetMs);
   return padBytes;

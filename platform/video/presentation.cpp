@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <deque>
@@ -32,6 +33,7 @@
 #include <cstring>
 #include <mutex>
 #include <string>
+#include <thread>
 
 extern "C" {
 void PortInput_LatchHeld(void);
@@ -466,7 +468,29 @@ double wrap_half(double x, double period) {
   return x;
 }
 
+void sleep_us_precise(double us) {
+#ifdef _WIN32
+  static thread_local HANDLE timer = CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
+  if (timer != nullptr) {
+    LARGE_INTEGER due;
+    due.QuadPart = -static_cast<LONGLONG>(us * 10.0);
+    if (SetWaitableTimerEx(timer, &due, 0, nullptr, nullptr, nullptr, 0)) {
+      WaitForSingleObject(timer, INFINITE);
+      return;
+    }
+  }
+  Sleep(static_cast<DWORD>(us / 1000.0));
+#else
+  std::this_thread::sleep_for(std::chrono::nanoseconds(static_cast<int64_t>(us * 1000.0)));
+#endif
+}
+
 void wait_until(int64_t when) {
+#ifdef _WIN32
+  constexpr double kSpinMs = 0.8;
+#else
+  constexpr double kSpinMs = 0.4;
+#endif
   for (;;) {
     LARGE_INTEGER qpc;
     QueryPerformanceCounter(&qpc);
@@ -475,8 +499,8 @@ void wait_until(int64_t when) {
       return;
     }
     const double ms = static_cast<double>(left) * 1000.0 / static_cast<double>(sPacer.frequency);
-    if (ms > 2.0) {
-      Sleep(static_cast<DWORD>(ms - 1.5));
+    if (ms > kSpinMs + 0.3) {
+      sleep_us_precise((ms - kSpinMs) * 1000.0);
     } else {
       YieldProcessor();
     }

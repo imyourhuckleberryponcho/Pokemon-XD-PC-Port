@@ -412,6 +412,7 @@
    "model": "none",
    "tag": "Core"
   },
+    {"nat": 718, "form": 4, "kind": "battle", "label": "Complete", "model": "none", "tag": "Complete"},
   {
    "nat": 778,
    "form": 1,

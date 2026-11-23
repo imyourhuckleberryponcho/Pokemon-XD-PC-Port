@@ -2,12 +2,16 @@
 
 #include <controls.h>
 
+#include <algorithm>
 #include <cstdlib>
+#include <string>
 #include <string_view>
 
 namespace xd_settings {
 
 namespace es = engine::settings;
+
+static void RegisterCheats(es::Registry& registry);
 
 void Register(es::Registry& registry) {
   es::RegisterStandardSettings(registry);
@@ -56,7 +60,7 @@ void Register(es::Registry& registry) {
                    .ForGames({kGameId})
                    .Implemented());
   registry.Add(D::Text("system.extra_disc.usum", C::System, "Ultra Sun / Ultra Moon dump file (for models)",
-                       "The decrypted Pokemon Ultra Sun or Ultra Moon dump (.3ds / .cci) the launcher's Extra assets page makes the "
+                       "The decrypted Pokemon Ultra Sun or Ultra Moon dump (.3ds / .cci / .cia) the launcher's Extra assets page makes the "
                        "Ultra Sun / Ultra Moon models from (empty: none chosen yet).",
                        "", "")
                    .Preference()
@@ -83,6 +87,81 @@ void Register(es::Registry& registry) {
                        "F9 opens a menu of the developers' own debug tools left in the game: go to any place, any "
                        "point of the story, set story flags, start battles, get items and Pokemon. For testing; "
                        "runs that used it are marked in their recording and bug reports.",
+                       false, false)
+                   .ForGames({kGameId})
+                   .Implemented());
+  RegisterCheats(registry);
+}
+
+static void RegisterCheats(es::Registry& registry) {
+  using D = es::Definition;
+  using C = es::Category;
+  registry.Add(D::Bool("cheats.enabled", C::System, "Enable cheats",
+                       "Turns the cheat menu on: a hot key (F5, or hold L + R and press Start on the controller; both can be changed in the controls) opens "
+                       "a menu of cheats over the game. Off: no cheat does anything. A playthrough that used a cheat is marked as such "
+                       "for good (it can't join competitive online rooms, and a speedrun with it is invalid). Never in Original.",
+                       false, false)
+                   .ForGames({kGameId})
+                   .Implemented());
+  registry.Add(D::Bool("cheats.catch_always", C::System, "Cheat: every Poke Ball catches",
+                       "A ball thrown at a wild Pokemon always catches it (Shadow Pokemon still need the Snag Ball).",
+                       false, false)
+                   .ForGames({kGameId})
+                   .Implemented());
+  registry.Add(D::Bool("cheats.catch_trainers", C::System, "Cheat: catch other trainers' Pokemon",
+                       "Poke Balls can be thrown at another trainer's Pokemon (not Shadow ones: those are always snagged). It is caught when the ball works, "
+                       "and that Pokemon is out of the battle, as a snagged Shadow Pokemon is.",
+                       false, false)
+                   .ForGames({kGameId})
+                   .Implemented());
+  registry.Add(D::Bool("cheats.balls_infinite", C::System, "Cheat: Poke Balls are never used up",
+                       "A ball thrown in battle stays in the bag.",
+                       false, false)
+                   .ForGames({kGameId})
+                   .Implemented());
+  registry.Add(D::Enum("cheats.exp", C::System, "Cheat: experience multiplier",
+                       "Experience Pokemon earn in battle is multiplied (x2, x5 or x10).",
+                       {{"off", "Off"}, {"x2", "x2"}, {"x5", "x5"}, {"x10", "x10"}}, "off", "off")
+                   .ForGames({kGameId})
+                   .Implemented());
+  registry.Add(D::Bool("cheats.level_cap_off", C::System, "Cheat: ignore the level cap",
+                       "The level-cap challenge rule does not hold Pokemon back (they level up to 100 as in the plain game).",
+                       false, false)
+                   .ForGames({kGameId})
+                   .Implemented());
+  registry.Add(D::Bool("cheats.money_infinite", C::System, "Cheat: infinite money",
+                       "Money is topped up and buying or paying never takes any.",
+                       false, false)
+                   .ForGames({kGameId})
+                   .Implemented());
+  registry.Add(D::Bool("cheats.coupons_infinite", C::System, "Cheat: infinite Poke Coupons",
+                       "Poke Coupons are topped up and spending them never takes any.",
+                       false, false)
+                   .ForGames({kGameId})
+                   .Implemented());
+  registry.Add(D::Enum("cheats.shiny", C::System, "Cheat: shiny odds",
+                       "How often a Pokemon you receive from now on is shiny (caught, gifts, Shadow Pokemon, Poke Spot Pokemon).",
+                       {{"off", "Off"}, {"1_in_512", "1 in 512"}, {"1_in_64", "1 in 64"}, {"1_in_8", "1 in 8"}, {"always", "Always"}}, "off", "off")
+                   .ForGames({kGameId})
+                   .Implemented());
+  registry.Add(D::Bool("cheats.perfect_ivs", C::System, "Cheat: perfect IVs",
+                       "Pokemon you receive from now on have all IVs at 31.",
+                       false, false)
+                   .ForGames({kGameId})
+                   .Implemented());
+  registry.Add(D::Bool("cheats.max_evs", C::System, "Cheat: maxed EVs",
+                       "Pokemon you receive from now on have every effort value at the game's maximum (100).",
+                       false, false)
+                   .ForGames({kGameId})
+                   .Implemented());
+  registry.Add(D::Bool("cheats.no_damage", C::System, "Cheat: no damage taken",
+                       "Your Pokemon take no damage in battle.",
+                       false, false)
+                   .ForGames({kGameId})
+                   .Implemented());
+  registry.Add(D::Bool("cheats.win_battles", C::System, "Cheat: win every battle",
+                       "The first hit on a foe's Pokemon makes it faint (a Shadow Pokemon is left with 1 HP so it can still be snagged). "
+                       "Nothing is forfeited: the battle goes on as a won one.",
                        false, false)
                    .ForGames({kGameId})
                    .Implemented());
@@ -136,6 +215,24 @@ std::vector<std::string> ApplyEnvironment(es::Registry& registry,
       used.push_back("XD_DEV_MENU=" + std::string(dev) + " ignored: XD_PRESET=original runs the pure game");
     } else if (registry.Override("system.dev_menu", "on")) {
       used.push_back("XD_DEV_MENU=" + std::string(dev) + " -> system.dev_menu=on");
+    }
+  }
+  if (const std::string_view cheats = get("XD_CHEATS"); !cheats.empty() && cheats != "0") {
+    if (get("XD_PRESET") == "original" || get("XD_REQUIRE_ORIGINAL") == "1") {
+      used.push_back("XD_CHEATS=" + std::string(cheats) + " ignored: Original runs the pure game");
+    } else if (registry.Override("cheats.enabled", "on")) {
+      std::string note = "XD_CHEATS=" + std::string(cheats) + " -> cheats.enabled=on";
+      for (size_t at = 0; at <= cheats.size();) {
+        const size_t end = std::min(cheats.find(';', at), cheats.size());
+        std::string part(cheats.substr(at, end - at));
+        at = end + 1;
+        if (part.empty() || part == "1" || part == "all" || part == "on") continue;
+        const size_t eq = part.find('=');
+        const std::string key = "cheats." + part.substr(0, eq);
+        const std::string value = eq == std::string::npos ? "on" : part.substr(eq + 1);
+        if (registry.Override(key, value)) note += ", " + key + "=" + value;
+      }
+      used.push_back(note);
     }
   }
   if (const std::string_view photo = get("XD_PHOTO_SCRIPT"); !photo.empty()) {

@@ -43,6 +43,7 @@
 #include <SDL3/SDL_stdinc.h>
 
 #include <gx_texture_decode.h>
+#include <controls.h>
 #include <port_audio.h>
 #include <port_disc.h>
 #include <port_menu.h>
@@ -119,7 +120,26 @@ void PortXD_AudioCategoriesInit(void);
 void PortXD_TrainerCardScriptPage(void);
 const PortMenuPage* PortXD_TrainerCardPage(void);
 int PortXD_AudioCategoryVolumeChanged(const char* id, int percent);
+void* itemDataBiosGetPtr(u16 index);
+u32 itemDataBiosGetName(void* item);
+u32 itemDataBiosGetDoc(void* item);
+u8 itemDataBiosGetKind(void* item);
+u32 itemDataBiosGetItemEffectParam(void* item);
+u8* itemParamGetPtr(u8 index);
+u8 itemParamGetLevelUpFlag(u8* param);
+void* heroItemGetItemKindToItemAryPtr(void* hero, u8 kind, u16* count, u16* max, u8* f1, u8* f2);
+uintptr_t heroGetStatus(void* hero, u32 selector, u16 index);
+u16* GSmsgGetGSchar(u32 key);
+int PortXD_CheatsEnabled(void);
+int PortXD_CheatDo(const char* action);
+int PortXD_CheatsWarned(void);
+void PortXD_CheatsSetWarned(int warned);
+uint32_t PortSpeedups_CheatMenuPresses(void);
 }
+struct BagSlot {
+  u16 itemDataId;
+  u16 num;
+};
 
 extern "C" int PortXD_SpeciesIndexOfNational(int national) {
   if (pokemon_data == nullptr || pokemon_data_number == nullptr) return 0;
@@ -998,6 +1018,7 @@ const Row kRows[] = {
     {"video.battle_revolution_models", [] { return Tr("Battle Revolution models"); }, 0, true, ""},
     {"system.pause_on_focus_loss", [] { return Tr("Pause in the background"); }, 0, true, ""},
     {"system.discord_presence", [] { return Tr("Discord presence"); }, 0, false, ""},
+    {"cheats.enabled", [] { return Tr("Enable cheats"); }, 0, true, ""},
     {nullptr, [] { return Tr("Back"); }, 0, false, ""},
 };
 
@@ -1279,6 +1300,15 @@ void ApplyMenuSoundVolume() {
   PortSfx_SetVolume(gain);
 }
 
+namespace cw {
+bool IsRow(const char* id);
+bool Intercept(bool turningOn);
+bool Active();
+bool Input(const PortMenuInput* in, bool& changed, int& sound);
+void Draw(ImDrawList* dl, const Screen& sc);
+std::string KeyName();
+}
+
 void RebuildRows() {
   const Row* cur = sPage.cursor < static_cast<int>(sPage.rows.size()) ? sPage.rows[sPage.cursor] : nullptr;
   sPage.rows.clear();
@@ -1325,6 +1355,7 @@ void Change(const Row& r, int dir) {
     break;
   default: return;
   }
+  if (cw::IsRow(r.id) && v.i != 0 && cw::Intercept(true)) return;
   if (!reg.Set(i, v)) return;
   sPage.changed = true;
   std::fprintf(stderr, "[settings menu] %s = %s\n", r.id, reg.ValueText(i).c_str());
@@ -1402,6 +1433,7 @@ void KeepOptionsPictures() {
 bool TwoChoices(const Row& r) {
   if (r.id == nullptr || IsSpecialRow(r) || IsActionRow(r.id)) return false;
   const es::Registry& reg = es::Global();
+  if (reg.Find(r.id) == es::kNoSetting) return false;
   const es::Definition& d = reg.Get(reg.Find(r.id));
   return d.type == es::Type::Bool || (d.type == es::Type::Enum && d.choices.size() == 2);
 }
@@ -1487,6 +1519,10 @@ std::string Description(const Row& r) {
   if (IsTimerRow(r)) return xd::speedrun::TimerRowInfo(TimerWhich(r));
   if (IsModsRow(r)) return Tr("The things mods let you do from here. Choose one and press A.");
   if (IsStatsRow(r)) return xd::speedrun::StatsText();
+  if (cw::IsRow(r.id)) {
+    return sPageFromTitle ? Fmt(Tr("Cheats for this save. Once on, %s opens the cheat menu while you play."), cw::KeyName().c_str())
+                          : Fmt(Tr("Cheats for this save: %s opens the cheat menu."), cw::KeyName().c_str());
+  }
   const es::Registry& reg = es::Global();
   if (IsActionRow(r.id)) {
     return std::strcmp(r.id, "language.restart_now") == 0
@@ -1841,8 +1877,9 @@ void DrawDescription(ImDrawList* dl, const Screen& sc, const std::string& text, 
 }
 
 void DrawRow(ImDrawList* dl, const Screen& sc, float top, const char* label, const std::string& value, const std::string& shortValue, bool sel,
-             bool arrows) {
-  const uint8_t white[4] = {0xF0, 0xF0, 0xF0, 0xFF};
+             bool arrows, const uint8_t* colour = nullptr) {
+  const uint8_t white0[4] = {0xF0, 0xF0, 0xF0, 0xFF};
+  const uint8_t* white = colour != nullptr ? colour : white0;
   const UseFont font(1);
   const float ty = std::floor(top + 14.f - static_cast<float>(sFontW + 1) / 2.f);
   if (sel) Pill(dl, sc, 28.f, 344.f, top);
@@ -1956,6 +1993,20 @@ bool ModsListFrame(const PortMenuInput* in) {
 }
 
 bool PageFrame(void*, const PortMenuInput* in) {
+  const PortMenuInput none{};
+  struct CheatWarning {
+    int sound = 0;
+    ~CheatWarning() {
+      if (sound != 0) PlayMenuSound(PageSoundMenu(), sound);
+      if (cw::Active() && ImGui::GetCurrentContext() != nullptr) cw::Draw(ImGui::GetForegroundDrawList(), ScreenNow());
+    }
+  } cheatWarning;
+  if (cw::Active()) {
+    bool on = false;
+    cw::Input(in, on, cheatWarning.sound);
+    if (on) sPage.changed = true;
+    in = &none;
+  }
   const int n = static_cast<int>(sPage.rows.size());
   const int cursorBefore = sPage.cursor;
   const bool changedBefore = sPage.changed;
@@ -4149,6 +4200,7 @@ void Neutral(PADStatus& s);
 void Filter(PADStatus* status);
 #include "online_lobby_page.inc"
 #include "save_picker_page.inc"
+#include "cheat_menu.inc"
 #include "loading_screen.inc"
 
 namespace ex {
@@ -4556,7 +4608,7 @@ void PortXD_SettingsMenuInit(void) {
   PortAudio_SetVolume(static_cast<float>(reg.Int("audio.master_volume").Get()) / 100.f);
   PortXD_AudioCategoriesInit();
   ApplyMenuSoundVolume();
-  PortMenu_SetScriptPage(EnvIs("XD_MENU_SCRIPT_PAGE", "online") ? &ot::kPage : EnvIs("XD_MENU_SCRIPT_PAGE", "battle") ? &ol::kPage : EnvIs("XD_MENU_SCRIPT_PAGE", "mods") ? &mm::kModsPage : EnvIs("XD_MENU_SCRIPT_PAGE", "refusal") ? &ng::kRefusalPage : EnvIs("XD_MENU_SCRIPT_PAGE", "note") ? &ng::kNotePage : &kPage);
+  PortMenu_SetScriptPage(EnvIs("XD_MENU_SCRIPT_PAGE", "online") ? &ot::kPage : EnvIs("XD_MENU_SCRIPT_PAGE", "battle") ? &ol::kPage : EnvIs("XD_MENU_SCRIPT_PAGE", "mods") ? &mm::kModsPage : EnvIs("XD_MENU_SCRIPT_PAGE", "refusal") ? &ng::kRefusalPage : EnvIs("XD_MENU_SCRIPT_PAGE", "note") ? &ng::kNotePage : EnvIs("XD_MENU_SCRIPT_PAGE", "cheats") ? &cm::kPage : &kPage);
   PortXD_TrainerCardScriptPage();
   if (std::getenv("XD_LOADSCREEN_TEST") != nullptr) PortMenu_SetScriptPage(&ls::kPage);
   PortVideo_SetNoticeDrawer(&kit::Notice);
@@ -4693,7 +4745,12 @@ void PortXD_TitleMenuPrint2(s32 layer, s32 x, s32 y, s32 color, s32 msg) {
 }
 
 void PortXD_SettingsMenuOverlay(void) {
-  if (const char* a = std::getenv("XD_TEXT_FIT_AUDIT")) {
+  static const auto envCopy = [](const char* name) { const char* v = std::getenv(name); return v != nullptr ? new std::string(v) : nullptr; };
+  static const std::string* const textFitAudit = envCopy("XD_TEXT_FIT_AUDIT");
+  static const std::string* const sfxGameTest = envCopy("XD_SFX_GAME_TEST");
+  static const std::string* const noticeTest = envCopy("XD_NOTICE_TEST");
+  static const std::string* const noteTest = envCopy("XD_NOTE_TEST");
+  if (const char* a = textFitAudit != nullptr ? textFitAudit->c_str() : nullptr) {
     static bool done = false;
     if (!done && a[0] != '\0' && ImGui::GetCurrentContext() != nullptr) {
       done = true;
@@ -4702,7 +4759,7 @@ void PortXD_SettingsMenuOverlay(void) {
   }
   ProbeItems();
   xd::scriptext::DrawPage();
-  if (const char* t = std::getenv("XD_SFX_GAME_TEST")) {
+  if (const char* t = sfxGameTest != nullptr ? sfxGameTest->c_str() : nullptr) {
     static bool done = false;
     unsigned frame = 0, snd = 0;
     if (!done && std::sscanf(t, "%u:%u", &frame, &snd) == 2 && PortVI_GetFlipCount() >= frame) {
@@ -4712,7 +4769,7 @@ void PortXD_SettingsMenuOverlay(void) {
       GSsndPlayNow(snd);
     }
   }
-  if (const char* t = std::getenv("XD_NOTICE_TEST")) {
+  if (const char* t = noticeTest != nullptr ? noticeTest->c_str() : nullptr) {
     static bool done = false;
     unsigned frame = 0;
     int at = 0;
@@ -4721,7 +4778,7 @@ void PortXD_SettingsMenuOverlay(void) {
       PortVideo_Notice(t + at, 6.0);
     }
   }
-  if (const char* t = std::getenv("XD_NOTE_TEST")) {
+  if (const char* t = noteTest != nullptr ? noteTest->c_str() : nullptr) {
     static bool done = false;
     unsigned frame = 0;
     float seconds = 0.f;
@@ -4804,6 +4861,11 @@ bool PortXD_ShowRuleMessage(const std::string& text) {
   ng::ruleText = text;
   return PortMenu_Open(&ng::kRulePage);
 }
+extern "C" bool PortXD_OpenCheatMenu(void) {
+  if (!PortXD_CheatsEnabled()) return false;
+  return PortMenu_Open(&cm::kPage);
+}
+
 extern "C" bool PortXD_LandingCoverActive(void) { return ls::CoverActive(); }
 void PortXD_ShowNote(const std::string& text, float seconds) {
   ng::noteText = text;
@@ -4974,6 +5036,8 @@ void PortXD_TextFitAudit(const char* path) {
     for (const char* label : {"DEX HELPER", "Quick heal", "An action with a really long name that goes on and on and on for ever"}) {
       for (int sel = 0; sel < 2; sel++) run(std::string("mods list '") + label + "' sel" + std::to_string(sel), [&] { bag::DrawRow(&tmp, sc, bag::kRowTop, label, "", "", sel != 0, false); });
     }
+    cm::Audit(run, &tmp, sc);
+    cw::Audit(run, &tmp, sc);
     run("mods list desc", [&] { bag::DrawDescription(&tmp, sc, Fmt(Tr("From the mod %s. Press A to use it."), "A mod with a rather long name indeed"), 0.f, 0); });
     ng::Audit(run, &tmp, sc);
     for (int turns : {0, 3, 22, 99}) {

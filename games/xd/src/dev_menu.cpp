@@ -1,3 +1,5 @@
+#include "xd_hidden_ability.h"
+#include "xd_forms.h"
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
@@ -65,11 +67,33 @@ void pokemonDB_SetMitaFlag(u16 id, bool value);
 void pokemonDB_SetTukamaetaFlag(u16 id, bool value);
 uint16_t pokemonEvolutionCheck(void* pokemon, int32_t mode, uint16_t item, uint16_t* extra, void* info);
 void heroAddPokecoupon(void* hero, s32 amount);
+void heroDecPokedoru(void* hero, u32 amount);
+void heroDecPokecoupon(void* hero, s32 amount);
 uintptr_t heroGetStatus(void* hero, u32 selector, u16 index);
 u8 pokemonIsDarkPokemon(void* pokemon);
 f32 pokemonGetDp(void* pokemon);
 void pokemonSetDp(void* pokemon, f32 value);
 s32 heroItemAddItemDataId(void* hero, u32 itemID, u32 amount, u32 index);
+void pokemonBiosSetMaxHpRnd(void* p, u16 v);
+void pokemonBiosSetPhyAtkRnd(void* p, u16 v);
+void pokemonBiosSetPhyDefRnd(void* p, u16 v);
+void pokemonBiosSetSpeAtkRnd(void* p, u16 v);
+void pokemonBiosSetSpeDefRnd(void* p, u16 v);
+void pokemonBiosSetNimblenessRnd(void* p, u16 v);
+void pokemonBiosSetMaxHpEffort(void* p, u16 v);
+void pokemonBiosSetPhyAtkEffort(void* p, u16 v);
+void pokemonBiosSetPhyDefEffort(void* p, u16 v);
+void pokemonBiosSetSpeAtkEffort(void* p, u16 v);
+void pokemonBiosSetSpeDefEffort(void* p, u16 v);
+void pokemonBiosSetNimblenessEffort(void* p, u16 v);
+void pokemonResetBasisStatus(void* p);
+u16 pokemonBiosGetPokemonDataId(void* p);
+s32 pokemon_GetHp(void* p);
+s32 pokemon_GetMaxHp(void* p);
+void pokemon_SetHp(void* p, u16 v);
+void* itemDataBiosGetItemEffectParam(void* item);
+void* itemParamGetPtr(void* effect);
+u8 itemParamGetLevelUpFlag(u8* p);
 void pcboxDebugPokemonSetupFull(void);
 void pokemonCreate(void* pokemon, u16 species, u8 level, void* attest);
 uintptr_t savedataGetStatus(u32 save, u32 kind);
@@ -81,12 +105,17 @@ u16 memoDataGetCount(u32 kind);
 void* pokemonDataBiosGetPtr(u16 id);
 u16 pokemonDataBiosGetHeight(void* pdata);
 void pokemonBiosSetItemDataId(void* pokemon, u16 item);
+void pokemon_SetPokemonWazaDataId(void* pokemon, u32 index, u16 waza);
+void pokemon_SetPokemonWazaPp(void* pokemon, u32 index, u8 pp);
+u8 wazaDB_GetPp(u16 waza);
 void* fightFloorGetFightOutBanmeToValidFightOutPokemon(void* floor, u16 banme);
 void fightOutPokemonWriteJoutaiDataId(void* fop, u16 id, u32 value);
 void fightOutPokemonSetKaisuuJoutaiDataId(void* fop, u16 id, u8 value);
 void fightOutPokemonSetNowKaisuuJoutaiDataId(void* fop, u16 id, u8 value);
 u8 fightOutPokemonIsJoutaiDataId(void* fop, u16 id);
 void pokemonBiosSetTokuseiFlag(void* pokemon, bool second);
+int32_t (*PortXD_HiddenItemUse(uint32_t item))(uint16_t, int*);
+uint32_t pokemonGetTokuseiDataId(void* pokemon);
 void pcboxAddItem(void* pcbox, u16 id, u16 n);
 void pokemonSetOnZukanFlag(void* pokemon, u8 caught);
 
@@ -302,6 +331,10 @@ void Perform(const std::string& action) {
     heroAddPokedoru(nullptr, static_cast<u32>(Num(w, 1)));
   } else if (k == "coupons") {
     heroAddPokecoupon(nullptr, static_cast<s32>(Num(w, 1)));
+  } else if (k == "pay") {
+    heroDecPokedoru(nullptr, static_cast<u32>(Num(w, 1)));
+  } else if (k == "paycoupons") {
+    heroDecPokecoupon(nullptr, static_cast<s32>(Num(w, 1)));
   } else if (k == "item") {
     const u16 id = static_cast<u16>(Num(w, 1));
     const long count = Num(w, 2, 1);
@@ -338,10 +371,18 @@ void Perform(const std::string& action) {
     const long slot = Num(w, 1, 1);
     const long which = Num(w, 2, 0);
     void* p = slot >= 1 && slot <= 6 ? reinterpret_cast<void*>(heroGetStatus(nullptr, 3, static_cast<u16>(slot - 1))) : nullptr;
-    if (p == nullptr || which < 0 || which > 1) {
-      sStatus = "ability: <party slot 1-6> <0|1>";
+    if (p == nullptr || which < 0 || which > 2) {
+      sStatus = "ability: <party slot 1-6> <0|1|2 (2 = the hidden ability: Gen 5-7 rule sets, 0.7.1 placeholder)>";
       return;
     }
+    if (which == 2) {
+      const bool ok = xd::hidden::Give(p, true);
+      std::fprintf(stderr, "[hidden] devmenu: party slot %ld hidden ability %s; its ability is now %u\n", slot, ok ? "set" : "NOT set (the species has none)",
+                   static_cast<unsigned>(pokemonGetTokuseiDataId(p)));
+      sStatus = std::string("ability: party slot ") + std::to_string(slot) + (ok ? " hidden ability" : " has no hidden ability");
+      return;
+    }
+    xd::hidden::Give(p, false);
     pokemonBiosSetTokuseiFlag(p, which != 0);
     sStatus = "ability: party slot " + std::to_string(slot) + " ability flag " + std::to_string(which);
   } else if (k == "lua") {
@@ -433,6 +474,61 @@ void Perform(const std::string& action) {
     pokemonSetDp(p, static_cast<f32>(Num(w, 2, 0)));
     sStatus = "heart: party slot " + std::to_string(slot) + " gauge " + std::to_string(static_cast<long>(before)) +
               " -> " + std::to_string(static_cast<long>(pokemonGetDp(p)));
+  } else if (k == "give_item") {
+    const u16 id = static_cast<u16>(Num(w, 1));
+    const long count = Num(w, 2, 1);
+    if (!itemDataCheckValid(id) || count < 1 || count > 999) {
+      sStatus = "give_item: no such item / count";
+      return;
+    }
+    heroItemAddItemDataId(nullptr, id, static_cast<u32>(count), static_cast<u32>(-1));
+    sStatus = "give_item: " + std::to_string(count) + " x item " + std::to_string(id);
+  } else if (k == "candy") {
+    const long count = std::clamp(Num(w, 1, 99), 1L, 999L);
+    u16 candy = 0;
+    for (u16 i = 1; i < 0x400 && candy == 0; i++) {
+      if (!itemDataCheckValid(i)) continue;
+      u8* param = static_cast<u8*>(itemParamGetPtr(itemDataBiosGetItemEffectParam(itemDataBiosGetPtr(i))));
+      if (param != nullptr && itemParamGetLevelUpFlag(param) != 0) candy = i;
+    }
+    if (candy == 0) {
+      sStatus = "candy: the game has no item that raises a level";
+      return;
+    }
+    heroItemAddItemDataId(nullptr, candy, static_cast<u32>(count), static_cast<u32>(-1));
+    sStatus = "candy: " + std::to_string(count) + " x item " + std::to_string(candy);
+  } else if (k == "maxparty") {
+    int n = 0;
+    for (u16 slot = 0; slot < 6; slot++) {
+      void* p = reinterpret_cast<void*>(heroGetStatus(nullptr, 3, slot));
+      if (p == nullptr || pokemonBiosGetPokemonDataId(p) == 0) continue;
+      if (pokemonIsDarkPokemon(p)) continue;
+      const s32 hp = pokemon_GetHp(p), maxHp = pokemon_GetMaxHp(p);
+      if (maxHp <= 0) continue;
+      pokemonBiosSetMaxHpRnd(p, 31); pokemonBiosSetPhyAtkRnd(p, 31); pokemonBiosSetPhyDefRnd(p, 31);
+      pokemonBiosSetSpeAtkRnd(p, 31); pokemonBiosSetSpeDefRnd(p, 31); pokemonBiosSetNimblenessRnd(p, 31);
+      pokemonBiosSetMaxHpEffort(p, 100); pokemonBiosSetPhyAtkEffort(p, 100); pokemonBiosSetPhyDefEffort(p, 100);
+      pokemonBiosSetSpeAtkEffort(p, 100); pokemonBiosSetSpeDefEffort(p, 100); pokemonBiosSetNimblenessEffort(p, 100);
+      pokemonResetBasisStatus(p);
+      const s32 newMax = pokemon_GetMaxHp(p);
+      pokemon_SetHp(p, static_cast<u16>(hp > 0 ? std::max<s32>(1, static_cast<s32>(static_cast<long long>(hp) * newMax / maxHp)) : 0));
+      n++;
+    }
+    sStatus = "maxparty: " + std::to_string(n) + " Pokemon";
+  } else if (k == "purify") {
+    int n = 0;
+    for (u16 slot = 0; slot < 6; slot++) {
+      void* p = reinterpret_cast<void*>(heroGetStatus(nullptr, 3, slot));
+      if (p != nullptr && pokemonIsDarkPokemon(p)) {
+        const f32 before = pokemonGetDp(p);
+        pokemonSetDp(p, 0.0f);
+        std::fprintf(stderr, "[dev menu] purify: party slot %d heart %ld -> %ld%c", slot + 1, static_cast<long>(before), static_cast<long>(pokemonGetDp(p)), 10);
+        n++;
+      }
+    }
+    sStatus = "purify: " + std::to_string(n) + " heart(s) opened";
+  } else if (k == "win") {
+    if (dbgMenuFightStopHostWin() < 0) sStatus = "not in a battle";
   } else if (k == "save") {
     if (fightIsFight() != 0) {
       sStatus = "save: not during a battle";
@@ -500,6 +596,16 @@ void Perform(const std::string& action) {
       r = pokemonEvolutionAll(p, species, 0, &info, nullptr, 1, 0, 1);
     }
     sStatus = "evolve: the scene returned " + std::to_string(r);
+  } else if (k == "usepatch") {
+    int consume = 0;
+    auto* use = PortXD_HiddenItemUse(xd::forms::PatchItem());
+    if (use == nullptr) {
+      sStatus = "usepatch: no Ability Patch here (needs the Gen 5-7 pack and a Gen 5, 6 or 7 rule set)";
+    } else {
+      const int r = use(static_cast<uint16_t>(xd::forms::PatchItem()), &consume);
+      std::fprintf(stderr, "[hidden] devmenu usepatch: the use function answered %d, %d to take\n", r, consume);
+      sStatus = "usepatch: " + std::to_string(r);
+    }
   } else if (k == "pc") {
     menuPcBoxMain();
   } else if (k == "shop") {
@@ -645,6 +751,11 @@ void StartNext() {
   }
   sRunning = sQueue.front();
   sQueue.erase(sQueue.begin());
+  bool cheat = false;
+  if (sRunning.rfind("@cheat ", 0) == 0) {
+    sRunning = sRunning.substr(7);
+    cheat = true;
+  }
   sStatus.clear();
   sThreadDone = false;
   sThreadStart = frame;
@@ -657,6 +768,7 @@ void StartNext() {
     return;
   }
   GSthreadSetName(sThread, "devMenu(port)");
+  if (cheat) return;
   PortInput_DevMenuNote(sRunning.c_str());
   sUsed.push_back("game frame " + std::to_string(frame) + ": " + sRunning);
 }
@@ -985,6 +1097,12 @@ bool PortXD_DevMenuInit(void) {
   return sEnabled;
 }
 
+bool PortXD_DevCheatAction(const char* action) {
+  if (action == nullptr || action[0] == '\0') return false;
+  sQueue.push_back(std::string("@cheat ") + action);
+  return true;
+}
+
 void PortXD_DevMenuToggle(void) {
   if (sEnabled) {
     sShown = !sShown;
@@ -996,6 +1114,7 @@ void PortXD_DevMenuFrame(void) {
     CheckReplay();
   }
   if (!sEnabled) {
+    if (!sQueue.empty() || !sThreadDone) StartNext();
     return;
   }
   const uint32_t frame = PortVI_GetFlipCount();

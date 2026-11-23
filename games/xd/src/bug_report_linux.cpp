@@ -46,7 +46,9 @@
 extern "C" {
 const char* PortInput_RecordingPath(void);
 uint32_t PortInput_MarkAndCopy(const wchar_t* dest);
+const char* PortXD_CheatsReport(void);
 const char* PortXD_DevMenuReport(void);
+const char* PortXD_ShadersPreparedReport(void);
 const char* PortXD_PlaythroughReport(void);
 const char* PortSpeedups_Report(void);
 int PortXD_ReportMap(char* out, int size);
@@ -264,7 +266,9 @@ bool WriteBundle(Press& p) {
   info << "system Linux\n";
   WriteLines(info, sInfo);
   WriteLines(info, PortXD_DevMenuReport());
+  WriteLines(info, PortXD_CheatsReport());
   WriteLines(info, PortXD_PlaythroughReport());
+  WriteLines(info, PortXD_ShadersPreparedReport());
   WriteLines(info, PortSpeedups_Report());
   info << "\n";
   if (automatic) {

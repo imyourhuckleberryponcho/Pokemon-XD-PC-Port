@@ -49,6 +49,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+extern "C" int PortXD_CheatsUsedHere(void);
 
 extern "C" {
 uint8_t fightTrainerSelectFightAction(void* trainer, uint32_t side);
@@ -273,6 +274,7 @@ xd::online::Capabilities MyCapabilities() {
   xd::online::Capabilities c;
   c.disc = "GXXE01";
   c.edition = xd::xg::Edition();
+  c.cheats = PortXD_CheatsUsedHere() != 0;
   for (const engine::rulesets::Format& f : xd::rulesets::Formats()) c.knownFormats += (c.knownFormats.empty() ? "" : ",") + f.id + ":" + xd::rulesets::FormatDigest(f);
   c.formatsDigest = xd::online::Hex(xd::online::Fnv64(c.knownFormats.data(), c.knownFormats.size()));
   if (xd::xg::Off(xd::xg::Feature::Gen4Pokemon) == nullptr && (xd::gen4::Loaded() || xd::gen4::PackPresent())) {
@@ -295,7 +297,7 @@ xd::online::Capabilities MyCapabilities() {
       const std::string t57 = o57.str();
       c.gen4Pack += "+g57" + (in57 ? xd::online::Hex(xd::online::Fnv64(t57.data(), t57.size())) : std::string("unknown"));
     }
-    if (xd::xg::On()) c.gen4Pack += "+xg1";
+    if (xd::xg::On()) c.gen4Pack += "+xg2";
   }
   std::vector<std::string> ids = xd::pt::LoadedModIds();
   std::sort(ids.begin(), ids.end());

@@ -34,6 +34,7 @@ struct Row {
   double seconds = 0;
   std::string rules;
   std::string rulesFull;
+  std::vector<std::string> cheats;
   std::filesystem::path thumbnail;
 };
 std::vector<Row> Rows();

@@ -6,6 +6,8 @@
 #include <cstdio>
 #include <cstring>
 
+#include "xd_hidden_ability.h"
+
 struct HeroPokemonGetParam {
     u8 trainerSexID;
     u8 catchLevel;
@@ -151,7 +153,9 @@ u16 PortXD_WildEsabaSpecies(s32 index) {
     if (sWild.armed) return sWild.species;
     return esabaGetPokemonID(index);
 }
+static bool sSpotNext = false;
 u32 PortXD_WildEsabaRnd(s32 index) {
+    sSpotNext = true;
     if (sWild.armed) return 0;
     return esabaGetPokemonRnd(index);
 }
@@ -161,6 +165,10 @@ void PortXD_WildPokemonCreate(void* pokemon, u16 id, u8 level, u32 trainer) {
         sWild.armed = false;
     }
     pokemonCreate(pokemon, id, level, trainer);
+    if (sSpotNext) {
+        sSpotNext = false;
+        xd::hidden::MaybeGive(pokemon);
+    }
 }
 
 }

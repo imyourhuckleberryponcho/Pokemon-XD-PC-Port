@@ -50,7 +50,7 @@ def main():
            '--hidden-import', 'usum_gen4', '--hidden-import', 'usum_gen4_values', '--hidden-import', 'usum_gen4_learnsets', '--hidden-import', 'usum_gen4_donors',
 
            '--hidden-import', 'usum_gen57_make', '--hidden-import', 'usum_dex_entries', '--hidden-import', 'gen57_all', '--hidden-import', 'gen57_forms', '--hidden-import', 'gen57_faces',
-           '--hidden-import', 'gen57_faces_fast', '--hidden-import', 'gen57_facecam', '--hidden-import', 'gen57_data', '--hidden-import', 'gen57_pack',
+           '--hidden-import', 'gen57_faces_fast', '--hidden-import', 'gen57_facecam', '--hidden-import', 'gen57_speed', '--hidden-import', 'gen57_memory', '--hidden-import', 'gen57_data', '--hidden-import', 'gen57_pack',
            '--hidden-import', 'gen57_moves', '--hidden-import', 'gen57_move_plan', '--hidden-import', 'gen57_abilities',
            '--hidden-import', 'check_pack_move_rows', '--hidden-import', 'check_pack_models', '--hidden-import', 'n3ds_cries',
            '--hidden-import', 'gen4_pack', '--hidden-import', 'gen4_cry', '--hidden-import', 'gen4_spots', '--hidden-import', 'gen4_icon',

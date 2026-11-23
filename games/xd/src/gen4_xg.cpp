@@ -130,6 +130,10 @@ Translator::Translator(Tables t) : mT(std::move(t)) {
     const std::string k = Key(mT.abilities[i]);
     if (!k.empty() && k != "" && mAbilityKey.find(k) == mAbilityKey.end()) mAbilityKey[k] = static_cast<int>(i);
   }
+  for (size_t i = 0; i < mT.species.size(); i++) {
+    const std::string k = Key(mT.species[i]);
+    if (!k.empty() && mSpeciesKey.find(k) == mSpeciesKey.end()) mSpeciesKey[k] = static_cast<int>(i);
+  }
   for (size_t i = 0; i < mT.items.size(); i++) {
     const std::string k = Key(mT.items[i]);
     if (!k.empty() && mItemKey.find(k) == mItemKey.end()) mItemKey[k] = static_cast<int>(i);
@@ -234,12 +238,26 @@ int Translator::AbilityFor(const std::string& xdName) const {
   return 0;
 }
 
-uint32_t Translator::MapAbility(uint32_t xdAbility) const { return static_cast<uint32_t>(AbilityFor(XdAbilityName(xdAbility))); }
+uint32_t Translator::MapAbility(uint32_t xdAbility) const {
+  const std::string name = XdAbilityName(xdAbility);
+  if (xdAbility >= 124 && mHasGen57) {
+    const auto it = mAbilityKey.find(Key(name));
+    return it != mAbilityKey.end() ? static_cast<uint32_t>(it->second) : xdAbility;
+  }
+  return static_cast<uint32_t>(AbilityFor(name));
+}
 
 void Translator::MapTypes(const std::string& species, uint32_t types[2]) const {
   const std::string k = Key(species);
   if (k == "togekiss") types[0] = 9;
   if (k == "mimejr") types[1] = 9;
+}
+
+void Translator::MapTypes57(uint32_t dex, uint32_t types[2]) const {
+  const auto it = mInfo.types.find(dex);
+  if (it == mInfo.types.end()) return;
+  if (it->second.first == 17) types[0] = 9;
+  if (it->second.second == 17) types[1] = 9;
 }
 
 uint32_t Translator::AddedMoveNumber(const std::string& name) const {
@@ -275,19 +293,54 @@ struct MachineText {
 }
 
 bool Translator::Run(std::vector<engine::mods::DataModFile>& files, const std::string& machinesText, std::string& error) {
-  using engine::mods::DataModFile;
   mReport.clear();
   mAddedOrder.clear();
   mPackMoves.clear();
   mPackKind.clear();
   mPackBase.clear();
-  DataModFile *items = nullptr, *moves = nullptr, *species = nullptr;
+  mCounts = Counts();
+  mHasGen57 = false;
+  return RunPack(false, files, machinesText, error);
+}
+
+bool Translator::RunGen57(std::vector<engine::mods::DataModFile>& files, const Gen57Info& info, std::string& error) {
+  mInfo = info;
+  mInfo.portCodeMoves.clear();
+  mInfo.fairyMoves.clear();
+  for (const std::string& n : info.portCodeMoves) mInfo.portCodeMoves.insert(Key(n));
+  for (const std::string& n : info.fairyMoves) mInfo.fairyMoves.insert(Key(n));
+  mHasGen57 = true;
+  if (mT.packAbilities.size() < 256) mT.packAbilities.resize(256);
+  if (!RunPack(true, files, std::string(), error)) return false;
+  for (uint32_t id : mInfo.abilityIds) {
+    const std::string name = XdAbilityName(id);
+    if (!name.empty() && mAbilityKey.find(Key(name)) != mAbilityKey.end()) {
+      mCounts.abilitiesByName++;
+    } else if (mInfo.portCodeAbilities.count(id) != 0) {
+      mCounts.abilitiesPortCode++;
+      mReport.push_back("ability " + name + ": not on XG, keeps its own number (the port's battle code)");
+    } else {
+      mCounts.abilitiesNameOnly++;
+      mReport.push_back("ability " + name + ": not on XG, a name with no effect");
+    }
+  }
+  return true;
+}
+
+bool Translator::RunPack(bool gen57, std::vector<engine::mods::DataModFile>& files, const std::string& machinesText, std::string& error) {
+  using engine::mods::DataModFile;
+  const std::string prefix = gen57 ? "gen57/" : "gen4/";
+  DataModFile *items = nullptr, *moves = nullptr, *species = nullptr, *forms = nullptr;
+  std::vector<DataModFile*> patches;
   for (DataModFile& f : files) {
     const std::string& l = f.label;
+    if (l.compare(0, prefix.size(), prefix) != 0) continue;
     const auto ends = [&](const char* s) { return l.size() >= std::string(s).size() && l.compare(l.size() - std::string(s).size(), std::string::npos, s) == 0; };
     if (ends("00_items.json")) items = &f;
     else if (ends("01_moves.json")) moves = &f;
     else if (ends("02_species.json")) species = &f;
+    else if (gen57 && ends("03_forms.json")) forms = &f;
+    else if (gen57 && (ends("04_ability_patch.json") || ends("05_rks_memories.json"))) patches.push_back(&f);
   }
   if (!moves || !species) {
     error = "the pack has no moves or species file";
@@ -308,25 +361,46 @@ bool Translator::Run(std::vector<engine::mods::DataModFile>& files, const std::s
     return false;
   }
   const std::vector<std::string> packOrder = rows->order;
+  std::vector<std::string> mine;
   for (const std::string& name : packOrder) {
     if (name.empty() || name[0] == '_') continue;
     mPackMoves.push_back(name);
+    mine.push_back(name);
   }
   J::Value newRows = Obj();
-  for (const std::string& name : mPackMoves) {
+  for (const std::string& name : mine) {
     const std::string key = Key(name);
     if (FindMove(name) >= 0) {
       mPackKind[key] = 'X';
+      if (gen57) mCounts.movesByName++;
       continue;
     }
+    Gen4MoveRule rule57 = {"", 'R', "Tackle", ""};
+    std::string donorNote;
     const Gen4MoveRule* rule = nullptr;
-    for (const Gen4MoveRule& r : kGen4MoveRules) {
-      if (Key(r.move) == key) rule = &r;
-    }
-    if (!rule) {
-      mReport.push_back("pack move \"" + name + "\" has no rule for XG: it becomes a plain hit (Tackle)");
-      static const Gen4MoveRule fallback = {"", 'R', "Tackle", ""};
-      rule = &fallback;
+    if (gen57) {
+      const J::Value& src0 = rows->fields.at(name);
+      const J::Value* cp = nullptr;
+      if (const auto itc = src0.fields.find("copy"); itc != src0.fields.end()) cp = &itc->second;
+      const J::Value* power = nullptr;
+      if (const auto itp = src0.fields.find("iryoku"); itp != src0.fields.end()) power = &itp->second;
+      const bool damaging = power != nullptr && power->kind == J::Value::Kind::Number && power->number > 0;
+      const std::string donor = cp && cp->kind == J::Value::Kind::String ? cp->text : std::string();
+      static std::string base57;
+      base57 = damaging ? "Tackle" : "Splash";
+      if (!donor.empty() && FindMove(donor) >= 0 && Key(donor) != "pound") base57 = donor;
+      rule57.base = base57.c_str();
+      rule57.keep = "";
+      rule = &rule57;
+    } else {
+      for (const Gen4MoveRule& r : kGen4MoveRules) {
+        if (Key(r.move) == key) rule = &r;
+      }
+      if (!rule) {
+        mReport.push_back("pack move \"" + name + "\" has no rule for XG: it becomes a plain hit (Tackle)");
+        static const Gen4MoveRule fallback = {"", 'R', "Tackle", ""};
+        rule = &fallback;
+      }
     }
     const int base = FindMove(rule->base);
     if (base < 0) {
@@ -341,16 +415,24 @@ bool Translator::Run(std::vector<engine::mods::DataModFile>& files, const std::s
     }
     mPackKind[key] = 'R';
     mAddedOrder.push_back(name);
-    mReport.push_back(name + ": new row on XG, effect of " + rule->base);
+    if (gen57) {
+      const bool code = mInfo.portCodeMoves.count(key) != 0;
+      if (code) mCounts.movesPortCode++; else mCounts.movesStandIn++;
+      mReport.push_back(name + ": new row on XG, effect of " + rule->base + (code ? " + the port's battle code" : ", no effect beyond that"));
+    } else {
+      mReport.push_back(name + ": new row on XG, effect of " + rule->base);
+    }
     J::Value src = rows->fields.at(name);
     J::Value row = Obj();
     Set(row, "copy", Num(base));
     const std::string keep = rule->keep;
     for (const std::string& f : src.order) {
       if (f == "copy" || f == "wazawzxdataId" || f == "seqId" || f == "unk16") continue;
+      if (f == "animation") continue;
       if (f == "avg" && keep.find("avg") != std::string::npos) continue;
       Set(row, f, src.fields.at(f));
     }
+    if (gen57 && mInfo.fairyMoves.count(key) != 0) Set(row, "zokuseiDataId", Num(9));
     Set(newRows, name, std::move(row));
   }
   Set(*add, "moves", std::move(newRows));
@@ -418,6 +500,19 @@ bool Translator::Run(std::vector<engine::mods::DataModFile>& files, const std::s
   size_t withoutMoves = 0;
   const auto doRow = [&](const std::string& sname, J::Value& s) {
     if (s.kind != J::Value::Kind::Object) return;
+    if (gen57) {
+      if (J::Value* c = Get(s, "copy")) {
+        if (c->kind == J::Value::Kind::String) {
+          const auto sk = mSpeciesKey.find(Key(c->text));
+          if (sk != mSpeciesKey.end()) c->text = "#" + std::to_string(sk->second);
+        }
+      }
+    }
+    if (gen57) {
+      Erase(s, "face");
+      Erase(s, "nakigoeId");
+      Erase(s, "voice");
+    }
     const auto lv = numbers(Get(s, "waza.level")), mv = numbers(Get(s, "waza.dataId"));
     std::vector<std::pair<uint32_t, uint32_t>> in;
     std::set<std::string> ownXd;
@@ -455,7 +550,18 @@ bool Translator::Run(std::vector<engine::mods::DataModFile>& files, const std::s
       auto ty = numbers(t);
       if (ty.size() == 2) {
         uint32_t tt[2] = {ty[0], ty[1]};
-        MapTypes(sname, tt);
+        if (gen57) {
+          const J::Value* dexv = Get(s, "numPokemon");
+          const auto ft = mInfo.formTypes.find(sname);
+          if (ft != mInfo.formTypes.end()) {
+            if (ft->second.first == 17) tt[0] = 9;
+            if (ft->second.second == 17) tt[1] = 9;
+          } else if (dexv && dexv->kind == J::Value::Kind::Number) {
+            MapTypes57(static_cast<uint32_t>(dexv->number), tt);
+          }
+        } else {
+          MapTypes(sname, tt);
+        }
         J::Value arr = Arr();
         arr.items.push_back(Num(tt[0]));
         arr.items.push_back(Num(tt[1]));
@@ -525,6 +631,57 @@ bool Translator::Run(std::vector<engine::mods::DataModFile>& files, const std::s
   }
   species->text.clear();
   Write(sroot, species->text);
+  if (forms) {
+    J::Value froot;
+    J::Reader rd(forms->text);
+    if (!rd.Document(froot) || froot.kind != J::Value::Kind::Object) {
+      error = "the pack's forms file can't be read: " + rd.Error();
+      return false;
+    }
+    J::Value* fadd = Get(froot, "add");
+    if (J::Value* frows = fadd ? Get(*fadd, "pokemon") : nullptr) {
+      for (const std::string& sname : frows->order) doRow(sname, frows->fields.at(sname));
+    }
+    if (J::Value* irows = fadd ? Get(*fadd, "items") : nullptr) {
+      for (const std::string& name : irows->order) {
+        J::Value& row = irows->fields.at(name);
+        if (row.kind != J::Value::Kind::Object) continue;
+        if (J::Value* c = Get(row, "copy")) {
+          if (c->kind == J::Value::Kind::String) {
+            const auto ik = mItemKey.find(Key(c->text));
+            if (ik == mItemKey.end()) {
+              mReport.push_back("item " + name + ": XG has no \"" + c->text + "\", copies Everstone");
+              c->text = "Everstone";
+            } else {
+              c->text = "#" + std::to_string(ik->second);
+            }
+          }
+        }
+      }
+    }
+    forms->text.clear();
+    Write(froot, forms->text);
+  }
+  for (DataModFile* patch : patches) {
+    J::Value proot;
+    J::Reader rd(patch->text);
+    if (!rd.Document(proot) || proot.kind != J::Value::Kind::Object) {
+      error = "the pack's ability patch file can't be read: " + rd.Error();
+      return false;
+    }
+    J::Value* padd = Get(proot, "add");
+    if (J::Value* irows = padd ? Get(*padd, "items") : nullptr) {
+      for (const std::string& name : irows->order) {
+        J::Value& row = irows->fields.at(name);
+        J::Value* c = row.kind == J::Value::Kind::Object ? Get(row, "copy") : nullptr;
+        if (!c || c->kind != J::Value::Kind::String) continue;
+        const auto ik = mItemKey.find(Key(c->text));
+        c->text = ik == mItemKey.end() ? "Everstone" : "#" + std::to_string(ik->second);
+      }
+    }
+    patch->text.clear();
+    Write(proot, patch->text);
+  }
   if (withoutMoves != 0) mReport.push_back(std::to_string(withoutMoves) + " species ended with no learn-set (check the tables)");
 
   if (items) {
@@ -607,6 +764,12 @@ bool BuildTables(const engine::mods::DataCatalog& catalog, const engine::mods::E
   out.abilities.assign(256, "");
   for (const auto& n : al->names) {
     if (n.second < 256) out.abilities[n.second] = n.first;
+  }
+  if (const engine::mods::NameList* sl = catalog.FindList("species")) {
+    out.species.assign(1024, "");
+    for (const auto& n : sl->names) {
+      if (n.second < 1024) out.species[n.second] = n.first;
+    }
   }
   out.items.assign(1024, "");
   for (const auto& n : il->names) {

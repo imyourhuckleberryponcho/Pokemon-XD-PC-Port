@@ -182,6 +182,7 @@ struct LoadResult {
 
   bool HasWarnings() const;
   std::string Report() const;
+  std::string ReportCapped(size_t maxMessages) const;
   std::string ActiveText() const;
 };
 

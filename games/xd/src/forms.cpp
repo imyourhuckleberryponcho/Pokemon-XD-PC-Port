@@ -12,6 +12,8 @@ namespace {
 std::vector<xd::forms::Form> sForms;
 std::map<uint32_t, uint32_t> sBase;
 bool sLoaded = false;
+uint32_t sPatch = 0;
+std::vector<uint32_t> sMemories;
 uint32_t sCharm = 0;
 
 std::vector<std::string> Split(const std::string& s, char sep) {
@@ -40,6 +42,8 @@ void Load(const engine::mods::LoadResult& result) {
   sForms.clear();
   sBase.clear();
   sCharm = 0;
+  sPatch = 0;
+  sMemories.clear();
   sLoaded = false;
   if (!xd::gen57::Loaded()) return;
   std::ifstream in(xd::gen57::PackFolder() / L"forms.txt");
@@ -56,6 +60,16 @@ void Load(const engine::mods::LoadResult& result) {
   std::string line;
   while (std::getline(in, line)) {
     while (!line.empty() && (line.back() == '\r' || line.back() == '\n')) line.pop_back();
+    if (line.rfind("patch ", 0) == 0) {
+      const auto st = items.find(line.substr(6));
+      if (st != items.end()) sPatch = st->second;
+      continue;
+    }
+    if (line.rfind("memory ", 0) == 0) {
+      const auto st = items.find(line.substr(7));
+      if (st != items.end()) sMemories.push_back(st->second);
+      continue;
+    }
     if (line.rfind("charm ", 0) == 0) {
       const auto st = items.find(line.substr(6));
       if (st != items.end()) sCharm = st->second;
@@ -94,6 +108,8 @@ uint32_t BaseOf(uint32_t row) {
   return it == sBase.end() ? row : it->second;
 }
 uint32_t CharmItem() { return sCharm; }
+uint32_t PatchItem() { return sPatch; }
+const std::vector<uint32_t>& MemoryItems() { return sMemories; }
 bool IsForm(uint32_t row) { return sBase.find(row) != sBase.end(); }
 
 uint32_t AlolaEvolution(uint32_t current, uint32_t held, uint32_t result) {

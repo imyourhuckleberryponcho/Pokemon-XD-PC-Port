@@ -53,6 +53,7 @@ extern void (*PortXD_OnFloorReady)(uint32_t floorID, int32_t mode);
 extern void (*PortXD_OnBattleStart)(uint32_t battleID);
 extern void (*PortXD_OnBattleEnd)(uint32_t battleID, uint32_t result, int32_t lost);
 extern int32_t (*(*PortXD_FieldItemUseFunc)(uint32_t item))(uint16_t, int*);
+extern "C" int32_t (*PortXD_HiddenItemUse(uint32_t item))(uint16_t, int*);
 extern void (*PortXD_OnHeroStep)(void);
 int32_t PortXD_GiftShadow(int32_t shadowId, int32_t level);
 int32_t PortXD_ShadowSpecies(int32_t shadowId);
@@ -642,6 +643,7 @@ int32_t ItemUseTrampoline(uint16_t, int* consume) {
 }
 
 int32_t (*FieldItemUse(uint32_t item))(uint16_t, int*) {
+  if (auto* patch = PortXD_HiddenItemUse(item)) return patch;
   if (!sHost) return nullptr;
   Value e = Value::Table();
   e.Set("item", static_cast<int64_t>(item));
@@ -661,6 +663,7 @@ int32_t (*FieldItemUse(uint32_t item))(uint16_t, int*) {
 void WireFieldHooks(const engine::mods::LoadResult& result) {
   PortXD_OnFloorReady = nullptr, PortXD_OnBattleStart = nullptr, PortXD_OnBattleEnd = nullptr, PortXD_FieldItemUseFunc = nullptr, PortXD_OnHeroStep = nullptr;
   PortXD_ScriptOnFlag = nullptr, PortXD_ScriptOnMoney = nullptr, PortXD_ScriptOnCaught = nullptr, PortXD_ScriptOnMenu = nullptr;
+  PortXD_FieldItemUseFunc = PortXD_HiddenItemUse;
   if (!sHost) return;
   bool wantResult = false;
   for (const auto& f : result.scripts) wantResult = wantResult || f.text.find("battle_result") != std::string::npos;
@@ -832,7 +835,9 @@ uint16_t fightWaza_GetIryoku(void* waza);
 uint16_t fightWaza_GetZokusei(void* waza);
 
 void PortXD_WsHpDecInner(void);
+void PortXD_CheatHit(void);
 void PortXD_WsHpDec(void) {
+  PortXD_CheatHit();
   if (xd::modbattle::Active()) {
     const uint8_t* cmd = static_cast<const uint8_t*>(fightSeq_GetWazaSeq());
     void* a = fightTargetGetPtrAsNowFightType(0x11, 0);

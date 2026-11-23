@@ -695,4 +695,32 @@ void make_gen4_pack(const std::string& out_folder, const DiscSource& pbr, const 
   if (fs::is_directory(old, ec)) fs::remove_all(old, ec);
 }
 
+std::vector<uint8_t> pack_build_fsys(uint32_t archive_id, const std::vector<FsMember>& members) {
+  std::vector<FsEnt> v;
+  for (const FsMember& m : members) v.push_back({m.word0, m.type, m.name, m.data, m.size, m.packed});
+  auto r = build_fsys(archive_id, v);
+  return r;
+}
+std::vector<uint8_t> pack_extend_toc(const std::vector<uint8_t>& toc, const std::vector<std::pair<uint32_t, std::string>>& rows) {
+  return extend_toc(toc, rows);
+}
+uint32_t pack_fsys_group(const std::vector<uint8_t>& fsys) { return be32(fsys, 8); }
+std::vector<FsMember> pack_read_members(const std::vector<uint8_t>& cd) {
+  const uint32_t cinfo = be32(cd, 0x18), ctable = be32(cd, cinfo);
+  std::vector<FsMember> out;
+  for (const FsysEntry& e : fsys_entries(cd)) {
+    FsMember f;
+    f.word0 = be32(cd, be32(cd, ctable + 4 * (size_t)e.index));
+    f.type = e.type;
+    f.name = e.name;
+    const size_t len = e.packed ? e.packed_size : e.size;
+    if ((size_t)e.offset + len > cd.size()) throw Fail("an archive member runs past the end");
+    f.data.assign(cd.begin() + e.offset, cd.begin() + e.offset + len);
+    f.size = e.size;
+    f.packed = e.packed;
+    out.push_back(std::move(f));
+  }
+  return out;
+}
+
 }

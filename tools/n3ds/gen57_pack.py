@@ -26,6 +26,7 @@ for sub in ('pbr_survey', 'pbr_convert'):
 import gen57_data as D
 import gen57_moves as MV
 import gen57_abilities as AB
+import gen57_hidden as HID
 
 PACK_VERSION = 1
 LANG_DIRS = {'ge': 'de', 'fr': 'fr', 'it': 'it', 'sp': 'es', 'jp': 'ja'}
@@ -274,6 +275,7 @@ def main():
     json.dump({'_note': 'made by gen57_pack.py: what the new abilities do (docs/modding/battle-effects.md)', 'abilities': adefs},
               open(os.path.join(tmp, 'battle', 'abilities.json'), 'w', encoding='utf-8'), indent=1)
     json.dump(areport, open(os.path.join(tmp, 'abilities_report.json'), 'w'), indent=1)
+    HID.write(u, tmp)
     open(os.path.join(tmp, 'tables.txt'), 'w').write('\n'.join(['format 1', 'pkxcount 419'] + pkx_rows) + '\n')
     json.dump(dict(id='ultra-sun-moon-gen57', version=PACK_VERSION, species=len(plan['species']), moves=len(mreport_moves), fairy_moves=fairy,
                    abilities=len(abil_ids), game='GXXE01', generated_from=u.prod, needs='gen4-rows'),

@@ -100,7 +100,42 @@ struct Mixed {
   int64_t lastSum;
 };
 
+static bool mix_channel_fast(GcDsp* dsp, uint16_t src, uint16_t dst, uint16_t volAddr, bool ramp, uint16_t scratch,
+                             Mixed& m) {
+  const unsigned n = kMixSamples;
+  if (src + n > 0x1000u || dst + 2 * n > 0x1000u || volAddr + 2u > 0x1000u || (ramp && scratch + n > 0x1000u)) return false;
+  auto overlaps = [](unsigned a, unsigned alen, unsigned b, unsigned blen) { return a < b + blen && b < a + alen; };
+  if (overlaps(src, n, dst, 2 * n)) return false;
+  if (ramp && (overlaps(scratch, n, src, n) || overlaps(scratch, n, dst, 2 * n))) return false;
+  uint16_t* ram = GcDsp_Dram(dsp);
+  const uint16_t volume = ram[volAddr];
+  const uint16_t delta = ramp ? ram[volAddr + 1] : 0;
+  const uint16_t* in = ram + src;
+  uint16_t* out = ram + dst;
+  int32_t last = 0, sum = 0;
+  uint16_t v = volume;
+  for (unsigned i = 0; i < n; i++) {
+    if (ramp) {
+      v = ramp_step(volume, delta, static_cast<int>(i));
+      ram[scratch + i] = v;
+    }
+    const int32_t term = (static_cast<int32_t>(s16(in[i])) * static_cast<int32_t>(v)) >> 15;
+    const int32_t old = static_cast<int32_t>(static_cast<int8_t>(out[2 * i])) * 0x10000 + out[2 * i + 1];
+    sum = old + term;
+    out[2 * i] = static_cast<uint16_t>(static_cast<int16_t>(static_cast<int8_t>(sum >> 16)));
+    out[2 * i + 1] = static_cast<uint16_t>(sum);
+    last = term;
+  }
+  if (ramp) ram[volAddr] = ramp_step(volume, delta, kMixSamples);
+  m.lastVolume = v;
+  m.lastSum = static_cast<int64_t>(static_cast<int8_t>(sum >> 16)) * 0x10000 + static_cast<uint16_t>(sum);
+  m.lastTerm = last > 0x7FFF ? 0x7FFF : last < -0x8000 ? 0x8000 : static_cast<uint16_t>(last);
+  return true;
+}
+
 Mixed mix_channel(GcDsp* dsp, uint16_t src, uint16_t dst, uint16_t volAddr, bool ramp, uint16_t scratch) {
+  Mixed fast{};
+  if (mix_channel_fast(dsp, src, dst, volAddr, ramp, scratch, fast)) return fast;
   const Dmem mem(dsp);
   const uint16_t volume = mem.read(volAddr);
   const uint16_t delta = ramp ? mem.read(static_cast<uint16_t>(volAddr + 1)) : 0;

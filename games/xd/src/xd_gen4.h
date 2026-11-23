@@ -14,6 +14,7 @@ namespace xd::gen4 {
 
 std::filesystem::path PackFolder();
 bool PackPresent(std::string* why = nullptr);
+void SetGen57Wanted(bool wanted);
 
 void Prepare(bool wanted, bool spots, engine::mods::LoadOptions& options, std::vector<engine::mods::DataModFile>& dataFiles);
 

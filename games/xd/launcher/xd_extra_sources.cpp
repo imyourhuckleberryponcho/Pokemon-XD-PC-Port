@@ -3,6 +3,7 @@
 #include "xd_battle_models.h"
 #include "xd_n3ds_dump.h"
 #include "xd_languages.h"
+#include "pack_match.h"
 
 namespace xd {
 
@@ -115,7 +116,7 @@ const std::vector<launcher::GameInfo::ExtraSource>& ExtraSources() {
     usum.makeLabel = Tr("Make models and Gen 4 + Gen 5-7 packs");
     usum.how = Tr("The program usum_models, which ships with the game, converts the Pokemon models in your own Ultra Sun or "
                   "Ultra Moon dump into XD's model format, in the folder extra_assets\\usum in your data folder. The dump must be a "
-                  "decrypted cartridge dump (.3ds or .cci); a .cia file, an encrypted dump or a folder can't be used yet. Your "
+                  "decrypted copy: a cartridge dump (.3ds or .cci) or a digital copy (.cia). An encrypted copy, an update or DLC .cia, or a folder can't be used. Your "
                   "XD disc (the Disc page) is needed too: it says which models XD has. The models and the Gen 4 pack take about ten minutes; "
                   "the Gen 5, 6 and 7 Pokemon (models, forms, moves, abilities, cries, faces and Pokedex pictures) take much longer, but they are "
                   "made in the background: you can keep using the launcher or play meanwhile. "
@@ -125,6 +126,8 @@ const std::vector<launcher::GameInfo::ExtraSource>& ExtraSources() {
     usum.converterStem = "usum_models";
     usum.converterFolder = "usum_models";
     usum.converterOverrideEnv = "XD_USUM_MODELS_EXE";
+    usum.converterTestStem = "usum_models_cpp";
+    usum.converterTestEnv = "XD_USUM_CPP";
     usum.converterArguments = {"--rom", "{disc}", "--xd-disc", "{game_disc}", "--out", "{out}", "--gen4-pack", "{out2}",
                                "--gen57-pack", "{out3}", "--xd-exe", "{game_program}", "--data-folder", "{data}"};
     usum.secondFolder = "usum_gen4";
@@ -140,6 +143,23 @@ const std::vector<launcher::GameInfo::ExtraSource>& ExtraSources() {
     usum.thirdWarning = Tr("There are a lot of assets to unpack and convert for the Gen 5, 6 and 7 Pokemon. This may take a while "
                            "(often 45 minutes to 1.5 hours, longer on slower PCs). You can keep using the launcher or play while it works; "
                            "the launcher stays open until it is done. If you close it, it continues where it stopped next time.");
+    usum.thirdCheck = [](const std::filesystem::path& assets) -> std::pair<int, std::string> {
+      switch (xd::packmatch::CheckGen57(assets)) {
+        case xd::packmatch::Problem::LegacyOtherGen4:
+          return {1, Tr("These Gen 5-7 files were made together with the Gen 4 files of the Ultra Sun / Ultra Moon dump, so the game uses those "
+                        "Gen 4 files whenever Gen 5-7 Pokemon are on. They still work; make them again to use the Battle Revolution Gen 4 files "
+                        "with them too.")};
+        case xd::packmatch::Problem::LegacyGen4Gone:
+          return {2, Tr("These Gen 5-7 files were made together with Gen 4 files that are not installed any more, so the game will not use "
+                        "them. Make the Ultra Sun / Ultra Moon files again.")};
+        case xd::packmatch::Problem::TocDiffers:
+        case xd::packmatch::Problem::TooManyCries:
+          return {2, Tr("These Gen 5-7 files do not fit the Gen 4 files that are installed now, so the game will not use them. Make the "
+                        "Ultra Sun / Ultra Moon files again.")};
+        default: break;
+      }
+      return {0, std::string()};
+    };
     usum.doneText = Tr("Pick \"Models: Ultra Sun / Ultra Moon\" in the New Game setup to play with them.");
     usum.tab = "models";
     usum.tabOrder = 0;

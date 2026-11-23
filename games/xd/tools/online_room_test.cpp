@@ -321,6 +321,34 @@ int main() {
     CHECK(ActionNumbers("") == 0 && ActionNumbers("x 1 2") == 0);
     CHECK(ActionNumbers("1 0 8 0 0 0 0 0 0 0") == 9);
   }
+
+
+  {
+    Fingerprint casual;
+    Fingerprint formatRoom;
+    formatRoom.rules.format = "gen4_singles";
+    formatRoom.rules.formatHash = "ab12cd34";
+    formatRoom.rules.rs = "gen4";
+    formatRoom.rules.gens = "3,4";
+    Capabilities cheater = casual.caps;
+    cheater.cheats = true;
+    const std::vector<uint8_t> plainBytes = Encode(casual);
+    const std::string plainBlob(plainBytes.begin(), plainBytes.end());
+    CHECK(plainBlob.find("cheats") == std::string::npos);
+    Fingerprint withCheats = casual;
+    withCheats.caps.cheats = true;
+    const std::vector<uint8_t> blob = Encode(withCheats);
+    Fingerprint back;
+    CHECK(Decode(blob, back) && back.caps.cheats);
+    Fingerprint backPlain;
+    CHECK(Decode(Encode(casual), backPlain) && !backPlain.caps.cheats);
+    const Verdict casualVerdict = Judge(casual.caps, casual.rules, cheater, true);
+    CHECK(casualVerdict.Ok() && Has(casualVerdict.notes, "marked"));
+    const Verdict competitive = Judge(formatRoom.caps, formatRoom.rules, cheater, true);
+    CHECK(!competitive.Ok() && Has(competitive.refuse, "used cheats"));
+    CHECK(Has(Judge(formatRoom.caps, formatRoom.rules, cheater, false).refuse, "used cheats"));
+    CHECK(Judge(formatRoom.caps, formatRoom.rules, formatRoom.caps, true).notes.empty());
+  }
   std::printf("online_room_test: %d checks, %d failed\n", sChecks, sFailed);
   return sFailed ? 1 : 0;
 }

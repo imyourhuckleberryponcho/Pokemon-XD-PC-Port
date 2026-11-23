@@ -1,4 +1,5 @@
 #pragma once
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -14,7 +15,7 @@ namespace pbr {
 
 class Json {
  public:
-  enum Kind { Null, Bool, Int, Str, Arr, Obj } kind = Null;
+  enum Kind { Null, Bool, Int, Str, Arr, Obj, Num } kind = Null;
   bool b = false;
   int64_t i = 0;
   std::string s;
@@ -28,13 +29,15 @@ class Json {
   Json(size_t v) : kind(Int), i((int64_t)v) {}
   Json(const char* v) : kind(Str), s(v) {}
   Json(const std::string& v) : kind(Str), s(v) {}
+  static Json num(const std::string& literal) { Json j; j.kind = Num; j.s = literal; return j; }
   static Json array() { Json j; j.kind = Arr; return j; }
   static Json object() { Json j; j.kind = Obj; return j; }
   Json& push(Json v) { a.push_back(std::move(v)); return a.back(); }
   Json& set(const std::string& key, Json v);
   Json* find(const std::string& key);
   const Json* find(const std::string& key) const;
-  std::string dump(int indent = 1) const;
+  std::string dump(int indent = 1, bool ensure_ascii = true) const;
+  static Json parse(const std::string& text);
 };
 
 struct PbrPersonal {
@@ -128,6 +131,15 @@ constexpr int kIconFirstId = 0x2200;
 constexpr int kWaveOld = 389;
 
 std::vector<uint8_t> gen4_wave(const CryOut& cry);
+
+struct FsMember { uint32_t word0 = 0, type = 0; std::string name; std::vector<uint8_t> data; uint32_t size = 0; bool packed = false; };
+std::vector<uint8_t> pack_build_fsys(uint32_t archive_id, const std::vector<FsMember>& members);
+std::vector<uint8_t> pack_extend_toc(const std::vector<uint8_t>& toc, const std::vector<std::pair<uint32_t, std::string>>& rows);
+std::vector<FsMember> pack_read_members(const std::vector<uint8_t>& fsys);
+uint32_t pack_fsys_group(const std::vector<uint8_t>& fsys);
+struct CryStream { uint32_t rate = 0, nsamp = 0; std::vector<std::array<uint16_t, 16>> coefs; std::vector<std::vector<uint8_t>> data; };
+void cry_build_xd(const CryStream& in, std::vector<uint8_t>& hdr, std::vector<uint8_t>& body, std::vector<std::string>& notes);
+std::vector<uint8_t> cry_wave_disp(const std::vector<uint8_t>& hdr, const std::vector<uint8_t>& body);
 
 struct PackModel { int dex = 0; std::string name, standin; std::vector<uint8_t> data; int standin_nat = 0; };
 void make_gen4_pack(const std::string& out_folder, const DiscSource& pbr, const DiscSource& xd, XdTables& xdt,

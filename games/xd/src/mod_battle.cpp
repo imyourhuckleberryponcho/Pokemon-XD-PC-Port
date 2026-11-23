@@ -3,7 +3,9 @@
 #include "data/xd_battle_defs.h"
 #include "xd_forms.h"
 #include "xd_gen57.h"
+#include "xd_hidden_ability.h"
 #include "xd_modern_types.h"
+#include "xd_xg.h"
 #include "xd_scripts.h"
 
 #include <mod_layout.h>
@@ -21,6 +23,7 @@
 #include <iterator>
 #include <filesystem>
 #include <map>
+#include <set>
 
 extern "C" {
 extern uint8_t ServerWork[8];
@@ -120,6 +123,22 @@ void WS_CONDCHG(void);
 uint8_t wazaDB_GetMamoru(uint16_t waza);
 void WS_TSUIKA_CHECK(void);
 void WS_SIZENKAIHUKU(void);
+uint16_t fightOutPokemon_GetUsedItemDataId(void* fop);
+void fightFloor_SetDefPokemonAndAtkFightWazaTargetId(void* floor, void* fop);
+void fightOutPokemonSetIdBuffJoutaiDataId(void* fop, uint16_t id, uint16_t value);
+void WS_HENSHIN(void);
+void WS_CHECK_TYPE(void);
+uint8_t fightFloorCheckFightActionFightOutPokemonIrekaeSelect(void* floor, void* pokemon, void** out);
+void WS_WAZAEND(void);
+uint32_t fightFloor_GetEncountDataId(void* floor);
+void* fightEncountDataBiosGetPtr(uint16_t id);
+uint32_t fightEncountDataBiosGetFightKind(void* enc);
+void fightWazaSetUseWazaStatus(void* fw, uint16_t waza);
+void* fightSeqSelectDefensePokemonPtr(void* atk, uint16_t waza, uint32_t type, uint32_t a, uint32_t b, uint32_t c, int32_t d);
+uint8_t fightFloor_GetFightType(int32_t floor);
+extern uint32_t ServerStatusFlag;
+uint8_t fightOutPokemonIsZokuseiDataId(void* fop, uint16_t type);
+const void* fightOutPokemonGetNamePtr(void* fop);
 }
 
 namespace xd::modbattle {
@@ -137,13 +156,20 @@ constexpr uint32_t kAmeukezara = 0x8041791Cu, kDokudoku = 0x804174FDu;
 constexpr uint32_t kRain = 0x8041783Cu, kSand = 0x80417858u, kSun = 0x80417874u;
 constexpr int kSlot = 163;
 constexpr uint8_t kPortOp = 0x53, kPortMark = 0xF1;
-enum : uint8_t { kCmdDispatch = 1, kCmdSetup = 2, kCmdAfter = 3, kCmdApply = 4, kCmdAbsorb = 5, kCmdForce = 6 };
+enum : uint8_t { kCmdDispatch = 1, kCmdSetup = 2, kCmdAfter = 3, kCmdApply = 4, kCmdAbsorb = 5, kCmdForce = 6, kCmdVanish = 7, kCmdUnvanishA = 8, kCmdUnvanishB = 9, kCmdDance = 10 };
 constexpr uint8_t kSelf = 0x40;
 constexpr size_t kBlockSize = 0x2000;
 constexpr uint32_t kOffDispatch = 0x000, kOffHit = 0x040, kOffHitSwitch = 0x120, kOffSelf = 0x200, kOffFoe = 0x240, kOffAbsorb = 0x280,
                    kOffHail = 0x2C0, kOffHitForce = 0x300, kOffFoeSwitch = 0x3A0, kOffScripts = 0x420;
 constexpr uint32_t kRoarSeq = 28;
 constexpr int kMaxScripts = (kBlockSize - kOffScripts) / 0x40;
+constexpr uint32_t kScriptBase2 = 0x8F004000u;
+constexpr size_t kBlock2Size = 0x2000;
+constexpr uint32_t kOff2Switch = 0x000, kOff2Dance = 0x0C0, kOff2Charge = 0x100;
+constexpr size_t kChargeStride = 0x300, kChargeCopy = 0x240;
+constexpr size_t kVanishCopy = 0x13A;
+constexpr uint32_t kVanishAfterA = 0x804140E6u, kVanishAfterB = 0x8041412Du;
+constexpr int kMaxCharge = 8;
 
 xb::Defs sDefs;
 bool sLoaded = false;
@@ -154,7 +180,10 @@ std::vector<std::string> sMessages;
 std::map<const xb::Block*, int> sBlockScript;
 int sFreeScript = 0;
 uint8_t sScripts[kBlockSize];
+uint8_t sScripts2[kBlock2Size];
 bool sInstalled = false;
+std::map<int64_t, int> sChargeIndex;
+int sMsgDisabled = -1, sMsgTransformed = -1;
 
 void PutBe32(uint8_t* p, uint32_t v) { p[0] = v >> 24; p[1] = v >> 16; p[2] = v >> 8; p[3] = v; }
 uint32_t GetBe32(const uint8_t* p) { return (uint32_t(p[0]) << 24) | (uint32_t(p[1]) << 16) | (uint32_t(p[2]) << 8) | p[3]; }
@@ -165,6 +194,10 @@ struct Mon {
   int entry = 0;
   int type = -1;
   int protect = 0;
+  bool berryNoted = false;
+  int charging = 0;
+  bool heating = false;
+  bool shellArmed = false, shellHit = false;
 };
 Mon sMons[16];
 int sTerrain = 0;
@@ -186,6 +219,11 @@ void* sDropReact = nullptr;
 const xb::AbilityDef* sAbsorbing = nullptr;
 const xb::Absorb* sAbsorbEntry = nullptr;
 void* sBounceFop = nullptr;
+void* sPendingSwitch = nullptr;
+uint16_t sDanceMove = 0;
+void* sSwitchKeepAtk = nullptr;
+void* sCorrode = nullptr;
+bool sAnyUnnerve = false, sAnyWind = false, sAnyInfiltrator = false, sAnyDancer = false;
 const xb::RuleSet* sRules = nullptr;
 bool sRuleWeatherDone = false;
 
@@ -202,7 +240,7 @@ void ResetBattle() {
   for (auto& f : sFieldEnd) f = -1;
   sTerrain = 0; sTerrainEnd = -1;
   sVeilEnd[0] = sVeilEnd[1] = -1; sWeb[0] = sWeb[1] = false;
-  sDealt = 0; sDealtTo = nullptr; sRuleWeatherDone = false; sBounceFop = nullptr;
+  sDealt = 0; sDealtTo = nullptr; sRuleWeatherDone = false; sBounceFop = nullptr; sPendingSwitch = nullptr; sSwitchKeepAtk = nullptr;
 }
 
 void Tick() {
@@ -335,6 +373,8 @@ bool Test(const xb::Condition& c, const Cx& x) {
     if (pk == nullptr) break;
     const int now = pokemon_GetHp(pk), max = pokemon_GetMaxHp(pk);
     r = now * 2 <= max && (now + sDealt) * 2 > max;
+    static const bool force = std::getenv("XD_WIMP_FORCE") != nullptr && std::getenv("XD_SETTINGS_DIR") != nullptr;
+    if (force && now > 0) r = true;
     break;
   }
   case xb::Cond::SlowerThanTarget:
@@ -467,6 +507,28 @@ void StartWeather(void* p, int weather) {
   fightSeq_CallWazaSeq(PortXD_GameAddress(weather == 1 ? kSun : weather == 2 ? kRain : kSand));
 }
 
+bool IsBerry(uint16_t item) { return item >= 0x85 && item <= 0xAF; }
+
+void DoTransform(void* user, void* foe, int messageId) {
+  if (!Alive(user) || !Alive(foe) || user == foe) return;
+  const void* seq = fightSeq_GetWazaSeq();
+  void* keepAtk = Target(0x11);
+  void* keepDef = Target(0x12);
+  fightFloor_SetAttackPokemonPtr(nullptr, user);
+  fightFloor_SetDefPokemonAndAtkFightWazaTargetId(nullptr, foe);
+  ServerWork[5] = 0;
+  WS_HENSHIN();
+  const bool ok = ServerWork[5] == 0;
+  Log("Imposter: the owner transforms into the foe: ", ok ? "done" : "failed");
+  fightSeq_JumpWazaSeq(const_cast<void*>(seq));
+  if (keepAtk != nullptr) fightFloor_SetAttackPokemonPtr(nullptr, keepAtk);
+  if (keepDef != nullptr) fightFloor_SetDefPokemonAndAtkFightWazaTargetId(nullptr, keepDef);
+  if (ok) {
+    fightMsgctrlSetValue(0xD, reinterpret_cast<uintptr_t>(fightOutPokemonGetNamePtr(foe)));
+    Say(messageId, user);
+  }
+}
+
 struct Run {
   void* user = nullptr;
   void* other = nullptr;
@@ -503,7 +565,13 @@ void RunBlocks(const std::vector<xb::Block>& blocks, const Run& run, bool noChan
       if (t == nullptr || (!Alive(t) && !(ownerFainted && t == run.user))) continue;
       switch (b.kind) {
       case xb::BlockKind::Stat: ChangeStat(t, b.stat == 8 ? BestStat(t) : b.stat, b.stages); break;
-      case xb::BlockKind::Status: ApplyTo(t, static_cast<uint8_t>(b.code)); break;
+      case xb::BlockKind::Status:
+        ApplyTo(t, static_cast<uint8_t>(b.code));
+        if (b.code == 0x20) {
+          void* out = nullptr;
+          Log("trap: the game's own switch check for the target says ", std::to_string(fightFloorCheckFightActionFightOutPokemonIrekaeSelect(nullptr, t, &out)) + " (1 = cannot switch), joutai 0x16 = " + std::to_string(fightOutPokemonIsJoutaiDataId(t, 0x16)));
+        }
+        break;
       case xb::BlockKind::Heal:
         if (fightOutPokemonIsHpMantan(t) == 0) HealWith(t, HealAmount(t, b.permille), sBlockScript.count(&b) ? sBlockScript[&b] : -1, run.silent);
         break;
@@ -536,6 +604,17 @@ void RunBlocks(const std::vector<xb::Block>& blocks, const Run& run, bool noChan
         break;
       }
       case xb::BlockKind::Weather: StartWeather(t, b.weather); break;
+      case xb::BlockKind::RestoreBerry: {
+        const uint16_t used = fightOutPokemon_GetUsedItemDataId(t);
+        if (IsBerry(used) && fightOutPokemonGetSoubiItemDataId(t) == 0) {
+          fightOutPokemonDoItemSoubi(t, used, 1, 1);
+          Log("Harvest: the berry is back: item ", std::to_string(used));
+          MonOf(t).berryNoted = false;
+          Say(b.messageId, t);
+        }
+        break;
+      }
+      case xb::BlockKind::Transform: DoTransform(run.user, t, b.messageId); break;
       case xb::BlockKind::RemoveItem:
         if (fightOutPokemonGetSoubiItemDataId(t) != 0) { fightOutPokemonDoItemSoubi(t, 0, 0, 0); Say(b.messageId, t); }
         break;
@@ -579,7 +658,7 @@ void RunBlocks(const std::vector<xb::Block>& blocks, const Run& run, bool noChan
         break;
       default: break;
       }
-      if (b.kind != xb::BlockKind::Message && b.kind != xb::BlockKind::Field && b.kind != xb::BlockKind::RemoveItem && b.kind != xb::BlockKind::Heal &&
+      if (b.kind != xb::BlockKind::Message && b.kind != xb::BlockKind::Field && b.kind != xb::BlockKind::RemoveItem && b.kind != xb::BlockKind::RestoreBerry && b.kind != xb::BlockKind::Transform && b.kind != xb::BlockKind::Heal &&
           b.kind != xb::BlockKind::Hurt && b.kind != xb::BlockKind::Recoil && b.kind != xb::BlockKind::Drain && b.kind != xb::BlockKind::StealItem && !b.message.empty()) Say(b.messageId, t);
     }
   }
@@ -666,6 +745,7 @@ namespace {
 std::string ForBank(std::string text, bool script) {
   const std::string code = script ? "{0F}" : "{10}";
   for (size_t at = text.find("{name}"); at != std::string::npos; at = text.find("{name}", at + code.size())) text.replace(at, 6, code);
+  for (size_t at = text.find("{foe}"); at != std::string::npos; at = text.find("{foe}", at + 4)) text.replace(at, 5, "{0D}");
   return text;
 }
 int AddMessage(const std::string& text, bool script) {
@@ -686,6 +766,7 @@ void PrepareBlocks(std::vector<xb::Block>& blocks) {
 }
 
 void Load(const em::LoadResult& result, const std::vector<em::ModFolder>& found, const std::string& gameId, std::vector<std::string>& problems) {
+  sAnyUnnerve = sAnyWind = sAnyInfiltrator = false; sChargeIndex.clear(); std::memset(sScripts2, 0, sizeof sScripts2); sCorrode = nullptr;
   sLoaded = false; sDigest = 0; sDefs = xb::Defs(); sMoves.clear(); sMessages.clear(); sBlockScript.clear(); sFreeScript = 0; sInstalled = false; sRules = nullptr;
   std::memset(sAbility, 0, sizeof sAbility);
   std::memset(sScripts, 0, sizeof sScripts);
@@ -720,7 +801,22 @@ void Load(const em::LoadResult& result, const std::vector<em::ModFolder>& found,
   }
   if (!any) return;
   xb::Finish(sDefs);
-  for (const std::string& p : sDefs.problems) problems.push_back(p);
+  int chargeLeftOut = 0;
+  for (const std::string& p : sDefs.problems) {
+    if (xd::xg::On() && p.find("the donor is one of the game's own two-turn moves") != std::string::npos) { chargeLeftOut++; continue; }
+    problems.push_back(p);
+  }
+  if (chargeLeftOut != 0) Log("XG: no charge turn for ", std::to_string(chargeLeftOut) + " move(s): the two-turn donor Razor Wind is not on XG, they act at once");  if (xd::xg::On() && xd::gen57::Loaded()) {
+    std::set<int64_t> added;
+    for (const auto& r : result.addedRows) {
+      if (r.table == "waza_data") added.insert(static_cast<int64_t>(r.id));
+    }
+    const size_t before = sDefs.moves.size();
+    sDefs.moves.erase(std::remove_if(sDefs.moves.begin(), sDefs.moves.end(),
+                                     [&](const xb::MoveDef& m) { return m.mod == "gen57" && added.count(m.id) == 0; }),
+                      sDefs.moves.end());
+    Log("XG: the pack's battle code for ", std::to_string(sDefs.moves.size()) + " of its " + std::to_string(before) + " moves (the others are XG's own moves)");
+  }
   if (sDefs.moves.empty() && sDefs.abilities.empty() && sDefs.ruleSets.empty()) return;
   sFieldEnd.assign(sDefs.fieldNames.size(), -1);
   {
@@ -731,6 +827,7 @@ void Load(const em::LoadResult& result, const std::vector<em::ModFolder>& found,
     sMsgWeb = AddMessage("A sticky web spreads out on the ground at {name}'s feet!", false);
     sMsgWebHit = AddMessage("{name} was caught in a sticky web!", false);
     sMsgImmune = AddMessage("{name} is not affected!", false);
+    sMsgDisabled = AddMessage("{name}'s move was disabled!", false);
     sSpikyHurt = xb::Block();
     sSpikyHurt.kind = xb::BlockKind::Hurt;
     sSpikyHurt.messageId = AddMessage("{name} was hurt!", true);
@@ -744,9 +841,12 @@ void Load(const em::LoadResult& result, const std::vector<em::ModFolder>& found,
     sTerrainHeal.messageId = AddMessage("{name} was healed by the grassy terrain!", true);
     sBlockScript[&sTerrainHeal] = -2;
   }
-  for (xb::MoveDef& m : sDefs.moves) PrepareBlocks(m.effects);
+  for (xb::MoveDef& m : sDefs.moves) {
+    PrepareBlocks(m.effects);
+    if (m.chargeDonor != 0 && !m.chargeMessage.empty()) m.chargeMessageId = AddMessage(m.chargeMessage, false);
+  }
   for (xb::AbilityDef& a : sDefs.abilities) {
-    for (auto* v : {&a.switchIn, &a.endOfTurn, &a.ko, &a.contact, &a.switchOut, &a.beforeMove, &a.hit, &a.hitDealt, &a.fainted, &a.statDropped, &a.anyFaint}) PrepareBlocks(*v);
+    for (auto* v : {&a.switchIn, &a.endOfTurn, &a.ko, &a.contact, &a.switchOut, &a.beforeMove, &a.hit, &a.hitDealt, &a.fainted, &a.statDropped, &a.anyFaint, &a.berryEaten, &a.halfHp}) PrepareBlocks(*v);
     for (xb::Absorb& o : a.absorb) {
       std::string text = o.message;
       if (text.empty()) text = o.healPermille > 0 ? "{name} absorbed the move and restored HP!" : "{name} absorbed the move!";
@@ -761,8 +861,9 @@ void Load(const em::LoadResult& result, const std::vector<em::ModFolder>& found,
   };
   for (xb::MoveDef& m : sDefs.moves) { scripts(m.effects); sMoves[m.id] = &m; }
   for (xb::AbilityDef& a : sDefs.abilities) {
-    for (auto* v : {&a.switchIn, &a.endOfTurn, &a.ko, &a.contact, &a.switchOut, &a.beforeMove, &a.hit, &a.hitDealt, &a.fainted, &a.statDropped, &a.anyFaint}) scripts(*v);
+    for (auto* v : {&a.switchIn, &a.endOfTurn, &a.ko, &a.contact, &a.switchOut, &a.beforeMove, &a.hit, &a.hitDealt, &a.fainted, &a.statDropped, &a.anyFaint, &a.berryEaten, &a.halfHp}) scripts(*v);
     sAbility[a.id] = &a;
+    sAnyUnnerve |= a.unnerve; sAnyWind |= a.strongWind; sAnyInfiltrator |= a.infiltrator; sAnyDancer |= !a.dancer.empty();
   }
   for (const xb::MoveDef& m : sDefs.moves) {
     for (const xb::Block& b : m.effects) {
@@ -772,6 +873,7 @@ void Load(const em::LoadResult& result, const std::vector<em::ModFolder>& found,
   for (const xb::RuleSet& r : sDefs.ruleSets) {
     if (r.forceDouble) Log("not built yet, left out: force_double of the rule set ", r.name);
   }
+  xd::hidden::SetTables(sDefs.hiddenNat, sDefs.hiddenRow);
   sDigest = xb::Digest(sDefs);
   sLoaded = true;
   Log("definitions: ", std::to_string(sDefs.moves.size()) + " moves, " + std::to_string(sDefs.abilities.size()) + " abilities, " + std::to_string(sDefs.ruleSets.size()) +
@@ -796,12 +898,9 @@ void InstallAbilityRows() {
   if (done) return;
   done = true;
   uint32_t top = pokemon_tokusei_data_number;
-  auto* rows = reinterpret_cast<uint32_t*>(pokemon_tokusei_data);
   for (const auto& a : sDefs.abilities) {
-    uint32_t* row = rows + 3 * a.id;
-    row[0] = 0;
-    row[1] = (0x7D0u << 20) | (kAbilityText + static_cast<uint32_t>(a.id) * 2);
-    row[2] = (0x7D0u << 20) | (kAbilityText + static_cast<uint32_t>(a.id) * 2 + 1);
+    xd::xg::SetAbilityRow(pokemon_tokusei_data, static_cast<uint32_t>(a.id), (0x7D0u << 20) | (kAbilityText + static_cast<uint32_t>(a.id) * 2),
+                          (0x7D0u << 20) | (kAbilityText + static_cast<uint32_t>(a.id) * 2 + 1));
     if (static_cast<uint32_t>(a.id) + 1 > top) top = static_cast<uint32_t>(a.id) + 1;
   }
   Log("ability table grown: ", std::to_string(pokemon_tokusei_data_number) + " -> " + std::to_string(top) + " rows");
@@ -824,22 +923,92 @@ void EnsureInstalled() {
   SetupScripts();
   if (const char* dump = std::getenv("XD_MODBATTLE_DUMP")) {
     for (const char* at = dump; *at != 0;) {
-      const int move = std::atoi(at);
-      const uint16_t seq = wazaDB_GetSeqId(static_cast<uint16_t>(move));
-      const uint32_t addr = GetBe32(static_cast<const uint8_t*>(PortXD_GameAddress(kWazaEffectTbl + 4 * seq)));
+      const bool raw = at[0] == '0' && (at[1] == 'x' || at[1] == 'X');
+      const int move = raw ? 0 : std::atoi(at);
+      const uint16_t seq = raw ? 0 : wazaDB_GetSeqId(static_cast<uint16_t>(move));
+      const uint32_t addr = raw ? static_cast<uint32_t>(std::strtoul(at, nullptr, 16)) : GetBe32(static_cast<const uint8_t*>(PortXD_GameAddress(kWazaEffectTbl + 4 * seq)));
       const auto* bytes = static_cast<const uint8_t*>(PortXD_GameAddress(addr));
       std::string line;
       char hex[8];
-      for (int i = 0; bytes != nullptr && i < 0x80; i++) { std::snprintf(hex, sizeof hex, "%02X ", bytes[i]); line += hex; }
+      const int dumpLen = std::getenv("XD_MODBATTLE_DUMP_LEN") != nullptr ? std::atoi(std::getenv("XD_MODBATTLE_DUMP_LEN")) : 0x80;
+      for (int i = 0; bytes != nullptr && i < dumpLen; i++) { std::snprintf(hex, sizeof hex, "%02X ", bytes[i]); line += hex; }
       std::fprintf(stderr, "[mod battle] script of move %d: effect place %u at 0x%08X: %s\n", move, seq, addr, line.c_str());
       while (*at != 0 && *at != ',') at++;
       if (*at == ',') at++;
     }
   }
+  {
+    uint8_t* o = sScripts2 + kOff2Switch;
+    const auto* baton = static_cast<const uint8_t*>(PortXD_GameAddress(kBatonPass));
+    if (baton != nullptr && baton[0] == 0x50 && baton[7] == 0x0A && baton[8] == 0x0B && baton[0x2E] == 0x53) {
+      uint8_t* tail = o;
+      std::memcpy(o, baton, 7); o += 7;
+      std::memcpy(o, baton + 10, 0x30 - 10); o += 0x30 - 10;
+      Relocate(tail, static_cast<size_t>(o - tail), 0x80415C93u, kWazaEnd);
+    }
+    *o++ = 0x29; PutBe32(o, kWazaEnd);
+    {
+      uint8_t* d = sScripts2 + kOff2Dance;
+      *d++ = 0x00; *d++ = 0x02; *d++ = 0x04;
+      PutPort(d, kCmdDance);
+      *d++ = 0x29; PutBe32(d, kWazaEnd);
+    }
+    int ci = 0;
+    for (const auto& m : sDefs.moves) {
+      if (m.chargeDonor == 0) continue;
+      if (ci >= kMaxCharge) { Log("too many two-turn moves, left out: ", m.name); continue; }
+      const uint16_t seq = wazaDB_GetSeqId(static_cast<uint16_t>(m.chargeDonor));
+      const auto* tbl = static_cast<const uint8_t*>(PortXD_GameAddress(kWazaEffectTbl + 4 * seq));
+      const auto* src = tbl != nullptr ? static_cast<const uint8_t*>(PortXD_GameAddress(GetBe32(tbl))) : nullptr;
+      if (src == nullptr) { Log("the donor's script was not found: ", m.name); continue; }
+      const uint32_t addr = GetBe32(tbl);
+      uint8_t* dst = sScripts2 + kOff2Charge + kChargeStride * ci;
+      const uint32_t base = kScriptBase2 + kOff2Charge + static_cast<uint32_t>(kChargeStride) * ci;
+      const bool vanish = seq == wazaDB_GetSeqId(19);
+      const size_t copyLen = vanish ? kVanishCopy : kChargeCopy;
+      std::memcpy(dst, src, copyLen);
+      int jumps = 0, tables = 0, vanishes = 0;
+      for (size_t i = 0; i + 4 <= copyLen; i++) {
+        const uint32_t v = GetBe32(dst + i);
+        if (dst[i] == 0x80 && v >= addr && v < addr + copyLen) { PutBe32(dst + i, v - addr + base); jumps++; i += 3; }
+      }
+      if (vanish) {
+        for (size_t i = 0; i + 8 <= copyLen; i++) {
+          if (dst[i] == 0x2B && dst[i + 1] == 0x00 && dst[i + 2] == 0x80 && dst[i + 6] == ((m.chargeDonor >> 8) & 0xFF) && dst[i + 7] == (m.chargeDonor & 0xFF)) {
+            dst[i + 6] = static_cast<uint8_t>(m.id >> 8); dst[i + 7] = static_cast<uint8_t>(m.id & 0xFF); vanishes++; i += 7;
+          }
+        }
+        for (size_t i = 0; i + 6 <= copyLen; i++) {
+          if ((dst[i] != 0xC5 && dst[i] != 0xC6) || dst[i + 1] != 0x29) continue;
+          const uint32_t to = GetBe32(dst + i + 2);
+          uint8_t cmd = 0;
+          if (dst[i] == 0xC5 && to == kWazaEnd) cmd = kCmdVanish;
+          else if (dst[i] == 0xC6 && to == kVanishAfterA) cmd = kCmdUnvanishA;
+          else if (dst[i] == 0xC6 && to == kVanishAfterB) cmd = kCmdUnvanishB;
+          if (cmd == 0) continue;
+          dst[i] = kPortOp; dst[i + 1] = kPortMark; dst[i + 2] = cmd; dst[i + 3] = 0; dst[i + 4] = 0; dst[i + 5] = 0;
+          vanishes++; i += 5;
+        }
+        tables = vanishes;
+      }
+      if (m.chargeMessageId >= 0 && !vanish) {
+        for (size_t i = 0; i + 5 <= copyLen; i++) {
+          if (dst[i] == 0x14 && dst[i + 1] == 0x80 && dst[i + 2] == 0x2F) {
+            if (tables == 0) for (int k = 0; k < 16; k++) PutBe32(dst + kChargeCopy + 4 * k, kBank | (kMessageText + static_cast<uint32_t>(m.chargeMessageId)));
+            PutBe32(dst + i + 1, base + static_cast<uint32_t>(kChargeCopy));
+            tables++;
+          }
+        }
+      }
+      sChargeIndex[m.id] = ci++;
+      Log(("two-turn move " + m.name + ": ").c_str(), "the script of " + std::to_string(m.chargeDonor) + " copied (" + std::to_string(jumps) + " jumps, " + std::to_string(tables) + (vanish ? " vanish places)" : " message tables)"));
+    }
+    PortXD_AddScriptBlock(kScriptBase2, sScripts2, sizeof sScripts2);
+  }
   PortXD_AddScriptBlock(kScriptBase, sScripts, sizeof sScripts);
   PutBe32(static_cast<uint8_t*>(PortXD_GameAddress(kWazaEffectTbl + 4 * kSlot)), kScriptBase + kOffDispatch);
   for (const auto& m : sDefs.moves) {
-    bool acts = !m.effects.empty() || m.crit || m.ignoreBoosts || m.useTargetAttack || m.defendWithDef || m.firstTurnOnly;
+    bool acts = !m.effects.empty() || m.chargeDonor != 0 || m.crit || m.ignoreBoosts || m.useTargetAttack || m.defendWithDef || m.firstTurnOnly || m.needsPhysicalHit || m.heatsUp;
     if (!acts) continue;
     auto* row = static_cast<uint8_t*>(wazaDataBiosGetPtr(static_cast<uint16_t>(m.id)));
     if (row == nullptr) continue;
@@ -861,12 +1030,23 @@ bool PortCommand(uint8_t id) {
   case kCmdDispatch: {
     if (it == sMoves.end()) { fightSeq_JumpWazaSeq(PortXD_GameAddress(kFailedWithMessage)); return true; }
     const xb::MoveDef& m = *it->second;
+    if (m.chargeDonor != 0) {
+      const auto ci = sChargeIndex.find(move);
+      if (ci != sChargeIndex.end()) { fightSeq_JumpWazaSeq(PortXD_GameAddress(kScriptBase2 + kOff2Charge + static_cast<uint32_t>(kChargeStride) * ci->second)); return true; }
+    }
     const bool damaging = wazaDB_GetIryoku(move) > 0;
     bool switchOut = false, foe = false, force = false;
     for (const auto& b : m.effects) {
       switchOut |= b.kind == xb::BlockKind::SwitchOut;
       force |= b.kind == xb::BlockKind::ForceSwitch;
       foe |= !b.onUser || b.onFoes;
+    }
+    if (m.needsPhysicalHit && atk != nullptr) {
+      Mon& sm = MonOf(atk);
+      const bool ok = sm.shellHit;
+      sm.shellArmed = false; sm.shellHit = false;
+      Log(ok ? "Shell Trap: a physical move hit the user first: the move goes off" : "Shell Trap: nothing hit the user first: the move fails", "");
+      if (!ok) { fightSeq_JumpWazaSeq(PortXD_GameAddress(kFailedWithMessage)); return true; }
     }
     if (m.firstTurnOnly) {
       void* user = atk;
@@ -889,6 +1069,18 @@ bool PortCommand(uint8_t id) {
     RunBlocks(it->second->effects, run, ab != nullptr && ab->removesSecondary && id == kCmdAfter);
     return false;
   }
+  case kCmdDance: {
+    if (atk == nullptr || sDanceMove == 0) return false;
+    const uint16_t copy = sDanceMove;
+    void* target = fightSeqSelectDefensePokemonPtr(atk, copy, fightFloor_GetFightType(0), 0, 1, 1, -1);
+    fightFloor_SetDefPokemonAndAtkFightWazaTargetId(0, target);
+    ServerStatusFlag &= ~0x400u;
+    Log("Dancer: copies the dance move ", std::to_string(copy));
+    const auto* table = static_cast<const uint8_t*>(PortXD_GameAddress(kWazaEffectTbl + 4 * wazaDB_GetSeqId(copy)));
+    if (table == nullptr) return false;
+    fightSeq_JumpWazaSeq(PortXD_GameAddress(GetBe32(table)));
+    return true;
+  }
   case kCmdForce: {
     if (def == nullptr || atk == nullptr || def == atk || !Alive(def)) return false;
     void* pk = fightOutPokemonGetPokemonPtr(def);
@@ -899,6 +1091,17 @@ bool PortCommand(uint8_t id) {
     const auto* bytes = static_cast<const uint8_t*>(PortXD_GameAddress(roar + 35));
     if (bytes == nullptr || bytes[0] != 0x90) { Log("Roar's script is not as read: forced switch left out", ""); return false; }
     fightSeq_JumpWazaSeq(PortXD_GameAddress(roar + 35));
+    return true;
+  }
+  case kCmdVanish: case kCmdUnvanishA: case kCmdUnvanishB: {
+    const auto vit = sMoves.find(move);
+    const int64_t donor = vit != sMoves.end() ? vit->second->chargeDonor : 19;
+    const uint16_t state = donor == 91 ? 0x20 : donor == 291 ? 0x21 : 0x1F;
+    if (atk != nullptr) {
+      if (id == kCmdVanish) { if (fightOutPokemonCheckWriteJoutaiDataId(atk, state) == 2) fightOutPokemonWriteJoutaiDataId(atk, state, 0); }
+      else if (fightOutPokemonIsJoutaiDataId(atk, state) == 1) fightOutPokemonInitJoutaiDataId(atk, state);
+    }
+    fightSeq_JumpWazaSeq(PortXD_GameAddress(id == kCmdVanish ? kWazaEnd : id == kCmdUnvanishA ? kVanishAfterA : kVanishAfterB));
     return true;
   }
   case kCmdAbsorb: {
@@ -1013,14 +1216,17 @@ int32_t AuraAndConvert(void* attacker, void* defender, uint16_t waza, uint16_t t
 }
 }
 
+uint16_t TypeOf(void* fop, uint8_t index, uint16_t type);
 uint8_t WazaType(void* fop, uint8_t type) {
   if (!sLoaded || fop == nullptr) return type;
   const uint16_t move = fightOutPokemon_GetUseWazaDataId(fop);
   if (move == 0) return type;
+  if (const auto mit = sMoves.find(move); mit != sMoves.end() && mit->second->typeFromUser) return static_cast<uint8_t>(TypeOf(fop, 0, fightOutPokemonGetZokuseiDataId(fop, 0)));
   if (const xb::Convert* k = ConvertFor(fop, move, type); k != nullptr && wazaDB_GetIryoku(move) > 0) return static_cast<uint8_t>(k->to);
   return type;
 }
 
+bool StrongWindOn();
 int32_t Damage(void* attacker, void* defender, uint16_t waza, uint16_t type, int32_t damage) {
   if (!sLoaded || attacker == nullptr || defender == nullptr || damage <= 2) return damage;
   if (xd::forms::DisguiseIntact(defender) && wazaDB_GetIryoku(waza) > 0) return 0;
@@ -1035,7 +1241,13 @@ int32_t Damage(void* attacker, void* defender, uint16_t waza, uint16_t type, int
     }
   }
   damage = AuraAndConvert(attacker, defender, waza, type, damage);
-  if (sVeilEnd[OnPlayersSide(defender) ? 0 : 1] >= sLastTurn && fightWaza_GetCritical(fightOutPokemon_GetFightWazaPtr(attacker)) != 2) damage = Scale(damage, 67);
+  if (sAnyWind && StrongWindOn() && HasType(defender, 2) && zokuseiGetWazaJoutai(type, 2) == 0x41) {
+    static int told = 0;
+    if (told++ < 4) Log("Delta Stream: Flying's weakness to this move is gone", "");
+    damage = Scale(damage, 50);
+  }
+  if (sVeilEnd[OnPlayersSide(defender) ? 0 : 1] >= sLastTurn && fightWaza_GetCritical(fightOutPokemon_GetFightWazaPtr(attacker)) != 2 &&
+      !(sAnyInfiltrator && AbilityOf(attacker) != nullptr && AbilityOf(attacker)->infiltrator)) damage = Scale(damage, 67);
   const xb::AbilityDef* a = AbilityOf(attacker);
   const xb::AbilityDef* d = AbilityOf(defender);
   if (a == nullptr && d == nullptr) return damage;
@@ -1205,15 +1417,102 @@ bool StatusBlocked(void* p, uint8_t effect) {
   return false;
 }
 
+namespace {
+struct FieldScan { void* holder = nullptr; bool found = false; };
+int32_t ScanUnnerve(void* f, uint16_t, void* data) {
+  auto* s = static_cast<FieldScan*>(data);
+  if (Alive(f) && f != s->holder && OnPlayersSide(f) != OnPlayersSide(s->holder)) { const xb::AbilityDef* a = AbilityOf(f); if (a != nullptr && a->unnerve) s->found = true; }
+  return 1;
+}
+int32_t ScanWind(void* f, uint16_t, void* data) {
+  if (Alive(f)) { const xb::AbilityDef* a = AbilityOf(f); if (a != nullptr && a->strongWind) static_cast<FieldScan*>(data)->found = true; }
+  return 1;
+}
+}
+bool StrongWindOn() {
+  FieldScan s;
+  fightFloorLoopValidFightOutPokemon(nullptr, ScanWind, &s, 0);
+  return s.found;
+}
+
 uint16_t SoubiKind(void* fop, uint16_t kind) {
+  if (sLoaded && sAnyUnnerve && kind != 0 && fop != nullptr && IsBerry(fightOutPokemonGetSoubiItemDataId(fop))) {
+    FieldScan s; s.holder = fop;
+    fightFloorLoopValidFightOutPokemon(nullptr, ScanUnnerve, &s, 0);
+    if (s.found) {
+      static int told = 0;
+      if (told++ < 4) Log("Unnerve: a berry's effect is read as none", "");
+      return 0;
+    }
+  }
   if (sRules == nullptr || sRules->bannedItems.empty() || fop == nullptr || kind == 0) return kind;
   const uint16_t item = fightOutPokemonGetSoubiItemDataId(fop);
   for (int b : sRules->bannedItems) if (b == item) return 0;
   return kind;
 }
 
+void CorrosionBegin() {
+  sCorrode = nullptr;
+  if (!sLoaded) return;
+  const uint8_t v = ServerWork[3];
+  const int e = v & 0x3F;
+  { static int seen = 0; if (seen++ < 12) Log("status effect about to be applied: effect number ", std::to_string(v)); }
+  if ((e != 2 && e != 6) || (v & 0x40) != 0) return;
+  void* atk = Target(0x11);
+  void* def = Target(0x12);
+  const xb::AbilityDef* a = AbilityOf(atk);
+  if (a != nullptr && a->poisonAnyType && def != nullptr && def != atk) {
+    sCorrode = def;
+    static int told = 0;
+    if (told++ < 4) Log("Corrosion: poison may land on any type", "");
+  }
+}
+bool CorrosionBeginType(uint8_t targetKind, uint8_t type) {
+  sCorrode = nullptr;
+  if (!sLoaded || targetKind != 0x12 || (type != 3 && type != 8)) return false;
+  void* atk = Target(0x11);
+  void* def = Target(0x12);
+  const xb::AbilityDef* a = AbilityOf(atk);
+  if (a == nullptr || !a->poisonAnyType || def == nullptr || def == atk) return false;
+  const uint16_t move = fightOutPokemon_GetUseWazaDataId(atk);
+  if (wazaDB_GetZokuseiDataId(move) != 3) return false;
+  sCorrode = def;
+  static int told = 0;
+  if (told++ < 4) Log("Corrosion: the poison move does not see the target's Poison / Steel type", "");
+  return true;
+}
+void CorrosionEnd() { sCorrode = nullptr; }
+bool TypeHiddenFrom(void* fop, uint16_t type) { return sCorrode != nullptr && sCorrode == fop && (type == 3 || type == 8); }
+
+bool SideIgnored(void* side, uint16_t id) {
+  if (!sLoaded || !sAnyInfiltrator || (id != 0x48 && id != 0x49 && id != 0x4B && id != 0x4C)) return false;
+  void* atk = Target(0x11);
+  const xb::AbilityDef* a = AbilityOf(atk);
+  if (a == nullptr || !a->infiltrator) return false;
+  using SideFn = void* (*)(uint32_t, void*);
+  void* own = reinterpret_cast<SideFn>(&fightTargetGetPtrAsNowFightType)(2, atk);
+  const bool ignored = side != own;
+  static int told = 0;
+  if (ignored && told++ < 4) Log(("Infiltrator: the other side's screen state " + std::to_string(id) + " is not seen").c_str(), "");
+  return ignored;
+}
+
+bool IgnoresSubstitute(void* attacker) {
+  if (!sLoaded || !sAnyInfiltrator) return false;
+  const xb::AbilityDef* a = AbilityOf(attacker);
+  static int told = 0;
+  const bool yes = a != nullptr && a->infiltrator;
+  if (yes && told++ < 4) Log("Infiltrator: the hit goes past the Substitute", "");
+  return yes;
+}
+
 uint16_t TypeOf(void* fop, uint8_t index, uint16_t type) {
   if (!sLoaded || fop == nullptr) return type;
+  if (sCorrode == fop && (type == 3 || type == 8)) return 9;
+  if (const xb::AbilityDef* a = AbilityOf(fop); a != nullptr && !a->typeByItem.empty()) {
+    const uint16_t item = fightOutPokemonGetSoubiItemDataId(fop);
+    for (const auto& e : a->typeByItem) if (e.item == item) return index == 0 ? static_cast<uint16_t>(e.type) : 9;
+  }
   for (const auto& m : sMons) {
     if (m.fop == fop && m.type >= 0) return index == 0 ? static_cast<uint16_t>(m.type) : 9;
   }
@@ -1282,8 +1581,96 @@ void FlushDrops() {
   RunBlocks(a->statDropped, run);
 }
 
+void CheckBerry(void* fop) {
+  if (fop == nullptr || !sLoaded) return;
+  const uint16_t used = fightOutPokemon_GetUsedItemDataId(fop);
+  Mon& m = MonOf(fop);
+  if (!IsBerry(used)) { m.berryNoted = false; return; }
+  if (m.berryNoted || !Alive(fop)) return;
+  m.berryNoted = true;
+  const xb::AbilityDef* a = AbilityOf(fop);
+  if (a == nullptr || a->berryEaten.empty()) return;
+  Log("Cheek Pouch: a berry was eaten: item ", std::to_string(used));
+  EnsureInstalled();
+  void* foes[8] = {};
+  uint16_t n = 0;
+  Foes(fop, foes, n);
+  Run run; run.user = fop; run.other = n > 0 ? foes[0] : nullptr;
+  RunBlocks(a->berryEaten, run);
+}
+
+void DisableMove(void* atk, uint16_t move) {
+  if (!Alive(atk) || move == 0 || fightOutPokemonCheckWriteJoutaiDataId(atk, 0x29) != 2) return;
+  fightOutPokemonWriteJoutaiDataId(atk, 0x29, 0);
+  fightOutPokemonSetIdBuffJoutaiDataId(atk, 0x29, move);
+  Log("Cursed Body: the attacker's move is disabled: move ", std::to_string(move));
+  Say(sMsgDisabled, atk);
+}
+
+void SwitchOwner(void* p) {
+  if (!Alive(p)) return;
+  sPendingSwitch = p;
+}
+
+struct DanceScan { void* user; uint16_t move; void* found; };
+int32_t ScanDancer(void* f, uint16_t, void* data) {
+  auto* s = static_cast<DanceScan*>(data);
+  if (s->found != nullptr || f == s->user || !Alive(f)) return 1;
+  const xb::AbilityDef* a = AbilityOf(f);
+  if (a == nullptr) return 1;
+  for (int m : a->dancer) if (m == s->move) { s->found = f; break; }
+  return 1;
+}
+
+bool TryDance() {
+  if (!sLoaded || !sAnyDancer) return false;
+  void* user = Target(0x11);
+  if (user == nullptr) return false;
+  const uint16_t move = fightOutPokemon_GetUseWazaDataId(user);
+  if (move == 0) return false;
+  DanceScan s{user, move, nullptr};
+  fightFloorLoopValidFightOutPokemon(nullptr, ScanDancer, &s, 0);
+  if (s.found == nullptr) return false;
+  EnsureInstalled();
+  sDanceMove = move;
+  sSwitchKeepAtk = user;
+  fightFloor_SetAttackPokemonPtr(nullptr, s.found);
+  fightWazaSetUseWazaStatus(fightOutPokemon_GetFightWazaPtr(s.found), move);
+  fightSeq_JumpWazaSeq(PortXD_GameAddress(kScriptBase2 + kOff2Dance));
+  return true;
+}
+
+bool WazaEndHook() {
+  if (sLoaded) { CheckBerry(Target(0x12)); CheckBerry(Target(0x11)); }
+  if (sPendingSwitch == nullptr) {
+    if (sSwitchKeepAtk != nullptr) { fightFloor_SetAttackPokemonPtr(nullptr, sSwitchKeepAtk); sSwitchKeepAtk = nullptr; sDanceMove = 0; return false; }
+    return TryDance();
+  }
+  void* p = sPendingSwitch;
+  sPendingSwitch = nullptr;
+  if (!sLoaded || !Alive(p)) return false;
+  EnsureInstalled();
+  if (!OnPlayersSide(p) && fightEncountDataBiosGetFightKind(fightEncountDataBiosGetPtr(static_cast<uint16_t>(fightFloor_GetEncountDataId(nullptr)))) == 0xC) {
+    const auto* table = static_cast<const uint8_t*>(PortXD_GameAddress(kWazaEffectTbl + 4 * kRoarSeq));
+    const uint32_t roar = table != nullptr ? GetBe32(table) : 0;
+    const auto* bytes = roar != 0 ? static_cast<const uint8_t*>(PortXD_GameAddress(roar + 35)) : nullptr;
+    if (bytes != nullptr && bytes[0] == 0x90) {
+      Log("Wimp Out / Emergency Exit: a wild Pokemon flees (the game's own forced-out script ends the battle)", "");
+      fightFloor_SetDefPokemonAndAtkFightWazaTargetId(nullptr, p);
+      fightSeq_JumpWazaSeq(PortXD_GameAddress(roar + 35));
+      return true;
+    }
+  }
+  sSwitchKeepAtk = Target(0x11);
+  fightFloor_SetAttackPokemonPtr(nullptr, p);
+  Log("Wimp Out / Emergency Exit: the owner goes back at the end of the move", "");
+  fightSeq_JumpWazaSeq(PortXD_GameAddress(kScriptBase2 + kOff2Switch));
+  return true;
+}
+
 void HitAfter(void* attacker, void* defender) {
   FlushDrops();
+  if (sLoaded) { CheckBerry(attacker); CheckBerry(defender); }
   if (sLoaded && attacker != nullptr && defender != nullptr && attacker != defender && Alive(defender) &&
       wazaDB_GetIryoku(fightOutPokemon_GetUseWazaDataId(attacker)) > 0 && xd::forms::DisguiseIntact(defender)) {
     EnsureInstalled();
@@ -1331,12 +1718,78 @@ void HitAfter(void* attacker, void* defender) {
       }
     }
   }
+  {
+    Mon& dm = MonOf(defender);
+    if (dm.shellArmed) {
+      Cx pcx; pcx.holder = defender; pcx.other = attacker; pcx.move = move;
+      xb::Condition ph; ph.kind = xb::Cond::Physical;
+      if (Test(ph, pcx)) { dm.shellHit = true; Log("Shell Trap: a physical move hit the waiting user", ""); }
+    }
+    if (dm.heating && wazaDB_GetDageki(move) != 0 && Alive(attacker)) {
+      const xb::AbilityDef* atkAb = AbilityOf(attacker);
+      if (!(atkAb != nullptr && atkAb->noContact)) { Log("Beak Blast: a contact move hit the heating beak: the attacker is burned", ""); ApplyTo(attacker, 3); }
+    }
+  }
+  if (!ko && Alive(attacker) && Alive(defender) && wazaDB_GetIryoku(move) > 0) {
+    const xb::AbilityDef* d = AbilityOf(defender);
+    if (d != nullptr && d->disableOnHit > 0 && static_cast<int>(HSD_Rand() % 100) < d->disableOnHit) DisableMove(attacker, move);
+  }
+  if (!ko && Alive(defender)) {
+    const xb::AbilityDef* d = AbilityOf(defender);
+    if (d != nullptr && !d->halfHp.empty()) {
+      Cx cx; cx.holder = defender; cx.other = attacker; cx.move = move;
+      xb::Condition cross; cross.kind = xb::Cond::HpCrossedHalf;
+      if (Test(cross, cx)) {
+        bool sw = false;
+        std::vector<xb::Block> rest;
+        for (const auto& b : d->halfHp) { if (b.kind == xb::BlockKind::SwitchOut) sw = true; else rest.push_back(b); }
+        Run run; run.user = defender; run.other = attacker; run.move = move;
+        if (!rest.empty()) RunBlocks(rest, run);
+        if (sw && Alive(defender)) SwitchOwner(defender);
+      }
+    }
+  }
+  if (const auto mit = sMoves.find(move); mit != sMoves.end() && mit->second->chargeDonor != 0 && Alive(attacker) && !mit->second->effects.empty()) {
+    Run run; run.user = attacker; run.other = defender; run.move = move;
+    RunBlocks(mit->second->effects, run);
+  }
   sDealt = 0;
+}
+
+uint32_t MoveTypeFromUser(void* attacker, void* fightWaza, uint32_t type) {
+  if (!sLoaded || attacker == nullptr || fightOutPokemon_GetFightWazaPtr(attacker) != fightWaza) return type;
+  const auto mit = sMoves.find(fightOutPokemon_GetUseWazaDataId(attacker));
+  if (mit == sMoves.end() || !mit->second->typeFromUser) return type;
+  return TypeOf(attacker, 0, fightOutPokemonGetZokuseiDataId(attacker, 0));
+}
+void ChosenMove(void* fop, uint16_t move) {
+  if (!sLoaded || fop == nullptr || move == 0) return;
+  const auto it = sMoves.find(move);
+  if (it == sMoves.end() || (!it->second->heatsUp && !it->second->needsPhysicalHit)) return;
+  Tick();
+  Mon& m = MonOf(fop);
+  if (it->second->heatsUp && !m.heating) { m.heating = true; Log("Beak Blast: the user is heating up its beak (a contact move on it burns the attacker until its move)", ""); }
+  if (it->second->needsPhysicalHit && !m.shellArmed) { m.shellArmed = true; m.shellHit = false; }
 }
 
 void MoveStarting(void* attacker, uint16_t move) {
   if (!sLoaded || attacker == nullptr) return;
   Tick();
+  MonOf(attacker).heating = false;
+  std::fprintf(stderr, "[mod battle] move used: turn %d, %s, move %u\n", sLastTurn, OnPlayersSide(attacker) ? "player's side" : "foe's side", static_cast<unsigned>(move));
+  if (const auto cit = sMoves.find(move); cit != sMoves.end() && cit->second->chargeDonor != 0) {
+    Mon& cm = MonOf(attacker);
+    if (cm.charging == static_cast<int>(move)) {
+      cm.charging = 0;
+      if (wazaDB_GetIryoku(move) == 0 && !cit->second->effects.empty()) {
+        EnsureInstalled();
+        Run run; run.user = attacker; run.other = Target(0x12); run.move = move;
+        RunBlocks(cit->second->effects, run);
+      }
+    } else {
+      cm.charging = static_cast<int>(move);
+    }
+  }
   { const auto pit = sMoves.find(move); MonOf(attacker).protect = pit != sMoves.end() ? pit->second->protectKind : 0; }
   xd::forms::BattleFormMove(attacker, move, MonOf(attacker).protect == 1, wazaDB_GetIryoku(move) > 0);
   const xb::AbilityDef* a = AbilityOf(attacker);
@@ -1354,6 +1807,7 @@ void Appear(void* p) {
   m = Mon();
   m.fop = p;
   m.entry = sLastTurn;
+  m.berryNoted = IsBerry(fightOutPokemon_GetUsedItemDataId(p));
   if (sRules != nullptr && sRules->weather != 0 && !sRuleWeatherDone) {
     sRuleWeatherDone = true;
     StartWeather(p, sRules->weather);
@@ -1399,6 +1853,8 @@ void EndOfTurn() {
   Tick();
   EnsureInstalled();
   FlushDrops();
+  for (auto& m : sMons) { m.heating = false; m.shellArmed = false; m.shellHit = false; }
+  fightFloorLoopValidFightOutPokemon(nullptr, [](void* fop, uint16_t, void*) -> int32_t { CheckBerry(fop); return 1; }, nullptr, 0);
   fightFloorLoopValidFightOutPokemon(nullptr, EachMon, nullptr, 0);
   xd::forms::BattleFormTurnEnd();
   if (sTerrain != 0 && sTerrainEnd >= sLastTurn && sTerrain == 1) {
@@ -1574,6 +2030,19 @@ bool SetRules(const std::string& name) {
 
 extern "C" {
 
+static int InfiltratorIgnoresSubstitute(void* attacker, void*, uint16_t) { return xd::modbattle::IgnoresSubstitute(attacker) ? 1 : 0; }
+extern "C" int (*PortXD_IgnoresSubstitute)(void* attacker, void* target, uint16_t waza);
+namespace {
+struct SubstituteHookInstaller { SubstituteHookInstaller() { PortXD_IgnoresSubstitute = &InfiltratorIgnoresSubstitute; } } sSubstituteHookInstaller;
+}
+
+uint8_t PortXD_RealSideJoutai(void* side, uint16_t id);
+uint8_t fightSideIsJoutaiDataId(void* side, uint16_t id) {
+  const uint8_t r = PortXD_RealSideJoutai(side, id);
+  if (r == 1 && xd::modbattle::SideIgnored(side, id)) return 0;
+  return r;
+}
+
 void PortXD_ModBackFightPokemon(void* trainer, uint8_t restoreItem) {
   const bool touched = xd::modbattle::RestoreRealLevels(trainer);
   fightTrainerBackFightPokemonToTemotiPokemon(trainer, restoreItem);
@@ -1615,6 +2084,25 @@ void PortXD_ModGuardCheck(void) {
   WS_GUARDCHECK();
   if (blocked) xd::modbattle::ProtectPenalty(atk, def, move);
 }
+void PortXD_ModCheckType(void) {
+  const auto* cmd = static_cast<const uint8_t*>(fightSeq_GetWazaSeq());
+  const bool on = cmd != nullptr && xd::modbattle::CorrosionBeginType(cmd[1], cmd[2]);
+  WS_CHECK_TYPE();
+  if (on) {
+    const auto* after = static_cast<const uint8_t*>(fightSeq_GetWazaSeq());
+    static int told = 0;
+    if (told++ < 6) std::fprintf(stderr, "[mod battle] Corrosion: the type check %s\n", after == cmd + 7 ? "passed (the script goes on)" : "still refused (the script jumped)");
+    xd::modbattle::CorrosionEnd();
+  }
+}
+uint8_t PortXD_ModIsType(void* fop, uint32_t type) {
+  const uint8_t r = fightOutPokemonIsZokuseiDataId(fop, static_cast<uint16_t>(type));
+  return r != 0 && xd::modbattle::TypeHiddenFrom(fop, static_cast<uint16_t>(type)) ? 0 : r;
+}
+void PortXD_ModWazaEnd(void) {
+  if (xd::modbattle::WazaEndHook()) return;
+  WS_WAZAEND();
+}
 void PortXD_ModTsuikaCheck(void) {
   xd::modbattle::TsuikaCheck();
   WS_TSUIKA_CHECK();
@@ -1628,11 +2116,13 @@ void PortXD_ModSizenkaifuku(void) {
 static void* sCmpFop[2];
 static int sCmpN = 0, sPriN = 0;
 uint16_t PortXD_ModCmpWaza(void* fop) {
+  const uint16_t chosen = fightOutPokemonGetCmpNimblenessWazaDataId(fop);
   if (xd::modbattle::Active()) {
     if (sCmpN >= 2) sCmpN = 0;
     sCmpFop[sCmpN++] = fop;
+    xd::modbattle::ChosenMove(fop, chosen);
   }
-  return fightOutPokemonGetCmpNimblenessWazaDataId(fop);
+  return chosen;
 }
 int8_t PortXD_ModPri(uint16_t waza) {
   const int32_t pri = wazaDB_GetPri(waza);

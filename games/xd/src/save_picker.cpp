@@ -218,6 +218,37 @@ std::string PlayTimeText(double seconds) {
   return buf;
 }
 
+template <class S> auto UsedCheats(const S& s, int) -> decltype(s.cheatsUsed) { return s.cheatsUsed; }
+template <class S> std::vector<std::string> UsedCheats(const S&, long) { return {}; }
+std::string CheatShown(std::string name) {
+  using engine::i18n::Tr;
+  const size_t colon = name.rfind(": ");
+  if (colon != std::string::npos) name = name.substr(colon + 2);
+  auto starts = [&](const char* p) { return name.rfind(p, 0) == 0; };
+  auto rest = [&](const char* p) { return name.substr(std::strlen(p)); };
+  if (starts("experience multiplier x")) return std::string(Tr("EXP")) + " \xC3\x97" + rest("experience multiplier x");
+  if (starts("shiny odds ")) {
+    const std::string odds = rest("shiny odds ");
+    return std::string(Tr("shiny")) + " " + (odds == "always" || odds == "Always" ? std::string(Tr("always")) : odds);
+  }
+  if (name == "every ball catches") return Tr("every ball catches");
+  if (name == "catch trainers' Pokemon") return Tr("snag any POK\xC3\xA9MON");
+  if (name == "balls never used up") return Tr("balls never run out");
+  if (name == "ignore the level cap") return Tr("no level cap");
+  if (name == "infinite money") return Tr("endless money");
+  if (name == "infinite Poke Coupons") return Tr("endless COUPONS");
+  if (name == "perfect IVs") return Tr("perfect IVs");
+  if (name == "maxed EVs") return Tr("perfect EVs");
+  if (name == "no damage taken") return Tr("no damage taken");
+  if (name == "win every battle") return Tr("win every battle");
+  if (name == "action give_item") return Tr("items given");
+  if (name == "action candy") return Tr("RARE CANDY");
+  if (name == "action purify") return Tr("purify at once");
+  if (name == "action money") return Tr("money given");
+  if (name == "action coupons") return Tr("COUPONS given");
+  return name;
+}
+
 std::vector<std::string> Items(const std::string& label) {
   std::vector<std::string> out;
   const std::string dot = "\xC2\xB7";
@@ -274,7 +305,14 @@ bool ReadRow(const fs::path& root, Row& row) {
     const size_t at = label.find("Randomizer ");
     if (!style.empty() && at != std::string::npos) label.insert(at + 11, style + " ");
   }
-  const std::vector<std::string> items = Items(label);
+  std::vector<std::string> items = Items(label);
+  for (const std::string& c : UsedCheats(setup, 0)) {
+    const std::string shown = CheatShown(c);
+    if (std::find(row.cheats.begin(), row.cheats.end(), shown) == row.cheats.end()) row.cheats.push_back(shown);
+  }
+  if (!row.cheats.empty()) {
+    items.erase(std::remove(items.begin(), items.end(), std::string("cheats used")), items.end());
+  }
   for (size_t i = 0; i < items.size(); i++) {
     row.rules += (i > 0 ? ", " : "") + items[i];
     row.rulesFull += (i > 0 ? "\n" : "") + items[i];
@@ -414,7 +452,9 @@ void ThumbnailAfterSave(const fs::path& file) {
 }
 
 void ThumbnailFrame() {
-  if (EnvIs("XD_THUMBNAILS", "0")) return;
+  static const bool thumbnailsOff = EnvIs("XD_THUMBNAILS", "0");
+  static const bool thumbnailLog = EnvIs("XD_THUMBNAIL_LOG", "1");
+  if (thumbnailsOff) return;
   const uint32_t now = PortVI_GetFlipCount();
   fs::path file;
   th::Picture keep;
@@ -423,7 +463,7 @@ void ThumbnailFrame() {
     std::lock_guard<std::mutex> lock(sThumbLock);
     if (sThumbFile.empty()) {
       static uint32_t sLogged = 0;
-      if (EnvIs("XD_THUMBNAIL_LOG", "1") && now - sLogged >= kKeepEvery * 4) {
+      if (thumbnailLog && now - sLogged >= kKeepEvery * 4) {
         sLogged = now;
         int wid = 0;
         const int st = PortXD_ActiveWindowState(&wid);

@@ -71,6 +71,15 @@ const char* PortInput_ReplaySettingsAt(size_t index, uint32_t* frame);
 uint32_t PortInput_ReplayRecordedFrame(void);
 void PortInput_LatchHeld(void);
 void OSResetSystem(int reset, uint32_t resetCode, int forceMenu);
+size_t PortXD_CheatsUsedCount(void);
+const char* PortXD_CheatsUsedAt(size_t i);
+void PortXD_CheatsSetUsed(const char* const* lines, size_t count);
+const char* PortXD_CheatsStateText(void);
+void PortXD_CheatsApplyState(const char* text);
+void PortXD_CheatsAllOff(void);
+int PortXD_CheatsWarned(void);
+void PortXD_CheatsSetWarned(int warned);
+bool PortXD_CheatHidesStart(void);
 }
 
 namespace {
@@ -84,12 +93,47 @@ namespace fs = std::filesystem;
 enum class CardState { NoSave, NoFile, Setup, Unreadable };
 using engine::i18n::Tr;
 
+void MergeCheats(ep::Setup& stamped) {
+  for (size_t i = 0; i < PortXD_CheatsUsedCount(); i++) {
+    const std::string used = PortXD_CheatsUsedAt(i);
+    if (std::find(stamped.cheatsUsed.begin(), stamped.cheatsUsed.end(), used) == stamped.cheatsUsed.end()) stamped.cheatsUsed.push_back(used);
+  }
+  if (!stamped.cheatsUsed.empty()) {
+    stamped.cheatState.clear();
+    const std::string state = PortXD_CheatsStateText();
+    for (size_t at = 0; !state.empty() && at <= state.size();) {
+      const size_t end = std::min(state.find(';', at), state.size());
+      stamped.cheatState.push_back(state.substr(at, end - at));
+      at = end + 1;
+    }
+  }
+  if (PortXD_CheatsWarned() != 0) stamped.cheatWarned = true;
+}
 bool WriteSetup(const fs::path& file, const ep::Setup& setup) {
   ep::Setup stamped = setup;
+  MergeCheats(stamped);
   xd::rulesets::Stamp(stamped);
   if (xd::xg::On() && stamped.edition.empty()) stamped.edition = "xg";
   return ep::WriteFile(file, stamped);
 }
+void AdoptCheats(const ep::Setup* setup) {
+  if (setup == nullptr) {
+    PortXD_CheatsSetUsed(nullptr, 0);
+    PortXD_CheatsAllOff();
+    PortXD_CheatsSetWarned(0);
+    return;
+  }
+  std::vector<const char*> lines;
+  for (const std::string& u : setup->cheatsUsed) lines.push_back(u.c_str());
+  PortXD_CheatsSetUsed(lines.data(), lines.size());
+  PortXD_CheatsSetWarned(setup->cheatWarned ? 1 : 0);
+  if (!setup->cheatsUsed.empty()) {
+    std::string state;
+    for (const std::string& c : setup->cheatState) state += (state.empty() ? "" : ";") + c;
+    PortXD_CheatsApplyState(state.c_str());
+  }
+}
+
 std::string Fmt(const char* format, ...) {
   char buf[2048];
   va_list args;
@@ -765,8 +809,24 @@ bool NeedsRestart(const ep::Setup& setup) {
   return want != have;
 }
 
+static bool RestartAlreadyDone(const ep::Setup& setup) {
+  if (!sRestarted) return false;
+  if (ep::Label(setup) != ep::Label(sRestartSetup)) return false;
+  std::vector<std::string> a, b;
+  for (const ep::ModUse& m : setup.mods) a.push_back(Lower(m.id));
+  for (const ep::ModUse& m : sRestartSetup.mods) b.push_back(Lower(m.id));
+  std::sort(a.begin(), a.end());
+  std::sort(b.begin(), b.end());
+  return a == b && LooksKey(xd::rulesets::ChoiceOf(setup).looks) == LooksKey(xd::rulesets::ChoiceOf(sRestartSetup).looks);
+}
+
 void Begin(const ep::Setup& setup, const std::string& settingsChanged) {
-  if (NeedsRestart(setup)) {
+  if (NeedsRestart(setup) && RestartAlreadyDone(setup)) {
+    std::fprintf(stderr, "[playthrough] this New Game setup (%s) already started the game again once and still wants packs or mods that are not loaded "
+                         "(Gen 4: %d, Gen 5-7: %d, other mods: see [mods] above): NOT starting again, carrying on with what is loaded\n",
+                 ep::Label(setup).c_str(), xd::gen4::Loaded() ? 1 : 0, xd::gen57::Loaded() ? 1 : 0);
+    Note(Tr("Some of the packs or mods chosen for this New Game could not be loaded, even after starting the game again. The game carries on without them (the log says which)."));
+  } else if (NeedsRestart(setup)) {
     const fs::path file = xd::CardRoot() / L"playthroughs" / L"next_new_game.json";
     if (WriteSetup(file, setup)) {
       Note("new game setup needs other mods: starting again (" + ep::Label(setup) + ")");
@@ -814,6 +874,7 @@ void Begin(const ep::Setup& setup, const std::string& settingsChanged) {
   sChosenFrame = PortVI_GetFlipCount();
   sCurrent = sPendingSetup;
   sCurrentUnknown = false;
+  AdoptCheats(nullptr);
   xd::challenges::SetActive(sCurrent.challenges, "new game");
   xd::shiny::SetActive(sCurrent.options, "new game");
   ApplySplit("new game");
@@ -917,6 +978,9 @@ void TimerPersist() {
 }
 
 void PadPoll(PADStatus* status) {
+  if (PortXD_CheatHidesStart()) {
+    for (int i = 0; i < PAD_MAX_CONTROLLERS; i++) status[i].button &= static_cast<u16>(~PAD_BUTTON_START);
+  }
   if (status[0].err == PAD_ERR_NONE) xd::speedrun::NotePad(status[0].stickX, status[0].stickY);
   if (sInjectA > 0) {
     if (PortVI_GetFlipCount() >= sInjectFrom + static_cast<uint32_t>(sInjectA)) {
@@ -968,8 +1032,10 @@ bool TitleInputImpl(PADStatus* status, int select, u16 newButtons) {
   if (!sScreen) {
     if (select == 0) {
       xd::speedrun::NewGame(xd::speedrun::NewGameDefault());
+      AdoptCheats(nullptr);
     } else if (select == 1 && !(sAsk && !sEngineAnswered)) {
       xd::speedrun::Continue(sCardState == CardState::Setup ? sCardSetup : ep::Setup{}, sCardId.key, sCardState == CardState::Setup);
+      AdoptCheats(sCardState == CardState::Setup ? &sCardSetup : nullptr);
       AdoptSplit();
       ApplySplitOf(sCardState == CardState::Setup ? &sCardSetup : nullptr, "continue");
     }
@@ -1032,6 +1098,7 @@ bool TitleInputImpl(PADStatus* status, int select, u16 newButtons) {
     sCurrentUnknown = sCardState != CardState::Setup;
     AdoptSplit();
     if (sCardState == CardState::Setup) sCurrent = sCardSetup;
+    AdoptCheats(sCardState == CardState::Setup ? &sCardSetup : nullptr);
     ApplySplit("continue");
     xd::challenges::SetActive(sCardState == CardState::Setup ? sCurrent.challenges : std::vector<std::string>(), "continue");
     xd::shiny::SetActive(!xd::shiny::TestSwitch().empty() ? xd::shiny::TestSwitch()
@@ -1188,6 +1255,7 @@ void PortXD_PlaythroughSaveWritten(const uint8_t* file, size_t size) {
       s.trainerId = id.trainerId;
       s.secretId = id.secretId;
       s.chosenBy = "run";
+      MergeCheats(s);
       xd::battles::Set(xd::battles::SinceStart(), true, "a new game's first save");
       s.battlesWonKept = true;
       s.battlesWon = xd::battles::List();
@@ -1359,6 +1427,13 @@ void PortXD_PlaythroughFrame(void) {
     const int bad = es::Global().ApplyOverrides(list);
     std::fprintf(stderr, "[playthrough] replay: recorded frame %u (game frame %u here): settings %s%s\n", frame,
                  PortVI_GetFlipCount(), list.c_str(), bad ? " (some refused)" : "");
+  }
+}
+
+void PortXD_PlaythroughCheatsChanged(void) {
+  if (sCardState != CardState::Setup || !sCardId.found) return;
+  if (!WriteSetup(xp::SetupFileFor(sCardId), sCardSetup)) {
+    std::fprintf(stderr, "[playthrough] could not write %ls\n", xp::SetupFileFor(sCardId).wstring().c_str());
   }
 }
 

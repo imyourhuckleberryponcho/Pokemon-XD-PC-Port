@@ -1,10 +1,14 @@
 #include "xd_gen57.h"
+#include "xd_spare.h"
 
 #include "xd_forms.h"
 
 #include "i18n.h"
+#include "pack_match.h"
 #include "pack_tables.h"
 #include "xd_gen4.h"
+#include "xd_gen4_xg.h"
+#include "../../../engine/mods/json.h"
 #include "xd_languages.h"
 #include "xd_user_folder.h"
 #include "xd_xg.h"
@@ -51,7 +55,7 @@ std::string Fmt(const char* format, ...) {
 }
 
 constexpr int kPackVersion = 1;
-constexpr uint32_t kPkxSpare = 1024;
+constexpr uint32_t kPkxSpare = XD_PC_SPARE_SPECIES;
 constexpr uint32_t kPkxDisc = 419;
 constexpr uint32_t kWaveDisc = 389;
 constexpr uint32_t kGroup = 0x7D0;
@@ -60,6 +64,8 @@ constexpr uint32_t kNoEffectText = 0x9100;
 
 bool sLoaded = false;
 bool sSpots = false;
+bool sOwnCries = false;
+uint32_t sReserved = 0, sPadSndFile = 0, sPadSndData = 0, sPadWaves = 0;
 xd::pack::PackTables sTables;
 std::vector<xd::pack::RowSpec> sRowsAll;
 
@@ -128,6 +134,16 @@ bool PackPresent(std::string* why) {
     if (why) *why = std::string(Tr("the Gen 5-7 files were made by another version, make them again"));
     return false;
   }
+  switch (xd::packmatch::CheckGen57(xd::SettingsFolder() / L"extra_assets")) {
+    case xd::packmatch::Problem::LegacyGen4Gone:
+      if (why) *why = std::string(Tr("the Gen 5-7 files were made together with Gen 4 files that are not installed any more, make the Ultra Sun / Ultra Moon files again"));
+      return false;
+    case xd::packmatch::Problem::TocDiffers:
+    case xd::packmatch::Problem::TooManyCries:
+      if (why) *why = std::string(Tr("the Gen 5-7 files do not fit the Gen 4 files that are installed now, make the Ultra Sun / Ultra Moon files again"));
+      return false;
+    default: break;
+  }
   return true;
 }
 
@@ -156,6 +172,8 @@ uint32_t ExtraRowCount(const char* table) {
   uint32_t n = 0;
   if (sLoaded) {
     for (const auto& r : sTables.rows) n += r.table == table ? r.count : 0;
+    if (std::strcmp(table, "snd_file") == 0) n += sPadSndFile;
+    if (std::strcmp(table, "snd_data") == 0) n += sPadSndData;
   }
   return n;
 }
@@ -168,7 +186,7 @@ uint32_t ModelRowsTaken() {
   const uint32_t gen4 = xd::gen4::ModelRowsTaken();
   return n > gen4 ? n - gen4 : 0;
 }
-uint32_t WaveRowsTaken() { return sLoaded ? static_cast<uint32_t>(sTables.waves.size()) : 0; }
+uint32_t WaveRowsTaken() { return sLoaded ? sPadWaves + static_cast<uint32_t>(sTables.waves.size()) : 0; }
 
 void Prepare(bool wanted, bool spots, engine::mods::LoadOptions& options, std::vector<engine::mods::DataModFile>& dataFiles) {
   sLoaded = false;
@@ -176,7 +194,9 @@ void Prepare(bool wanted, bool spots, engine::mods::LoadOptions& options, std::v
   sTables = {};
   sRowsAll.clear();
   sAbilities.clear();
-  if (!wanted || xd::xg::On()) return;
+  sOwnCries = false;
+  sReserved = sPadSndFile = sPadSndData = sPadWaves = 0;
+  if (!wanted) return;
   std::string why;
   if (!xd::gen4::Loaded()) {
     std::fprintf(stderr, "[gen57] Gen 5-7 Pokemon are on, but the Gen 4 files they continue are not loaded: the game starts without them\n");
@@ -198,6 +218,33 @@ void Prepare(bool wanted, bool spots, engine::mods::LoadOptions& options, std::v
                  error.empty() ? "unreadable" : error.c_str());
     sTables = {};
     return;
+  }
+  const xd::packmatch::Gen57Pack info = xd::packmatch::ReadGen57(pack);
+  sOwnCries = info.ownCries;
+  sReserved = info.reserved != 0 ? info.reserved : xd::packmatch::kReservedCries;
+  {
+    const uint32_t n4 = xd::gen4::ExtraRowCount("snd_file"), d4 = xd::gen4::ExtraRowCount("snd_data");
+    uint32_t firstFile = 0, firstData = 0;
+    for (const auto& r : sTables.rows) {
+      if (r.table == "snd_file" && firstFile == 0) firstFile = r.row;
+      if (r.table == "snd_data" && firstData == 0) firstData = r.row;
+    }
+    const uint32_t wantFile = xd::packmatch::kDiscSndFile + (sOwnCries ? sReserved : n4);
+    const uint32_t wantData = xd::packmatch::kDiscSndData + (sOwnCries ? sReserved : d4);
+    if ((firstFile != 0 && firstFile != wantFile) || (firstData != 0 && firstData != wantData) || (sOwnCries && (n4 > sReserved || d4 > sReserved))) {
+      std::fprintf(stderr, "[gen57] the pack's cry rows start at %u / %u, the Gen 4 pack leaves %u / %u: the game starts without the Gen 5-7 Pokemon\n", firstFile,
+                   firstData, wantFile, wantData);
+      PortMessage_Show(PORT_MESSAGE_WARNING, Tr("Pokemon XD - Gen 5-7"),
+                       Fmt("%s\n\n%s",
+                           Tr("The Gen 5-7 Pokemon can't be used: the Gen 5-7 files do not fit the Gen 4 files that are installed."),
+                           Tr("Make the Ultra Sun / Ultra Moon files again on the launcher's \"Extra assets\" page.\nThe game starts without them."))
+                           .c_str());
+      sTables = {};
+      return;
+    }
+    if (sOwnCries && firstFile != 0) sPadSndFile = sReserved - n4;
+    if (sOwnCries && firstData != 0) sPadSndData = sReserved - d4;
+    if (sOwnCries && !sTables.waves.empty()) sPadWaves = sReserved - xd::gen4::WaveRowsTaken();
   }
   std::filesystem::path dataDir = pack / L"data";
   const char* lang = xd::languages::Active() ? xd::languages::Active()->id : "us";
@@ -235,7 +282,10 @@ void Prepare(bool wanted, bool spots, engine::mods::LoadOptions& options, std::v
   if (ReadText(pack / L"abilities.txt", abilities)) ParseAbilities(abilities);
   options.extraLayers.push_back({"usum_gen57", "Gen 5-7 Pokemon", pack});
   options.builtInFolders["gen57"] = pack;
-  sRowsAll = sTables.rows;
+  sRowsAll.clear();
+  if (sPadSndFile != 0) sRowsAll.push_back({"snd_file", xd::packmatch::kDiscSndFile + xd::gen4::ExtraRowCount("snd_file"), sPadSndFile, 0, {}});
+  if (sPadSndData != 0) sRowsAll.push_back({"snd_data", xd::packmatch::kDiscSndData + xd::gen4::ExtraRowCount("snd_data"), sPadSndData, 0, {}});
+  for (const auto& r : sTables.rows) sRowsAll.push_back(r);
   if (spots && xd::gen4::SpotsLoaded()) {
     engine::mods::DataModFile d;
     d.mod = "gen57";
@@ -260,6 +310,64 @@ void Prepare(bool wanted, bool spots, engine::mods::LoadOptions& options, std::v
                sAbilities.size());
 }
 
+bool XgInfo(xd::gen4::xg::Gen57Info& out) {
+  namespace J = engine::mods::json;
+  const std::filesystem::path pack = PackFolder();
+  const auto readJson = [&](const std::filesystem::path& file, J::Value& root) {
+    std::string text;
+    if (!ReadText(file, text)) return false;
+    J::Reader rd(text);
+    return rd.Document(root);
+  };
+  const auto num = [](const J::Value& v) { return v.kind == J::Value::Kind::Number ? static_cast<int>(v.number) : -1; };
+  J::Value root;
+  if (readJson(pack / L"battle" / L"moves.json", root) && root.kind == J::Value::Kind::Object) {
+    if (const auto it = root.fields.find("moves"); it != root.fields.end()) {
+      for (const std::string& k : it->second.order) out.portCodeMoves.insert(k);
+    }
+  }
+  root = J::Value();
+  if (readJson(pack / L"battle" / L"abilities.json", root) && root.kind == J::Value::Kind::Object) {
+    if (const auto it = root.fields.find("abilities"); it != root.fields.end()) {
+      for (const std::string& k : it->second.order) {
+        const J::Value& a = it->second.fields.at(k);
+        if (a.kind != J::Value::Kind::Object) continue;
+        const auto id = a.fields.find("id");
+        if (id != a.fields.end() && num(id->second) > 0) out.portCodeAbilities.insert(static_cast<uint32_t>(num(id->second)));
+      }
+    }
+  }
+  for (const std::string& n : FairyMoveNames()) out.fairyMoves.insert(n);
+  root = J::Value();
+  if (readJson(pack / L"report.json", root) && root.kind == J::Value::Kind::Array) {
+    for (const J::Value& e : root.items) {
+      if (e.kind != J::Value::Kind::Object) continue;
+      const auto nat = e.fields.find("nat"), types = e.fields.find("types");
+      if (nat == e.fields.end() || types == e.fields.end() || types->second.items.size() != 2) continue;
+      out.types[static_cast<uint32_t>(num(nat->second))] = {num(types->second.items[0]), num(types->second.items[1])};
+    }
+  }
+  root = J::Value();
+  if (readJson(pack / L"forms_report.json", root) && root.kind == J::Value::Kind::Array) {
+    for (const J::Value& e : root.items) {
+      if (e.kind != J::Value::Kind::Object) continue;
+      const auto key = e.fields.find("key"), types = e.fields.find("types");
+      if (key == e.fields.end() || types == e.fields.end() || types->second.items.size() != 2) continue;
+      out.formTypes[key->second.text] = {num(types->second.items[0]), num(types->second.items[1])};
+    }
+  }
+  for (const AbilityRow& a : sAbilities) out.abilityIds.insert(a.id);
+  return !out.abilityIds.empty();
+}
+
+std::vector<std::string> AbilityNamesForXG() {
+  std::vector<std::string> names(256);
+  for (const AbilityRow& a : sAbilities) {
+    if (a.id < 256) names[a.id] = a.name[0];
+  }
+  return names;
+}
+
 void AfterLoad(const engine::mods::LoadResult& result) {
   if (!sLoaded) return;
   xd::forms::Load(result);
@@ -278,10 +386,11 @@ void AfterLoad(const engine::mods::LoadResult& result) {
 void ApplyMainTables() {
   if (!sLoaded) return;
   if (!sTables.waves.empty()) {
-    const uint32_t first = pokemon_nakigoe_data_number;
-    if (first + sTables.waves.size() > kWaveDisc + kPkxSpare) {
+    const uint32_t first = sOwnCries ? kWaveDisc + sReserved : pokemon_nakigoe_data_number;
+    if (first < pokemon_nakigoe_data_number || first + sTables.waves.size() > kWaveDisc + kPkxSpare) {
       std::fprintf(stderr, "[gen57] the PDA's cry waveforms don't fit the game's table: left out\n");
     } else {
+      for (uint32_t k = pokemon_nakigoe_data_number; k < first; k++) pokemon_nakigoe_data[k] = pokemon_nakigoe_data[0];
       for (size_t k = 0; k < sTables.waves.size(); k++) {
         auto* p = static_cast<uint8_t*>(PortMem_LowAlloc(sTables.waves[k].size(), 16));
         std::copy(sTables.waves[k].begin(), sTables.waves[k].end(), p);
@@ -333,19 +442,16 @@ void InstallAbilityRows() {
   if (!sLoaded || sAbilities.empty()) return;
   static bool done = false;
   if (done) return;
-  if (pokemon_tokusei_data_number < 124) {
+  if (!xd::xg::On() && pokemon_tokusei_data_number < 124) {
     std::fprintf(stderr, "[gen57] ability table has %u rows, the Gen 4 rows are missing: Gen 5-7 ability names not added\n",
                  pokemon_tokusei_data_number);
     return;
   }
   done = true;
-  auto* rows = reinterpret_cast<uint32_t*>(pokemon_tokusei_data);
   uint32_t top = pokemon_tokusei_data_number;
   for (const AbilityRow& a : sAbilities) {
-    uint32_t* row = rows + 3 * a.id;
-    row[0] = 0;
-    row[1] = (kGroup << 20) | (kFirstText + a.id * 2);
-    row[2] = (kGroup << 20) | (Implemented(a.id) ? kFirstText + a.id * 2 + 1 : kNoEffectText);
+    xd::xg::SetAbilityRow(pokemon_tokusei_data, a.id, (kGroup << 20) | (kFirstText + a.id * 2),
+                          (kGroup << 20) | (xd::xg::On() || Implemented(a.id) ? kFirstText + a.id * 2 + 1 : kNoEffectText));
     top = std::max(top, a.id + 1);
   }
   pokemon_tokusei_data_number = top;

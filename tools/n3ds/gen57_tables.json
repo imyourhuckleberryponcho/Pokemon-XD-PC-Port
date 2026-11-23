@@ -1,0 +1,2572 @@
+{
+ "moves": {
+  "anim_phys": {
+   "0": "Body Slam",
+   "1": "Mega Kick",
+   "2": "Wing Attack",
+   "3": "Poison Tail",
+   "4": "Bonemerang",
+   "5": "Rock Throw",
+   "6": "Fury Cutter",
+   "7": "Shadow Punch",
+   "8": "Metal Claw",
+   "9": "Fire Punch",
+   "10": "Waterfall",
+   "11": "Vine Whip",
+   "12": "Thunderpunch",
+   "13": "Extrasensory",
+   "14": "Ice Punch",
+   "15": "Dragon Claw",
+   "16": "Crunch",
+   "17": "Body Slam"
+  },
+  "anim_spec": {
+   "0": "Hyper Voice",
+   "1": "Aerial Ace",
+   "2": "Gust",
+   "3": "Sludge Bomb",
+   "4": "Mud Shot",
+   "5": "Ancientpower",
+   "6": "Signal Beam",
+   "7": "Shadow Ball",
+   "8": "Mist Ball",
+   "9": "Flamethrower",
+   "10": "Water Pulse",
+   "11": "Magical Leaf",
+   "12": "Thunderbolt",
+   "13": "Psychic",
+   "14": "Ice Beam",
+   "15": "Dragonbreath",
+   "16": "Faint Attack",
+   "17": "Magical Leaf"
+  },
+  "anim_status": [
+   "Swords Dance",
+   "Screech",
+   "Splash"
+  ],
+  "stat": {
+   "1": "atk",
+   "2": "def",
+   "3": "spa",
+   "4": "spd",
+   "5": "spe",
+   "6": "acc",
+   "7": "eva"
+  },
+  "inflict": {
+   "1": "paralysis",
+   "2": "sleep",
+   "3": "freeze",
+   "4": "burn",
+   "5": "poison",
+   "6": "confusion"
+  },
+  "range": {
+   "0": 0,
+   "1": 5,
+   "2": 5,
+   "3": 0,
+   "4": 6,
+   "5": 4,
+   "6": 5,
+   "7": 5,
+   "8": 5,
+   "9": 0,
+   "10": 5,
+   "11": 5,
+   "12": 5
+  },
+  "features_done": [
+   "blocks",
+   "charge",
+   "cond_fainted",
+   "crit",
+   "cure_status",
+   "def_stat",
+   "first_turn_only",
+   "force_switch",
+   "foul_play",
+   "heats_up",
+   "ignore_boosts",
+   "needs_physical_hit",
+   "power_formula",
+   "power_rules",
+   "protect_variant",
+   "set_type_target",
+   "side",
+   "status_switch",
+   "switch_out",
+   "terrain",
+   "type_from_user"
+  ],
+  "feature_of_prop": {
+   "crit": "crit",
+   "ignore_boosts": "ignore_boosts",
+   "use_target_attack": "foul_play",
+   "defend_stat": "def_stat",
+   "first_turn_only": "first_turn_only",
+   "power_formula": "power_formula",
+   "type_chart": "type_chart",
+   "protect": "protect_variant",
+   "charge": "charge",
+   "needs_physical_hit": "needs_physical_hit",
+   "heats_up": "heats_up",
+   "type_from_user": "type_from_user"
+  },
+  "ok_pure": [
+   "Acid Spray",
+   "Baby-Doll Eyes",
+   "Brutal Swing",
+   "Clanging Scales",
+   "Coil",
+   "Confide",
+   "Cotton Guard",
+   "Diamond Storm",
+   "Dragon Ascent",
+   "Dragon Hammer",
+   "Draining Kiss",
+   "Eerie Impulse",
+   "Fire Lash",
+   "Flame Charge",
+   "Glaciate",
+   "Heal Pulse",
+   "Hone Claws",
+   "Hyperspace Fury",
+   "Leafage",
+   "Lunge",
+   "Noble Roar",
+   "Nuzzle",
+   "Oblivion Wing",
+   "Parabolic Charge",
+   "Play Nice",
+   "Power-Up Punch",
+   "Quiver Dance",
+   "Relic Song",
+   "Shell Smash",
+   "Shift Gear",
+   "Tearful Look",
+   "Toxic Thread",
+   "Trop Kick",
+   "V-create",
+   "Volt Switch",
+   "Water Shuriken",
+   "Work Up"
+  ],
+  "force_partial": {
+   "Techno Blast": "type should follow the Drive held (always Normal here)",
+   "Phantom Force": "vanishes in the air state (Fly's): the few moves that hit a flying target also hit it; does not break Protect",
+   "Steamroller": "no double damage against Minimize"
+  },
+  "donor_status_default": "Splash",
+  "anim": {
+   "Flame Charge": "Flame Wheel",
+   "Volt Switch": "Thunderbolt",
+   "Dragon Tail": "Dragon Claw",
+   "Hex": "Shadow Ball",
+   "Shell Smash": "Withdraw",
+   "Quiver Dance": "Dragon Dance",
+   "Coil": "Bulk Up",
+   "Work Up": "Bulk Up",
+   "Hone Claws": "Sharpen",
+   "Autotomize": "Agility",
+   "Shift Gear": "Agility",
+   "Cotton Guard": "Iron Defense",
+   "Geomancy": "Cosmic Power",
+   "Parting Shot": "Screech",
+   "Heal Pulse": "Softboiled",
+   "Floral Healing": "Softboiled",
+   "Shore Up": "Recover",
+   "Purify": "Softboiled",
+   "Kings Shield": "Protect",
+   "King's Shield": "Protect",
+   "Spiky Shield": "Protect",
+   "Baneful Bunker": "Protect",
+   "Mat Block": "Protect",
+   "Wide Guard": "Protect",
+   "Quick Guard": "Protect",
+   "Crafty Shield": "Protect",
+   "Grassy Terrain": "Ingrain",
+   "Misty Terrain": "Mist",
+   "Electric Terrain": "Charge",
+   "Psychic Terrain": "Calm Mind",
+   "Aurora Veil": "Light Screen",
+   "Sticky Web": "String Shot",
+   "Play Rough": "Body Slam",
+   "Moonblast": "Magical Leaf",
+   "Draining Kiss": "Sweet Kiss",
+   "Boomburst": "Hyper Voice",
+   "Hurricane": "Gust",
+   "Scald": "Water Pulse",
+   "Wild Charge": "Volt Tackle",
+   "Foul Play": "Faint Attack",
+   "Psyshock": "Psychic",
+   "Psystrike": "Psychic",
+   "Secret Sword": "Aeroblast",
+   "Fire Lash": "Vine Whip"
+  },
+  "partial": {
+   "Autotomize": "Speed +2 only: the weight loss is not built",
+   "Freeze-Dry": "Water Pokemon are not hit super effectively",
+   "Magnetic Flux": "raises the user whatever its ability (should need Plus or Minus; it is made for allies)",
+   "Gear Up": "raises the user whatever its ability (should need Plus or Minus; it is made for allies)",
+   "Aromatic Mist": "ally only: does nothing in single battles (as in the games)",
+   "Smack Down": "does not ground a Flying target",
+   "Synchronoise": "hits any target (should hit only one sharing a type)",
+   "Echoed Voice": "power does not grow with use",
+   "Clear Smog": "does not reset the target's stat changes",
+   "Sky Drop": "plain hit (no lifting turn)",
+   "Incinerate": "does not burn up a berry",
+   "Retaliate": "power not doubled after a faint",
+   "Final Gambit": "plain hit of fixed power (should deal the user's HP and faint)",
+   "Water Pledge": "no combination with the other Pledges",
+   "Fire Pledge": "no combination with the other Pledges",
+   "Grass Pledge": "no combination with the other Pledges",
+   "Fusion Flare": "power not doubled after Fusion Bolt",
+   "Fusion Bolt": "power not doubled after Fusion Flare",
+   "Flying Press": "plain Fighting hit (not also Flying)",
+   "Belch": "works without having eaten a berry",
+   "Hyperspace Hole": "does not break through Protect",
+   "Thousand Arrows": "does not ground a Flying target",
+   "Sparkling Aria": "does not cure a burn",
+   "Throat Chop": "does not stop sound moves",
+   "Pollen Puff": "cannot heal an ally (plain hit)",
+   "Burn Up": "the user does not lose its Fire type",
+   "Revelation Dance": "type does not follow the user (Normal)",
+   "Core Enforcer": "does not switch off an ability",
+   "Beak Blast": "no message when it starts heating up; the burn is as the games",
+   "Shell Trap": "its own failure message is the plain \"But it failed\"; in double battles it hits one foe, not both",
+   "Stomping Tantrum": "power not doubled after a failed move",
+   "Spectral Thief": "does not steal stat boosts",
+   "Sunsteel Strike": "does not ignore abilities",
+   "Moongeist Beam": "does not ignore abilities"
+  },
+  "partial_ok": [
+   "Boomburst",
+   "Disarming Voice",
+   "Flame Burst",
+   "Petal Blizzard",
+   "Round"
+  ],
+  "plan": {
+   "Volt Switch": {
+    "blocks": [
+     {
+      "switch_out": "user"
+     }
+    ]
+   },
+   "Parting Shot": {
+    "blocks": [
+     {
+      "stat": "atk",
+      "stages": -1,
+      "target": "target"
+     },
+     {
+      "stat": "spa",
+      "stages": -1,
+      "target": "target"
+     },
+     {
+      "switch_out": "user",
+      "needs": [
+       "status_switch"
+      ]
+     }
+    ],
+    "needs": [
+     "status_switch"
+    ]
+   },
+   "Dragon Tail": {
+    "blocks": [
+     {
+      "force_switch": true,
+      "needs": [
+       "force_switch"
+      ]
+     }
+    ],
+    "needs": [
+     "force_switch"
+    ]
+   },
+   "Circle Throw": {
+    "blocks": [
+     {
+      "force_switch": true,
+      "needs": [
+       "force_switch"
+      ]
+     }
+    ],
+    "needs": [
+     "force_switch"
+    ]
+   },
+   "Storm Throw": {
+    "props": {
+     "crit": "always"
+    },
+    "needs": [
+     "crit"
+    ]
+   },
+   "Frost Breath": {
+    "props": {
+     "crit": "always"
+    },
+    "needs": [
+     "crit"
+    ]
+   },
+   "Chip Away": {
+    "props": {
+     "ignore_boosts": true
+    },
+    "needs": [
+     "ignore_boosts"
+    ]
+   },
+   "Sacred Sword": {
+    "props": {
+     "ignore_boosts": true
+    },
+    "needs": [
+     "ignore_boosts"
+    ]
+   },
+   "Darkest Lariat": {
+    "props": {
+     "ignore_boosts": true
+    },
+    "needs": [
+     "ignore_boosts"
+    ]
+   },
+   "Foul Play": {
+    "props": {
+     "use_target_attack": true
+    },
+    "needs": [
+     "foul_play"
+    ]
+   },
+   "Psyshock": {
+    "props": {
+     "defend_stat": "def"
+    },
+    "needs": [
+     "def_stat"
+    ]
+   },
+   "Psystrike": {
+    "props": {
+     "defend_stat": "def"
+    },
+    "needs": [
+     "def_stat"
+    ]
+   },
+   "Secret Sword": {
+    "props": {
+     "defend_stat": "def"
+    },
+    "needs": [
+     "def_stat"
+    ]
+   },
+   "First Impression": {
+    "props": {
+     "first_turn_only": true
+    },
+    "needs": [
+     "first_turn_only"
+    ]
+   },
+   "Shell Trap": {
+    "props": {
+     "needs_physical_hit": true
+    },
+    "needs": [
+     "needs_physical_hit"
+    ]
+   },
+   "Multi-Attack": {
+    "props": {
+     "type_from_user": true
+    },
+    "needs": [
+     "type_from_user"
+    ]
+   },
+   "Beak Blast": {
+    "props": {
+     "heats_up": true
+    },
+    "needs": [
+     "heats_up"
+    ]
+   },
+   "Heavy Slam": {
+    "props": {
+     "power_formula": "weight"
+    },
+    "needs": [
+     "power_formula"
+    ]
+   },
+   "Heat Crash": {
+    "props": {
+     "power_formula": "weight"
+    },
+    "needs": [
+     "power_formula"
+    ]
+   },
+   "Electro Ball": {
+    "props": {
+     "power_formula": "speed"
+    },
+    "needs": [
+     "power_formula"
+    ]
+   },
+   "Stored Power": {
+    "props": {
+     "power_formula": "boosts"
+    },
+    "needs": [
+     "power_formula"
+    ]
+   },
+   "Power Trip": {
+    "props": {
+     "power_formula": "boosts"
+    },
+    "needs": [
+     "power_formula"
+    ]
+   },
+   "Hex": {
+    "power_rules": [
+     {
+      "when": "target_has_status",
+      "mult": 2
+     }
+    ],
+    "ok": true
+   },
+   "Acrobatics": {
+    "power_rules": [
+     {
+      "when": "user_no_item",
+      "mult": 2
+     }
+    ],
+    "ok": true
+   },
+   "Venoshock": {
+    "power_rules": [
+     {
+      "when": "target_status:poison",
+      "mult": 2
+     }
+    ],
+    "ok": true
+   },
+   "Hurricane": {
+    "accuracy_rules": [
+     {
+      "when": "weather:rain",
+      "accuracy": 255
+     },
+     {
+      "when": "weather:sun",
+      "accuracy": 50
+     }
+    ],
+    "ok": true
+   },
+   "Grassy Terrain": {
+    "blocks": [
+     {
+      "terrain": "grassy"
+     }
+    ],
+    "needs": [
+     "terrain"
+    ]
+   },
+   "Electric Terrain": {
+    "blocks": [
+     {
+      "terrain": "electric"
+     }
+    ],
+    "needs": [
+     "terrain"
+    ]
+   },
+   "Psychic Terrain": {
+    "blocks": [
+     {
+      "terrain": "psychic"
+     }
+    ],
+    "needs": [
+     "terrain"
+    ]
+   },
+   "Misty Terrain": {
+    "blocks": [
+     {
+      "terrain": "misty"
+     }
+    ],
+    "needs": [
+     "terrain"
+    ]
+   },
+   "Aurora Veil": {
+    "blocks": [
+     {
+      "side": "aurora_veil",
+      "when": "weather:hail",
+      "needs": [
+       "side"
+      ]
+     }
+    ],
+    "needs": [
+     "side"
+    ]
+   },
+   "Sticky Web": {
+    "blocks": [
+     {
+      "side": "sticky_web",
+      "target": "target",
+      "needs": [
+       "side"
+      ]
+     }
+    ],
+    "needs": [
+     "side"
+    ]
+   },
+   "Soak": {
+    "blocks": [
+     {
+      "set_type": "Water",
+      "target": "target",
+      "needs": [
+       "set_type_target"
+      ]
+     }
+    ],
+    "needs": [
+     "set_type_target"
+    ]
+   },
+   "Trick-or-Treat": {
+    "blocks": [
+     {
+      "set_type": "Ghost",
+      "target": "target",
+      "needs": [
+       "set_type_target"
+      ]
+     }
+    ],
+    "needs": [
+     "set_type_target"
+    ],
+    "note": "the target becomes Ghost (it should only gain Ghost)"
+   },
+   "Forest's Curse": {
+    "blocks": [
+     {
+      "set_type": "Grass",
+      "target": "target",
+      "needs": [
+       "set_type_target"
+      ]
+     }
+    ],
+    "needs": [
+     "set_type_target"
+    ],
+    "note": "the target becomes Grass (it should only gain Grass)"
+   },
+   "Floral Healing": {
+    "blocks": [
+     {
+      "heal": 50,
+      "target": "target"
+     }
+    ],
+    "note": "66 percent in Grassy Terrain is not built"
+   },
+   "Purify": {
+    "blocks": [
+     {
+      "heal": 50,
+      "target": "user",
+      "when": "target_has_status"
+     },
+     {
+      "cure_status": true,
+      "target": "target"
+     }
+    ],
+    "needs": [
+     "cure_status"
+    ]
+   },
+   "Strength Sap": {
+    "blocks": [
+     {
+      "stat": "atk",
+      "stages": -1,
+      "target": "target"
+     },
+     {
+      "heal": 25,
+      "target": "user"
+     }
+    ],
+    "note": "heals a quarter of its HP (it should heal as much as the target's Attack)"
+   },
+   "Shore Up": {
+    "blocks": [
+     {
+      "heal": 50,
+      "message": "{name} shored up and restored its HP!"
+     }
+    ],
+    "note": "66 percent in a sandstorm is not built"
+   },
+   "Shell Smash": {
+    "blocks": [
+     {
+      "stat": "def",
+      "stages": -1
+     },
+     {
+      "stat": "spd",
+      "stages": -1
+     },
+     {
+      "stat": "atk",
+      "stages": 2
+     },
+     {
+      "stat": "spa",
+      "stages": 2
+     },
+     {
+      "stat": "spe",
+      "stages": 2
+     }
+    ]
+   },
+   "Geomancy": {
+    "blocks": [
+     {
+      "stat": "spa",
+      "stages": 2
+     },
+     {
+      "stat": "spd",
+      "stages": 2
+     },
+     {
+      "stat": "spe",
+      "stages": 2
+     }
+    ],
+    "needs": [
+     "charge"
+    ],
+    "props": {
+     "charge": {
+      "donor": "Razor Wind",
+      "message": "{name} is absorbing power!"
+     }
+    }
+   },
+   "Freeze Shock": {
+    "blocks": [
+     {
+      "status": "paralysis",
+      "target": "target",
+      "chance": 30
+     }
+    ],
+    "needs": [
+     "charge"
+    ],
+    "props": {
+     "charge": {
+      "donor": "Razor Wind",
+      "message": "{name} became cloaked in a freezing light!"
+     }
+    }
+   },
+   "Ice Burn": {
+    "blocks": [
+     {
+      "status": "burn",
+      "target": "target",
+      "chance": 30
+     }
+    ],
+    "needs": [
+     "charge"
+    ],
+    "props": {
+     "charge": {
+      "donor": "Razor Wind",
+      "message": "{name} became cloaked in freezing air!"
+     }
+    }
+   },
+   "Phantom Force": {
+    "blocks": [],
+    "needs": [
+     "charge"
+    ],
+    "props": {
+     "charge": {
+      "donor": "Fly",
+      "message": "{name} vanished instantly!"
+     }
+    }
+   },
+   "Thousand Waves": {
+    "blocks": [
+     {
+      "status": "trap",
+      "target": "target",
+      "when": "!target_type:ghost",
+      "message": "{name} can no longer escape!"
+     }
+    ],
+    "ok": true
+   },
+   "Spirit Shackle": {
+    "blocks": [
+     {
+      "status": "trap",
+      "target": "target",
+      "when": "!target_type:ghost",
+      "message": "{name} can no longer escape!"
+     }
+    ],
+    "ok": true
+   },
+   "Anchor Shot": {
+    "blocks": [
+     {
+      "status": "trap",
+      "target": "target",
+      "when": "!target_type:ghost",
+      "message": "{name} can no longer escape!"
+     }
+    ],
+    "ok": true
+   },
+   "Rototiller": {
+    "blocks": [
+     {
+      "stat": "atk",
+      "stages": 1,
+      "when": "user_type:grass"
+     },
+     {
+      "stat": "spa",
+      "stages": 1,
+      "when": "user_type:grass"
+     },
+     {
+      "stat": "atk",
+      "stages": 1,
+      "target": "target",
+      "when": "target_type:grass"
+     },
+     {
+      "stat": "spa",
+      "stages": 1,
+      "target": "target",
+      "when": "target_type:grass"
+     }
+    ],
+    "ok": true
+   },
+   "Flower Shield": {
+    "blocks": [
+     {
+      "stat": "def",
+      "stages": 1,
+      "when": "user_type:grass"
+     },
+     {
+      "stat": "def",
+      "stages": 1,
+      "target": "target",
+      "when": "target_type:grass"
+     }
+    ],
+    "ok": true
+   },
+   "Venom Drench": {
+    "blocks": [
+     {
+      "stat": "atk",
+      "stages": -1,
+      "target": "target",
+      "when": "target_status:poison"
+     },
+     {
+      "stat": "spa",
+      "stages": -1,
+      "target": "target",
+      "when": "target_status:poison"
+     },
+     {
+      "stat": "spe",
+      "stages": -1,
+      "target": "target",
+      "when": "target_status:poison"
+     }
+    ],
+    "ok": true
+   },
+   "Aromatic Mist": {
+    "blocks": [],
+    "own_effect": true,
+    "donor": "Splash"
+   },
+   "King's Shield": {
+    "donor": "Protect",
+    "own_effect": true,
+    "props": {
+     "protect": "kings_shield"
+    },
+    "needs": [
+     "protect_variant"
+    ]
+   },
+   "Spiky Shield": {
+    "donor": "Protect",
+    "own_effect": true,
+    "props": {
+     "protect": "spiky_shield"
+    },
+    "needs": [
+     "protect_variant"
+    ]
+   },
+   "Baneful Bunker": {
+    "donor": "Protect",
+    "own_effect": true,
+    "props": {
+     "protect": "baneful_bunker"
+    },
+    "needs": [
+     "protect_variant"
+    ]
+   },
+   "Mat Block": {
+    "donor": "Protect",
+    "own_effect": true,
+    "note": "plain Protect (should work on the first turn only)"
+   },
+   "Rage Powder": {
+    "donor": "Follow Me",
+    "own_effect": true
+   },
+   "Mind Blown": {
+    "blocks": [
+     {
+      "hurt": 50,
+      "message": "{name} hurt itself!"
+     }
+    ],
+    "ok": true
+   },
+   "Fell Stinger": {
+    "blocks": [
+     {
+      "stat": "atk",
+      "stages": 3,
+      "when": "target_fainted",
+      "needs": [
+       "cond_fainted"
+      ]
+     }
+    ],
+    "needs": [
+     "cond_fainted"
+    ]
+   }
+  }
+ },
+ "abilities": {
+  "table": {
+   "124": [
+    "Pickpocket",
+    {
+     "contact": [
+      {
+       "steal_item": true
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "170": [
+    "Magician",
+    {
+     "hit_dealt": [
+      {
+       "steal_item": true
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "125": [
+    "Sheer Force",
+    {
+     "remove_secondary": true,
+     "damage_dealt": [
+      {
+       "when": "move_has_secondary",
+       "mult": 1.3
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "126": [
+    "Contrary",
+    {
+     "contrary": true
+    },
+    "partial",
+    "turns round the changes that come through a move's extra effect or an ability; the plain stat moves (Swords Dance) are not turned"
+   ],
+   "128": [
+    "Defiant",
+    {
+     "stat_dropped": [
+      {
+       "stat": "atk",
+       "stages": 2
+      }
+     ]
+    },
+    "partial",
+    "runs a moment after the drop (at the next hit or the end of the turn)"
+   ],
+   "129": [
+    "Defeatist",
+    {
+     "stat_mods": [
+      {
+       "stat": "atk",
+       "mult": 0.5,
+       "when": "hp_below_half"
+      },
+      {
+       "stat": "spa",
+       "mult": 0.5,
+       "when": "hp_below_half"
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "133": [
+    "Weak Armor",
+    {
+     "hit": [
+      {
+       "stat": "def",
+       "stages": -1,
+       "when": "physical"
+      },
+      {
+       "stat": "spe",
+       "stages": 2,
+       "when": "physical"
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "134": [
+    "Heavy Metal",
+    {},
+    "partial",
+    "doubles the weight only for Heavy Slam / Heat Crash"
+   ],
+   "135": [
+    "Light Metal",
+    {},
+    "partial",
+    "halves the weight only for Heavy Slam / Heat Crash"
+   ],
+   "136": [
+    "Multiscale",
+    {
+     "damage_taken": [
+      {
+       "when": "full_hp",
+       "mult": 0.5
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "137": [
+    "Toxic Boost",
+    {
+     "damage_dealt": [
+      {
+       "when": [
+        "physical",
+        "user_status:poison"
+       ],
+       "mult": 1.5
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "138": [
+    "Flare Boost",
+    {
+     "damage_dealt": [
+      {
+       "when": [
+        "special",
+        "user_status:burn"
+       ],
+       "mult": 1.5
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "141": [
+    "Moody",
+    {
+     "end_of_turn": [
+      {
+       "moody": true
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "143": [
+    "Poison Touch",
+    {
+     "hit_dealt": [
+      {
+       "status": "poison",
+       "target": "target",
+       "chance": 30,
+       "when": "contact"
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "144": [
+    "Regenerator",
+    {
+     "switch_out": [
+      {
+       "heal": 33.3
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "145": [
+    "Big Pecks",
+    {
+     "stat_drop_block": [
+      "def"
+     ]
+    },
+    "partial",
+    "stops the extra-effect drops of moves; a drop that always happens (Screech) still lands"
+   ],
+   "146": [
+    "Sand Rush",
+    {
+     "stat_mods": [
+      {
+       "stat": "spe",
+       "mult": 2,
+       "when": "weather:sand"
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "147": [
+    "Wonder Skin",
+    {
+     "accuracy_against": [
+      {
+       "when": "status_move",
+       "accuracy": 50
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "148": [
+    "Analytic",
+    {
+     "damage_dealt": [
+      {
+       "when": "slower_than_target",
+       "mult": 1.3
+      }
+     ]
+    },
+    "partial",
+    "compares speeds; it does not look at priority"
+   ],
+   "142": [
+    "Overcoat",
+    {
+     "immune_moves": [
+      "Cotton Spore",
+      "Magic Powder",
+      "Poison Powder",
+      "Powder",
+      "Rage Powder",
+      "Sleep Powder",
+      "Spore",
+      "Stun Spore"
+     ]
+    },
+    "partial",
+    "immune to powder / spore moves; the sandstorm / hail damage immunity is not built"
+   ],
+   "203": [
+    "Long Reach",
+    {
+     "no_contact": true
+    },
+    "partial",
+    "the foe's on-contact abilities of the pack (Mummy, Pickpocket, Poison Touch ...) do not run; the game's own contact abilities (Rough Skin, Static) still do"
+   ],
+   "152": [
+    "Mummy",
+    {
+     "contact": [
+      {
+       "set_ability": 152,
+       "target": "target"
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "153": [
+    "Moxie",
+    {
+     "ko": [
+      {
+       "stat": "atk",
+       "stages": 1
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "154": [
+    "Justified",
+    {
+     "hit": [
+      {
+       "stat": "atk",
+       "stages": 1,
+       "when": "type:dark"
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "155": [
+    "Rattled",
+    {
+     "hit": [
+      {
+       "stat": "spe",
+       "stages": 1,
+       "when": "type:dark"
+      },
+      {
+       "stat": "spe",
+       "stages": 1,
+       "when": "type:ghost"
+      },
+      {
+       "stat": "spe",
+       "stages": 1,
+       "when": "type:bug"
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "156": [
+    "Magic Bounce",
+    {
+     "reflect_status": true
+    },
+    "full",
+    ""
+   ],
+   "157": [
+    "Sap Sipper",
+    {
+     "absorb": [
+      {
+       "type": "Grass",
+       "stat": "atk",
+       "stages": 1
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "158": [
+    "Prankster",
+    {
+     "priority": [
+      {
+       "when": "status_move",
+       "add": 1
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "159": [
+    "Sand Force",
+    {
+     "damage_dealt": [
+      {
+       "when": [
+        "weather:sand",
+        "type:rock"
+       ],
+       "mult": 1.3
+      },
+      {
+       "when": [
+        "weather:sand",
+        "type:ground"
+       ],
+       "mult": 1.3
+      },
+      {
+       "when": [
+        "weather:sand",
+        "type:steel"
+       ],
+       "mult": 1.3
+      }
+     ]
+    },
+    "full",
+    "the sandstorm damage immunity is not built"
+   ],
+   "160": [
+    "Iron Barbs",
+    {
+     "contact": [
+      {
+       "hurt": 12.5,
+       "target": "target"
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "162": [
+    "Victory Star",
+    {
+     "accuracy_dealt": [
+      {
+       "mult": 1.1
+      }
+     ]
+    },
+    "partial",
+    "its own moves only (no allies in single battles)"
+   ],
+   "168": [
+    "Protean",
+    {
+     "before_move": [
+      {
+       "set_type": "move"
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "169": [
+    "Fur Coat",
+    {
+     "damage_taken": [
+      {
+       "when": "physical",
+       "mult": 0.5
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "171": [
+    "Bulletproof",
+    {
+     "immune_moves": [
+      "Acid Spray",
+      "Aura Sphere",
+      "Barrage",
+      "Bullet Seed",
+      "Egg Bomb",
+      "Electro Ball",
+      "Energy Ball",
+      "Focus Blast",
+      "Gyro Ball",
+      "Ice Ball",
+      "Magnet Bomb",
+      "Mist Ball",
+      "Mud Bomb",
+      "Octazooka",
+      "Rock Wrecker",
+      "Searing Shot",
+      "Seed Bomb",
+      "Shadow Ball",
+      "Sludge Bomb",
+      "Weather Ball",
+      "Zap Cannon",
+      "Pollen Puff"
+     ]
+    },
+    "full",
+    ""
+   ],
+   "172": [
+    "Competitive",
+    {
+     "stat_dropped": [
+      {
+       "stat": "spa",
+       "stages": 2
+      }
+     ]
+    },
+    "partial",
+    "runs a moment after the drop (at the next hit or the end of the turn)"
+   ],
+   "173": [
+    "Strong Jaw",
+    {
+     "damage_dealt": [
+      {
+       "when": {
+        "move_in": [
+         "Bite",
+         "Crunch",
+         "Fire Fang",
+         "Ice Fang",
+         "Thunder Fang",
+         "Poison Fang",
+         "Psychic Fangs",
+         "Hyper Fang"
+        ]
+       },
+       "mult": 1.5
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "174": [
+    "Refrigerate",
+    {
+     "convert": [
+      {
+       "from": 0,
+       "to": 15,
+       "mult": 1.2
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "175": [
+    "Sweet Veil",
+    {
+     "status_block": [
+      "sleep"
+     ]
+    },
+    "partial",
+    "for itself only (no allies in single battles); stops the extra-effect sleep of moves"
+   ],
+   "177": [
+    "Gale Wings",
+    {
+     "priority": [
+      {
+       "when": [
+        "type:flying",
+        "full_hp"
+       ],
+       "add": 1
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "178": [
+    "Mega Launcher",
+    {
+     "damage_dealt": [
+      {
+       "when": {
+        "move_in": [
+         "Aura Sphere",
+         "Dark Pulse",
+         "Dragon Pulse",
+         "Heal Pulse",
+         "Origin Pulse",
+         "Water Pulse"
+        ]
+       },
+       "mult": 1.5
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "179": [
+    "Grass Pelt",
+    {
+     "stat_mods": [
+      {
+       "stat": "def",
+       "mult": 1.5,
+       "when": "terrain:grassy"
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "181": [
+    "Tough Claws",
+    {
+     "damage_dealt": [
+      {
+       "when": "contact",
+       "mult": 1.3
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "182": [
+    "Pixilate",
+    {
+     "convert": [
+      {
+       "from": 0,
+       "to": 18,
+       "mult": 1.2
+      }
+     ]
+    },
+    "partial",
+    "Fairy exists only with the choice \"Modern types\"; without it the moves stay Normal"
+   ],
+   "183": [
+    "Gooey",
+    {
+     "contact": [
+      {
+       "stat": "spe",
+       "stages": -1,
+       "target": "target"
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "184": [
+    "Aerilate",
+    {
+     "convert": [
+      {
+       "from": 0,
+       "to": 2,
+       "mult": 1.2
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "185": [
+    "Parental Bond",
+    {
+     "damage_dealt": [
+      {
+       "when": "damaging_move",
+       "mult": 1.25
+      }
+     ]
+    },
+    "partial",
+    "the second hit (a quarter as strong) is folded into one hit that is 1.25 times as strong; no second chance for a secondary effect"
+   ],
+   "186": [
+    "Dark Aura",
+    {
+     "aura": {
+      "type": 17,
+      "mult": 1.33
+     }
+    },
+    "full",
+    ""
+   ],
+   "187": [
+    "Fairy Aura",
+    {
+     "aura": {
+      "type": 18,
+      "mult": 1.33
+     }
+    },
+    "partial",
+    "Fairy exists only with the choice \"Modern types\""
+   ],
+   "188": [
+    "Aura Break",
+    {
+     "breaks_auras": true
+    },
+    "full",
+    ""
+   ],
+   "189": [
+    "Primordial Sea",
+    {
+     "switch_in": [
+      {
+       "weather": "rain"
+      }
+     ]
+    },
+    "partial",
+    "plain rain (no heavy rain that nothing can end)"
+   ],
+   "190": [
+    "Desolate Land",
+    {
+     "switch_in": [
+      {
+       "weather": "sun"
+      }
+     ]
+    },
+    "partial",
+    "plain sun (no extreme sun that nothing can end)"
+   ],
+   "192": [
+    "Stamina",
+    {
+     "hit": [
+      {
+       "stat": "def",
+       "stages": 1
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "195": [
+    "Water Compaction",
+    {
+     "hit": [
+      {
+       "stat": "def",
+       "stages": 2,
+       "when": "type:water"
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "196": [
+    "Merciless",
+    {
+     "crit_when": [
+      "target_status:poison"
+     ]
+    },
+    "full",
+    ""
+   ],
+   "198": [
+    "Stakeout",
+    {
+     "damage_dealt": [
+      {
+       "when": "target_first_turn",
+       "mult": 2
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "199": [
+    "Water Bubble",
+    {
+     "damage_dealt": [
+      {
+       "when": "type:water",
+       "mult": 2
+      }
+     ],
+     "damage_taken": [
+      {
+       "when": "type:fire",
+       "mult": 0.5
+      }
+     ],
+     "status_block": [
+      "burn"
+     ]
+    },
+    "full",
+    "the burn is stopped only for extra effects of moves"
+   ],
+   "200": [
+    "Steelworker",
+    {
+     "damage_dealt": [
+      {
+       "when": "type:steel",
+       "mult": 1.5
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "201": [
+    "Berserk",
+    {
+     "hit": [
+      {
+       "stat": "spa",
+       "stages": 1,
+       "when": "hp_crossed_half"
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "202": [
+    "Slush Rush",
+    {
+     "stat_mods": [
+      {
+       "stat": "spe",
+       "mult": 2,
+       "when": "weather:hail"
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "204": [
+    "Liquid Voice",
+    {
+     "convert": [
+      {
+       "to": 11,
+       "mult": 1.0,
+       "when": "sound"
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "205": [
+    "Triage",
+    {
+     "priority": [
+      {
+       "when": {
+        "move_in": [
+         "Recover",
+         "Softboiled",
+         "Roost",
+         "Heal Order",
+         "Moonlight",
+         "Morning Sun",
+         "Synthesis",
+         "Milk Drink",
+         "Slack Off",
+         "Shore Up",
+         "Heal Pulse",
+         "Floral Healing",
+         "Absorb",
+         "Mega Drain",
+         "Giga Drain",
+         "Leech Life",
+         "Dream Eater",
+         "Drain Punch",
+         "Horn Leech",
+         "Parabolic Charge",
+         "Draining Kiss",
+         "Oblivion Wing"
+        ]
+       },
+       "add": 3
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "206": [
+    "Galvanize",
+    {
+     "convert": [
+      {
+       "from": 0,
+       "to": 13,
+       "mult": 1.2
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "207": [
+    "Surge Surfer",
+    {
+     "stat_mods": [
+      {
+       "stat": "spe",
+       "mult": 2,
+       "when": "terrain:electric"
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "214": [
+    "Queenly Majesty",
+    {
+     "blocks_priority": true
+    },
+    "full",
+    ""
+   ],
+   "219": [
+    "Dazzling",
+    {
+     "blocks_priority": true
+    },
+    "full",
+    ""
+   ],
+   "215": [
+    "Innards Out",
+    {
+     "fainted": [
+      {
+       "hurt_dealt": 100,
+       "target": "target"
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "218": [
+    "Fluffy",
+    {
+     "damage_taken": [
+      {
+       "when": "contact",
+       "mult": 0.5
+      },
+      {
+       "when": "type:fire",
+       "mult": 2
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "221": [
+    "Tangling Hair",
+    {
+     "contact": [
+      {
+       "stat": "spe",
+       "stages": -1,
+       "target": "target"
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "224": [
+    "Beast Boost",
+    {
+     "ko": [
+      {
+       "stat": "best",
+       "stages": 1
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "226": [
+    "Electric Surge",
+    {
+     "switch_in": [
+      {
+       "terrain": "electric"
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "227": [
+    "Psychic Surge",
+    {
+     "switch_in": [
+      {
+       "terrain": "psychic"
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "228": [
+    "Misty Surge",
+    {
+     "switch_in": [
+      {
+       "terrain": "misty"
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "229": [
+    "Grassy Surge",
+    {
+     "switch_in": [
+      {
+       "terrain": "grassy"
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "230": [
+    "Full Metal Body",
+    {
+     "acts_as": "Clear Body"
+    },
+    "full",
+    ""
+   ],
+   "231": [
+    "Shadow Shield",
+    {
+     "damage_taken": [
+      {
+       "when": "full_hp",
+       "mult": 0.5
+      }
+     ]
+    },
+    "full",
+    ""
+   ],
+   "161": [
+    "Zen Mode",
+    {},
+    "full",
+    "Darmanitan: Zen Mode form at half HP or less, Standard above it (when it comes in and at the end of each turn): forms_battle.cpp"
+   ],
+   "176": [
+    "Stance Change",
+    {},
+    "full",
+    "Aegislash: Blade Forme before a damaging move, Shield Forme before Kings Shield: forms_battle.cpp"
+   ],
+   "197": [
+    "Shields Down",
+    {},
+    "partial",
+    "Minior: Core form at half HP or less, Meteor form above it; the status immunity of the Meteor form is not built"
+   ],
+   "208": [
+    "Schooling",
+    {},
+    "full",
+    "Wishiwashi: School Form at level 20 and HP above a quarter, Solo Form below: forms_battle.cpp"
+   ],
+   "209": [
+    "Disguise",
+    {},
+    "partial",
+    "Mimikyu: the first damaging hit does no damage, it loses 1/8 HP and is Busted until the battle ends; the AI does not know it"
+   ],
+   "216": [
+    "Dancer",
+    {
+     "dancer": [
+      "Swords Dance",
+      "Dragon Dance",
+      "Feather Dance",
+      "Teeter Dance",
+      "Petal Dance",
+      "Quiver Dance",
+      "Fiery Dance",
+      "Revelation Dance",
+      "Lunar Dance"
+     ]
+    },
+    "partial",
+    "after another Pokemon uses a dance move the first Dancer of the others copies it at once with the move's own script (its own message, PP line and effects); only the first Dancer copies when there are two, and a dance move that failed is copied too"
+   ],
+   "211": [
+    "Power Construct",
+    {},
+    "partial",
+    "Zygarde: Complete Forme (the form row from the dump) when its HP falls to half or less, checked when it comes in and at the end of each turn, kept for the rest of the battle: forms_battle.cpp; the Complete Forme keeps the base model (its own model is not made); only reachable through the hidden ability (Gen 5-7 rule sets)"
+   ],
+   "210": [
+    "Battle Bond",
+    {},
+    "partial",
+    "Greninja: Ash-Greninja after a KO; the Water Shuriken change is not built"
+   ],
+   "163": [
+    "Turboblaze",
+    {},
+    "full",
+    "the foe's ability is ignored as Mold Breaker does it (needs the Gen 4 rules, where Mold Breaker lives)"
+   ],
+   "164": [
+    "Teravolt",
+    {},
+    "full",
+    "the foe's ability is ignored as Mold Breaker does it (needs the Gen 4 rules, where Mold Breaker lives)"
+   ],
+   "213": [
+    "Comatose",
+    {
+     "status_block": [
+      "all"
+     ]
+    },
+    "partial",
+    "no status problems from the extra effects of moves; it does not count as asleep"
+   ],
+   "220": [
+    "Soul-Heart",
+    {
+     "any_faint": [
+      {
+       "stat": "spa",
+       "stages": 1
+      }
+     ]
+    },
+    "partial",
+    "Sp. Atk +1 when a Pokemon is knocked out by a hit (not by poison, weather ...)"
+   ],
+   "131": [
+    "Healer",
+    {},
+    "partial",
+    "ally only: does nothing in single battles (as in the games)"
+   ],
+   "132": [
+    "Friend Guard",
+    {},
+    "partial",
+    "ally only: does nothing in single battles (as in the games)"
+   ],
+   "140": [
+    "Telepathy",
+    {},
+    "partial",
+    "ally only: does nothing in single battles (as in the games)"
+   ],
+   "165": [
+    "Aroma Veil",
+    {},
+    "partial",
+    "ally only: does nothing in single battles (as in the games)"
+   ],
+   "166": [
+    "Flower Veil",
+    {},
+    "partial",
+    "ally only: does nothing in single battles (as in the games)"
+   ],
+   "180": [
+    "Symbiosis",
+    {},
+    "partial",
+    "ally only: does nothing in single battles (as in the games)"
+   ],
+   "217": [
+    "Battery",
+    {},
+    "partial",
+    "ally only: does nothing in single battles (as in the games)"
+   ],
+   "222": [
+    "Receiver",
+    {},
+    "partial",
+    "ally only: does nothing in single battles (as in the games)"
+   ],
+   "223": [
+    "Power of Alchemy",
+    {},
+    "partial",
+    "ally only: does nothing in single battles (as in the games)"
+   ],
+   "127": [
+    "Unnerve",
+    {
+     "unnerve": true
+    },
+    "full",
+    "foes' berries have no effect while it is out (the foe's berry effect is read as none)"
+   ],
+   "130": [
+    "Cursed Body",
+    {
+     "disable_on_hit": 30
+    },
+    "full",
+    "30 % to Disable the move that hit it (the game's own Disable state on the attacker)"
+   ],
+   "139": [
+    "Harvest",
+    {
+     "end_of_turn": [
+      {
+       "restore_berry": true,
+       "when": "weather:sun",
+       "message": "{name} harvested its berry!"
+      },
+      {
+       "restore_berry": true,
+       "chance": 50,
+       "when": "!weather:sun",
+       "message": "{name} harvested its berry!"
+      }
+     ]
+    },
+    "full",
+    "the berry it used up (the game remembers it, as Recycle does) comes back at the end of the turn: 50 %, always in sun"
+   ],
+   "167": [
+    "Cheek Pouch",
+    {
+     "berry_eaten": [
+      {
+       "heal": 33.3
+      }
+     ]
+    },
+    "full",
+    "a third of its HP back when it eats a berry; the heal follows the berry at the end of the move that made it eat"
+   ],
+   "150": [
+    "Imposter",
+    {
+     "switch_in": [
+      {
+       "transform": true,
+       "message": "{name} transformed into {foe}!"
+      }
+     ]
+    },
+    "partial",
+    "the game's own Transform command on entering; no transform picture (the model is changed by the game's Transform script, not by the command)"
+   ],
+   "151": [
+    "Infiltrator",
+    {
+     "infiltrator": true
+    },
+    "partial",
+    "its moves pass the foe's Reflect, Light Screen, Aurora Veil, Safeguard and Mist; Substitute is not bypassed"
+   ],
+   "193": [
+    "Wimp Out",
+    {
+     "half_hp": [
+      {
+       "switch_out": "user"
+      }
+     ]
+    },
+    "full",
+    "when a hit takes it to half HP or less it goes back at the end of the move that hit it (Baton Pass's own switch-out, where U-turn's runs) and the replacement comes in (seen on the player's side; a wild Pokemon flees through the game's own forced-out script: written, not tested); the foe side's replacement was not seen"
+   ],
+   "194": [
+    "Emergency Exit",
+    {
+     "half_hp": [
+      {
+       "switch_out": "user"
+      }
+     ]
+    },
+    "partial",
+    "the same as Wimp Out"
+   ],
+   "212": [
+    "Corrosion",
+    {
+     "poison_any_type": true
+    },
+    "full",
+    "poison from its moves also works on Steel and Poison types"
+   ],
+   "191": [
+    "Delta Stream",
+    {
+     "strong_wind": true,
+     "switch_in": [
+      {
+       "message": "The mysterious air current blows on regardless!"
+      }
+     ]
+    },
+    "partial",
+    "while it is out Flying Pokemon take no extra damage from Rock, Ice and Electric moves; the weather is NOT removed and weather moves still work"
+   ],
+   "225": [
+    "RKS System",
+    {
+     "type_by_item": [
+      {
+       "item": "Fighting Memory",
+       "type": 1
+      },
+      {
+       "item": "Flying Memory",
+       "type": 2
+      },
+      {
+       "item": "Poison Memory",
+       "type": 3
+      },
+      {
+       "item": "Ground Memory",
+       "type": 4
+      },
+      {
+       "item": "Rock Memory",
+       "type": 5
+      },
+      {
+       "item": "Bug Memory",
+       "type": 6
+      },
+      {
+       "item": "Ghost Memory",
+       "type": 7
+      },
+      {
+       "item": "Steel Memory",
+       "type": 8
+      },
+      {
+       "item": "Fire Memory",
+       "type": 10
+      },
+      {
+       "item": "Water Memory",
+       "type": 11
+      },
+      {
+       "item": "Grass Memory",
+       "type": 12
+      },
+      {
+       "item": "Electric Memory",
+       "type": 13
+      },
+      {
+       "item": "Psychic Memory",
+       "type": 14
+      },
+      {
+       "item": "Ice Memory",
+       "type": 15
+      },
+      {
+       "item": "Dragon Memory",
+       "type": 16
+      },
+      {
+       "item": "Dark Memory",
+       "type": 17
+      },
+      {
+       "item": "Fairy Memory",
+       "type": 18
+      }
+     ]
+    },
+    "full",
+    "its type follows the Memory it holds (the 17 Memory items are in the pack and sold at the prize desk under the Gen 5-7 rules); Multi-Attack takes the same type"
+   ],
+   "232": [
+    "Prism Armor",
+    {
+     "damage_taken": [
+      {
+       "when": "super_effective",
+       "mult": 0.75
+      }
+     ]
+    },
+    "full",
+    ""
+   ]
+  },
+  "not_built_why": {
+   "127": "foes eating berries: berries are not tracked",
+   "130": "disabling the attacker: Disable is not a block",
+   "131": "ally only",
+   "132": "ally only",
+   "139": "berries are not tracked",
+   "140": "ally only",
+   "142": "powder / weather immunity not built",
+   "149": "disguise as a party member (not built: needs the model and name of another party member)",
+   "150": "Transform on entry",
+   "151": "passes screens and Substitute",
+   "161": "form change",
+   "163": "ignoring abilities needs the Gen 4 rules",
+   "164": "ignoring abilities needs the Gen 4 rules",
+   "165": "ally only",
+   "166": "ally only",
+   "167": "berries are not tracked",
+   "176": "form change",
+   "180": "ally only",
+   "191": "no strong-wind weather",
+   "197": "form change",
+   "203": "moves that never make contact",
+   "208": "form change",
+   "209": "form change",
+   "210": "form change",
+   "211": "form change",
+   "213": "never wakes up",
+   "216": "copying dance moves",
+   "217": "ally only",
+   "220": "reacting to every faint",
+   "222": "ally only",
+   "223": "ally only",
+   "225": "form change"
+  },
+  "form_triggers": {
+   "161": "Zen Mode (Darmanitan): Zen Mode form when HP is half or less at the end of a turn, back to normal above half",
+   "176": "Stance Change (Aegislash): Blade Forme when it uses a damaging move, Shield Forme when it uses King's Shield",
+   "197": "Shields Down (Minior): Core form (shell broken) when HP falls to half or less; Meteor form above half; no status problems while in Meteor form",
+   "208": "Schooling (Wishiwashi): School Form when level 20 or more and HP above a quarter, Solo Form at a quarter or less, checked on entering and at the end of a turn",
+   "209": "Disguise (Mimikyu): Busted Form after the first damaging hit (the hit does no damage, it loses 1/8 of its HP instead); stays Busted until the battle ends",
+   "210": "Battle Bond (Greninja): Ash-Greninja after it knocks out a foe",
+   "211": "Power Construct (Zygarde): Complete Forme when HP is half or less at the end of a turn",
+   "225": "RKS System (Silvally): type follows the memory item held",
+   "181": "Tough Claws, 184 Aerilate, 185 Parental Bond (Mega Kangaskhan / Mega Pinsir / Mega Gyarados abilities): built, the form only has to give the ability number",
+   "189": "Primordial Sea (Primal Kyogre) / 190 Desolate Land (Primal Groudon): built as plain rain / sun on entering; the Primal form change itself is the forms machinery's"
+  }
+ },
+ "all": {
+  "spots57": {
+   "esabapokemondata_E1": [
+    524,
+    529,
+    551,
+    610,
+    498
+   ],
+   "esabapokemondata_E2": [
+    540,
+    548,
+    506,
+    722,
+    495
+   ],
+   "esabapokemondata_E3": [
+    527,
+    532,
+    595,
+    633,
+    501
+   ]
+  },
+  "legend57": [
+   494,
+   638,
+   639,
+   640,
+   641,
+   642,
+   643,
+   644,
+   645,
+   646,
+   647,
+   648,
+   649,
+   716,
+   717,
+   718,
+   719,
+   720,
+   721,
+   772,
+   773,
+   785,
+   786,
+   787,
+   788,
+   789,
+   790,
+   791,
+   792,
+   793,
+   794,
+   795,
+   796,
+   797,
+   798,
+   799,
+   800,
+   801,
+   802,
+   803,
+   804,
+   805,
+   806,
+   807
+  ],
+  "fairy_species_old": [
+   35,
+   36,
+   39,
+   40,
+   122,
+   173,
+   174,
+   175,
+   176,
+   183,
+   184,
+   209,
+   210,
+   468
+  ],
+  "evo_notes": "USUM methods: 1-3 friendship (kept, 1), 4 level (kept), 5 trade (kept), 9-11 stat comparison (kept as 8-10), 12 / 13 Silcoon / Cascoon, 14 Ninjask, 15 Shedinja, 16 beauty (kept as the Gen 3 kinds), 6 trade with item, 7 trade for species, 8 / 17 / 18 / 19 / 20 use item (stones), 21 knows a move, 22 species in the party, 23 / 24 level by gender, 25-... places and special rules: XD cannot do the item / place ones, so they become LEVEL 36 (22 for a first stage, 40 for a second): the Pokemon evolves by level in Orre instead",
+  "no_effect": {
+   "en": " (No effect in this game yet.)",
+   "de": " (In diesem Spiel noch ohne Wirkung.)",
+   "fr": " (Pas encore d'effet dans ce jeu.)",
+   "it": " (Ancora nessun effetto in questo gioco.)",
+   "es": " (A\u00fan sin efecto en este juego.)",
+   "ja": "\uff08\u3053\u306e\u30b2\u30fc\u30e0\u3067\u306f\u307e\u3060\u52b9\u679c\u306a\u3057\uff09"
+  }
+ },
+ "forms": {
+  "stone_doc": {
+   "en": "{S} Mega{00}Evolves when it{00}holds this.",
+   "fr": "{S} peut{00}m\u00e9ga-\u00e9voluer{00}s'il le tient.",
+   "de": "Mega-Entwicklung{00}f\u00fcr {S}{00}beim Tragen.",
+   "it": "Megaevoluzione{00}di {S}{00}se tenuta.",
+   "es": "Megaevoluci\u00f3n{00}de {S}{00}si lo lleva.",
+   "ja": "{S}\u304c{00}\u30e1\u30ac\u30b7\u30f3\u30ab\u3067\u304d\u308b{00}\u6301\u305f\u305b\u308b\u3068"
+  },
+  "charm_doc": {
+   "en": [
+    "ALOLA CHARM",
+    "Held at evolution,{00}it picks the{00}Alolan form."
+   ],
+   "fr": [
+    "AMULETTE ALOLA",
+    "Port\u00e9e \u00e0 l'\u00e9volution,{00}elle donne la forme{00}d'Alola."
+   ],
+   "de": [
+    "ALOLA-AMULETT",
+    "Beim Entwickeln{00}getragen: w\u00e4hlt die{00}Alola-Form."
+   ],
+   "it": [
+    "TALISMANO ALOLA",
+    "Tenuto all'evoluzione{00}d\u00e0 la forma{00}di Alola."
+   ],
+   "es": [
+    "AMULETO ALOLA",
+    "Si lo lleva al{00}evolucionar, da la{00}forma de Alola."
+   ],
+   "ja": [
+    "\u30a2\u30ed\u30fc\u30e9\u306e\u304a\u307e\u3082\u308a",
+    "\u9032\u5316\u3059\u308b\u3068\u304d{00}\u6301\u305f\u305b\u308b\u3068{00}\u30a2\u30ed\u30fc\u30e9\u306e\u59ff\u306b\u306a\u308b\u3002"
+   ]
+  },
+  "stone_coupon": 12000,
+  "charm_coupon": 5000,
+  "rotom_signature": {
+   "1": 315,
+   "2": 56,
+   "3": 59,
+   "4": 403,
+   "5": 437
+  },
+  "model_form_code": {
+   "alola": "61",
+   "mega": "5%d",
+   "primal": "5%d"
+  }
+ },
+ "patch": {
+  "coupon": 20000,
+  "memory_coupon": 3000,
+  "memories": [
+   "Fighting",
+   "Flying",
+   "Poison",
+   "Ground",
+   "Rock",
+   "Bug",
+   "Ghost",
+   "Steel",
+   "Fire",
+   "Water",
+   "Grass",
+   "Electric",
+   "Psychic",
+   "Ice",
+   "Dragon",
+   "Dark",
+   "Fairy"
+  ],
+  "doc": {
+   "us": [
+    "ABILITY PATCH",
+    "Changes a Pokemon{00}to its hidden{00}ability."
+   ],
+   "fr": [
+    "PATCH CAPACITE",
+    "Donne au Pokemon{00}sa capacite{00}cachee."
+   ],
+   "de": [
+    "FAEHIGK.-PFLASTER",
+    "Gibt einem Pokemon{00}seine Versteckte{00}Faehigkeit."
+   ],
+   "it": [
+    "CEROTTO ABILITA",
+    "Da al Pokemon{00}la sua abilita{00}nascosta."
+   ],
+   "es": [
+    "PARCHE HABILIDAD",
+    "Da al Pokemon su{00}habilidad{00}oculta."
+   ],
+   "jp": [
+    "\u3068\u304f\u305b\u3044\u30d1\u30c3\u30c1",
+    "\u30dd\u30b1\u30e2\u30f3\u3092{00}\u304b\u304f\u308c\u3068\u304f\u305b\u3044\u306b{00}\u304b\u3048\u308b\u3002"
+   ]
+  },
+  "folders": {
+   "data": "us",
+   "data_fr": "fr",
+   "data_ge": "de",
+   "data_it": "it",
+   "data_sp": "es",
+   "data_jp": "jp"
+  }
+ }
+}

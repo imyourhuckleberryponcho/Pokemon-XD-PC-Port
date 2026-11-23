@@ -34,6 +34,7 @@ import gen57_pack as P
 import gen57_data as D
 import gen57_moves as MV
 import gen57_abilities as AB
+import gen57_speed as SP
 
 FIRST, LAST = 494, 807
 SLOW_FIRST = {655, 724, 727, 764, 780, 791, 805, 806}
@@ -204,7 +205,21 @@ def icon_faces(u, out_dir, mn):
 
 
 
-SND_DATA_COUNT, SND_FILE_COUNT, WAVE_OLD, CRY_GROUP = 1507, 516, 389, 1966
+SND_DATA_COUNT, SND_FILE_COUNT, WAVE_OLD = 1507, 516, 389
+
+
+
+
+CRY_RESERVED = 106
+CRY57_GROUP = 4600
+CRY57_ARCHIVE = 'stm_se_nakigoe_gen57'
+
+
+def fnv64_hex(data):
+    h = 14695981039346656037
+    for b in data:
+        h = ((h ^ b) * 1099511628211) & 0xFFFFFFFFFFFFFFFF
+    return '%016x' % h
 
 
 def xd_voices(d):
@@ -220,7 +235,7 @@ def xd_voices(d):
 
 
 def make_cries(u, d, tmp, a, nats, standins, cw, rows_out, species_edit):
-    """Cry streams (header + body members) in a copy of the Gen 4 pack's cry archive, snd rows after the Gen 4 ones, the PDA waveforms."""
+    """Cry streams (header + body members) in an archive of their own, snd rows after the room reserved for the Gen 4 pack's, the PDA waveforms."""
     import noddisc
     import n3ds_cries as C
     import gen4_cry
@@ -228,35 +243,28 @@ def make_cries(u, d, tmp, a, nats, standins, cw, rows_out, species_edit):
     g4 = open(os.path.join(a.gen4_pack, 'tables.txt')).read().splitlines()
     n4 = sum(1 for l in g4 if l.startswith('row snd_file '))
     w4 = sum(1 for l in g4 if l.startswith('wave '))
+    assert n4 <= CRY_RESERVED and w4 <= CRY_RESERVED, 'the Gen 4 pack has more cries than the Gen 5-7 pack left room for'
     waves = C.cry_waves(a.rom)
     voices = xd_voices(d)
-    cry_name = 'stm_se_nakigoe_archive.fsys'
-    g4cry = open(os.path.join(a.gen4_pack, 'files', cry_name), 'rb').read()
-    old = noddisc.fsys_entries(g4cry)
-    ents = [(e.word0, e.type, e.name, noddisc.stored(g4cry, e), e.size, e.packed) for e in old]
-    used = {e.word0 >> 16 for e in old}
-    new_h, new_b, notes = [], [], {}
+    hdrs, bods, notes = [], [], {}
     j = 0
     for nat in nats:
         w = cw.get(str(nat))
         if w is None:
             continue
         hdr, body, nt = gen4_cry.build_xd(C.parse_cwav(waves[w]))
-        n = n4 + j
-        hid, bid = 0x2000 + 2 * j, 0x2001 + 2 * j
-        assert hid not in used and bid not in used, 'cry member id clash'
-        new_h.append(((hid << 16) | (20 << 9), 20, '(null)', hdr))
-        new_b.append(((bid << 16) | (21 << 9), 21, '(null)', body))
-        rows_out.append('row snd_file %d 1 -1 0:4:%d 4:4:%d 8:4:%d' % (SND_FILE_COUNT + n, CRY_GROUP, (hid << 16) | (20 << 9), (bid << 16) | (21 << 9)))
+        n = CRY_RESERVED + j
+        hid, bid = 0x100 + 2 * j, 0x101 + 2 * j
+        hdrs.append(((hid << 16) | (20 << 9), 20, '(null)', hdr))
+        bods.append(((bid << 16) | (21 << 9), 21, '(null)', body))
+        rows_out.append('row snd_file %d 1 -1 0:4:%d 4:4:%d 8:4:%d' % (SND_FILE_COUNT + n, CRY57_GROUP, (hid << 16) | (20 << 9), (bid << 16) | (21 << 9)))
         rows_out.append('row snd_data %d 1 %d 6:2:%d' % (SND_DATA_COUNT + n, voices[standins[nat]], SND_FILE_COUNT + n))
         rows_out.append('wave %d %s' % (nat, gen4_cry.wave_disp(hdr, body).hex()))
-        species_edit[nat] = dict(nakigoeId=WAVE_OLD + w4 + j, voice=SND_DATA_COUNT + n)
+        species_edit[nat] = dict(nakigoeId=WAVE_OLD + CRY_RESERVED + j, voice=SND_DATA_COUNT + n)
         notes[nat] = dict(wave=w, notes=nt)
         j += 1
-    hdrs = [e for e in ents if e[1] == 20] + new_h
-    bods = [e for e in ents if e[1] == 21] + new_b
-    rest = [e for e in ents if e[1] not in (20, 21)]
-    open(os.path.join(tmp, 'files', cry_name), 'wb').write(G4.build_fsys(struct.unpack_from('>I', g4cry, 8)[0], hdrs + bods + rest))
+    if j:
+        open(os.path.join(tmp, 'files', CRY57_ARCHIVE + '.fsys'), 'wb').write(G4.build_fsys(CRY57_GROUP, hdrs + bods))
     return notes
 
 
@@ -320,7 +328,8 @@ def randomizer_lines(u, report, rows_by_nat):
 _W = {}
 
 
-def _init(rom, xd_disc):
+def _init(rom, xd_disc, ladder=None):
+    _W['ladder'] = ladder or {}
     import pbr_models as PM
     import usum_models as UM
     PM.find_nod()
@@ -353,14 +362,8 @@ def _convert_one(job):
             raise
         p = u.personal(nat)
 
-
-        for side, dec, atol, ctol, quant in ((256, 2600, 1, 1, 0), (256, 2600, 3, 2, 0), (128, 2600, 3, 2, 0), (128, 2600, 8, 3, 0), (128, 2600, 16, 3, 32),
-                                             (128, 2600, 16, 4, 16), (128, 2000, 24, 4, 16), (64, 1600, 24, 5, 12), (64, 1200, 32, 6, 8), (64, 900, 32, 6, 8), (64, 600, 32, 6, 8)):
-            pkx, info = gf_to_xd.convert(gm, texs, mots, xd_bytes, mode='role', log=lambda t: None,
-                                         opts=dict(ground=True, decimate=dec, fire=True, light=1.0, eyes=True, size_rule='mainline', max_side=side,
-                                                   height_cm=p.height_cm, hover_rule='model', match=False, anim_tol=atol, chan_tol=ctol, quant=quant), hover=None)
-            if len(pkx) <= 614400:
-                break
+        pkx, info, _step = SP.convert_ladder(gf_to_xd.convert, gm, texs, mots, xd_bytes, p.height_cm, start=_W.get('ladder', {}).get(str(nat), 0),
+                                             record=SP.record_path('sp', nat))
     except BaseException as e:
         rep = dict(error=repr(e)[:200], model_number=mnum)
         json.dump(rep, open(rpath, 'w'))
@@ -413,7 +416,7 @@ def main():
     if not a.no_models:
         todo = [(n, standins[n], model_number(n, mn), tmp, n - FIRST) for n in nats]
         todo.sort(key=lambda j: j[0] not in SLOW_FIRST)
-        with cf.ProcessPoolExecutor(max_workers=jobs, initializer=_init, initargs=(a.rom, a.xd_disc)) as ex:
+        with cf.ProcessPoolExecutor(max_workers=jobs, initializer=_init, initargs=(a.rom, a.xd_disc, SP.load(a.rom).get('ladder', {}))) as ex:
             futs = [ex.submit(_convert_one, j) for j in todo]
             for i, f in enumerate(cf.as_completed(futs)):
                 nat, rep = f.result()
@@ -430,7 +433,10 @@ def main():
             ok.remove(n)
             r['left_out'] = 'over the 614400-byte file cap (%d bytes): stand-in model' % r['size']
     toc_rows = [(P.PKX_GROUP_FIRST + n - FIRST, 'pkx_n3_%d' % n) for n in ok]
+    if a.cries:
+        toc_rows.append((CRY57_GROUP, CRY57_ARCHIVE))
     open(os.path.join(tmp, 'files', toc_name), 'wb').write(G4.extend_toc(g4toc, toc_rows))
+    g4toc_hash = fnv64_hex(g4toc)
     for n in ok:
         pass
 
@@ -488,10 +494,13 @@ def main():
     json.dump({'_note': 'made by gen57_all.py: what the new abilities do (docs/modding/battle-effects.md)', 'abilities': adefs},
               open(os.path.join(tmp, 'battle', 'abilities.json'), 'w', encoding='utf-8'), indent=1)
     json.dump(areport, open(os.path.join(tmp, 'abilities_report.json'), 'w'), indent=1)
+    import gen57_hidden as HID
+    HID.write(u, tmp)
     open(os.path.join(tmp, 'tables.txt'), 'w').write('\n'.join(['format 1', 'pkxcount 419'] + cry_rows + pkx_rows + name_lines) + '\n')
     json.dump([dict(species=n, level=lv, usum_move=m, xd_row=m + 20) for n, lv, m in pending], open(os.path.join(tmp, 'pending_moves.json'), 'w'))
     json.dump(dict(id='ultra-sun-moon-gen57', version=P.PACK_VERSION, species=len(nats), moves=len(mreport_moves), fairy_moves=fairy, abilities=len(abil_ids), game='GXXE01',
-                   generated_from=u.prod, needs='gen4-rows', evolution_rule=EVO_NOTES),
+                   generated_from=u.prod, needs='gen4-rows', evolution_rule=EVO_NOTES,
+                   **(dict(cry_archive='own', cry_rows_reserved=CRY_RESERVED, gen4_toc=g4toc_hash) if a.cries else {})),
               open(os.path.join(tmp, 'gen57.json'), 'w'), indent=1)
     json.dump(report, open(os.path.join(tmp, 'report.json'), 'w'), indent=1)
     if os.path.isdir(out):

@@ -3,7 +3,9 @@
 #include "json.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <set>
 
@@ -20,7 +22,7 @@ int StatNumber(const std::string& w) {
 }
 int StatusCode(const std::string& w) {
   static const std::pair<const char*, int> k[] = {{"sleep", 1}, {"poison", 2}, {"burn", 3}, {"freeze", 4}, {"paralysis", 5}, {"toxic", 6},
-                                                  {"bad_poison", 6}, {"confusion", 7}, {"confuse", 7}, {"flinch", 8}};
+                                                  {"bad_poison", 6}, {"confusion", 7}, {"confuse", 7}, {"flinch", 8}, {"trap", 0x20}};
   for (const auto& p : k) if (w == p.first) return p.second;
   return 0;
 }
@@ -165,14 +167,14 @@ bool ParseBlock(Ctx& c, const js::Value& v, Block& b, bool moveContext) {
   if (v.kind != js::Value::Kind::Object) { c.Problem(v.line, "an effect must be an object like {\"stat\": \"atk\", \"stages\": 1}"); return false; }
   b.line = static_cast<int>(v.line);
   static const char* kinds[] = {"stat", "status", "heal", "hurt", "recoil", "drain", "switch_out", "force_switch", "weather", "remove_item", "message",
-                                "set_type", "field", "set_ability", "terrain", "cure_status", "hurt_dealt", "moody", "side", "steal_item"};
+                                "set_type", "field", "set_ability", "terrain", "cure_status", "hurt_dealt", "moody", "side", "steal_item", "restore_berry", "transform"};
   int found = 0;
   std::string kindKey;
-  for (const char* k : kinds) if (Get(v, k)) { found++; if (kindKey.empty()) kindKey = k; }
+  for (const char* k : kinds) if (Get(v, k)) { found++; if (kindKey.empty() || kindKey == "message") kindKey = k; }
   if (found == 0) { c.Problem(v.line, "an effect needs one of: stat, status, heal, hurt, recoil, drain, switch_out, force_switch, weather, remove_item, message, set_type, field, set_ability, terrain, cure_status"); return false; }
   if (found > 1 && !(Get(v, "message") && found == 2)) { c.Problem(v.line, "an effect holds only one action (put the others in their own { }); \"message\" may go with it"); return false; }
   static const std::set<std::string> known = {"stat", "stages", "status", "heal", "hurt", "recoil", "drain", "switch_out", "force_switch", "weather", "remove_item",
-                                              "message", "set_type", "field", "set_ability", "terrain", "cure_status", "hurt_dealt", "moody", "side", "steal_item", "turns", "end_message", "target", "chance", "when"};
+                                              "message", "set_type", "field", "set_ability", "terrain", "cure_status", "hurt_dealt", "moody", "side", "steal_item", "restore_berry", "transform", "turns", "end_message", "target", "chance", "when"};
   for (const auto& k : v.order) if (!known.count(k)) { c.Problem(v.line, "unknown key \"" + k + "\" in an effect"); return false; }
   std::string t;
   if (const js::Value* tv = Get(v, "target")) {
@@ -247,6 +249,10 @@ bool ParseBlock(Ctx& c, const js::Value& v, Block& b, bool moveContext) {
     if (b.message.empty()) b.message = "{name} stole an item!";
   } else if (kindKey == "moody") {
     b.kind = BlockKind::Moody;
+  } else if (kindKey == "restore_berry") {
+    b.kind = BlockKind::RestoreBerry;
+  } else if (kindKey == "transform") {
+    b.kind = BlockKind::Transform; b.onUser = false;
   } else if (kindKey == "hurt_dealt") {
     if (!Num(Get(v, "hurt_dealt"), n) || n <= 0 || n > 100) { c.Problem(v.line, "\"hurt_dealt\" is a percent from 1 to 100"); return false; }
     b.kind = BlockKind::HurtDealt; b.permille = static_cast<int>(std::lround(n * 10));
@@ -304,7 +310,7 @@ void ParseMove(Ctx& c, const std::string& name, const js::Value& v) {
   int64_t id = 0;
   if (!c.resolve("move", name, id)) { c.Problem(v.line, "no move called \"" + name + "\" (add it in a data file first)"); return; }
   m.id = id;
-  static const std::set<std::string> known = {"effects", "power_rules", "accuracy_rules", "script", "_note", "crit", "ignore_boosts", "use_target_attack", "defend_stat", "first_turn_only", "power_formula", "never_miss", "protect"};
+  static const std::set<std::string> known = {"effects", "power_rules", "accuracy_rules", "script", "_note", "crit", "ignore_boosts", "use_target_attack", "defend_stat", "first_turn_only", "power_formula", "never_miss", "protect", "charge", "needs_physical_hit", "heats_up", "type_from_user"};
   for (const auto& k : v.order) if (!known.count(k)) { c.Problem(v.line, "unknown key \"" + k + "\" in the move \"" + name + "\""); return; }
   bool ok = ParseBlocks(c, Get(v, "effects"), m.effects, true);
   ok = ParseRules(c, Get(v, "power_rules"), m.power, "power_rules") && ok;
@@ -316,7 +322,7 @@ void ParseMove(Ctx& c, const std::string& name, const js::Value& v) {
     else { c.Problem(v.line, "\"crit\" is \"always\""); ok = false; }
   }
   auto flag = [&](const char* key, bool& into) { if (const js::Value* x = Get(v, key)) into = x->kind == js::Value::Kind::Bool && x->boolean; };
-  flag("ignore_boosts", m.ignoreBoosts); flag("use_target_attack", m.useTargetAttack); flag("first_turn_only", m.firstTurnOnly); flag("never_miss", m.neverMiss);
+  flag("ignore_boosts", m.ignoreBoosts); flag("use_target_attack", m.useTargetAttack); flag("first_turn_only", m.firstTurnOnly); flag("never_miss", m.neverMiss); flag("needs_physical_hit", m.needsPhysicalHit); flag("heats_up", m.heatsUp); flag("type_from_user", m.typeFromUser);
   if (const js::Value* x = Get(v, "defend_stat")) { m.defendWithDef = x->kind == js::Value::Kind::String && x->text == "def"; if (!m.defendWithDef) { c.Problem(v.line, "\"defend_stat\" is \"def\""); ok = false; } }
   if (const js::Value* x = Get(v, "protect")) {
     m.protectKind = x->kind == js::Value::Kind::String ? (x->text == "kings_shield" ? 1 : x->text == "spiky_shield" ? 2 : x->text == "baneful_bunker" ? 3 : 0) : 0;
@@ -327,6 +333,11 @@ void ParseMove(Ctx& c, const std::string& name, const js::Value& v) {
     if (m.powerFormula == 0) { c.Problem(v.line, "\"power_formula\" is weight, speed or boosts"); ok = false; }
   }
   if (const js::Value* s = Get(v, "script")) m.script = s->kind == js::Value::Kind::Bool && s->boolean;
+  if (const js::Value* x = Get(v, "charge")) {
+    std::string donor; int64_t did = 0;
+    if (x->kind != js::Value::Kind::Object || !Get(*x, "donor") || !Str(*Get(*x, "donor"), donor) || !c.resolve("move", donor, did)) { c.Problem(x->line, "\"charge\" is { \"donor\": \"Razor Wind\", \"message\": \"{name} is charging!\" } (the donor is one of the game's own two-turn moves)"); ok = false; }
+    else { m.chargeDonor = did; if (const js::Value* mm = Get(*x, "message")) Str(*mm, m.chargeMessage); }
+  }
   if (ok) c.defs.moves.push_back(std::move(m));
 }
 
@@ -336,8 +347,8 @@ void ParseAbility(Ctx& c, const std::string& name, const js::Value& v) {
   if (v.kind != js::Value::Kind::Object) { c.Problem(v.line, "the ability \"" + name + "\" must be an object"); return; }
   static const std::set<std::string> known = {"id", "text", "switch_in", "end_of_turn", "ko", "contact", "switch_out", "before_move", "damage_dealt",
                                               "damage_taken", "stat_mods", "absorb", "stat_drop_block", "status_block", "priority", "reflect_status",
-                                              "remove_secondary", "script", "acts_as", "_note", "hit", "hit_dealt", "fainted", "stat_dropped", "any_faint", "convert", "aura", "breaks_auras",
-                                              "immune_moves", "accuracy_against", "accuracy_dealt", "crit_when", "contrary", "blocks_priority", "no_contact"};
+                                              "remove_secondary", "script", "acts_as", "_note", "unnerve", "disable_on_hit", "poison_any_type", "strong_wind", "infiltrator", "berry_eaten", "half_hp", "type_by_item", "hit", "hit_dealt", "fainted", "stat_dropped", "any_faint", "convert", "aura", "breaks_auras",
+                                              "immune_moves", "dancer", "accuracy_against", "accuracy_dealt", "crit_when", "contrary", "blocks_priority", "no_contact"};
   for (const auto& k : v.order) if (!known.count(k)) { c.Problem(v.line, "unknown key \"" + k + "\" in the ability \"" + name + "\""); return; }
   double n = 0;
   if (const js::Value* i = Get(v, "id")) {
@@ -358,6 +369,26 @@ void ParseAbility(Ctx& c, const std::string& name, const js::Value& v) {
   ok = ParseBlocks(c, Get(v, "fainted"), a.fainted, false) && ok;
   ok = ParseBlocks(c, Get(v, "stat_dropped"), a.statDropped, false) && ok;
   ok = ParseBlocks(c, Get(v, "any_faint"), a.anyFaint, false) && ok;
+  ok = ParseBlocks(c, Get(v, "berry_eaten"), a.berryEaten, false) && ok;
+  ok = ParseBlocks(c, Get(v, "half_hp"), a.halfHp, true) && ok;
+  if (const js::Value* x = Get(v, "disable_on_hit")) { if (!Num(x, n) || n < 1 || n > 100) { c.Problem(x->line, "\"disable_on_hit\" is a percent from 1 to 100"); ok = false; } else a.disableOnHit = static_cast<int>(n); }
+  if (const js::Value* ti = Get(v, "type_by_item")) {
+    if (ti->kind != js::Value::Kind::Array) { c.Problem(ti->line, "\"type_by_item\" is a list of { \"item\": \"Fire Memory\", \"type\": \"Fire\" }"); ok = false; }
+    else for (const auto& x : ti->items) {
+      std::string nm; int64_t iid = 0, t = 0;
+      if (x.kind != js::Value::Kind::Object || !Get(x, "item") || !Str(*Get(x, "item"), nm) || !Get(x, "type") || !TypeValue(c, *Get(x, "type"), t)) { c.Problem(x.line, "a type_by_item entry is { \"item\": \"Fire Memory\", \"type\": \"Fire\" }"); ok = false; continue; }
+      if (!c.resolve("item", nm, iid)) continue;
+      AbilityDef::TypeByItem e; e.item = static_cast<int>(iid); e.type = static_cast<int>(t); a.typeByItem.push_back(e);
+    }
+  }
+  if (const js::Value* dv = Get(v, "dancer")) {
+    if (dv->kind != js::Value::Kind::Array) { c.Problem(dv->line, "\"dancer\" is a list of move names: [\"Swords Dance\", \"Dragon Dance\"]"); ok = false; }
+    else for (const auto& x : dv->items) {
+      std::string nm; int64_t mid = 0;
+      if (!Str(x, nm)) { c.Problem(x.line, "\"dancer\" is a list of move names"); ok = false; continue; }
+      if (c.resolve("move", nm, mid)) a.dancer.push_back(static_cast<int>(mid));
+    }
+  }
   ok = ParseRules(c, Get(v, "accuracy_against"), a.accuracyAgainst, "accuracy_against") && ok;
   ok = ParseRules(c, Get(v, "accuracy_dealt"), a.accuracyDealt, "accuracy_dealt") && ok;
   ok = ParseWhen(c, Get(v, "crit_when"), a.critWhen) && ok;
@@ -438,7 +469,22 @@ void ParseAbility(Ctx& c, const std::string& name, const js::Value& v) {
   flag("breaks_auras", a.breaksAuras);
   flag("remove_secondary", a.removesSecondary);
   flag("script", a.script);
+  flag("unnerve", a.unnerve); flag("poison_any_type", a.poisonAnyType); flag("strong_wind", a.strongWind); flag("infiltrator", a.infiltrator);
   if (ok) c.defs.abilities.push_back(std::move(a));
+}
+
+void ParseHidden(Ctx& c, const js::Value& v) {
+  for (const auto& key : v.order) {
+    const js::Value& item = v.fields.at(key);
+    int64_t id = 0;
+    if (item.kind == js::Value::Kind::Number) id = static_cast<int64_t>(item.number);
+    else if (item.kind != js::Value::Kind::String || !c.resolve("ability", item.text, id)) { c.Problem(item.line, "the hidden ability of \"" + key + "\" is an ability number or name"); continue; }
+    if (id < 1 || id > 255) { c.Problem(item.line, "hidden ability number out of range"); continue; }
+    if (!key.empty() && std::all_of(key.begin(), key.end(), [](unsigned char ch) { return std::isdigit(ch) != 0; })) { c.defs.hiddenNat[std::atoi(key.c_str())] = static_cast<int>(id); continue; }
+    int64_t row = 0;
+    if (!c.resolve("species", key, row)) { c.Problem(item.line, "no species called \"" + key + "\""); continue; }
+    c.defs.hiddenRow[static_cast<int>(row)] = static_cast<int>(id);
+  }
 }
 
 void ParseRuleSet(Ctx& c, const std::string& name, const js::Value& v) {
@@ -475,8 +521,9 @@ void ParseFile(const std::string& mod, const std::string& file, const std::strin
   for (const auto& key : root.order) {
     const js::Value& v = root.fields.at(key);
     if (key == "_note") continue;
-    if (key != "moves" && key != "abilities" && key != "rule_sets") { c.Problem(v.line, "unknown part \"" + key + "\" (moves, abilities, rule_sets)"); continue; }
+    if (key != "moves" && key != "abilities" && key != "rule_sets" && key != "hidden_abilities") { c.Problem(v.line, "unknown part \"" + key + "\" (moves, abilities, rule_sets, hidden_abilities)"); continue; }
     if (v.kind != js::Value::Kind::Object) { c.Problem(v.line, "\"" + key + "\" must be an object"); continue; }
+    if (key == "hidden_abilities") { ParseHidden(c, v); continue; }
     for (const auto& name : v.order) {
       const js::Value& item = v.fields.at(name);
       if (key == "moves") ParseMove(c, name, item);
@@ -545,8 +592,9 @@ uint64_t Digest(const Defs& d) {
   std::sort(mv.begin(), mv.end(), [](auto* a, auto* b) { return a->id < b->id; });
   h.Add(mv.size());
   for (auto* m : mv) { h.Add(static_cast<uint64_t>(m->id)); h.Add(m->effects); h.Add(m->power); h.Add(m->accuracy); h.Add(m->script);
-    if (m->crit || m->ignoreBoosts || m->useTargetAttack || m->defendWithDef || m->firstTurnOnly || m->powerFormula || m->neverMiss || m->protectKind)
-      h.Add(static_cast<uint64_t>(m->crit * 1 + m->ignoreBoosts * 2 + m->useTargetAttack * 4 + m->defendWithDef * 8 + m->firstTurnOnly * 16 + m->powerFormula * 32 + m->neverMiss * 256 + m->protectKind * 1024)); }
+    if (m->chargeDonor != 0) { h.Add(0x0714u); h.Add(static_cast<uint64_t>(m->chargeDonor)); h.Add(m->chargeMessage); }
+    if (m->crit || m->ignoreBoosts || m->useTargetAttack || m->defendWithDef || m->firstTurnOnly || m->powerFormula || m->neverMiss || m->protectKind || m->needsPhysicalHit || m->heatsUp || m->typeFromUser)
+      h.Add(static_cast<uint64_t>(m->crit * 1 + m->ignoreBoosts * 2 + m->useTargetAttack * 4 + m->defendWithDef * 8 + m->firstTurnOnly * 16 + m->powerFormula * 32 + m->neverMiss * 256 + m->protectKind * 1024 + m->needsPhysicalHit * 2048 + m->heatsUp * 4096 + m->typeFromUser * 8192)); }
   std::vector<const AbilityDef*> ab;
   for (const auto& a : d.abilities) ab.push_back(&a);
   std::sort(ab.begin(), ab.end(), [](auto* a, auto* b) { return a->id < b->id; });
@@ -570,6 +618,13 @@ uint64_t Digest(const Defs& d) {
     for (int i : r.bannedItems) h.Add(static_cast<uint64_t>(i));
   }
   for (const auto& f : d.fieldNames) h.Add(f);
+  for (const auto& a : d.abilities) {
+    if (!(a.unnerve || a.disableOnHit || a.poisonAnyType || a.strongWind || a.infiltrator || !a.berryEaten.empty() || !a.halfHp.empty() || !a.typeByItem.empty() || !a.dancer.empty())) continue;
+    h.Add(0x0711u); h.Add(static_cast<uint64_t>(a.id)); h.Add(a.unnerve); h.Add(static_cast<uint64_t>(a.disableOnHit)); h.Add(a.poisonAnyType); h.Add(a.strongWind); h.Add(a.infiltrator); for (int dm : a.dancer) h.Add(static_cast<uint64_t>(dm));
+    h.Add(a.berryEaten); h.Add(a.halfHp); for (const auto& t : a.typeByItem) { h.Add(static_cast<uint64_t>(t.item)); h.Add(static_cast<uint64_t>(t.type)); }
+  }
+  for (const auto& kv : d.hiddenNat) { h.Add(0x0712u); h.Add(static_cast<uint64_t>(kv.first)); h.Add(static_cast<uint64_t>(kv.second)); }
+  for (const auto& kv : d.hiddenRow) { h.Add(0x0713u); h.Add(static_cast<uint64_t>(kv.first)); h.Add(static_cast<uint64_t>(kv.second)); }
   return h.h;
 }
 

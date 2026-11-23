@@ -1,4 +1,5 @@
 #include <controls.h>
+#include <gc_adapter.h>
 #include <settings.h>
 
 #include <algorithm>
@@ -460,6 +461,41 @@ void test_settings(const fs::path& dir) {
 
 }
 
+void test_gamecube_adapter() {
+  const std::string adapter = "0300000057e000003703000000000000";
+  const std::vector<ConnectedPad> four = {{adapter, "Nintendo GameCube Controller", 0x057e, 0x0337},
+                                          {adapter, "Nintendo GameCube Controller", 0x057e, 0x0337},
+                                          {adapter, "Nintendo GameCube Controller", 0x057e, 0x0337},
+                                          {adapter, "Nintendo GameCube Controller", 0x057e, 0x0337}};
+  std::array<ControllerChoice, 4> all = {ControllerChoice::Auto(), ControllerChoice::Auto(), ControllerChoice::Auto(),
+                                         ControllerChoice::Auto()};
+  check(AssignControllers(all, four) == std::array<int, 4>{0, 1, 2, 3}, "adapter: four Auto ports get slots 1-4");
+  std::array<ControllerChoice, 4> pinned;
+  for (size_t p = 0; p < 4; p++) {
+    pinned[p] = ControllerChoice::Pin(adapter, NthOfModel(four, p), "WUP-028");
+  }
+  check(NthOfModel(four, 3) == 3 && AssignControllers(pinned, four) == std::array<int, 4>{0, 1, 2, 3},
+        "adapter: pinned slot n plays as controller n");
+  const std::array<ControllerChoice, 4> defaults = {DefaultChoice(0), DefaultChoice(1), DefaultChoice(2),
+                                                    DefaultChoice(3)};
+  check(AssignControllers(defaults, four) == std::array<int, 4>{0, -1, -1, -1},
+        "adapter: with the defaults only controller 1 plays (2-4 are \"none\" until the player sets them)");
+  for (int p = 0; p < kPorts; p++) {
+    const GamepadMap g = ApplyPadPreset(DefaultPort(p).gamepad, PadPreset::GameCubeAdapter);
+    check(g.kind == Device::GameCube && PadPresetOf(g) == PadPreset::GameCubeAdapter, "adapter preset on every port");
+  }
+  check(ClassifyOpenError(0, true, false) == AdapterState::Reachable, "open ok: reachable");
+  check(ClassifyOpenError(-12, true, false) == AdapterState::NoDriver &&
+            ClassifyOpenError(-5, true, false) == AdapterState::NoDriver,
+        "Windows: not supported / not found = no WinUSB driver");
+  check(ClassifyOpenError(-12, false, false) == AdapterState::Unknown, "elsewhere those are unknown");
+  check(ClassifyOpenError(-3, false, false) == AdapterState::NoPermission, "Linux: access denied = udev rule");
+  check(ClassifyOpenError(-3, false, true) == AdapterState::InUse && ClassifyOpenError(-6, true, false) == AdapterState::InUse,
+        "busy / macOS access = another program has it");
+  const AdapterProbe probe = ProbeGameCubeAdapter();
+  std::printf("  (adapter look here: state %d, libusb error %d)\n", static_cast<int>(probe.state), probe.libusbError);
+}
+
 int main(int argc, char** argv) {
   const fs::path dir = argc > 1 ? fs::path(argv[1]) : fs::temp_directory_path() / "engine_controls_test";
   std::error_code ec;
@@ -473,6 +509,7 @@ int main(int argc, char** argv) {
   test_names();
   test_tokens();
   test_ports_and_presets();
+  test_gamecube_adapter();
   test_settings(dir);
 
   fs::remove_all(dir, ec);

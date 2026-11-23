@@ -248,6 +248,7 @@ std::vector<uint8_t> Encode(const Fingerprint& f) {
     o << "rando=" << f.caps.randomizer.substr(0, 90) << "\n";
     o << "tables=" << Hex(f.caps.tables) << "\n";
     if (!f.caps.formatsDigest.empty()) o << "fmts=" << f.caps.formatsDigest << "\n";
+    if (f.caps.cheats) o << "cheats=1\n";
     o << "r.rules=" << f.rules.ruleSet << "\n";
     o << "r.items=" << f.rules.items << "\n";
     o << "r.timer=" << f.rules.timerSeconds << "\n";
@@ -297,6 +298,7 @@ bool Decode(const std::vector<uint8_t>& blob, Fingerprint& out) {
   f.caps.randomizer = get("rando");
   f.caps.tables = std::strtoull(get("tables").c_str(), nullptr, 16);
   f.caps.formatsDigest = get("fmts");
+  f.caps.cheats = get("cheats") == "1";
   f.rules.ruleSet = get("r.rules");
   f.rules.items = get("r.items");
   f.rules.timerSeconds = std::atoi(get("r.timer").c_str());
@@ -358,6 +360,14 @@ Verdict Judge(const Capabilities& room, const RoomRules& rules, const Capabiliti
   Verdict v;
   const std::string they = joiner ? "The room" : "Your friend's game";
   const std::string you = joiner ? "your game" : "theirs";
+  if (mine.cheats) {
+    if (!rules.format.empty()) {
+      v.refuse.push_back(joiner ? "This is a competitive room, and your playthrough used cheats, so it can't join. Casual rooms and trades are still open to it."
+                                : "Your friend's playthrough used cheats, so it can't be in a competitive room. A casual room or a trade works.");
+    } else {
+      v.notes.push_back(joiner ? "Your playthrough used cheats: this room is marked." : "Your friend's playthrough used cheats: this room is marked.");
+    }
+  }
   const bool newKind = NeedsNewProtocol(rules);
   const int needed = NeedsExtras(rules) ? 3 : newKind ? 2 : 1;
   const bool known = room.protocol >= 1 && room.protocol <= 3 && mine.protocol >= 1 && mine.protocol <= 3;

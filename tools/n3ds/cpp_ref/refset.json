@@ -1,0 +1,25 @@
+{
+ "_note": "The reference set of the C++ converter port: numbers and names only (no game data). kind xd = a Gen 1-3 species of XD (usum_models), g57 = a Gen 5-7 species (gen57_all), form = a Gen 5-7 form (gen57_forms), g4 = a Gen 4 species (usum_models --gen4-pack).",
+ "jobs": [
+  {"name": "xd_025_pikachu",   "kind": "xd",   "nat": 25,  "why": "plain rig"},
+  {"name": "xd_006_charizard", "kind": "xd",   "nat": 6,   "why": "plain rig, flame"},
+  {"name": "xd_143_snorlax",   "kind": "xd",   "nat": 143, "why": "big plain rig"},
+  {"name": "xd_150_mewtwo",    "kind": "xd",   "nat": 150, "why": "plain rig"},
+  {"name": "g57_494_victini",  "kind": "g57",  "nat": 494, "why": "plain rig"},
+  {"name": "g57_500_emboar",   "kind": "g57",  "nat": 500, "why": "stretchy bones, size step 1"},
+  {"name": "g57_505_watchog",  "kind": "g57",  "nat": 505, "why": "plain rig"},
+  {"name": "g57_520_tranquill","kind": "g57",  "nat": 520, "why": "plain rig"},
+  {"name": "g57_560_scrafty",  "kind": "g57",  "nat": 560, "why": "plain rig"},
+  {"name": "g57_600_klang",    "kind": "g57",  "nat": 600, "why": "plain rig"},
+  {"name": "g57_700_sylveon",  "kind": "g57",  "nat": 700, "why": "rig heavy (ribbons)"},
+  {"name": "g57_724_decidueye","kind": "g57",  "nat": 724, "why": "slowest model (whole ladder)"},
+  {"name": "g57_778_mimikyu",  "kind": "g57",  "nat": 778, "why": "odd rig"},
+  {"name": "g57_655_delphox",  "kind": "g57",  "nat": 655, "why": "slowest of Python (25 min), rig heavy"},
+  {"name": "form_006_1_megax", "kind": "form", "nat": 6,   "form": 1, "why": "Mega"},
+  {"name": "form_003_1_mega",  "kind": "form", "nat": 3,   "form": 1, "why": "Mega, needs size steps"},
+  {"name": "form_026_1_alola", "kind": "form", "nat": 26,  "form": 1, "why": "Alolan"},
+  {"name": "form_037_1_alola", "kind": "form", "nat": 37,  "form": 1, "why": "Alolan"},
+  {"name": "g4_387_turtwig",   "kind": "g4",   "nat": 387, "why": "Gen 4 species"},
+  {"name": "g4_448_lucario",   "kind": "g4",   "nat": 448, "why": "Gen 4 species"}
+ ]
+}

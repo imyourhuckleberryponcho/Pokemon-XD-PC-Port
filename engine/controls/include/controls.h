@@ -138,7 +138,7 @@ std::array<int, 4> AssignControllers(const std::array<ControllerChoice, 4>& choi
                                      const std::vector<ConnectedPad>& pads);
 int NthOfModel(const std::vector<ConnectedPad>& pads, size_t index);
 
-enum class Action : uint8_t { FastForward, SpeedrunBreak, ReplayBar, Count };
+enum class Action : uint8_t { FastForward, SpeedrunBreak, ReplayBar, CheatMenu, Count };
 inline constexpr size_t kActionCount = static_cast<size_t>(Action::Count);
 const char* ActionId(Action action);
 const char* ActionName(Action action);

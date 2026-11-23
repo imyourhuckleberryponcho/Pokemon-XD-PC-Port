@@ -1374,6 +1374,10 @@ void TranslateGen4Species(const std::function<void(Gen4Species&)>& fix) {
   for (Gen4Species& g : sGen4) fix(g);
 }
 
+void TranslateGen57Species(const std::function<void(Gen4Species&)>& fix) {
+  for (Gen4Species& g : sGen57) fix(g);
+}
+
 bool CodeIncludesGen4(const std::string& code) {
   er::Settings s;
   bool seedOnly = false;

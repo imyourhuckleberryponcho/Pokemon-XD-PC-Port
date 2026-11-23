@@ -8,6 +8,7 @@ Outside libraries (Aurora, SDL, Dear ImGui) and the launcher's font, each with i
 | SDL3 | https://github.com/libsdl-org/SDL | tag `release-3.4.20` (commit `f00dc919ca35`) — the version Aurora pins | zlib |
 | Borealis | https://github.com/encounter/borealis | commit `8e9427fab92c1935a5d6bacadc6053c687f10c1e` (2026-10-28) | MIT |
 | RenderDoc in-app API header | `renderdoc/renderdoc_app.h`, from RenderDoc 1.47 (https://renderdoc.org) | 1.47.0 | MIT |
+| libusb | https://github.com/libusb/libusb, release `v1.0.30` (Windows: `libusb-1.0.30.7z` sha256 7fb1dfec...; Linux/Mac: `libusb-1.0.30.tar.bz2` sha256 fea36f34...), downloaded at configure time by `cmake/XdLibUSB.cmake`, not stored here | 1.0.30 | LGPL 2.1 (`libusb/COPYING`; a separate library file next to the programs on Windows and Linux, linked statically into SDL on Mac) |
 | Inter (font) | https://github.com/rsms/inter, release `Inter-4.1.zip` (`extras/ttf`) | 4.1 | SIL Open Font License 1.1 (`fonts/inter/OFL.txt`) |
 | Luau | https://github.com/luau-lang/luau, tag `0.740` (tarball sha256 419f96e4ecf5a0dd415a2625ea7ea9dc8a407e86d64b25e00936302b25a7afbd) | 0.740 | MIT (`luau/LICENCE.md`, `luau/LICENCE-lua.md`: the Lua 5.x parts) |
 | Monocypher | https://monocypher.org, `monocypher-4.0.2.tar.gz` (SHA-512 checked against the site's `.sha512`) | 4.0.2 | BSD 2-clause or CC0 (`monocypher/LICENCE.md`) |

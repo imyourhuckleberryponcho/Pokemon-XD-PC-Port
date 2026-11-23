@@ -2,6 +2,7 @@
 #define ENGINE_SETTINGS_UI_H
 
 #include <controls.h>
+#include <gc_adapter.h>
 #include <settings.h>
 
 #include <cstdint>
@@ -57,7 +58,12 @@ class ControlsPanel {
   };
   void SetPads(std::vector<Pad> pads) { pads_ = std::move(pads); }
   const std::vector<Pad>& Pads() const { return pads_; }
+  void SetAdapterState(controls::AdapterState state, int libusbError) {
+    adapterState_ = state;
+    adapterError_ = libusbError;
+  }
   int AssignedPad(const settings::Registry& registry, int port) const;
+  bool AdapterPadShown() const;
 
   int Port() const { return port_; }
   void SetPort(int port) { port_ = port < 0 ? 0 : port > 3 ? 3 : port; }
@@ -110,6 +116,8 @@ class ControlsPanel {
   Listen listen_;
   controls::Device device_ = controls::Device::Generic;
   std::vector<Pad> pads_;
+  controls::AdapterState adapterState_ = controls::AdapterState::NoLibrary;
+  int adapterError_ = 0;
   controls::RawInputs raw_;
   int port_ = 0;
   int shownTab_ = 0;

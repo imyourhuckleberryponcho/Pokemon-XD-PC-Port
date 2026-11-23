@@ -112,6 +112,15 @@ int main() {
     check(!ParseLine("DEVMENU frame 30 field 61", d), "a developer-menu line needs an action");
   }
   {
+    const std::string line = FormatCheat({31, 62, "set cheats.exp=x5"});
+    check(line == "CHEAT frame 31 field 62 set cheats.exp=x5", "cheat line text");
+    Recording c;
+    check(ParseLine(line, c) && c.cheats.size() == 1 && c.cheats[0].frame == 31 && c.cheats[0].action == "set cheats.exp=x5" && c.devMenu.empty() && c.settings.empty(),
+          "cheat line reads back");
+    check(ParseLine("CHEAT frame 40 field 80 do give_item 4 20", c) && c.cheats.size() == 2 && c.cheats[1].action == "do give_item 4 20", "a one-off line keeps all its words");
+    check(!ParseLine("CHEAT frame 30 field 61", c), "a cheat line needs an action");
+  }
+  {
     const std::string line = FormatPhoto(40, 81, "off (2 photos)");
     check(line == "PHOTO frame 40 field 81 off (2 photos)", "photo-mode line text");
     Recording p;

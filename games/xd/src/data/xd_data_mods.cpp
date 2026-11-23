@@ -9,6 +9,7 @@
 #include <gs_formats.h>
 
 #include <algorithm>
+#include <cstdio>
 #include <cctype>
 #include <cstring>
 #include <map>
@@ -1144,7 +1145,9 @@ bool BuildMessageBank(uint32_t group, const std::vector<std::pair<uint32_t, std:
   size_t total = 0x10 + texts.size() * 8;
   for (size_t i = 0; i < texts.size(); i++) {
     if (texts[i].first >> 20 != group || (i != 0 && (texts[i].first & 0xFFFFF) <= (texts[i - 1].first & 0xFFFFF))) {
-      error = "the texts' numbers are not in order in group " + std::to_string(group);
+      char at[64];
+      std::snprintf(at, sizeof at, " (text 0x%X after 0x%X)", texts[i].first & 0xFFFFF, i != 0 ? texts[i - 1].first & 0xFFFFF : 0u);
+      error = "the texts' numbers are not in order in group " + std::to_string(group) + at;
       return false;
     }
     if (!text_encode(texts[i].second, encoded[i])) {

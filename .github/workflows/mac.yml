@@ -330,7 +330,7 @@ jobs:
           # 0.7.0: the modules and data files the Gen 4 / Ultra Sun work added must be inside the freeze (a missing hidden import only shows
           # when the converter really starts): the data files are there, and a start with made-up arguments reaches its own error message
           # (a ModuleNotFoundError from the frozen Python would be the finding; its own "error ..." line plus a Traceback is normal).
-          for f in usum_dex_map.json usum_gen4_plan.json; do
+          for f in usum_dex_map.json usum_gen4_plan.json gen57_speed_numbers.json; do
             find build/usum_models_dist_mac/usum_models -name "$f" | grep -q . || { echo "MISSING in the freeze: $f"; exit 1; }
           done
           # 0.7.0 (the launcher's Gen 5-7 build): every module and data file of it is inside the freeze
@@ -405,7 +405,7 @@ jobs:
             done < <(find "$APP/Contents/Resources" -type f)
             echo "Mach-O files in Resources: $COUNT, without a good signature: $BAD"
             echo "== helpers through the links in Contents/MacOS"
-            for h in pbr_models/pbr_models pbr_models/colo_models usum_models/usum_models xd_languages/xd_languages; do
+            for h in pbr_models/pbr_models pbr_models/colo_models usum_models/usum_models usum_models/usum_models_cpp xd_languages/xd_languages; do
               if [ -e "$APP/Contents/MacOS/$h" ]; then
                 echo "-- $h"; ls -laL "$APP/Contents/MacOS/$h"
                 perl -e 'alarm 60; exec @ARGV' "$APP/Contents/MacOS/$h" --version 2>&1 | head -n 3; echo "exit ${PIPESTATUS[0]}"

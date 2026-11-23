@@ -74,6 +74,7 @@ struct Gen4Species {
 void SetGen4Species(std::vector<Gen4Species> species);
 bool LoadGen4Species(const std::filesystem::path& randomizerTxt, std::string& error);
 void TranslateGen4Species(const std::function<void(Gen4Species&)>& fix);
+void TranslateGen57Species(const std::function<void(Gen4Species&)>& fix);
 bool CodeIncludesGen4(const std::string& code);
 bool LoadGen57Species(const std::filesystem::path& randomizerTxt, std::string& error);
 bool CodeIncludesGen57(const std::string& code);

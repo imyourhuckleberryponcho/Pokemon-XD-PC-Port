@@ -44,6 +44,9 @@ using engine::i18n::Tr;
 constexpr size_t kFastForward = static_cast<size_t>(ec::Action::FastForward);
 constexpr size_t kBreakAction = static_cast<size_t>(ec::Action::SpeedrunBreak);
 constexpr size_t kBarAction = static_cast<size_t>(ec::Action::ReplayBar);
+constexpr size_t kCheatAction = static_cast<size_t>(ec::Action::CheatMenu);
+std::atomic<bool> sCheatModsHeld{false};
+uint32_t sCheatKeyPresses = 0;
 uint32_t sBarKeyPresses = 0;
 uint32_t sBreakKeyPresses = 0;
 
@@ -129,39 +132,60 @@ bool IsActionKey(uint16_t scancode, size_t action) {
 
 bool IsFastForwardKey(uint16_t scancode) { return IsActionKey(scancode, kFastForward); }
 
+bool PadInputHeld(SDL_Gamepad* pad, int port, const ec::Input& in) {
+  switch (in.kind) {
+  case ec::Input::Kind::Button: return SDL_GetGamepadButton(pad, static_cast<SDL_GamepadButton>(in.code));
+  case ec::Input::Kind::Label:
+    return SDL_GetGamepadButton(pad, static_cast<SDL_GamepadButton>(ec::LabelPosition(
+                                         static_cast<ec::FaceLabel>(in.code), port_controls::PortDevice(port))));
+  case ec::Input::Kind::Axis: {
+    const float v = SDL_GetGamepadAxis(pad, static_cast<SDL_GamepadAxis>(in.code)) / 32767.f;
+    return (in.sign > 0 && v > 0.5f) || (in.sign < 0 && v < -0.5f);
+  }
+  default: return false;
+  }
+}
+
+SDL_Gamepad* PadOfPort(int port) {
+  const aurora::input::SourceId source = aurora::pad::port_controller(static_cast<uint32_t>(port));
+  if (source == aurora::input::kInvalidSourceId) {
+    return nullptr;
+  }
+  return SDL_GetGamepadFromID(aurora::input::gamepad_for_source(source));
+}
+
 bool PadHeldFor(size_t action) {
   for (int port = 0; port < ec::kPorts; port++) {
     const std::vector<ec::Input>& list = ActionsOf(port).pad[action];
     if (list.empty()) {
       continue;
     }
-    const aurora::input::SourceId source = aurora::pad::port_controller(static_cast<uint32_t>(port));
-    if (source == aurora::input::kInvalidSourceId) {
-      continue;
-    }
-    SDL_Gamepad* pad = SDL_GetGamepadFromID(aurora::input::gamepad_for_source(source));
+    SDL_Gamepad* pad = PadOfPort(port);
     if (pad == nullptr) {
       continue;
     }
     for (const ec::Input& in : list) {
-      switch (in.kind) {
-      case ec::Input::Kind::Button:
-        if (SDL_GetGamepadButton(pad, static_cast<SDL_GamepadButton>(in.code))) return true;
-        break;
-      case ec::Input::Kind::Label:
-        if (SDL_GetGamepadButton(pad, static_cast<SDL_GamepadButton>(ec::LabelPosition(
-                                          static_cast<ec::FaceLabel>(in.code), port_controls::PortDevice(port))))) {
-          return true;
-        }
-        break;
-      case ec::Input::Kind::Axis: {
-        const float v = SDL_GetGamepadAxis(pad, static_cast<SDL_GamepadAxis>(in.code)) / 32767.f;
-        if ((in.sign > 0 && v > 0.5f) || (in.sign < 0 && v < -0.5f)) return true;
-        break;
-      }
-      default: break;
-      }
+      if (PadInputHeld(pad, port, in)) return true;
     }
+  }
+  return false;
+}
+
+bool PadChordFor(size_t action, bool last) {
+  for (int port = 0; port < ec::kPorts; port++) {
+    const std::vector<ec::Input>& list = ActionsOf(port).pad[action];
+    if (list.empty()) {
+      continue;
+    }
+    SDL_Gamepad* pad = PadOfPort(port);
+    if (pad == nullptr) {
+      continue;
+    }
+    bool all = true;
+    for (size_t i = 0; i + 1 < list.size(); i++) {
+      all = all && PadInputHeld(pad, port, list[i]);
+    }
+    if (all && (!last || PadInputHeld(pad, port, list.back()))) return true;
   }
   return false;
 }
@@ -185,6 +209,7 @@ void PortSpeedups_HandleEvent(const void* sdlEvent) {
       }
       if (!e->key.repeat && IsActionKey(code, kBreakAction)) sBreakKeyPresses++;
       if (!e->key.repeat && IsActionKey(code, kBarAction)) sBarKeyPresses++;
+      if (!e->key.repeat && IsActionKey(code, kCheatAction)) sCheatKeyPresses++;
     }
   } else if (e->type == SDL_EVENT_KEY_UP) {
     sKeysDown.erase(std::remove(sKeysDown.begin(), sKeysDown.end(), static_cast<uint16_t>(e->key.scancode)),
@@ -203,6 +228,23 @@ uint32_t PortSpeedups_ReplayBarPresses(void) {
   padWas = held;
   return n;
 }
+
+uint32_t PortSpeedups_CheatMenuPresses(void) {
+  static bool padWas = false;
+  uint32_t n = sCheatKeyPresses;
+  sCheatKeyPresses = 0;
+  const bool held = PadChordFor(kCheatAction, true);
+  if (held && !padWas) n++;
+  padWas = held;
+  bool mods = false;
+  for (int port = 0; port < ec::kPorts && !mods; port++) {
+    mods = ActionsOf(port).pad[kCheatAction].size() >= 2 && PadChordFor(kCheatAction, false);
+  }
+  sCheatModsHeld.store(mods, std::memory_order_relaxed);
+  return n;
+}
+
+bool PortSpeedups_CheatChordModifiersHeld(void) { return sCheatModsHeld.load(std::memory_order_relaxed); }
 
 uint32_t PortSpeedups_BreakPresses(void) {
   static bool padWas = false;

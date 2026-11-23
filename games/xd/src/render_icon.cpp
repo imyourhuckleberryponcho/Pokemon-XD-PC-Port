@@ -111,6 +111,7 @@ struct Job {
   bool offer = false;
   bool row = false;
   bool failed = false;
+  bool posed = false;
   bool retried = false;
   u32 fileGroup = 0;
   std::string note;
@@ -403,6 +404,14 @@ _GSmodel* TitleModel(int n) { return static_cast<_GSmodel*>(GSresGetResourceAllG
 
 void StopPose(_GSmodel* m) {
   if (m != nullptr && GSmodelCanAnimate(m) != 0) GSmodelSetAnimRate(m, 0.f);
+}
+
+float PoseFrame() {
+  static const float v = [] {
+    const char* e = std::getenv("XD_RENDER_ICON_POSE");
+    return (e != nullptr && e[0] != '\0') ? static_cast<float>(std::atof(e)) : -1.f;
+  }();
+  return v;
 }
 
 Job* FindJob(const char* name) {
@@ -824,6 +833,12 @@ void OnFrame(uint32_t frame) {
         ApplyView();
         sStep = Step::Armed;
         sStepFrame = frame;
+        break;
+      }
+      if (PoseFrame() >= 0.f && !job.posed && GSmodelCanAnimate(job.model) != 0) {
+        GSmodelSetAnimFrame(job.model, PoseFrame());
+        job.posed = true;
+        sStepFrame = frame - 16;
         break;
       }
       if (!AimAtBounds(job.model, dir)) {

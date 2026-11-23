@@ -418,6 +418,19 @@ int main(int argc, char** argv) {
     check(has_message(r, Message::Level::Warning, "Conflict") && r.Report().find("Title.thp") != std::string::npos,
           "the conflict is reported, naming the file");
   }
+  {
+    LoadResult many;
+    for (int i = 0; i < 25; i++) many.messages.push_back({i % 3 == 0 ? Message::Level::Info : Message::Level::Problem, "problem number " + std::to_string(i)});
+    many.messages.push_back({Message::Level::Warning, std::string(500, 'x')});
+    const std::string capped = many.ReportCapped(10);
+    int lines = 1;
+    for (size_t at = capped.find("\n\n"); at != std::string::npos; at = capped.find("\n\n", at + 2)) lines++;
+    check(lines == 11, "a long report shows 10 messages and one line saying how many more");
+    check(capped.find("and 7 more") != std::string::npos && capped.find("problem number 1") != std::string::npos && capped.find("problem number 23") == std::string::npos,
+          "the cap counts the messages left out (Info lines are never in the window)");
+    check(many.ReportCapped(100).find(std::string(300, 'x')) == std::string::npos, "one very long message is cut");
+    check(many.ReportCapped(100).find("more (see the log)") == std::string::npos, "a short report has no 'more' line");
+  }
 
   write_file(listFile, "[profile default]\nmovie = on\nother = on\n");
   {
@@ -662,6 +675,20 @@ int main(int argc, char** argv) {
       r = Load(lo);
       check(contents(find(r, "common.fsys")) == "world2" && !has_message(r, Message::Level::Warning, "replaces all of"),
             "extra layer: a mod's whole archive replaces the layer's entries without a warning");
+      const fs::path gone = root / "extra_assets" / "usum_like";
+      write_file(gone / "fsys" / "pkx_g4_nothere.fsys" / "#0", "model");
+      write_file(mods3 / "badent" / "mod.json", manifest("badent", "\"applies\": \"any_time\""));
+      write_file(mods3 / "badent" / "fsys" / "pkx_g4_nothere.fsys" / "#0", "model");
+      write_file(list3, "[profile default]\n");
+      lo.extraLayers = {{"usum", "Ultra Sun / Ultra Moon models", gone}};
+      r = Load(lo);
+      check(!has_message(r, Message::Level::Problem, "pkx_g4_nothere") && !r.HasWarnings() &&
+                has_message(r, Message::Level::Info, "pkx_g4_nothere.fsys: they belong to a pack that is not loaded"),
+            "extra layer: changes inside an archive the game doesn't have: skipped quietly (Info only)");
+      write_file(list3, "[profile default]\nbadent = on\n");
+      r = Load(lo);
+      check(has_message(r, Message::Level::Problem, "but the disc has no pkx_g4_nothere.fsys"),
+            "extra layer: a user mod's changes inside a missing archive still get their message");
     }
   }
 

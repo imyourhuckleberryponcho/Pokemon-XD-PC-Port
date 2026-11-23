@@ -2,6 +2,7 @@ add_library(engine_formats STATIC formats/dsp_adpcm.cpp formats/lzss_fsys.c form
 target_include_directories(engine_formats PUBLIC formats/include)
 
 add_subdirectory(formats/pbr)
+add_subdirectory(formats/n3ds)
 add_subdirectory(formats/colo)
 
 if (WIN32)
@@ -36,8 +37,10 @@ target_link_libraries(engine_settings PUBLIC engine_i18n)
 add_executable(settings_test settings/tests/settings_test.cpp)
 target_link_libraries(settings_test PRIVATE engine_settings)
 
-add_library(engine_controls STATIC controls/controls.cpp controls/controls_names.cpp controls/controls_settings.cpp)
+add_library(engine_controls STATIC controls/controls.cpp controls/controls_names.cpp controls/controls_settings.cpp
+  controls/gc_adapter.cpp)
 target_include_directories(engine_controls PUBLIC controls/include)
+target_link_libraries(engine_controls PRIVATE ${CMAKE_DL_LIBS})
 target_link_libraries(engine_controls PUBLIC engine_settings)
 
 add_executable(controls_test controls/tests/controls_test.cpp)

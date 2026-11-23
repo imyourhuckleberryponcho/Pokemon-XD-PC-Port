@@ -1,5 +1,7 @@
 #include "xd_shiny.h"
 
+extern "C" int PortXD_CheatShinyDivisor(void);
+
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
@@ -11,6 +13,13 @@ namespace {
 std::vector<std::string> sActive;
 int sDivisor = 8192;
 bool sShadow = false, sGifts = false, sSpots = false;
+int Divisor() {
+  const int cheat = PortXD_CheatShinyDivisor();
+  return cheat > 0 && cheat < sDivisor ? cheat : sDivisor;
+}
+bool Shadow() { return sShadow || PortXD_CheatShinyDivisor() > 0; }
+bool Gifts() { return sGifts || PortXD_CheatShinyDivisor() > 0; }
+bool Spots() { return sSpots || PortXD_CheatShinyDivisor() > 0; }
 
 uint32_t Mix(uint64_t x) {
   x += 0x9E3779B97F4A7C15ull;
@@ -25,10 +34,11 @@ bool IsShiny(uint32_t trainerRnd, uint32_t rnd) {
 }
 
 uint32_t Boost(uint32_t rnd, uint32_t trainerRnd, int nature) {
-  if (sDivisor >= 8192 || IsShiny(trainerRnd, rnd)) return rnd;
-  const double p = (1.0 / sDivisor - 1.0 / 8192.0) / (1.0 - 1.0 / 8192.0);
+  const int divisor = Divisor();
+  if (divisor >= 8192 || IsShiny(trainerRnd, rnd)) return rnd;
+  const double p = (1.0 / divisor - 1.0 / 8192.0) / (1.0 - 1.0 / 8192.0);
   const uint32_t h32 = Mix((static_cast<uint64_t>(rnd) << 32) | trainerRnd);
-  if (h32 >= static_cast<uint32_t>(p * 4294967296.0)) return rnd;
+  if (p < 1.0 && h32 >= static_cast<uint32_t>(p * 4294967296.0)) return rnd;
   const uint32_t lo = rnd & 0xFFFF, a = (trainerRnd >> 16) ^ (trainerRnd & 0xFFFF);
   const uint32_t k0 = Mix(static_cast<uint64_t>(rnd) * 31u + trainerRnd) & 7;
   for (uint32_t i = 0; i < 8; i++) {
@@ -36,7 +46,7 @@ uint32_t Boost(uint32_t rnd, uint32_t trainerRnd, int nature) {
     const uint32_t candidate = (((a ^ lo ^ k) & 0xFFFF) << 16) | lo;
     if (!IsShiny(trainerRnd, candidate)) continue;
     if (nature >= 0 && static_cast<int>(candidate % 25) != nature) continue;
-    std::fprintf(stderr, "[shiny] PID %08X made shiny (%08X, odds 1 in %d)\n", candidate, rnd, sDivisor);
+    std::fprintf(stderr, "[shiny] PID %08X made shiny (%08X, odds 1 in %d)\n", candidate, rnd, divisor);
     return candidate;
   }
   return rnd;
@@ -136,12 +146,12 @@ uintptr_t heroGetStatus(void* hero, uint32_t selector, uint16_t index);
 
 uint32_t pokemonCreateRndFit(void* pokemon, int8_t sex, int8_t seikaku, int8_t rare, uint32_t trainerRnd) {
   const uint32_t rnd = PortXD_RealCreateRndFit(pokemon, sex, seikaku, rare, trainerRnd);
-  if (pokemon == nullptr || rare != -1 || sDivisor >= 8192) return rnd;
+  if (pokemon == nullptr || rare != -1 || Divisor() >= 8192) return rnd;
   return Boost(rnd, trainerRnd, seikaku);
 }
 
 uint32_t PortXD_FitMaybeShadow(void* pokemon, int8_t sex, int8_t seikaku, int32_t rare, uint32_t trainerRnd) {
-  if (sShadow && rare == 0 && pokemon != nullptr && pokemonBiosGetDarkpokemonDataId(pokemon) != 0) {
+  if (Shadow() && rare == 0 && pokemon != nullptr && pokemonBiosGetDarkpokemonDataId(pokemon) != 0) {
     rare = -1;
     std::fprintf(stderr, "[shiny] Shadow Pokemon %u: made without the shiny lock\n", pokemonBiosGetDarkpokemonDataId(pokemon));
   }
@@ -149,7 +159,7 @@ uint32_t PortXD_FitMaybeShadow(void* pokemon, int8_t sex, int8_t seikaku, int32_
 }
 
 uint32_t PortXD_HeroFit(void* pokemon, int32_t sex, int32_t seikaku, int32_t rare, uint32_t trainerRnd) {
-  if (sShadow && rare == 0) {
+  if (Shadow() && rare == 0) {
     rare = -1;
     std::fprintf(stderr, "[shiny] a gift Shadow Pokemon: made without the shiny lock\n");
   }
@@ -157,18 +167,18 @@ uint32_t PortXD_HeroFit(void* pokemon, int32_t sex, int32_t seikaku, int32_t rar
 }
 
 uint32_t PortXD_GiftFit(void* pokemon, int32_t sex, int32_t seikaku, int32_t rare, uint32_t trainerRnd) {
-  if (sGifts && rare == 0) rare = -1;
+  if (Gifts() && rare == 0) rare = -1;
   return pokemonCreateRndFit(pokemon, static_cast<int8_t>(sex), static_cast<int8_t>(seikaku), static_cast<int8_t>(rare), trainerRnd);
 }
 
 uint32_t PortXD_SpotFit(void* pokemon, int8_t sex, int8_t seikaku, int8_t rare, uint32_t trainerRnd) {
-  if (sSpots && rare == 0) rare = -1;
+  if (Spots() && rare == 0) rare = -1;
   return pokemonCreateRndFit(pokemon, sex, seikaku, rare, trainerRnd);
 }
 
 uint32_t PortXD_SpotRnd(void) {
   const uint32_t rnd = pokemonCreateRnd();
-  if (sDivisor >= 8192) return rnd;
+  if (Divisor() >= 8192) return rnd;
   return Boost(rnd, static_cast<uint32_t>(heroGetStatus(nullptr, 2, 0)), -1);
 }
 }

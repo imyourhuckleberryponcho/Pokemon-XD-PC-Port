@@ -140,6 +140,9 @@ std::string Label(const Setup& setup) {
   if (!setup.engineChanged.empty()) {
     label += kDot + std::string("was ") + EngineName(setup.engine == Engine::Enhanced ? Engine::Faithful : Engine::Enhanced);
   }
+  if (!setup.cheatsUsed.empty()) {
+    label += kDot + std::string("cheats used");
+  }
   if (!setup.setupChanged.empty()) {
     label += kDot + std::string("setup changed");
   }
@@ -180,6 +183,7 @@ std::string DisplayLabel(const Setup& setup) {
   if (!setup.engineChanged.empty()) {
     label += kDot + Fmt(Tr("was %s"), TrEngineName(setup.engine == Engine::Enhanced ? Engine::Faithful : Engine::Enhanced));
   }
+  if (!setup.cheatsUsed.empty()) label += kDot + std::string(Tr("cheats used"));
   if (!setup.setupChanged.empty()) label += kDot + std::string(Tr("setup changed"));
   if (setup.Failed()) label += kDot + std::string(Tr("run failed"));
   return label;
@@ -248,6 +252,17 @@ std::string ToJson(const Setup& s) {
     for (size_t i = 0; i < s.engineChanged.size(); i++) out += (i > 0 ? ", " : "") + Quote(s.engineChanged[i]);
     out += "],\n";
   }
+  if (!s.cheatsUsed.empty()) {
+    out += "  \"cheats_used\": [";
+    for (size_t i = 0; i < s.cheatsUsed.size(); i++) out += (i > 0 ? ", " : "") + Quote(s.cheatsUsed[i]);
+    out += "],\n";
+  }
+  if (!s.cheatState.empty()) {
+    out += "  \"cheats\": [";
+    for (size_t i = 0; i < s.cheatState.size(); i++) out += (i > 0 ? ", " : "") + Quote(s.cheatState[i]);
+    out += "],\n";
+  }
+  if (s.cheatWarned) out += "  \"cheat_warned\": true,\n";
   if (!s.challengeLog.empty()) {
     out += "  \"challenge_log\": [";
     for (size_t i = 0; i < s.challengeLog.size(); i++) out += (i > 0 ? ", " : "") + Quote(s.challengeLog[i]);
@@ -387,6 +402,12 @@ bool FromJson(std::string_view text, Setup& out, std::string& error) {
   if (!ParseEngine(Text(root, "engine_started"), out.startedEngine)) {
     out.startedEngine = out.engineChanged.size() % 2 == 0 ? out.engine
                                                            : out.engine == Engine::Enhanced ? Engine::Faithful : Engine::Enhanced;
+  }
+  out.cheatsUsed = Texts(root, "cheats_used");
+  out.cheatState = Texts(root, "cheats");
+  {
+    const auto w = root.fields.find("cheat_warned");
+    out.cheatWarned = w != root.fields.end() && w->second.kind == Value::Kind::Bool && w->second.boolean;
   }
   out.setupChanged = Texts(root, "setup_changed");
   out.challengeLog = Texts(root, "challenge_log");

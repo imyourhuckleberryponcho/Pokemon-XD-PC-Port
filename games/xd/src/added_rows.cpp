@@ -1,4 +1,5 @@
 #include "xd_added_rows.h"
+#include "xd_spare.h"
 #include "xd_gen4_abilities.h"
 #include "xd_mod_battle.h"
 #include "xd_gen57.h"
@@ -20,7 +21,7 @@
 
 extern "C" uint16_t pc_metronome_first_mod_move;
 #ifdef XD_HAVE_METRONOME_NEVER_PICK
-extern "C" uint16_t pc_metronome_never_pick[1024];
+extern "C" uint16_t pc_metronome_never_pick[XD_PC_SPARE_MOVES];
 extern "C" uint16_t pc_metronome_never_pick_count;
 #endif
 
@@ -58,7 +59,7 @@ void Install(const engine::mods::LoadResult& result) {
   std::vector<uint16_t> never;
   for (const auto& r : sRows) {
     if (r.table == "waza_data" && firstMove != 0 && r.id >= firstMove && r.id <= 0xFFFF && r.bytes.size() > 0x0C && r.bytes[0x0C] == 0 &&
-        r.bytes[0x16] != 0xA4 && r.mod != "gen4" && never.size() < 1024) {
+        r.bytes[0x16] != 0xA4 && r.mod != "gen4" && never.size() < XD_PC_SPARE_MOVES) {
       never.push_back(static_cast<uint16_t>(r.id));
     }
   }
@@ -112,6 +113,15 @@ extern "C" void* PortXD_MsgOpen(void* bank) {
     }
     for (auto& t : extra) texts.push_back(std::move(t));
     std::stable_sort(texts.begin(), texts.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+    for (size_t i = 1; i < texts.size();) {
+      if (texts[i].first == texts[i - 1].first) {
+        std::fprintf(stderr, "[mods] message bank: text 0x%X is given twice, the first one is kept (\"%s\" over \"%s\")\n", texts[i].first & 0xFFFFF,
+                     texts[i - 1].second.c_str(), texts[i].second.c_str());
+        texts.erase(texts.begin() + static_cast<std::ptrdiff_t>(i));
+      } else {
+        i++;
+      }
+    }
     xd::gen4::InstallAbilityRows();
     xd::modbattle::InstallAbilityRows();
     xd::gen57::InstallAbilityRows();

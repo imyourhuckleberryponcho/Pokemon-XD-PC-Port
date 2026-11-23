@@ -419,7 +419,7 @@ ConvertFileResult convert_file(const std::vector<uint8_t>& sdr_bytes, const std:
     xd_full = hsd_read_pkx(xd_bytes, true).model;
     graft = &gi->second;
   }
-  WriteReport report;
+  [[maybe_unused]] WriteReport report;
   auto build = [&](double tol_scale, bool quiet) {
     double st = step;
     Logger lg = quiet ? Logger([](const std::string&) {}) : log;

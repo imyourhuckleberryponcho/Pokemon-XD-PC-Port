@@ -106,6 +106,7 @@ struct Recording {
   std::vector<Mark> marks;
   std::vector<uint32_t> modReloads;
   std::vector<DevMenuLine> devMenu;
+  std::vector<DevMenuLine> cheats;
   std::vector<DevMenuLine> settings;
   bool settingsSinceMenu = false;
   bool hasEnd = false;
@@ -126,6 +127,7 @@ bool BuildFieldTimeline(const Recording& recording, FieldTimeline& out, std::str
 std::string FormatChange(const Change& change);
 std::string FormatMark(const Mark& mark);
 std::string FormatDevMenu(const DevMenuLine& line);
+std::string FormatCheat(const DevMenuLine& line);
 std::string FormatPhoto(uint32_t frame, uint32_t field, const std::string& what);
 std::string FormatEnhanced(uint32_t frame, uint32_t field, const std::string& what);
 std::string FormatMenu(uint32_t frame, uint32_t field, const std::string& what);

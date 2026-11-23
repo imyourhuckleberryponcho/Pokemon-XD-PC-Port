@@ -122,3 +122,11 @@ A sticky web spreads out on the ground at {name}'s feet!
 {name} shored up and restored its HP!
 {name} hurt itself!
 
+# 0.7.1 mod_battle.cpp / the Gen 5-7 pack (battle/*.json messages reach Tr() through a variable)
+{name}'s move was disabled!
+{name} harvested its berry!
+{name} transformed into {foe}!
+The mysterious air current blows on regardless!
+{name} became cloaked in a freezing light!
+{name} became cloaked in freezing air!
+{name} is absorbing power!

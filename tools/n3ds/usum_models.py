@@ -1,6 +1,6 @@
 """usum_models: Ultra Sun / Ultra Moon Pokemon models for Pokemon XD, made from the player's own 3DS dump and own XD disc.
 
-  python -I usum_models.py --rom <decrypted Ultra Sun / Ultra Moon .cci> --xd-disc <XD image> --out <folder>
+  python -I usum_models.py --rom <decrypted Ultra Sun / Ultra Moon .cci or .cia> --xd-disc <XD image> --out <folder>
                            [--jobs N] [--only 6,25,...] [--decimate 2600]
 
 The models-only pack: every Gen 1-3 Pokemon XD has a model for gets the Ultra Sun / Ultra Moon model of the same species, in
@@ -104,19 +104,9 @@ def scan_groups(g):
     n = (len(g.entries) - 1) // 9
     out = {}
     for k in range(n):
-        bb = garc.maybe(g.read(1 + 9 * k))
-        if len(bb) < 1000:
-            continue
         try:
-            b = gfpack.pc_split(bb)[0]
-            x = gf_read.R(b)
-            x.u32(); x.u32(); x.pad16(); x.section()
-            for t in range(4):
-                c = x.u32()
-                names = [(x.u32(), x.pstr(0x40))[1] for _ in range(c)]
-                if t == 1:
-                    tex = names[0] if names else ''
-            if tex.startswith('pm') and tex[2:6].isdigit():
+            tex = M.model_texture_name(g, k)
+            if tex is not None and tex.startswith('pm') and tex[2:6].isdigit():
                 out[k] = (int(tex[2:6]), tex[7:9] if len(tex) >= 9 and tex[6] == '_' else '00')
         except Exception:
             pass
@@ -291,7 +281,8 @@ def run(a):
             height_cm = u16(us.personal(dex), 0x24)
             jobs_l.append(('g4', (dex, model, standin, noddisc.extract(data, ent), table[dex], a.decimate, height_cm, tmp, src)))
     del d
-    nj = a.jobs or max(1, min(6, (os.cpu_count() or 2) - 2))
+    import gen57_memory
+    nj = a.jobs or gen57_memory.workers_for(max(1, min(6, gen57_memory.cpu_count() - 2)))
     results, logs = {}, {}
     total = len(jobs_l)
 
@@ -381,6 +372,29 @@ def make_gen4_pack(a, us, src, results):
     shutil.rmtree(src, ignore_errors=True) if not os.environ.get('USUM_KEEP_SOURCE') else None
 
 
+def faces_only(a):
+    """usum_models --faces-only <pack>: the faces stage of usum_gen57_make on its own, for the C++ converter (usum_models_cpp), which makes
+    everything else itself. Protocol lines: `progress <done> <total> <what>`; `error <words>` (exit 1)."""
+    import usum_gen57_make as G57
+    import gen57_all as A
+    import gen57_faces_fast as FF
+    try:
+        G57.low_priority()
+        pack = os.path.abspath(a.faces_only)
+        nats = [int(x) for x in a.only.split(',')] if a.only else list(range(A.FIRST, A.LAST + 1))
+        import gen57_memory
+        jobs = a.jobs or gen57_memory.workers_for(max(1, min(8, gen57_memory.cpu_count() - 2)), lambda *x: None)
+        work = os.path.abspath(a.faces_work or pack + '.faces')
+        os.makedirs(work, exist_ok=True)
+        lg = open(os.path.join(work, 'faces.log'), 'a', encoding='utf-8')
+        FF.make_faces(a, A, pack, work, nats, jobs, G57.progress, lambda *x: (lg.write(' '.join(str(v) for v in x) + chr(10)), lg.flush()))
+        return 0
+    except Exception as ex:
+        traceback.print_exc()
+        say('error The faces could not be drawn (%s: %s).' % (type(ex).__name__, ' '.join(str(ex).split())[:160]))
+        return 1
+
+
 def program_dir():
     return os.path.dirname(os.path.abspath(sys.argv[0] if getattr(sys, 'frozen', False) else __file__))
 
@@ -394,13 +408,13 @@ def main():
         return
     if sys.argv[1:] == ['--selfcheck']:
         import importlib
-        for m in ('usum_gen57_make', 'gen57_all', 'gen57_forms', 'gen57_faces', 'gen57_faces_fast', 'gen57_facecam', 'gen57_data', 'gen57_pack', 'gen57_moves',
+        for m in ('usum_gen57_make', 'gen57_all', 'gen57_forms', 'gen57_faces', 'gen57_faces_fast', 'gen57_facecam', 'gen57_speed', 'gen57_memory', 'gen57_data', 'gen57_pack', 'gen57_moves',
                   'gen57_move_plan', 'gen57_abilities', 'usum_dex_entries', 'check_pack_move_rows', 'check_pack_models', 'n3ds_cries', 'gen4_pack', 'gen4_cry', 'gen4_spots',
                   'make_proto', 'gf_to_xd', 'gf_pose', 'hsd_read', 'model', 'noddisc', 'numpy', 'PIL.Image'):
             importlib.import_module(m)
         import gen57_all
         gen57_all.load_tables()
-        for f in ('gen57_forms.json', 'gen57_model_numbers.json', 'gen57_cry_waves.json', 'usum_dex_map.json', 'usum_gen4_plan.json'):
+        for f in ('gen57_forms.json', 'gen57_model_numbers.json', 'gen57_cry_waves.json', 'gen57_speed_numbers.json', 'usum_dex_map.json', 'usum_gen4_plan.json'):
             if not os.path.isfile(os.path.join(HERE, f)):
                 raise SystemExit('selfcheck: missing ' + f)
         say('selfcheck ok')
@@ -422,7 +436,11 @@ def main():
     ap.add_argument('--gen57-only', default='', help='test: only these national numbers')
     ap.add_argument('--gen57-skip', default='', help='test: skip stages (forms,faces,pictures)')
     ap.add_argument('--pbr-models', default='', help='the pack builder program (default: next to this program)')
+    ap.add_argument('--faces-only', default='', help='the C++ converter (usum_models_cpp) asks for the round faces of the Gen 5-7 pack made in this folder (stage faces only; --faces-work, --jobs)')
+    ap.add_argument('--faces-work', default='', help='work folder of --faces-only')
     a = ap.parse_args()
+    if a.faces_only:
+        sys.exit(faces_only(a))
     try:
         if a.data_folder and not a.pictures_out:
             a.pictures_out = os.path.join(a.data_folder, 'icons', 'pokedex')

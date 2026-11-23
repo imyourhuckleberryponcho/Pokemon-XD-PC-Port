@@ -19,6 +19,8 @@ Mat mat_inv(const Mat& m);
 V3 mat_point(const Mat& m, const V3& p);
 V3 mat_vec(const Mat& m, const V3& p);
 Mat mat_rot(double rx, double ry, double rz);
+extern double (*mat_rot_sin)(double);
+extern double (*mat_rot_cos)(double);
 Mat mat_srt(const V3& scale, const V3& rot, const V3& pos);
 void mat_decompose(const Mat& m, V3* scale, V3* rot, V3* pos);
 

@@ -1,4 +1,6 @@
 #include "xd_forms.h"
+#include "xd_hidden_ability.h"
+#include "xd_xg.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -21,6 +23,7 @@ extern "C" void (*PortXD_ShopTablesLinkedHook)(void);
 static void ShopTablesLinked();
 namespace { struct Register { Register() { PortXD_ShopTablesLinkedHook = &ShopTablesLinked; } } sRegister; }
 static void ShopTablesLinked() {
+  if (xd::xg::Off(xd::xg::Feature::PrizeDesk) != nullptr) return;
   if (!xd::forms::Loaded() || shopGoods == nullptr || shopGoods_number == nullptr || shopData == nullptr || *shopGoods_number < xd::forms::ShopSpareRows() + 8) return;
   const uint32_t start = *shopGoods_number - xd::forms::ShopSpareRows();
   const uint32_t old = shopData[9].goodsIdx;
@@ -30,6 +33,8 @@ static void ShopTablesLinked() {
   auto has = [&](uint32_t item) { for (uint16_t g : list) if (g == item) return true; return false; };
   const uint32_t charm = xd::forms::CharmItem();
   if (charm != 0 && !has(charm)) list.push_back(static_cast<uint16_t>(charm));
+  if (const uint32_t patch = xd::forms::PatchItem(); patch != 0 && xd::hidden::Enabled() && !has(patch)) list.push_back(static_cast<uint16_t>(patch));
+  if (xd::hidden::Enabled()) for (uint32_t m : xd::forms::MemoryItems()) if (!has(m) && list.size() < 100) list.push_back(static_cast<uint16_t>(m));
   size_t stones = 0;
   if (xd::forms::MegaRule()) {
     for (const auto& f : xd::forms::All()) {

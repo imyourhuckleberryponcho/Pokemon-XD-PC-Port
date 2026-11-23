@@ -197,6 +197,35 @@ Saves, settings, mods, logs and bug reports live in one data folder: {p['data']}
 """
 
 
+NEW_071 = """New in 0.7.1
+------------
+- Runs better on weaker PCs: threads that only wait now sleep, the sound held back after a stutter shrinks back
+  sooner (so sound stays in step with the picture), less work in the graphics translation and the cutscene video,
+  and the sound chip about 20 percent faster (the sound is bit for bit the same). The log says at start-up whether
+  this PC's graphics were prepared by the launcher.
+- Fewer freezes in the first battles: the launcher prepares the graphics the Battle Revolution models need too.
+- Hidden abilities in the Gen 5, 6 and 7 rule sets: a wild Pokemon at a Poke Spot has it 1 time in 20, and the
+  Ability Patch from the Mt. Battle prize desk gives any Pokemon its hidden ability.
+- More abilities: Unnerve, Cursed Body, Harvest, Cheek Pouch, Imposter, Infiltrator (also past a Substitute),
+  Corrosion, Dancer, Wimp Out and Emergency Exit (your own side), Power Construct, RKS System (17 Memories at the
+  prize desk). Two-turn and trapping moves: Freeze Shock, Ice Burn, Geomancy, Phantom Force, Shell Trap, Beak Blast,
+  Thousand Waves, Spirit Shackle, Anchor Shot. Not yet: Illusion, Sky Drop, Delta Stream's weather.
+- Gen 5-7 Pokemon also work on Pokemon XG.
+- A cheat menu (Enhanced): switch on "Enable cheats" in SETTINGS, then F5 (or hold L + R and press START) opens it:
+  catching, EXP multiplier, money, items, Rare Candies, shiny chance, perfect IVs / EVs, no damage, win battles,
+  instant purification. A save that used cheats is marked; it can't join competitive online rooms.
+- The Ultra Sun / Ultra Moon converter is now built into the program: about 3 times faster and uses far less memory.
+- A decrypted digital copy (.cia) of Ultra Sun / Ultra Moon works like a cartridge dump.
+- Nintendo's GameCube controller adapter is found (Windows needs the same driver Dolphin uses).
+- Mods can add up to 4096 new Pokemon, moves and items each (was 1024).
+- Fixed: a crash at New Game when both the Battle Revolution and the Ultra Sun / Ultra Moon models were made;
+  new Pokemon showing blank (no name) with Gen 5-7 and the Fairy type both on; Gen 4 Pokemon missing their
+  Ultra Sun / Ultra Moon models and a very long "check your mods" box; endless restarts when a New Game's
+  Pokemon could not be loaded (XG); a plainer message when an antivirus removed the game's program;
+  Pokedex pictures no longer caught mid-blink.
+"""
+
+
 NEW_070 = """New in 0.7.0
 ------------
 This is the big one. Parts that need a game disc or dump of your own are marked.
@@ -359,7 +388,7 @@ The full history is on the GitHub releases page: """ + RELEASES_URL + """
 
 
 def new_in():
-    return NEW_070 + chr(10) + NEW_061 + chr(10) + NEW_060 + chr(10) + NEW_05X
+    return NEW_071 + chr(10) + NEW_070 + chr(10) + NEW_061 + chr(10) + NEW_060 + chr(10) + NEW_05X
 
 
 def known_issues(system):

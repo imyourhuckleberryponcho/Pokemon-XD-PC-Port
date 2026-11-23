@@ -103,7 +103,7 @@ and the rest of the mod still works.
 | `its message texts can't be used (...)` / sizes named | The new texts of a table are longer than the old ones together. Shorten. |
 | `the new row "X" needs "copy": the row it starts from` | Add `"copy"` to an added row. |
 | `the new row "X" has the name of ...` | The name is taken. Choose another. |
-| `mods can add at most 1024 rows to T` | Too many rows. |
+| `mods can add at most 4096 rows to T` | Too many rows. |
 | `adds rows to T, which can't get new rows` | Only species, moves and items can grow. |
 | `a row can only copy rows above it` | Move the copied row above. |
 | `changes the new row "X" before the file that adds it; put the "add" first` | File names are read in order. Name the adding file so it comes first (for example `00-add.json`). |

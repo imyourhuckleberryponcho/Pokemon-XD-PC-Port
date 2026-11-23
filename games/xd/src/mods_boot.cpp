@@ -100,8 +100,22 @@ bool MakeMoreShadows(const engine::mods::DataCatalog& catalog, const engine::mod
   }
   const bool gen4 = xd::xg::Off(xd::xg::Feature::Gen4Pokemon) == nullptr && xd::gen4::Loaded();
   if (gen4 && !xr::LoadGen4Species(xd::gen4::PackFolder() / L"randomizer.txt", error)) return false;
+  if (gen4) {
+    if (const auto* tr = xd::gen4::xg::Active()) xr::TranslateGen4Species([tr](xr::Gen4Species& g) {
+      tr->MapLearnset(g.level, g.move);
+      for (uint32_t& a : g.abilities) a = tr->MapAbility(a);
+      tr->MapTypes(g.name, g.types);
+    });
+  }
   const bool gen57 = gen4 && xd::gen57::Loaded();
   if (gen57 && !xr::LoadGen57Species(xd::gen57::PackFolder() / L"randomizer.txt", error)) return false;
+  if (gen57) {
+    if (const auto* tr = xd::gen4::xg::Active()) xr::TranslateGen57Species([tr](xr::Gen4Species& g) {
+      tr->MapLearnset(g.level, g.move);
+      for (uint32_t& a : g.abilities) a = tr->MapAbility(a);
+      tr->MapTypes57(g.dex, g.types);
+    });
+  }
   engine::randomizer::ModOutput mod;
   if (!xr::GenerateMoreShadows(catalog, read, plan, rando, gen4, mod, error, gen57)) return false;
   out.push_back({"more_shadows", "More Shadow Pokemon", "data/more_shadows.json", mod.ToJson("more shadows " + text), true});
@@ -264,6 +278,7 @@ extern "C" bool PortXD_LoadMods(void) {
   options.listReadOnly = playerFilesReadOnly;
   options.disc = em::OpenDiscView();
   options.disc.gameId = em::MakeTarget(options.disc.gameId, xd::xg::Edition());
+  std::vector<em::LoadOptions::ExtraLayer> lookLayers;
   const std::filesystem::path modelsFolder = user / L"extra_assets" / xd::battle_models::kLayerId;
   bool modelsOn = false;
   std::vector<std::string> modelSources;
@@ -331,13 +346,13 @@ extern "C" bool PortXD_LoadMods(void) {
       const xd::rulesets::SourceFolder* f = xd::rulesets::SourceLayer(id);
       if (f == nullptr) continue;
       em::LoadOptions::ExtraLayer layer{f->layerId, f->name, user / L"extra_assets" / f->layerId, {}, pinned};
-      options.extraLayers.push_back(layer);
+      lookLayers.push_back(layer);
     }
     for (const auto& pb : pinBySource) {
       const xd::rulesets::SourceFolder* f = xd::rulesets::SourceLayer(pb.first);
       if (f == nullptr) continue;
       em::LoadOptions::ExtraLayer layer{std::string("pins-") + f->layerId, std::string(f->name) + " (pinned species)", user / L"extra_assets" / f->layerId, pb.second, {}};
-      options.extraLayers.push_back(layer);
+      lookLayers.push_back(layer);
       modelsOn = true;
     }
   }
@@ -378,8 +393,10 @@ extern "C" bool PortXD_LoadMods(void) {
   const std::string moreShadowsText = xd::pt::BootMoreShadows();
   xd::starter::SetPlan({});
   std::vector<em::DataModFile> gen4Files;
+  xd::gen4::SetGen57Wanted(xd::pt::BootGen57());
   xd::gen4::Prepare(xd::pt::BootGen4(), xd::pt::BootGen4Spots(), options, gen4Files);
   xd::gen57::Prepare(xd::pt::BootGen57(), xd::pt::BootGen4Spots(), options, gen4Files);
+  for (em::LoadOptions::ExtraLayer& layer : lookLayers) options.extraLayers.push_back(std::move(layer));
   xd::faces::SetFaceRowsTaken(xd::gen4::ExtraRowCount("poke_face") + xd::gen57::ExtraRowCount("poke_face"));
   xd::data::SetFlagRowsTaken(xd::gen4::ExtraRowCount("flag_data") + xd::gen57::ExtraRowCount("flag_data"));
   {
@@ -394,14 +411,14 @@ extern "C" bool PortXD_LoadMods(void) {
   xd::rulegen::PrepareNumbers(xd::gen4::Loaded() ? xd::pt::BootRuleGen() : 3, gen4Files);
   {
     std::string layers = "base disc";
-    for (const std::string& id : modelSources) {
-      if (const xd::rulesets::SourceFolder* f = xd::rulesets::SourceLayer(id)) layers += std::string(" > ") + f->name;
-    }
     if (std::strcmp(xd::languages::Active()->id, "us") != 0) layers += std::string(" > Languages (") + xd::languages::Active()->name + ")";
     if (xd::gen4::Loaded()) layers += " > Gen 4 pack";
     if (xd::gen4::SpotsLoaded()) layers += " > Gen 4 Poke Spots";
     if (xd::gen57::SpotsLoaded()) layers += " > Gen 5-7 Poke Spots";
     if (xd::gen57::Loaded()) layers += " > Gen 5-7 pack";
+    for (const std::string& id : modelSources) {
+      if (const xd::rulesets::SourceFolder* f = xd::rulesets::SourceLayer(id)) layers += std::string(" > ") + f->name;
+    }
     if (xd::modern::Loaded()) layers += " > Modern types (Fairy)";
     if (!randomizerCode.empty()) layers += " > Randomizer " + randomizerCode;
     std::fprintf(stderr, "[mods] built-in layers: %s (user mods are applied before them; conflicts are reported only for user mods)\n",
@@ -447,6 +464,11 @@ extern "C" bool PortXD_LoadMods(void) {
           return false;
         }
         if (!xr::LoadGen57Species(xd::gen57::PackFolder() / L"randomizer.txt", error)) return false;
+        if (const auto* tr = xd::gen4::xg::Active()) xr::TranslateGen57Species([tr](xr::Gen4Species& g) {
+          tr->MapLearnset(g.level, g.move);
+          for (uint32_t& a : g.abilities) a = tr->MapAbility(a);
+          tr->MapTypes57(g.dex, g.types);
+        });
       }
       xr::Result r;
       if (!xr::Generate(catalog, read, s, r, error, xd::xg::On() ? &xr::kXGStarterBase : nullptr)) return false;
@@ -492,7 +514,7 @@ extern "C" bool PortXD_LoadMods(void) {
     PortMessage_Show(PORT_MESSAGE_WARNING, Tr("Pokemon XD - mods"),
                      TrFmt(Tr("Please check your mods:\n\n%s\n\nThe game starts with the mods that can be used. Mods are in %s, the "
                               "list of mods that are on in mods.ini next to it."),
-                           result.Report().c_str(), reinterpret_cast<const char*>(options.modsFolder.u8string().c_str()))
+                           result.ReportCapped(10).c_str(), reinterpret_cast<const char*>(options.modsFolder.u8string().c_str()))
                          .c_str());
   }
   if (!result.program.empty() && !ApplyProgramChanges(result.program)) {

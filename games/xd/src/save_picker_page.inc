@@ -56,6 +56,15 @@ void Close(void*) {
   }
 }
 
+float CheatsBadge(ImDrawList* dl, const Screen& sc, float x1, float y) {
+  const std::string t = Tr("Cheats used");
+  const float s = 0.62f, w = kit::Width(t, s) + 18.f, h = 20.f, x = x1 - w;
+  dl->AddRectFilled(sc.At(x, y), sc.At(x1, y + h), IM_COL32(0xF2, 0xC1, 0x4E, 50), h / 2.f * sc.s);
+  dl->AddRect(sc.At(x, y), sc.At(x1, y + h), IM_COL32(0xF2, 0xC1, 0x4E, 150), h / 2.f * sc.s, 0, 1.f * sc.s);
+  kit::Text(dl, sc, x + 9.f, y + 2.f, t, kit::kBad, s);
+  return w;
+}
+
 constexpr int kShown = 3;
 constexpr float kRowH = 84.f;
 
@@ -99,12 +108,20 @@ bool Frame(void*, const PortMenuInput* in) {
     const std::string engine = row.rules.substr(0, row.rules.find(','));
     const float cw = kit::Width(engine, 0.62f) + 18.f;
     kit::Chip(dl, sc, 584.f - cw, y + 12.f, engine, true);
+    if (!row.cheats.empty()) CheatsBadge(dl, sc, 584.f - cw - 6.f, y + 12.f);
   }
   if (D.first > 0) kit::Arrow(dl, sc, 320.f, 70.f, true);
   if (D.first + kShown < n) kit::Arrow(dl, sc, 320.f, 72.f + kRowH * kShown + 12.f, false);
   const float ry = 72.f + kRowH * kShown + 18.f;
   kit::TitledWindow(dl, sc, 40.f, ry, 600.f, 438.f, Tr("Rules of this save"));
-  kit::Para(dl, sc, 66.f, ry + 40.f, 508.f, D.rows[static_cast<size_t>(D.cursor)].rules, kit::kText, 0.68f, 16.f, 3);
+  const xd::picker::Row& chosen = D.rows[static_cast<size_t>(D.cursor)];
+  const int ruleLines = kit::Para(dl, sc, 66.f, ry + 40.f, 508.f, chosen.rules, kit::kText, 0.68f, 16.f, chosen.cheats.empty() ? 3 : 2);
+  if (!chosen.cheats.empty()) {
+    std::string list;
+    for (size_t i = 0; i < chosen.cheats.size(); i++) list += (i > 0 ? ", " : "") + chosen.cheats[i];
+    kit::Para(dl, sc, 66.f, ry + 40.f + 16.f * static_cast<float>(ruleLines), 508.f, Fmt(Tr("Cheats used: %s"), list.c_str()), kit::kBad, 0.68f, 16.f,
+              3 - ruleLines);
+  }
   kit::HintBar(dl, sc, Tr("A: load this save   B: back to the title menu"));
   kit::FadeIn(dl, D.age);
   return true;

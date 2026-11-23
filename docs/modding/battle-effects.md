@@ -73,6 +73,8 @@ after the block (`{name}` is the Pokémon's name).
 | `{"cure_status": true}` | The Pokémon's sleep / poison / burn / freeze / paralysis is cured |
 | `{"hurt_dealt": 100}` | The Pokémon loses that percent of the damage the hit just dealt (Innards Out) |
 | `{"moody": true}` | One random stat +2 and another one -1 |
+| `{"restore_berry": true}` | The berry the Pokémon ate comes back (Harvest: put it in `end_of_turn`, once for 100 percent in sun, once with `"chance": 50` and `"when": "!weather:sun"`) |
+| `{"transform": true}` | The Pokémon turns into the foe (the game's own Transform: its stats, types, moves and ability). `{foe}` in a `"message"` is the foe's name (Imposter, in `switch_in`) |
 
 `{"stat": "best", "stages": 1}` raises the Pokémon's best stat (Beast Boost). `"set_type"` also takes `"target": "target"` (Soak). A move that has a
 switch-out block **and** a status effect (Parting Shot) works too: the stats fall first, then the user goes back.
@@ -89,6 +91,9 @@ Next to `effects`, a move entry may hold (all optional):
 | `"defend_stat": "def"` | a special move that meets the target's Defense (Psyshock) |
 | `"first_turn_only": true` | fails unless the user came in this turn (First Impression) |
 | `"power_formula": "weight"` | `weight` (Heavy Slam: the user's weight against the target's), `speed` (Electro Ball), `boosts` (Stored Power: 20 + 20 for each raised stage) |
+| `"needs_physical_hit": true` | fails unless a physical move hit the user earlier in the same turn (Shell Trap; give it a late priority in the move's row). In plain words: the move waits for a hit |
+| `"heats_up": true` | from the start of the turn until the move is used, a foe's contact move that hits the user burns that foe (Beak Blast; give it a late priority) |
+| `"type_from_user": true` | the move's type is the user's own (first) type (Multi-Attack: a Silvally holding a Memory) |
 | `"protect": "kings_shield"` | a Protect move (copy Protect as the donor) with a punishment for a contact move it stops: `kings_shield` (Attack -2), `spiky_shield` (1/8 HP), `baneful_bunker` (poison) |
 
 More tests for `"when"`: `target_status:poison` / `user_status:burn` (`poison paralysis burn freeze sleep`), `terrain:electric` (`grassy electric psychic misty any`),
@@ -155,6 +160,46 @@ One text or a list (all must be true). `"!"` in front turns it round (`"!contact
 | `accuracy_against` | `[{"when": "status_move", "accuracy": 50}]`: foes' moves can be at most this accurate against it (Wonder Skin) |
 | `accuracy_dealt` | `[{"mult": 1.1}]`: its own moves are this much more accurate (Victory Star) |
 | `crit_when` | tests: its damaging moves are critical hits when they are true (Merciless: `target_status:poison`) |
+| `unnerve` | `true`: its foes' berries have no effect while it is out (Unnerve) |
+| `disable_on_hit` | `30`: a percent. A damaging move that hits it is disabled for its user (the game's own Disable) (Cursed Body) |
+| `poison_any_type` | `true`: poison from its moves (the poison status moves, Toxic) works on Steel and Poison types (Corrosion). Seen working: the Steel Metagross was badly poisoned and lost HP at the turn end |
+| `infiltrator` | `true`: its moves ignore the foe's Reflect, Light Screen, Aurora Veil, Safeguard and Mist, and its hits go past a Substitute (Infiltrator) |
+| `strong_wind` | `true`: while it is out, Flying Pokémon take no extra damage from Rock, Ice and Electric moves (Delta Stream). The weather is not removed |
+| `berry_eaten` | a list of blocks that run when its owner has just eaten a berry (Cheek Pouch: `{"heal": 33.3}`). It runs right after the move in which the berry was eaten (round 3; it used to wait for the end of the turn) |
+| `half_hp` | a list of blocks that run when a hit takes its owner to half HP or less (it did not faint). `{"switch_out": "user"}` sends the owner back at the END of the move that hurt it (Baton Pass's own switch-out script, where U-turn's runs; Wimp Out / Emergency Exit). Seen to trigger and never to stop the battle; the replacement itself was not seen in a test battle. Wild Pokémon do not flee |
+| `dancer` | `["Swords Dance", "Dragon Dance"]`: right after another Pokemon uses one of these moves, the first owner of this ability among the others uses the same move at once (its own message, PP line and effects; no turn is used) (Dancer) |
+| `type_by_item` | `[{"item": "Fire Memory", "type": "Fire"}]`: its type follows the item it holds (RKS System). An item the game does not have is left out |
+
+## Two-turn moves
+
+```json
+"Freeze Shock": {
+  "charge": { "donor": "Razor Wind", "message": "{name} became cloaked in a freezing light!" },
+  "effects": [ { "status": "paralysis", "target": "target", "chance": 30 } ]
+}
+```
+
+`"charge"` makes the move a two-turn move: the first time it is used the user only charges up (the words in `message`), the next turn it is locked into the move and the
+move happens. `"donor"` is one of the game's own two-turn moves (Razor Wind, Skull Bash, Sky Attack, SolarBeam): the game's own script of that move is used (the lock, the PP, the
+messages of the hit), only the words of the first turn are yours. The move's `effects` run after its hit (a move with no damage, such as Geomancy: with the second turn). Moves that
+vanish for the first turn: use `"donor": "Fly"` (or Dig, Dive, Bounce: one script for all four). The script is copied, its "which move is this" tests and its two state commands answer for your move,
+so the user is out of reach exactly as the donor is (the game's own in-the-air / underground / underwater state; the few moves that hit a Fly user also hit yours). The words of the vanish turn are the donor's ("flew up high"), `message` is not used for them. Up to eight such moves in all the loaded mods.
+
+## Trapping moves
+
+`{"status": "trap", "target": "target"}` (with `"when": "!target_type:ghost"` to leave Ghost-types out) gives the target the game's own "cannot switch / cannot escape" state, the one Mean Look, Block and Spider Web set. The game's menu and its trainer AI refuse the switch, and the game ends the state when the user leaves or faints. Example: Thousand Waves, Spirit Shackle, Anchor Shot in the Gen 5-7 pack.
+
+## Hidden abilities (a placeholder rule)
+
+A species can have a third ability slot, the "hidden ability". It only exists in the Gen 5, 6 and 7 rule sets, and only for Pokémon that have it: a wild Pokémon at a Poké Spot has it 1 time in 20, and the Ability Patch (sold at the
+Mt. Battle prize desk) gives any Pokémon its hidden ability. A mod says which species have one, in any `battle/*.json`:
+
+```json
+{ "hidden_abilities": { "Eevee": "Adaptability", "558": 161 } }
+```
+
+The key is a species name or a National Dex number, the value an ability name or number. The Gen 5-7 pack already has them for every species of the Ultra Sun / Ultra Moon list. The rule itself is in one place
+in the game's code (`games/xd/src/hidden_ability.cpp`, "THE RULE").
 
 ## Terrains
 

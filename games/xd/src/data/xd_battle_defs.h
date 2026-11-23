@@ -62,6 +62,8 @@ enum class BlockKind : uint8_t {
   StealItem,
   HurtDealt,
   Moody,
+  RestoreBerry,
+  Transform,
 };
 
 struct Block {
@@ -104,8 +106,14 @@ struct MoveDef {
   bool useTargetAttack = false;
   bool defendWithDef = false;
   bool firstTurnOnly = false;
+  bool needsPhysicalHit = false;
+  bool typeFromUser = false;
+  bool heatsUp = false;
   int powerFormula = 0;
   bool neverMiss = false;
+  int64_t chargeDonor = 0;
+  std::string chargeMessage;
+  int chargeMessageId = -1;
   int protectKind = 0;
   std::string mod;
   int line = 0;
@@ -147,6 +155,16 @@ struct AbilityDef {
   bool reflectStatus = false;
   bool removesSecondary = false;
   bool script = false;
+  bool unnerve = false;
+  int disableOnHit = 0;
+  bool poisonAnyType = false;
+  std::vector<int> dancer;
+  bool strongWind = false;
+  bool infiltrator = false;
+  std::vector<Block> berryEaten;
+  std::vector<Block> halfHp;
+  struct TypeByItem { int item = 0; int type = 0; };
+  std::vector<TypeByItem> typeByItem;
   std::string mod;
   int line = 0;
 };
@@ -167,6 +185,7 @@ struct Defs {
   std::vector<AbilityDef> abilities;
   std::vector<RuleSet> ruleSets;
   std::vector<std::string> fieldNames;
+  std::map<int, int> hiddenNat, hiddenRow;
   std::vector<std::string> problems;
 };
 

@@ -25,6 +25,58 @@ SPECIES = {'machamp': ('kairiky', 68), 'arcanine': ('windie', 59), 'charizard': 
            'blastoise': ('kamex', 9)}
 
 
+def _texture_name_of(bb, strict=False):
+    """The first texture name of a model group's first entry `bb` (a model package, whole or only its first bytes). strict: the bytes may
+    be cut short, so anything that reads past them (or stops inside a name) is an error instead of a wrong answer."""
+    sub = gfpack.pc_split(bb)[0]
+    x = gf_read.R(sub)
+    x.u32(); x.u32(); x.pad16(); x.section()
+    tex = ''
+    for t in range(4):
+        c = x.u32()
+        names = [(x.u32(), x.pstr(0x40))[1] for _ in range(c)]
+        if t == 1:
+            tex = names[0] if names else ''
+    if strict and x.p > len(sub):
+        raise ValueError('cut short')
+    return tex
+
+
+_TEX_CACHE = {}
+
+
+def model_texture_name(g, k):
+    """The first texture name of model group k, or None when the group is too small to be a model (what find_group / scan_groups read of
+    every group). Only the first bytes of the compressed entry are decompressed (the names are in the first few KB; a whole model is
+    ~100 times that and was decompressed one byte at a time, ~0.2 s each, hundreds of groups for every species): the answer is the same.
+    Kept for the next call in this process."""
+    key = (id(g), k)
+    if key in _TEX_CACHE:
+        return _TEX_CACHE[key]
+    raw = g.read(1 + 9 * k)
+    res = False
+    if raw[:1] == b'':
+        size = raw[1] | raw[2] << 8 | raw[3] << 16
+        if size == 0:
+            size = int.from_bytes(raw[4:8], 'little')
+        if size < 1000:
+            res = None
+        else:
+            for lim in (4096, 32768):
+                if lim >= size:
+                    break
+                try:
+                    res = _texture_name_of(garc.lz11(raw, lim), strict=True)
+                    break
+                except Exception:
+                    res = False
+    if res is False:
+        bb = garc.maybe(raw)
+        res = None if len(bb) < 1000 else _texture_name_of(bb)
+    _TEX_CACHE[key] = res
+    return res
+
+
 def find_group(g, pm, form='00'):
     """(group number) of the 3DS model pmNNNN_FF: read the model's first texture name of each group, scanning from
     a guess (groups follow the national numbers closely)."""
@@ -40,22 +92,11 @@ def find_group(g, pm, form='00'):
     want = 'pm%04d_%s' % (pm, form)
     n = (len(g.entries) - 1) // 9
     k0 = min(pm, n - 1)
-    seen = 0
     for d in range(0, n):
         for k in (k0 + d, k0 - d):
             if 0 <= k < n:
-                bb = garc.maybe(g.read(1 + 9 * k))
-                if len(bb) < 1000:
-                    continue
-                b = gfpack.pc_split(bb)[0]
-                x = gf_read.R(b)
-                x.u32(); x.u32(); x.pad16(); x.section()
-                for t in range(4):
-                    c = x.u32()
-                    names = [(x.u32(), x.pstr(0x40))[1] for _ in range(c)]
-                    if t == 1:
-                        tex = names[0] if names else ''
-                if tex.startswith(want):
+                tex = model_texture_name(g, k)
+                if tex is not None and tex.startswith(want):
                     return k
     raise SystemExit('model %s not found' % want)
 

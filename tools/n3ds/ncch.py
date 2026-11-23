@@ -1,5 +1,8 @@
-"""Read an unencrypted (decrypted) 3DS cartridge dump: NCSD/CCI -> NCCH -> RomFS. Pure Python, read only.
-Usage: python -I ncch.py <game.cci> [list [prefix]]   (the game's data is never copied by this tool)"""
+"""Read an unencrypted (decrypted) 3DS game: a cartridge dump (NCSD/CCI) or a digital copy (.cia) -> NCCH -> RomFS.
+Pure Python, read only. A .cia is read in place: its header and TMD say where content 0 (the game's NCCH, the same
+NCCH a .cci holds as partition 0) starts, and everything else is an offset into the same file (nothing is copied).
+Only DECRYPTED copies are read; the tool never decrypts, and never asks for or contains any console keys.
+Usage: python -I ncch.py <game.cci|game.cia> [list [prefix]]   (the game's data is never copied by this tool)"""
 import struct, sys
 
 class RomFS:
@@ -49,12 +52,75 @@ class RomFS:
         self.f.seek(self.l3 + self.fdo + o)
         return self.f.read(s)
 
+ENCRYPTED_CIA = ('this .cia is encrypted. The converter only reads decrypted copies and does not decrypt anything itself: '
+                 're-export the game decrypted with your own dumping tool.')
+UPDATE_CIA = "this .cia is the game's update, not the game itself. Choose the game's own .cia."
+DLC_CIA = "this .cia is the game's downloadable content (DLC), not the game itself. Choose the game's own .cia."
+SHORT_CIA = 'this .cia looks cut short or damaged: the game data is not where its header says.'
+
+
+def _align(n, a=0x40):
+    return (n + a - 1) & ~(a - 1)
+
+
+def cia_content0(f, size):
+    """(offset of content 0 = the game's NCCH inside the .cia, title id) or SystemExit(plain sentence).
+    Layout: header 0x2020 | cert chain | ticket | TMD | meta | contents, each part padded to 0x40."""
+    f.seek(0)
+    h = f.read(0x2020)
+    if len(h) < 0x2020:
+        raise SystemExit(SHORT_CIA)
+    hdr, typ, ver, cert, tik, tmd, meta, csize = struct.unpack_from('<IHHIIIIQ', h, 0)
+    if hdr != 0x2020 or typ != 0:
+        raise SystemExit('this is not a 3DS game file the converter can read (a .3ds, .cci or decrypted .cia).')
+    tmd_off = _align(hdr) + _align(cert) + _align(tik)
+    cont_off = tmd_off + _align(tmd) + _align(meta)
+    f.seek(tmd_off)
+    t = f.read(min(tmd, 0x10000))
+    if len(t) < 4 or tmd < 0x100:
+        raise SystemExit(SHORT_CIA)
+    sigtype = struct.unpack_from('>I', t, 0)[0]
+    sig = {0x10000: 0x240, 0x10001: 0x140, 0x10002: 0x80, 0x10003: 0x240, 0x10004: 0x140, 0x10005: 0x80}.get(sigtype)
+    if sig is None or len(t) < sig + 0xC4 + 0x900:
+        raise SystemExit(SHORT_CIA)
+    tid = struct.unpack_from('>Q', t, sig + 0x4C)[0]
+    hi = tid >> 32
+    if hi == 0x0004000E:
+        raise SystemExit(UPDATE_CIA)
+    if hi == 0x0004008C:
+        raise SystemExit(DLC_CIA)
+    if hi != 0x00040000:
+        raise SystemExit('this .cia is not a game (its title id is %016X).' % tid)
+    count = struct.unpack_from('>H', t, sig + 0x9E)[0]
+    rec = sig + 0xC4 + 0x900
+    if count == 0 or len(t) < rec + count * 0x30:
+        raise SystemExit(SHORT_CIA)
+    present = h[0x20:0x2020]
+    off = cont_off
+    for i in range(count):
+        cid, cidx, ctype, csz = struct.unpack_from('>IHHQ', t, rec + i * 0x30)
+        if not present[cidx >> 3] & (0x80 >> (cidx & 7)):
+            continue
+        if cidx == 0:
+            if ctype & 1:
+                raise SystemExit(ENCRYPTED_CIA)
+            if off + 0x200 > size:
+                raise SystemExit(SHORT_CIA)
+            return off, tid
+        off += csz
+    raise SystemExit(SHORT_CIA)
+
+
 def open_rom(path, part=0):
     f = open(path, 'rb')
     h = f.read(0x200)
-    assert h[0x100:0x104] == b'NCSD'
-    po, ps = struct.unpack_from('<II', h, 0x120 + part * 8)
-    base = po * 0x200
+    if h[0x100:0x104] == b'NCSD':
+        po, ps = struct.unpack_from('<II', h, 0x120 + part * 8)
+        base = po * 0x200
+    else:
+        assert len(h) >= 8 and struct.unpack_from('<I', h, 0)[0] == 0x2020, 'not NCSD'
+        f.seek(0, 2)
+        base, _tid = cia_content0(f, f.tell())
     f.seek(base)
     n = f.read(0x200)
     assert n[0x100:0x104] == b'NCCH'

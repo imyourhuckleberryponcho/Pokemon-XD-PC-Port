@@ -27,6 +27,8 @@ uint32_t BaseOf(uint32_t row);
 uint32_t AlolaEvolution(uint32_t current, uint32_t held, uint32_t result);
 bool IsForm(uint32_t row);
 uint32_t CharmItem();
+uint32_t PatchItem();
+const std::vector<uint32_t>& MemoryItems();
 uint32_t ShopSpareRows();
 void AppendTexts(std::vector<std::pair<uint32_t, std::string>>& texts);
 

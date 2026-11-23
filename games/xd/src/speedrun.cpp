@@ -44,6 +44,7 @@ int floorGetFloorState(void);
 int floorGetCurrent(void);
 uint32_t fadeGetType(void);
 const char* PortXD_DevMenuReport(void);
+int PortXD_CheatsUsedHere(void);
 int32_t menuNameEntryOpen(int32_t mode, intptr_t param);
 uint32_t deckGetDarkPokemonSize(void);
 extern uint32_t* deckdata_virtual_number;
@@ -1003,6 +1004,7 @@ void UpdateValidity() {
     }
   };
   if (std::strstr(PortXD_DevMenuReport(), "USED") != nullptr) add("developer menu used");
+  if (PortXD_CheatsUsedHere() != 0) add("cheats used");
   if (std::strstr(PortSpeedups_Report(), "none used") == nullptr) add("speed-ups used");
   if (sEnhanced) add("Enhanced engine (the categories are for the original game)");
   const es::Registry& reg = es::Global();

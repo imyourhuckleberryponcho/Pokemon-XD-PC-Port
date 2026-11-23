@@ -192,8 +192,13 @@ mod list.
   trainer card will). Script: `extradisc:colosseum=<disc>`, `extramake:colosseum`; `tools/colo_models/proof_launcher.py`.
 - **Pokemon Ultra Sun / Ultra Moon** (2026-11-18, `usum` row; docs/USUM_MODELS.md): the one row whose input is a FILE, not a disc image
   (`ExtraSource::dump = true`, `identify` = `xd::IdentifyN3dsDump` in games/xd/launcher/xd_n3ds_dump.cpp: reads the NCSD / NCCH headers
-  only). Accepted: a DECRYPTED cartridge dump, `.3ds` or `.cci`, of Ultra Sun or Ultra Moon (product code CTR-P-A2A / A2B, any region).
-  Refused with a plain sentence: an encrypted dump, a `.cia`, a folder, another file, a cut-short file, another 3DS game (Sun / Moon / X / Y
+  only). Accepted: a DECRYPTED cartridge dump, `.3ds` or `.cci`, or a DECRYPTED digital copy, `.cia` (0.7.1), of Ultra Sun or Ultra Moon
+  (product code CTR-P-A2A / A2B, any region). A `.cia` is told by its content (header size 0x2020, no NCSD mark), not its extension: the CIA
+  header and the TMD give where content 0 starts (header, certificates, ticket, TMD, meta, each padded to 0x40; contents present by the
+  index bits; content 0 = the game's NCCH, the same one a .cci holds as partition 0), and the converter (`tools/n3ds/ncch.py`) reads it in
+  place at that offset, no copy. Refused with their own plain sentences (translated): an update `.cia` (title id high word 0004000E), a DLC
+  `.cia` (0004008C), another title kind, an encrypted `.cia` (the TMD says the content is encrypted, or the NCCH is not NoCrypto: "export it
+  decrypted with your own dumping tool"; the port never decrypts and never asks for keys). Also refused: a folder, another file, a cut-short file, another 3DS game (Sun / Moon / X / Y
   are named but not taken: untested / not supported). Make runs `usum_models --rom <dump> --xd-disc <your XD disc> --out extra_assets\usum`
   (progress per model, `done` line, exit 2 + `error` line for a wrong dump; `--version` feeds "Out of date: make again"). The result's
   mod.json carries `count` so the page says "Ready: 385 models". No switch: the model source is chosen per playthrough in the New Game setup

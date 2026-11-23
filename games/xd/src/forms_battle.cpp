@@ -79,7 +79,7 @@ namespace {
 constexpr uint32_t kBank = 0x7D0u << 20;
 constexpr uint32_t kTextReact = 0xBF00, kTextMega = 0xBF01, kTextPrimal = 0xBF02;
 constexpr uint32_t kTextZenOn = 0xBF10, kTextZenOff = 0xBF11, kTextBlade = 0xBF12, kTextShield = 0xBF13, kTextSchoolOn = 0xBF14, kTextSchoolOff = 0xBF15,
-                   kTextShellOff = 0xBF16, kTextShellOn = 0xBF17, kTextBusted = 0xBF18, kTextPirouette = 0xBF19, kTextAria = 0xBF1A, kTextAsh = 0xBF1B;
+                   kTextShellOff = 0xBF16, kTextShellOn = 0xBF17, kTextBusted = 0xBF18, kTextPirouette = 0xBF19, kTextAria = 0xBF1A, kTextAsh = 0xBF1B, kTextComplete = 0xBF20;
 void* sFormed[16];
 int sFormedCount = 0;
 bool IsFormed(void* fop) { for (int i = 0; i < sFormedCount; i++) if (sFormed[i] == fop) return true; return false; }
@@ -292,6 +292,11 @@ void AppendTexts(std::vector<std::pair<uint32_t, std::string>>& texts) {
   texts.emplace_back((0x7D0u << 20) | kTextPirouette, engine::i18n::Tr("{10} changed to Pirouette Forme!"));
   texts.emplace_back((0x7D0u << 20) | kTextAria, engine::i18n::Tr("{10} changed to Aria Forme!"));
   texts.emplace_back((0x7D0u << 20) | kTextAsh, engine::i18n::Tr("{10} became Ash-Greninja!"));
+  texts.emplace_back((0x7D0u << 20) | kTextComplete, engine::i18n::Tr("{10} transformed into its Complete Forme!"));
+  texts.emplace_back((0x7D0u << 20) | 0xBF1C, engine::i18n::Tr("The Pokemon now has its hidden ability!"));
+  texts.emplace_back((0x7D0u << 20) | 0xBF1D, engine::i18n::Tr("This Pokemon has no hidden ability."));
+  texts.emplace_back((0x7D0u << 20) | 0xBF1E, engine::i18n::Tr("This Pokemon already has its hidden ability."));
+  texts.emplace_back((0x7D0u << 20) | 0xBF1F, engine::i18n::Tr("A Shadow Pokemon cannot use this yet."));
 }
 
 }
@@ -336,6 +341,7 @@ void Evaluate(void* fop, bool afterHit) {
   switch (ability) {
   case 161: tag = "Zen"; want = hp * 2 <= mx; on = kTextZenOn; off = kTextZenOff; if (afterHit) return; break;
   case 208: tag = "School"; want = pokemon_GetLevel(p) >= 20 && hp * 4 > mx; on = kTextSchoolOn; off = kTextSchoolOff; if (afterHit) return; break;
+  case 211: tag = "Complete"; want = hp * 2 <= mx; on = kTextComplete; off = 0; if (afterHit || !want) return; break;
   case 197: tag = "Core"; want = hp * 2 <= mx; on = kTextShellOff; off = kTextShellOn; break;
   default: return;
   }

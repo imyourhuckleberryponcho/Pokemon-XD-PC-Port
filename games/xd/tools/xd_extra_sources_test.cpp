@@ -6,6 +6,7 @@
 #include <settings.h>
 
 #include <algorithm>
+#include <cstdint>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -112,7 +113,54 @@ int main() {
     check(!xd::IdentifyN3dsDump(make("nope.3ds", false, false, true, "CTR-P-A2AE"), id, title, err) && !err.empty(), "dump check: a file without the NCSD mark is refused");
     check(!xd::IdentifyN3dsDump(make("cut.3ds", true, false, true, "CTR-P-A2AE"), id, title, err) && !err.empty(), "dump check: a dump whose game data is missing is refused");
     check(!xd::IdentifyN3dsDump(make("small.3ds", true, true, true, "CTR-P-A2AE", 0x180), id, title, err) && !err.empty(), "dump check: a file shorter than a header is refused");
-    check(!xd::IdentifyN3dsDump(make("game.cia", true, true, true, "CTR-P-A2AE"), id, title, err) && err.find(".cia") != std::string::npos, "dump check: a .cia is refused and named");
+    struct CiaOpt { uint32_t titleHigh = 0x00040000; bool encryptedContent = false; bool ncchPlain = true; bool cut = false; bool sigEcdsa = false; };
+    auto makeCia = [&](const char* name, const CiaOpt& o, const char* code) {
+      auto be32 = [](std::vector<char>& v, size_t at, uint32_t x) { for (int i = 0; i < 4; ++i) v[at + i] = static_cast<char>(x >> (24 - 8 * i)); };
+      auto le32 = [](std::vector<char>& v, size_t at, uint32_t x) { for (int i = 0; i < 4; ++i) v[at + i] = static_cast<char>(x >> (8 * i)); };
+      const size_t sig = o.sigEcdsa ? 0x80 : 0x240;
+      const size_t tmdSize = sig + 0xC4 + 0x900 + 2 * 0x30;
+      const size_t cert = 0x100, tik = 0x2C4, meta = 0;
+      auto al = [](size_t n) { return (n + 0x3F) & ~size_t(0x3F); };
+      const size_t tmdOff = al(0x2020) + al(cert) + al(tik), contentOff = tmdOff + al(tmdSize) + al(meta);
+      std::vector<char> b(contentOff + 0x1000, 0);
+      le32(b, 0, 0x2020); le32(b, 8, static_cast<uint32_t>(cert)); le32(b, 12, static_cast<uint32_t>(tik)); le32(b, 16, static_cast<uint32_t>(tmdSize));
+      b[0x20] = static_cast<char>(0xC0);
+      if (o.sigEcdsa) be32(b, tmdOff, 0x10005); else be32(b, tmdOff, 0x10000);
+      be32(b, tmdOff + sig + 0x4C, o.titleHigh); be32(b, tmdOff + sig + 0x50, 0x00123400);
+      b[tmdOff + sig + 0x9F] = 2;
+      const size_t rec = tmdOff + sig + 0xC4 + 0x900;
+      b[rec + 7] = o.encryptedContent ? 1 : 0; b[rec + 0x0F] = 0x00; be32(b, rec + 8, 0); be32(b, rec + 12, 0x1000);
+      b[rec + 0x30 + 5] = 1;
+      const size_t n = contentOff;
+      std::memcpy(&b[n + 0x100], "NCCH", 4);
+      std::memcpy(&b[n + 0x150], code, std::strlen(code));
+      if (o.ncchPlain) b[n + 0x188 + 7] = 4;
+      if (o.cut) b.resize(contentOff + 0x80);
+      const fs::path f = dir / name;
+      std::ofstream(f, std::ios::binary).write(b.data(), static_cast<std::streamsize>(b.size()));
+      return f.string();
+    };
+    check(xd::IdentifyN3dsDump(makeCia("ok.cia", CiaOpt{}, "CTR-P-A2AE"), id, title, err) && id == "CTR-P-A2A" && title == "Pokemon Ultra Sun",
+          "cia: a decrypted Ultra Sun .cia is recognised like the .cci");
+    CiaOpt ecdsa; ecdsa.sigEcdsa = true;
+    check(xd::IdentifyN3dsDump(makeCia("ok2.cia", ecdsa, "CTR-P-A2BJ"), id, title, err) && id == "CTR-P-A2B", "cia: another signature block size, Ultra Moon");
+    CiaOpt enc; enc.encryptedContent = true;
+    check(!xd::IdentifyN3dsDump(makeCia("enc.cia", enc, "CTR-P-A2AE"), id, title, err) && err.find("encrypted") != std::string::npos && err.find("dumping tool") != std::string::npos,
+          "cia: an encrypted .cia (TMD content type) is refused with the encrypted sentence");
+    CiaOpt ncchEnc; ncchEnc.ncchPlain = false;
+    check(!xd::IdentifyN3dsDump(makeCia("enc2.cia", ncchEnc, "CTR-P-A2AE"), id, title, err) && err.find(".cia is encrypted") != std::string::npos,
+          "cia: an NCCH that is not NoCrypto is refused with the encrypted sentence");
+    CiaOpt upd; upd.titleHigh = 0x0004000E; upd.encryptedContent = true;
+    check(!xd::IdentifyN3dsDump(makeCia("upd.cia", upd, "CTR-P-A2AE"), id, title, err) && err.find("update") != std::string::npos,
+          "cia: an update .cia is refused with its own sentence (even when encrypted)");
+    CiaOpt dlc; dlc.titleHigh = 0x0004008C;
+    check(!xd::IdentifyN3dsDump(makeCia("dlc.cia", dlc, "CTR-P-A2AE"), id, title, err) && err.find("DLC") != std::string::npos, "cia: a DLC .cia is refused with its own sentence");
+    CiaOpt sys; sys.titleHigh = 0x00040010;
+    check(!xd::IdentifyN3dsDump(makeCia("sys.cia", sys, "CTR-P-A2AE"), id, title, err) && err.find("not a game") != std::string::npos, "cia: a system title is refused");
+    CiaOpt cut; cut.cut = true;
+    check(!xd::IdentifyN3dsDump(makeCia("cut.cia", cut, "CTR-P-A2AE"), id, title, err) && err.find("cut short") != std::string::npos, "cia: a cut-short .cia is refused");
+    check(!xd::IdentifyN3dsDump(make("tiny.cia", false, false, false, "x", 0x100), id, title, err) && !err.empty(), "cia: a tiny file named .cia is refused");
+    check(xd::IdentifyN3dsDump(make("renamed.cia", true, true, true, "CTR-P-A2AE"), id, title, err) && id == "CTR-P-A2A", "a cartridge dump with the wrong extension is still read by what it holds");
     check(!xd::IdentifyN3dsDump(dir.string(), id, title, err) && err.find("folder") != std::string::npos, "dump check: a folder is refused and named");
     check(!xd::IdentifyN3dsDump((dir / "missing.3ds").string(), id, title, err) && !err.empty(), "dump check: a missing file is refused");
     fs::remove_all(dir);

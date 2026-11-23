@@ -11,11 +11,11 @@ in the set is written as what is built (damage only / name only) and says so in 
 """
 
 FEATURES_DONE = {'blocks', 'switch_out', 'power_rules', 'status_switch', 'force_switch', 'crit', 'ignore_boosts', 'foul_play', 'def_stat', 'first_turn_only',
-                 'power_formula', 'terrain', 'set_type_target', 'cure_status', 'side', 'protect_variant', 'cond_fainted'}
+                 'power_formula', 'terrain', 'set_type_target', 'cure_status', 'side', 'protect_variant', 'cond_fainted', 'charge', 'needs_physical_hit', 'heats_up', 'type_from_user'}
 
 
 FEATURE_OF_PROP = {'crit': 'crit', 'ignore_boosts': 'ignore_boosts', 'use_target_attack': 'foul_play', 'defend_stat': 'def_stat',
-                   'first_turn_only': 'first_turn_only', 'power_formula': 'power_formula', 'type_chart': 'type_chart', 'protect': 'protect_variant'}
+                   'first_turn_only': 'first_turn_only', 'power_formula': 'power_formula', 'type_chart': 'type_chart', 'protect': 'protect_variant', 'charge': 'charge', 'needs_physical_hit': 'needs_physical_hit', 'heats_up': 'heats_up', 'type_from_user': 'type_from_user'}
 
 OK_PURE = {'Hone Claws', 'Quiver Dance', 'Coil', 'Flame Charge', 'Acid Spray', 'Work Up', 'Cotton Guard', 'Shift Gear', 'Noble Roar', 'Play Nice',
            'Confide', 'Tearful Look', 'Baby-Doll Eyes', 'Toxic Thread', 'Lunge', 'Trop Kick', 'Fire Lash', 'Power-Up Punch', 'Nuzzle',
@@ -23,8 +23,8 @@ OK_PURE = {'Hone Claws', 'Quiver Dance', 'Coil', 'Flame Charge', 'Acid Spray', '
            'Volt Switch', 'Water Shuriken', 'V-create', 'Diamond Storm', 'Glaciate', 'Relic Song', 'Hyperspace Fury', 'Eerie Impulse', 'Leafage', 'Brutal Swing', 'Dragon Hammer'}
 
 
-FORCE_PARTIAL = {'Techno Blast': 'type should follow the Drive held (always Normal here)', 'Multi-Attack': 'type should follow the Memory held (always Normal here)',
-                 'Phantom Force': 'plain one-turn hit: no vanish turn, does not break Protect', 'Steamroller': 'no double damage against Minimize',
+FORCE_PARTIAL = {'Techno Blast': 'type should follow the Drive held (always Normal here)', 
+                 'Phantom Force': "vanishes in the air state (Fly's): the few moves that hit a flying target also hit it; does not break Protect", 'Steamroller': 'no double damage against Minimize',
                  'Heart Stamp': None, 'Solar Blade': None}
 FORCE_PARTIAL = {k: v for k, v in FORCE_PARTIAL.items() if v}
 
@@ -50,20 +50,18 @@ ANIM = {
 
 
 PARTIAL = {
-    'Autotomize': 'Speed +2 only: the weight loss is not built', 'Freeze Shock': 'no charging turn: it hits at once', 'Ice Burn': 'no charging turn: it hits at once',
-    'Freeze-Dry': 'Water Pokemon are not hit super effectively', 'Magnetic Flux': 'raises the user whatever its ability (should need Plus or Minus; it is made for allies)',
+    'Autotomize': 'Speed +2 only: the weight loss is not built',     'Freeze-Dry': 'Water Pokemon are not hit super effectively', 'Magnetic Flux': 'raises the user whatever its ability (should need Plus or Minus; it is made for allies)',
     'Gear Up': 'raises the user whatever its ability (should need Plus or Minus; it is made for allies)', 'Aromatic Mist': 'ally only: does nothing in single battles (as in the games)',
-    'Geomancy': 'no charging turn: works at once',
     'Smack Down': 'does not ground a Flying target', 'Synchronoise': 'hits any target (should hit only one sharing a type)',
     'Echoed Voice': 'power does not grow with use', 'Clear Smog': 'does not reset the target\'s stat changes', 'Sky Drop': 'plain hit (no lifting turn)',
     'Incinerate': 'does not burn up a berry', 'Retaliate': 'power not doubled after a faint', 'Final Gambit': 'plain hit of fixed power (should deal the user\'s HP and faint)',
     'Water Pledge': 'no combination with the other Pledges', 'Fire Pledge': 'no combination with the other Pledges', 'Grass Pledge': 'no combination with the other Pledges',
     'Fusion Flare': 'power not doubled after Fusion Bolt', 'Fusion Bolt': 'power not doubled after Fusion Flare', 'Flying Press': 'plain Fighting hit (not also Flying)',
     'Belch': 'works without having eaten a berry', 'Hyperspace Hole': 'does not break through Protect', 'Thousand Arrows': 'does not ground a Flying target',
-    'Thousand Waves': 'does not trap the target', 'Spirit Shackle': 'does not trap the target', 'Anchor Shot': 'does not trap the target',
+    
     'Sparkling Aria': 'does not cure a burn', 'Throat Chop': 'does not stop sound moves', 'Pollen Puff': 'cannot heal an ally (plain hit)',
     'Burn Up': 'the user does not lose its Fire type', 'Revelation Dance': 'type does not follow the user (Normal)', 'Core Enforcer': 'does not switch off an ability',
-    'Beak Blast': 'no heating-up turn', 'Shell Trap': 'no trap: a plain hit that goes late', 'Stomping Tantrum': 'power not doubled after a failed move',
+    'Beak Blast': 'no message when it starts heating up; the burn is as the games', 'Shell Trap': 'its own failure message is the plain "But it failed"; in double battles it hits one foe, not both', 'Stomping Tantrum': 'power not doubled after a failed move',
     'Spectral Thief': 'does not steal stat boosts', 'Sunsteel Strike': 'does not ignore abilities', 'Moongeist Beam': 'does not ignore abilities',
     'Disarming Voice': None, 'Boomburst': None, 'Petal Blizzard': None, 'Flame Burst': None, 'Round': None,
 }
@@ -90,6 +88,9 @@ PLAN = {
     'Psystrike': {'props': {'defend_stat': 'def'}, 'needs': ['def_stat']},
     'Secret Sword': {'props': {'defend_stat': 'def'}, 'needs': ['def_stat']},
     'First Impression': {'props': {'first_turn_only': True}, 'needs': ['first_turn_only']},
+    'Shell Trap': {'props': {'needs_physical_hit': True}, 'needs': ['needs_physical_hit']},
+    'Multi-Attack': {'props': {'type_from_user': True}, 'needs': ['type_from_user']},
+    'Beak Blast': {'props': {'heats_up': True}, 'needs': ['heats_up']},
 
     'Heavy Slam': {'props': {'power_formula': 'weight'}, 'needs': ['power_formula']},
     'Heat Crash': {'props': {'power_formula': 'weight'}, 'needs': ['power_formula']},
@@ -122,7 +123,21 @@ PLAN = {
     'Shore Up': {'blocks': [{'heal': 50, 'message': '{name} shored up and restored its HP!'}], 'note': '66 percent in a sandstorm is not built'},
     'Shell Smash': {'blocks': [{'stat': 'def', 'stages': -1}, {'stat': 'spd', 'stages': -1}, {'stat': 'atk', 'stages': 2},
                                {'stat': 'spa', 'stages': 2}, {'stat': 'spe', 'stages': 2}]},
-    'Geomancy': {'blocks': [{'stat': 'spa', 'stages': 2}, {'stat': 'spd', 'stages': 2}, {'stat': 'spe', 'stages': 2}], 'note': 'no charging turn: works at once'},
+
+
+    'Geomancy': {'blocks': [{'stat': 'spa', 'stages': 2}, {'stat': 'spd', 'stages': 2}, {'stat': 'spe', 'stages': 2}], 'needs': ['charge'],
+                 'props': {'charge': {'donor': 'Razor Wind', 'message': '{name} is absorbing power!'}}},
+    'Freeze Shock': {'blocks': [{'status': 'paralysis', 'target': 'target', 'chance': 30}], 'needs': ['charge'],
+                     'props': {'charge': {'donor': 'Razor Wind', 'message': '{name} became cloaked in a freezing light!'}}},
+    'Ice Burn': {'blocks': [{'status': 'burn', 'target': 'target', 'chance': 30}], 'needs': ['charge'],
+                 'props': {'charge': {'donor': 'Razor Wind', 'message': '{name} became cloaked in freezing air!'}}},
+
+    'Phantom Force': {'blocks': [], 'needs': ['charge'], 'props': {'charge': {'donor': 'Fly', 'message': '{name} vanished instantly!'}}},
+
+
+    'Thousand Waves': {'blocks': [{'status': 'trap', 'target': 'target', 'when': '!target_type:ghost', 'message': '{name} can no longer escape!'}], 'ok': True},
+    'Spirit Shackle': {'blocks': [{'status': 'trap', 'target': 'target', 'when': '!target_type:ghost', 'message': '{name} can no longer escape!'}], 'ok': True},
+    'Anchor Shot': {'blocks': [{'status': 'trap', 'target': 'target', 'when': '!target_type:ghost', 'message': '{name} can no longer escape!'}], 'ok': True},
 
     'Rototiller': {'blocks': [{'stat': 'atk', 'stages': 1, 'when': 'user_type:grass'}, {'stat': 'spa', 'stages': 1, 'when': 'user_type:grass'},
                               {'stat': 'atk', 'stages': 1, 'target': 'target', 'when': 'target_type:grass'}, {'stat': 'spa', 'stages': 1, 'target': 'target', 'when': 'target_type:grass'}], 'ok': True},

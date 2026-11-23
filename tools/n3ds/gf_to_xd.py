@@ -483,7 +483,17 @@ def sample_motion_arrays(sk, mo, nsamples, stretch=1.0):
 
 
 def sample_at(sk, mo, frames):
-    """Like sample_motion_arrays but at the given (fractional) source frames."""
+    """Like sample_motion_arrays but at the given (fractional) source frames. The answer is kept in the motion (`_memo`) for the same skeleton and
+    frames: the size ladder (gen57_speed.convert_ladder) converts one model up to 11 times and every step asks for the very same poses; callers
+    change the arrays they get (ground offsets), so each call gets copies."""
+    key = ('at', id(sk.bones), tuple(frames))
+    memo = mo.setdefault('_memo', {})
+    if key not in memo:
+        memo[key] = _sample_at(sk, mo, frames)
+    return tuple(a.copy() for a in memo[key])
+
+
+def _sample_at(sk, mo, frames):
     nb = len(sk.names)
     nsamples = len(frames)
     S = np.zeros((nsamples, nb, 3))
@@ -501,6 +511,14 @@ def sample_at(sk, mo, frames):
 
 
 def motion_energy(sk, mo):
+    key = ('energy', id(sk.bones))
+    memo = mo.setdefault('_memo', {})
+    if key not in memo:
+        memo[key] = _motion_energy(sk, mo)
+    return memo[key].copy()
+
+
+def _motion_energy(sk, mo):
     """Per source frame interval: how much the pose changes (rotations, and translations at 1/50) = where the strike is."""
     nat = max(mo['frames'], 1)
     S, R, T = sample_at(sk, mo, [float(k) for k in range(nat + 1)])

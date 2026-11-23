@@ -580,7 +580,10 @@ void NoteTurn(uint32_t turn) {
 }
 
 bool Watching() { return P.on; }
-bool KeysScripted() { return std::getenv("XD_BATTLE_REPLAY_KEYS") != nullptr; }
+bool KeysScripted() {
+  static const bool scripted = std::getenv("XD_BATTLE_REPLAY_KEYS") != nullptr;
+  return scripted;
+}
 
 bool Prepare() {
   const bool live = !EnvSet("XD_BATTLE_REPLAY") && EnvSet("XD_SPECTATE");

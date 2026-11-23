@@ -12,13 +12,13 @@ A data file may have an `add` block. You name each new row yourself. The port gi
 table and tells the game. You never need to know the number: write the **name** wherever a species, move or item is
 wanted.
 
-Tables that can grow: `pokemon` (species), `moves` and `items`. You can add at most 1024 new rows to each (all mods
+Tables that can grow: `pokemon` (species), `moves` and `items`. You can add at most 4096 new rows to each (all mods
 together, the Gen 4 pack included). Other tables cannot grow (the message says so). More Shadow Pokémon (past the free rows),
 more HMs, more tutors and more bag slots cannot be added yet: they would not fit the GameCube save, and the game's code would have to
 learn to look in the save extension file for them. See "Bigger lists" below for what each one needs.
 
-**Why 1024?** The save is not the limit: it stores these numbers in 16 bits. The limit is in the game's own program. The
-decompilation gave the PC version 1024 spare rows in each table that the port cannot make longer (the models and cries
+**Why 4096?** The save is not the limit: it stores these numbers in 16 bits. The limit is in the game's own program. The
+decompilation gave the PC version 4096 spare rows in each table that the port cannot make longer (the models and cries
 by species, the move animations, the item parameters). Going past them would read memory that is not a table. Also, the game's Pokémon memo (the PDA
 list) keeps 500 different species in the save. More than that are kept in a file next to the save, the **save extension**
 ([save-extension.md](save-extension.md)); the memo's screens show all of them, so Gen 5-7 (800 and more species) fit.
@@ -236,7 +236,7 @@ can tell it apart from the copy. `"dex": "copy"` (or no key) leaves it pointing 
   are not touched. The numbers are in `added_ids.json` (the rows are called "seen mark of X" and "caught mark of X").
 - **How many species fit.** The save has room for about **9,368** more one-bit flags after the game's own (measured on the disc: the game uses
   2,888 of the 12,256 bits that fit; the Gen 4 pack takes 214; a mod's story flags 1 to 16 bits each, at most 256). Every species with own
-  flags needs 2. So all **1,024** species a mod set can add fit with plenty to spare (2,048 bits); the limit is the 1,024 spare rows of the
+  flags needs 2. So all **4,096** species a mod set can add fit (8,192 of those bits); the limit is the 4,096 spare rows of the
   game's tables, not the save. If the room ever ran out, the port says so and the species keeps its copy's flags.
 - Species the Gen 4 pack adds already have flags of their own.
 
@@ -273,7 +273,7 @@ new animation by taking each piece from a different move:
 | `"animation"` | with the keys above: the move to take every part from that you did not name (nothing is played for a part named `"none"`) |
 
 A move's name, `"#85"`, or a move your mod adds earlier works for each. The new animation is a **new row of the game's animation table** (made when
-the game starts; up to 1,024 of them), so the other moves keep theirs, and a save does not depend on it.
+the game starts; up to 4,096 of them), so the other moves keep theirs, and a save does not depend on it.
 
 What this does **not** do: it does not change the insides of a piece (the particles, the camera path, the sounds in it). That needs the
 game's effect file format, which no tool writes yet; see [roadmap.md](roadmap.md). Mixing the pieces of two moves is allowed even when they were
@@ -302,7 +302,7 @@ This is the measured list (the numbers are in the game's own program and save, r
 
 | List | Plain game | Mods can reach | What stops it | What it would take |
 |---|---|---|---|---|
-| New Pokémon, moves, items (rows) | 415 / 375 / 594 | **+1024 each** | the game's compiled tables have 1024 spare rows (`PC_SPARE_*`) | the decomp raises the number; the port reads it from the snapshot by itself (no change here) |
+| New Pokémon, moves, items (rows) | 415 / 375 / 594 | **+4096 each** | the game's compiled tables have 4096 spare rows (`PC_SPARE_*`) | the decomp raises the number; the port reads it from the snapshot by itself (no change here) |
 | Strategy Memo entries | 500 saved | **unlimited** (tested with 602) | the save holds 500 | **built**: the extra entries are in the save extension file ([save-extension.md](save-extension.md)) |
 | Shadow Pokémon | 48 in the story, 83 rows in use | **up to 127 rows now (44 free)** | the save's Shadow list has 128 places; the game checks `< 0x80` in five places | rows 84-127 are plain data (see below); past 127 needs the decomp |
 | TMs and HMs | 58 (50 + 8) | **6 more** in the bag; more moves per TM list | the bag's TM pocket has 64 slots; a species has 58 bytes of "can learn" | a bigger pocket and a wider row: decomp (see below) |

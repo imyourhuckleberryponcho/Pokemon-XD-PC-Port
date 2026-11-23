@@ -1,5 +1,6 @@
 #include "gc_dsp.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -35,14 +36,22 @@ struct GcDsp {
   uint16_t coef[0x800]{};
   bool haveIrom = false, haveCoef = false;
 
-  uint16_t ar[4]{}, ix[4]{}, wr[4]{};
-  uint16_t st[4]{};
+  struct RegFile {
+    uint16_t ar[4], ix[4], wr[4];
+    uint16_t st[4];
+    uint16_t accHigh[2];
+    uint16_t config, sr;
+    uint16_t pl, pm1, ph, pm2;
+    uint16_t axl[2], axh[2];
+    uint16_t accLowMid[4];
+  };
+  union {
+    RegFile rf{};
+    uint16_t rfa[32];
+  };
   uint16_t stack[4][32]{};
   uint8_t stackPtr[4]{};
   int64_t ac[2]{};
-  uint16_t axl[2]{}, axh[2]{};
-  uint16_t config = 0, sr = 0;
-  uint16_t pl = 0, pm1 = 0, ph = 0, pm2 = 0;
   uint16_t pc = 0;
 
   uint16_t hw[256]{};
@@ -51,6 +60,7 @@ struct GcDsp {
   uint8_t pending = 0;
   uint32_t acsa = 0, acea = 0, acca = 0;
   bool accStopped = false;
+  uint32_t iramGen = 0;
 
   std::unordered_map<uint16_t, std::pair<GcDspRomRoutine, void*>> romRoutines;
   uint32_t portRomState[16]{};
@@ -68,12 +78,12 @@ void log(GcDsp* d, const std::string& msg) {
 
 DSP_INLINE void push(GcDsp* d, int s, uint16_t v) {
   d->stackPtr[s] = (d->stackPtr[s] + 1) & 31;
-  d->stack[s][d->stackPtr[s]] = d->st[s];
-  d->st[s] = v;
+  d->stack[s][d->stackPtr[s]] = d->rf.st[s];
+  d->rf.st[s] = v;
 }
 DSP_INLINE uint16_t pop(GcDsp* d, int s) {
-  const uint16_t r = d->st[s];
-  d->st[s] = d->stack[s][d->stackPtr[s]];
+  const uint16_t r = d->rf.st[s];
+  d->rf.st[s] = d->stack[s][d->stackPtr[s]];
   d->stackPtr[s] = (d->stackPtr[s] - 1) & 31;
   return r;
 }
@@ -88,22 +98,22 @@ DSP_INLINE void set_acc_h(GcDsp* d, int n, uint16_t v) {
 }
 DSP_INLINE bool outside_s32(int64_t v) { return v < -2147483648ll || v > 2147483647ll; }
 DSP_INLINE uint16_t acc_m_sat(const GcDsp* d, int n) {
-  if ((d->sr & SR_SXM) && outside_s32(d->ac[n])) {
+  if ((d->rf.sr & SR_SXM) && outside_s32(d->ac[n])) {
     return d->ac[n] > 0 ? 0x7FFF : 0x8000;
   }
   return acc_m(d, n);
 }
-DSP_INLINE int64_t ax(const GcDsp* d, int n) { return static_cast<int32_t>((static_cast<uint32_t>(d->axh[n]) << 16) | d->axl[n]); }
+DSP_INLINE int64_t ax(const GcDsp* d, int n) { return static_cast<int32_t>((static_cast<uint32_t>(d->rf.axh[n]) << 16) | d->rf.axl[n]); }
 
 DSP_INLINE int64_t prod(const GcDsp* d) {
-  return s8(static_cast<uint8_t>(d->ph)) * 0x100000000ll + ((static_cast<int64_t>(d->pm1) + d->pm2) << 16) + d->pl;
+  return s8(static_cast<uint8_t>(d->rf.ph)) * 0x100000000ll + ((static_cast<int64_t>(d->rf.pm1) + d->rf.pm2) << 16) + d->rf.pl;
 }
 DSP_INLINE void set_prod(GcDsp* d, int64_t v) {
   const uint64_t u = static_cast<uint64_t>(v) & kMask40;
-  d->pl = static_cast<uint16_t>(u);
-  d->pm1 = static_cast<uint16_t>(u >> 16);
-  d->ph = static_cast<uint16_t>((u >> 32) & 0xFF);
-  d->pm2 = 0;
+  d->rf.pl = static_cast<uint16_t>(u);
+  d->rf.pm1 = static_cast<uint16_t>(u >> 16);
+  d->rf.ph = static_cast<uint16_t>((u >> 32) & 0xFF);
+  d->rf.pm2 = 0;
 }
 DSP_INLINE int64_t round_hm(int64_t p) {
   return (p & 0x10000) ? ((p + 0x8000) & ~0xFFFFll) : ((p + 0x7FFF) & ~0xFFFFll);
@@ -111,33 +121,33 @@ DSP_INLINE int64_t round_hm(int64_t p) {
 enum MulMode { MUL_SIGNED, MUL_UNSIGNED, MUL_MIXED };
 DSP_INLINE int64_t multiply(const GcDsp* d, uint16_t a, uint16_t b, MulMode mode) {
   int64_t r;
-  if ((d->sr & SR_SU) && mode == MUL_UNSIGNED) {
+  if ((d->rf.sr & SR_SU) && mode == MUL_UNSIGNED) {
     r = static_cast<int64_t>(a) * b;
-  } else if ((d->sr & SR_SU) && mode == MUL_MIXED) {
+  } else if ((d->rf.sr & SR_SU) && mode == MUL_MIXED) {
     r = static_cast<int64_t>(a) * s16(b);
   } else {
     r = s16(a) * s16(b);
   }
-  return (d->sr & SR_AM) ? r : r * 2;
+  return (d->rf.sr & SR_AM) ? r : r * 2;
 }
 
 DSP_INLINE void flags40(GcDsp* d, int64_t r, bool carry, bool overflow) {
-  d->sr &= ~0x3F;
-  if (carry) d->sr |= SR_C;
-  if (overflow) d->sr |= SR_O | SR_OS;
-  if (r == 0) d->sr |= SR_Z;
-  if (r < 0) d->sr |= SR_S;
-  if (outside_s32(r)) d->sr |= SR_AS;
+  d->rf.sr &= ~0x3F;
+  if (carry) d->rf.sr |= SR_C;
+  if (overflow) d->rf.sr |= SR_O | SR_OS;
+  if (r == 0) d->rf.sr |= SR_Z;
+  if (r < 0) d->rf.sr |= SR_S;
+  if (outside_s32(r)) d->rf.sr |= SR_AS;
   const int top = static_cast<int>((r >> 30) & 3);
-  if (top == 0 || top == 3) d->sr |= SR_TB;
+  if (top == 0 || top == 3) d->rf.sr |= SR_TB;
 }
 DSP_INLINE void flags16(GcDsp* d, uint16_t v, bool as) {
-  d->sr &= ~0x3F;
-  if (v == 0) d->sr |= SR_Z;
-  if (v & 0x8000) d->sr |= SR_S;
-  if (as) d->sr |= SR_AS;
+  d->rf.sr &= ~0x3F;
+  if (v == 0) d->rf.sr |= SR_Z;
+  if (v & 0x8000) d->rf.sr |= SR_S;
+  if (as) d->rf.sr |= SR_AS;
   const int top = (v >> 14) & 3;
-  if (top == 0 || top == 3) d->sr |= SR_TB;
+  if (top == 0 || top == 3) d->rf.sr |= SR_TB;
 }
 DSP_INLINE bool add_carry(int64_t a, int64_t r) {
   return static_cast<uint64_t>(a & kMask40) > static_cast<uint64_t>(r & kMask40);
@@ -155,9 +165,9 @@ DSP_INLINE int64_t sub_flags(GcDsp* d, int64_t a, int64_t b) {
   flags40(d, r, carry, add_overflow(a, -b, r));
   return r;
 }
-DSP_INLINE bool condition(const GcDsp* d, int cc) {
-  const bool c = d->sr & SR_C, o = d->sr & SR_O, z = d->sr & SR_Z, s = d->sr & SR_S, as = d->sr & SR_AS,
-             tb = d->sr & SR_TB, lz = d->sr & SR_LZ;
+bool condition_of(uint16_t sr, int cc) {
+  const bool c = sr & SR_C, o = sr & SR_O, z = sr & SR_Z, s = sr & SR_S, as = sr & SR_AS, tb = sr & SR_TB,
+             lz = sr & SR_LZ;
   switch (cc) {
   case 0x0: return o == s;
   case 0x1: return o != s;
@@ -177,6 +187,8 @@ DSP_INLINE bool condition(const GcDsp* d, int cc) {
   default: return true;
   }
 }
+uint8_t sCondTable[16][128];
+DSP_INLINE bool condition(const GcDsp* d, int cc) { return sCondTable[cc & 15][d->rf.sr & 0x7F] != 0; }
 
 DSP_INLINE uint16_t addr_inc(uint16_t ar, uint16_t wr) {
   const uint32_t m = 2u * (wr | 1u);
@@ -214,28 +226,30 @@ DSP_INLINE uint16_t addr_sub(uint16_t ar, uint16_t wr, uint16_t ixv) {
   }
   return static_cast<uint16_t>(n);
 }
-DSP_INLINE uint16_t ar_inc(const GcDsp* d, int r) { return addr_inc(d->ar[r], d->wr[r]); }
-DSP_INLINE uint16_t ar_dec(const GcDsp* d, int r) { return addr_dec(d->ar[r], d->wr[r]); }
-DSP_INLINE uint16_t ar_addix(const GcDsp* d, int r, int i) { return addr_add(d->ar[r], d->wr[r], d->ix[i]); }
+DSP_INLINE uint16_t ar_inc(const GcDsp* d, int r) { return addr_inc(d->rf.ar[r], d->rf.wr[r]); }
+DSP_INLINE uint16_t ar_dec(const GcDsp* d, int r) { return addr_dec(d->rf.ar[r], d->rf.wr[r]); }
+DSP_INLINE uint16_t ar_addix(const GcDsp* d, int r, int i) { return addr_add(d->rf.ar[r], d->rf.wr[r], d->rf.ix[i]); }
 
+constexpr uint32_t kPlainRead = 0x0FFC0FFFu, kPlainWrite = 0x0FB00FFFu;
 DSP_INLINE uint16_t read_reg(GcDsp* d, int r) {
+  if ((kPlainRead >> (r & 31)) & 1) return d->rfa[r & 31];
   switch (r & 31) {
-  case 0: case 1: case 2: case 3: return d->ar[r & 3];
-  case 4: case 5: case 6: case 7: return d->ix[r & 3];
-  case 8: case 9: case 10: case 11: return d->wr[r & 3];
+  case 0: case 1: case 2: case 3: return d->rf.ar[r & 3];
+  case 4: case 5: case 6: case 7: return d->rf.ix[r & 3];
+  case 8: case 9: case 10: case 11: return d->rf.wr[r & 3];
   case 12: case 13: case 14: case 15: return pop(d, r & 3);
   case 16: return acc_h(d, 0);
   case 17: return acc_h(d, 1);
-  case 18: return d->config;
-  case 19: return d->sr;
-  case 20: return d->pl;
-  case 21: return d->pm1;
-  case 22: return d->ph;
-  case 23: return d->pm2;
-  case 24: return d->axl[0];
-  case 25: return d->axl[1];
-  case 26: return d->axh[0];
-  case 27: return d->axh[1];
+  case 18: return d->rf.config;
+  case 19: return d->rf.sr;
+  case 20: return d->rf.pl;
+  case 21: return d->rf.pm1;
+  case 22: return d->rf.ph;
+  case 23: return d->rf.pm2;
+  case 24: return d->rf.axl[0];
+  case 25: return d->rf.axl[1];
+  case 26: return d->rf.axh[0];
+  case 27: return d->rf.axh[1];
   case 28: return acc_l(d, 0);
   case 29: return acc_l(d, 1);
   case 30: return acc_m_sat(d, 0);
@@ -243,23 +257,27 @@ DSP_INLINE uint16_t read_reg(GcDsp* d, int r) {
   }
 }
 DSP_INLINE void write_reg(GcDsp* d, int r, uint16_t v) {
+  if ((kPlainWrite >> (r & 31)) & 1) {
+    d->rfa[r & 31] = v;
+    return;
+  }
   switch (r & 31) {
-  case 0: case 1: case 2: case 3: d->ar[r & 3] = v; break;
-  case 4: case 5: case 6: case 7: d->ix[r & 3] = v; break;
-  case 8: case 9: case 10: case 11: d->wr[r & 3] = v; break;
+  case 0: case 1: case 2: case 3: d->rf.ar[r & 3] = v; break;
+  case 4: case 5: case 6: case 7: d->rf.ix[r & 3] = v; break;
+  case 8: case 9: case 10: case 11: d->rf.wr[r & 3] = v; break;
   case 12: case 13: case 14: case 15: push(d, r & 3, v); break;
   case 16: set_acc_h(d, 0, v); break;
   case 17: set_acc_h(d, 1, v); break;
-  case 18: d->config = v & 0xFF; break;
-  case 19: d->sr = v & ~0x0100; break;
-  case 20: d->pl = v; break;
-  case 21: d->pm1 = v; break;
-  case 22: d->ph = v & 0xFF; break;
-  case 23: d->pm2 = v; break;
-  case 24: d->axl[0] = v; break;
-  case 25: d->axl[1] = v; break;
-  case 26: d->axh[0] = v; break;
-  case 27: d->axh[1] = v; break;
+  case 18: d->rf.config = v & 0xFF; break;
+  case 19: d->rf.sr = v & ~0x0100; break;
+  case 20: d->rf.pl = v; break;
+  case 21: d->rf.pm1 = v; break;
+  case 22: d->rf.ph = v & 0xFF; break;
+  case 23: d->rf.pm2 = v; break;
+  case 24: d->rf.axl[0] = v; break;
+  case 25: d->rf.axl[1] = v; break;
+  case 26: d->rf.axh[0] = v; break;
+  case 27: d->rf.axh[1] = v; break;
   case 28: set_acc_l(d, 0, v); break;
   case 29: set_acc_l(d, 1, v); break;
   case 30: set_acc_m(d, 0, v); break;
@@ -268,7 +286,7 @@ DSP_INLINE void write_reg(GcDsp* d, int r, uint16_t v) {
 }
 DSP_INLINE void load_reg(GcDsp* d, int r, uint16_t v) {
   write_reg(d, r, v);
-  if ((r == 30 || r == 31) && (d->sr & SR_SXM)) {
+  if ((r == 30 || r == 31) && (d->rf.sr & SR_SXM)) {
     d->ac[r - 30] = s16(v) << 16;
   }
 }
@@ -355,8 +373,24 @@ void do_dma(GcDsp* d) {
     return;
   }
   uint16_t* target = (dscr & 2) ? d->iram : d->dram;
+  if (dscr & 2) d->iramGen++;
   const uint32_t words = length / 2;
   const int hi = (!(dscr & 2) && d->host.dramWordsHostOrder) ? 1 : 0, lo = 1 - hi;
+  const uint32_t first = dspAddr & 0xFFFu;
+  if (words > 0 && first + words <= 0x1000u && !((dscr & 1) && (dscr & 2))) {
+    uint16_t* t = target + first;
+    if (dscr & 1) {
+      for (uint32_t i = 0; i < words; i++) {
+        mem[i * 2 + hi] = static_cast<uint8_t>(t[i] >> 8);
+        mem[i * 2 + lo] = static_cast<uint8_t>(t[i]);
+      }
+    } else {
+      for (uint32_t i = 0; i < words; i++) {
+        t[i] = static_cast<uint16_t>(mem[i * 2 + hi] << 8 | mem[i * 2 + lo]);
+      }
+    }
+    return;
+  }
   for (uint32_t i = 0; i < words; i++) {
     const uint16_t a = static_cast<uint16_t>((dspAddr + i) & 0xFFF);
     if (dscr & 1) {
@@ -452,6 +486,7 @@ DSP_NOINLINE void log_no_coef(GcDsp* d, uint16_t a) {
   log(d, buf);
 }
 DSP_INLINE uint16_t dmem_read(GcDsp* d, uint16_t a) {
+  if (a < 0x1000) return d->dram[a];
   switch (a >> 12) {
   case 0x0: return d->dram[a & 0xFFF];
   case 0x1:
@@ -464,6 +499,10 @@ DSP_INLINE uint16_t dmem_read(GcDsp* d, uint16_t a) {
   }
 }
 DSP_INLINE void dmem_write(GcDsp* d, uint16_t a, uint16_t v) {
+  if (a < 0x1000) {
+    d->dram[a] = v;
+    return;
+  }
   switch (a >> 12) {
   case 0x0: d->dram[a & 0xFFF] = v; break;
   case 0xF: hw_write(d, static_cast<uint8_t>(a), v); break;
@@ -488,12 +527,7 @@ DSP_INLINE uint16_t ext_src(GcDsp* d, int ss) {
   return ss < 2 ? acc_l(d, ss) : acc_m_sat(d, ss - 2);
 }
 DSP_INLINE void write_ax_reg(GcDsp* d, int idx, uint16_t v) {
-  switch (idx & 3) {
-  case 0: d->axl[0] = v; break;
-  case 1: d->axl[1] = v; break;
-  case 2: d->axh[0] = v; break;
-  default: d->axh[1] = v; break;
-  }
+  d->rfa[24 + (idx & 3)] = v;
 }
 template <int K> DSP_INLINE void ext_before(GcDsp* d, uint8_t e, ExtOut& x) {
   switch (K) {
@@ -504,16 +538,16 @@ template <int K> DSP_INLINE void ext_before(GcDsp* d, uint8_t e, ExtOut& x) {
   case K_S:
   case K_SN: {
     const int dr = e & 3, ss = (e >> 3) & 3;
-    dmem_write(d, d->ar[dr], ext_src(d, ss));
+    dmem_write(d, d->rf.ar[dr], ext_src(d, ss));
     x.a0 = K == K_S ? ar_inc(d, dr) : ar_addix(d, dr, dr);
     break;
   }
   case K_L:
   case K_LN: {
     const int sr = e & 3, dd = (e >> 3) & 7;
-    x.v0 = dmem_read(d, d->ar[sr]);
+    x.v0 = dmem_read(d, d->rf.ar[sr]);
     const int reg = 0x18 + dd;
-    x.wide = (reg == 30 || reg == 31) && (d->sr & SR_SXM);
+    x.wide = (reg == 30 || reg == 31) && (d->rf.sr & SR_SXM);
     x.a0 = K == K_L ? ar_inc(d, sr) : ar_addix(d, sr, sr);
     break;
   }
@@ -522,8 +556,8 @@ template <int K> DSP_INLINE void ext_before(GcDsp* d, uint8_t e, ExtOut& x) {
     const int s = e & 1;
     const bool load0 = K == K_LS;
     const bool n0 = (e >> 2) & 1, m3 = (e >> 3) & 1;
-    dmem_write(d, d->ar[load0 ? 3 : 0], acc_m_sat(d, s));
-    x.v0 = dmem_read(d, d->ar[load0 ? 0 : 3]);
+    dmem_write(d, d->rf.ar[load0 ? 3 : 0], acc_m_sat(d, s));
+    x.v0 = dmem_read(d, d->rf.ar[load0 ? 0 : 3]);
     x.a0 = n0 ? ar_addix(d, 0, 0) : ar_inc(d, 0);
     x.a1 = m3 ? ar_addix(d, 3, 3) : ar_inc(d, 3);
     break;
@@ -532,7 +566,7 @@ template <int K> DSP_INLINE void ext_before(GcDsp* d, uint8_t e, ExtOut& x) {
   case K_LD: {
     const int s = K == K_LDAX ? (e >> 5) & 1 : e & 3;
     const bool n = (e >> 2) & 1, m = (e >> 3) & 1;
-    const uint16_t a = d->ar[s], b = d->ar[3];
+    const uint16_t a = d->rf.ar[s], b = d->rf.ar[3];
     x.v0 = dmem_read(d, a);
     x.v1 = (a >> 10) == (b >> 10) ? x.v0 : dmem_read(d, b);
     x.a0 = n ? ar_addix(d, s, s) : ar_inc(d, s);
@@ -548,7 +582,7 @@ template <int K> DSP_INLINE void ext_after(GcDsp* d, uint8_t e, const ExtOut& x)
   case K_IR:
   case K_NR:
   case K_S:
-  case K_SN: d->ar[e & 3] = x.a0; break;
+  case K_SN: d->rf.ar[e & 3] = x.a0; break;
   case K_MV: write_ax_reg(d, (e >> 2) & 3, x.v0); break;
   case K_L:
   case K_LN: {
@@ -561,29 +595,29 @@ template <int K> DSP_INLINE void ext_after(GcDsp* d, uint8_t e, const ExtOut& x)
     } else {
       write_reg(d, reg, x.v0);
     }
-    d->ar[sr] = x.a0;
+    d->rf.ar[sr] = x.a0;
     break;
   }
   case K_LS:
   case K_SL:
     write_ax_reg(d, (e >> 4) & 3, x.v0);
-    d->ar[0] = x.a0;
-    d->ar[3] = x.a1;
+    d->rf.ar[0] = x.a0;
+    d->rf.ar[3] = x.a1;
     break;
   case K_LDAX: {
     const int s = (e >> 5) & 1, r = (e >> 4) & 1;
     write_ax_reg(d, 2 + r, x.v0);
     write_ax_reg(d, r, x.v1);
-    d->ar[s] = x.a0;
-    d->ar[3] = x.a1;
+    d->rf.ar[s] = x.a0;
+    d->rf.ar[3] = x.a1;
     break;
   }
   case K_LD: {
     const int s = e & 3, dsel = (e >> 5) & 1, rsel = (e >> 4) & 1;
     write_ax_reg(d, dsel ? 2 : 0, x.v0);
     write_ax_reg(d, rsel ? 3 : 1, x.v1);
-    d->ar[s] = x.a0;
-    d->ar[3] = x.a1;
+    d->rf.ar[s] = x.a0;
+    d->rf.ar[3] = x.a1;
     break;
   }
   default: break;
@@ -611,14 +645,14 @@ using Handler = void (*)(GcDsp*, uint16_t);
 struct Decoded {
   Handler fn;
   uint8_t size;
+  uint8_t simple;
 };
 Decoded sDecoded[0x10000];
 
 DSP_INLINE uint16_t fetch(GcDsp* d) { return imem_read(d, d->pc++); }
 DSP_INLINE void skip_next(GcDsp* d) { d->pc += sDecoded[imem_read(d, d->pc)].size; }
 DSP_INLINE int64_t sel_ax_part(const GcDsp* d, int sel) {
-  const uint16_t v = sel == 0 ? d->axl[0] : sel == 1 ? d->axl[1] : sel == 2 ? d->axh[0] : d->axh[1];
-  return s16(v);
+  return s16(d->rfa[24 + sel]);
 }
 DSP_INLINE void store_mul(GcDsp* d, int r, int64_t newProd, int kind) {
   const int64_t old = prod(d);
@@ -672,10 +706,10 @@ namespace dspops {
   };                                                                                                                   \
   DSP_INLINE void name::run(GcDsp* d, uint16_t o)
 OP(NOP) { (void)d, (void)o; }
-OP(DAR) { d->ar[o & 3] = ar_dec(d, o & 3); }
-OP(IAR) { d->ar[o & 3] = ar_inc(d, o & 3); }
-OP(SUBARN) { d->ar[o & 3] = addr_sub(d->ar[o & 3], d->wr[o & 3], d->ix[o & 3]); }
-OP(ADDARN) { d->ar[o & 3] = ar_addix(d, o & 3, (o >> 2) & 3); }
+OP(DAR) { d->rf.ar[o & 3] = ar_dec(d, o & 3); }
+OP(IAR) { d->rf.ar[o & 3] = ar_inc(d, o & 3); }
+OP(SUBARN) { d->rf.ar[o & 3] = addr_sub(d->rf.ar[o & 3], d->rf.wr[o & 3], d->rf.ix[o & 3]); }
+OP(ADDARN) { d->rf.ar[o & 3] = ar_addix(d, o & 3, (o >> 2) & 3); }
 OP(HALT) { d->control |= CTRL_HALT; d->pc--; }
 OP(LOOP) {
   const uint16_t count = read_reg(d, o & 31);
@@ -698,7 +732,7 @@ OP(IF) { if (!condition(d, o & 15)) skip_next(d); }
 OP(J) { const uint16_t a = fetch(d); if (condition(d, o & 15)) d->pc = a; }
 OP(CALL) { const uint16_t a = fetch(d); if (condition(d, o & 15)) { push(d, 0, d->pc); d->pc = a; } }
 OP(RET) { if (condition(d, o & 15)) d->pc = pop(d, 0); }
-OP(RTI) { if (condition(d, o & 15)) { d->sr = pop(d, 1); d->pc = pop(d, 0); } }
+OP(RTI) { if (condition(d, o & 15)) { d->rf.sr = pop(d, 1); d->pc = pop(d, 0); } }
 OP(JR) { if (condition(d, o & 15)) d->pc = read_reg(d, (o >> 5) & 7); }
 OP(CALLR) {
   if (condition(d, o & 15)) { const uint16_t t = read_reg(d, (o >> 5) & 7); push(d, 0, d->pc); d->pc = t; }
@@ -718,14 +752,14 @@ OP(XORI) { logic_imm(d, o, 0); }
 OP(ANDI) { logic_imm(d, o, 1); }
 OP(ORI) { logic_imm(d, o, 2); }
 OP(CMPI) { const int n = (o >> 8) & 1; sub_flags(d, d->ac[n], s16(fetch(d)) << 16); }
-OP(ANDF) { const int n = (o >> 8) & 1; const uint16_t imm = fetch(d); d->sr = ((acc_m(d, n) & imm) == 0) ? (d->sr | SR_LZ) : (d->sr & ~SR_LZ); }
-OP(ANDCF) { const int n = (o >> 8) & 1; const uint16_t imm = fetch(d); d->sr = ((acc_m(d, n) & imm) == imm) ? (d->sr | SR_LZ) : (d->sr & ~SR_LZ); }
+OP(ANDF) { const int n = (o >> 8) & 1; const uint16_t imm = fetch(d); d->rf.sr = ((acc_m(d, n) & imm) == 0) ? (d->rf.sr | SR_LZ) : (d->rf.sr & ~SR_LZ); }
+OP(ANDCF) { const int n = (o >> 8) & 1; const uint16_t imm = fetch(d); d->rf.sr = ((acc_m(d, n) & imm) == imm) ? (d->rf.sr | SR_LZ) : (d->rf.sr & ~SR_LZ); }
 static DSP_INLINE void ilrr(GcDsp* d, uint16_t o, int update) {
   const int s = o & 3, n = (o >> 8) & 1;
-  load_reg(d, 30 + n, imem_read(d, d->ar[s]));
-  if (update == 1) d->ar[s] = ar_dec(d, s);
-  if (update == 2) d->ar[s] = ar_inc(d, s);
-  if (update == 3) d->ar[s] = ar_addix(d, s, s);
+  load_reg(d, 30 + n, imem_read(d, d->rf.ar[s]));
+  if (update == 1) d->rf.ar[s] = ar_dec(d, s);
+  if (update == 2) d->rf.ar[s] = ar_inc(d, s);
+  if (update == 3) d->rf.ar[s] = ar_addix(d, s, s);
 }
 OP(ILRR) { ilrr(d, o, 0); }
 OP(ILRRD) { ilrr(d, o, 1); }
@@ -734,8 +768,8 @@ OP(ILRRN) { ilrr(d, o, 3); }
 OP(ADDIS) { do_add(d, (o >> 8) & 1, s8(static_cast<uint8_t>(o)) << 16); }
 OP(CMPIS) { const int n = (o >> 8) & 1; sub_flags(d, d->ac[n], s8(static_cast<uint8_t>(o)) << 16); }
 OP(LRIS) { load_reg(d, 0x18 + ((o >> 8) & 7), static_cast<uint16_t>(s8(static_cast<uint8_t>(o)))); }
-OP(SBCLR) { d->sr &= ~(1 << ((o & 7) + 6)); }
-OP(SBSET) { d->sr |= 1 << ((o & 7) + 6); }
+OP(SBCLR) { d->rf.sr &= ~(1 << ((o & 7) + 6)); }
+OP(SBSET) { d->rf.sr |= 1 << ((o & 7) + 6); }
 OP(LSL) { const int n = (o >> 8) & 1; d->ac[n] = shift_arith(d->ac[n], o & 0x3F, true); flags40(d, d->ac[n], false, false); }
 OP(ASL) { const int n = (o >> 8) & 1; d->ac[n] = shift_arith(d->ac[n], o & 0x3F, true); flags40(d, d->ac[n], false, false); }
 OP(LSR) { const int n = (o >> 8) & 1; const int i = o & 0x3F; d->ac[n] = shift_logical(d->ac[n], i ? 64 - i : 0, false); flags40(d, d->ac[n], false, false); }
@@ -743,10 +777,10 @@ OP(ASR) { const int n = (o >> 8) & 1; const int i = o & 0x3F; d->ac[n] = shift_a
 OP(SI) { const uint16_t v = fetch(d); dmem_write(d, static_cast<uint16_t>(s8(static_cast<uint8_t>(o))), v); }
 static DSP_INLINE void lrr(GcDsp* d, uint16_t o, int update) {
   const int s = (o >> 5) & 3;
-  load_reg(d, o & 31, dmem_read(d, d->ar[s]));
-  if (update == 1) d->ar[s] = ar_dec(d, s);
-  if (update == 2) d->ar[s] = ar_inc(d, s);
-  if (update == 3) d->ar[s] = ar_addix(d, s, s);
+  load_reg(d, o & 31, dmem_read(d, d->rf.ar[s]));
+  if (update == 1) d->rf.ar[s] = ar_dec(d, s);
+  if (update == 2) d->rf.ar[s] = ar_inc(d, s);
+  if (update == 3) d->rf.ar[s] = ar_addix(d, s, s);
 }
 OP(LRR) { lrr(d, o, 0); }
 OP(LRRD) { lrr(d, o, 1); }
@@ -754,28 +788,28 @@ OP(LRRI) { lrr(d, o, 2); }
 OP(LRRN) { lrr(d, o, 3); }
 static DSP_INLINE void srr(GcDsp* d, uint16_t o, int update) {
   const int dr = (o >> 5) & 3;
-  dmem_write(d, d->ar[dr], read_reg(d, o & 31));
-  if (update == 1) d->ar[dr] = ar_dec(d, dr);
-  if (update == 2) d->ar[dr] = ar_inc(d, dr);
-  if (update == 3) d->ar[dr] = ar_addix(d, dr, dr);
+  dmem_write(d, d->rf.ar[dr], read_reg(d, o & 31));
+  if (update == 1) d->rf.ar[dr] = ar_dec(d, dr);
+  if (update == 2) d->rf.ar[dr] = ar_inc(d, dr);
+  if (update == 3) d->rf.ar[dr] = ar_addix(d, dr, dr);
 }
 OP(SRR) { srr(d, o, 0); }
 OP(SRRD) { srr(d, o, 1); }
 OP(SRRI) { srr(d, o, 2); }
 OP(SRRN) { srr(d, o, 3); }
 OP(MRR) { load_reg(d, (o >> 5) & 31, read_reg(d, o & 31)); }
-OP(LRS) { load_reg(d, 0x18 + ((o >> 8) & 7), dmem_read(d, static_cast<uint16_t>((d->config << 8) | (o & 0xFF)))); }
-OP(SRSH) { dmem_write(d, static_cast<uint16_t>((d->config << 8) | (o & 0xFF)), acc_h(d, (o >> 8) & 1)); }
-OP(SRS) { dmem_write(d, static_cast<uint16_t>((d->config << 8) | (o & 0xFF)), ext_src(d, (o >> 8) & 3)); }
+OP(LRS) { load_reg(d, 0x18 + ((o >> 8) & 7), dmem_read(d, static_cast<uint16_t>((d->rf.config << 8) | (o & 0xFF)))); }
+OP(SRSH) { dmem_write(d, static_cast<uint16_t>((d->rf.config << 8) | (o & 0xFF)), acc_h(d, (o >> 8) & 1)); }
+OP(SRS) { dmem_write(d, static_cast<uint16_t>((d->rf.config << 8) | (o & 0xFF)), ext_src(d, (o >> 8) & 3)); }
 static DSP_INLINE void logic_reg(GcDsp* d, int n, uint16_t operand, int kind) {
   uint16_t m = acc_m(d, n);
   m = kind == 0 ? (m ^ operand) : kind == 1 ? (m & operand) : (m | operand);
   set_acc_m(d, n, m);
   flags16(d, m, outside_s32(d->ac[n]));
 }
-OP(XORR) { logic_reg(d, (o >> 8) & 1, d->axh[(o >> 9) & 1], 0); }
-OP(ANDR) { logic_reg(d, (o >> 8) & 1, d->axh[(o >> 9) & 1], 1); }
-OP(ORR) { logic_reg(d, (o >> 8) & 1, d->axh[(o >> 9) & 1], 2); }
+OP(XORR) { logic_reg(d, (o >> 8) & 1, d->rf.axh[(o >> 9) & 1], 0); }
+OP(ANDR) { logic_reg(d, (o >> 8) & 1, d->rf.axh[(o >> 9) & 1], 1); }
+OP(ORR) { logic_reg(d, (o >> 8) & 1, d->rf.axh[(o >> 9) & 1], 2); }
 OP(XORC) { const int n = (o >> 8) & 1; logic_reg(d, n, acc_m(d, 1 - n), 0); }
 OP(ANDC) { const int n = (o >> 8) & 1; logic_reg(d, n, acc_m(d, 1 - n), 1); }
 OP(ORC) { const int n = (o >> 8) & 1; logic_reg(d, n, acc_m(d, 1 - n), 2); }
@@ -789,8 +823,8 @@ static DSP_INLINE void shift_var(GcDsp* d, int n, uint16_t src, bool logical) {
   }
   flags40(d, d->ac[n], false, false);
 }
-OP(LSRNRX) { shift_var(d, (o >> 8) & 1, d->axh[(o >> 9) & 1], true); }
-OP(ASRNRX) { shift_var(d, (o >> 8) & 1, d->axh[(o >> 9) & 1], false); }
+OP(LSRNRX) { shift_var(d, (o >> 8) & 1, d->rf.axh[(o >> 9) & 1], true); }
+OP(ASRNRX) { shift_var(d, (o >> 8) & 1, d->rf.axh[(o >> 9) & 1], false); }
 OP(LSRNR) { const int n = (o >> 8) & 1; shift_var(d, n, acc_m(d, 1 - n), true); }
 OP(ASRNR) { const int n = (o >> 8) & 1; shift_var(d, n, acc_m(d, 1 - n), false); }
 OP(ADDR) { do_add(d, (o >> 8) & 1, sel_ax_part(d, (o >> 9) & 3) << 16); }
@@ -806,7 +840,7 @@ OP(MOVR) { const int n = (o >> 8) & 1; d->ac[n] = sel_ax_part(d, (o >> 9) & 3) <
 OP(MOVAX) { const int n = (o >> 8) & 1; d->ac[n] = ax(d, (o >> 9) & 1); flags40(d, d->ac[n], false, false); }
 OP(MOV) { const int n = (o >> 8) & 1; d->ac[n] = d->ac[1 - n]; flags40(d, d->ac[n], false, false); }
 OP(MOVP) { const int n = (o >> 8) & 1; const int64_t p = prod(d); d->ac[n] = w40(p); flags40(d, p, false, false); }
-OP(ADDAXL) { do_add(d, (o >> 8) & 1, d->axl[(o >> 9) & 1]); }
+OP(ADDAXL) { do_add(d, (o >> 8) & 1, d->rf.axl[(o >> 9) & 1]); }
 OP(INCM) { do_add(d, (o >> 8) & 1, 0x10000); }
 OP(INC) { do_add(d, (o >> 8) & 1, 1); }
 OP(DECM) { do_sub(d, (o >> 8) & 1, 0x10000); }
@@ -822,18 +856,18 @@ OP(MOVNP) { const int n = (o >> 8) & 1; const int64_t p = -prod(d); d->ac[n] = w
 OP(NX) { (void)d, (void)o; }
 OP(CLR) { const int n = (o >> 11) & 1; d->ac[n] = 0; flags40(d, 0, false, false); }
 OP(CMP) { (void)o; sub_flags(d, d->ac[0], d->ac[1]); }
-OP(MULAXH) { (void)o; set_prod(d, multiply(d, d->axh[0], d->axh[0], MUL_SIGNED)); }
-OP(CLRP) { (void)o; d->pl = 0; d->pm1 = 0xFFF0; d->ph = 0x00FF; d->pm2 = 0x0010; }
+OP(MULAXH) { (void)o; set_prod(d, multiply(d, d->rf.axh[0], d->rf.axh[0], MUL_SIGNED)); }
+OP(CLRP) { (void)o; d->rf.pl = 0; d->rf.pm1 = 0xFFF0; d->rf.ph = 0x00FF; d->rf.pm2 = 0x0010; }
 OP(TSTPROD) { (void)o; flags40(d, prod(d), false, false); }
-OP(TSTAXH) { flags16(d, d->axh[(o >> 8) & 1], false); }
+OP(TSTAXH) { flags16(d, d->rf.axh[(o >> 8) & 1], false); }
 static DSP_INLINE void mode_bits(GcDsp* d, uint16_t o) {
   switch ((o >> 8) & 7) {
-  case 2: d->sr &= ~SR_AM; break;
-  case 3: d->sr |= SR_AM; break;
-  case 4: d->sr &= ~SR_SU; break;
-  case 5: d->sr |= SR_SU; break;
-  case 6: d->sr &= ~SR_SXM; break;
-  case 7: d->sr |= SR_SXM; break;
+  case 2: d->rf.sr &= ~SR_AM; break;
+  case 3: d->rf.sr |= SR_AM; break;
+  case 4: d->rf.sr &= ~SR_SU; break;
+  case 5: d->rf.sr |= SR_SU; break;
+  case 6: d->rf.sr &= ~SR_SXM; break;
+  case 7: d->rf.sr |= SR_SXM; break;
   default: break;
   }
 }
@@ -843,17 +877,17 @@ OP(CLR15) { mode_bits(d, o); }
 OP(SET15) { mode_bits(d, o); }
 OP(SET16) { mode_bits(d, o); }
 OP(SET40) { mode_bits(d, o); }
-OP(MUL) { const int s = (o >> 11) & 1; set_prod(d, multiply(d, d->axl[s], d->axh[s], MUL_SIGNED)); }
+OP(MUL) { const int s = (o >> 11) & 1; set_prod(d, multiply(d, d->rf.axl[s], d->rf.axh[s], MUL_SIGNED)); }
 OP(ASR16) { const int n = (o >> 11) & 1; d->ac[n] = d->ac[n] >> 16; flags40(d, d->ac[n], false, false); }
-OP(MULMVZ) { const int s = (o >> 11) & 1; store_mul(d, (o >> 8) & 1, multiply(d, d->axl[s], d->axh[s], MUL_SIGNED), 2); }
-OP(MULAC) { const int s = (o >> 11) & 1; store_mul(d, (o >> 8) & 1, multiply(d, d->axl[s], d->axh[s], MUL_SIGNED), 0); }
-OP(MULMV) { const int s = (o >> 11) & 1; store_mul(d, (o >> 8) & 1, multiply(d, d->axl[s], d->axh[s], MUL_SIGNED), 1); }
+OP(MULMVZ) { const int s = (o >> 11) & 1; store_mul(d, (o >> 8) & 1, multiply(d, d->rf.axl[s], d->rf.axh[s], MUL_SIGNED), 2); }
+OP(MULAC) { const int s = (o >> 11) & 1; store_mul(d, (o >> 8) & 1, multiply(d, d->rf.axl[s], d->rf.axh[s], MUL_SIGNED), 0); }
+OP(MULMV) { const int s = (o >> 11) & 1; store_mul(d, (o >> 8) & 1, multiply(d, d->rf.axl[s], d->rf.axh[s], MUL_SIGNED), 1); }
 static DSP_INLINE int64_t mulx_product(const GcDsp* d, uint16_t o) {
   const int s = (o >> 12) & 1, t = (o >> 11) & 1;
-  if (s == 0 && t == 0) return multiply(d, d->axl[0], d->axl[1], MUL_UNSIGNED);
-  if (s == 0 && t == 1) return multiply(d, d->axl[0], d->axh[1], MUL_MIXED);
-  if (s == 1 && t == 0) return multiply(d, d->axl[1], d->axh[0], MUL_MIXED);
-  return multiply(d, d->axh[0], d->axh[1], MUL_SIGNED);
+  if (s == 0 && t == 0) return multiply(d, d->rf.axl[0], d->rf.axl[1], MUL_UNSIGNED);
+  if (s == 0 && t == 1) return multiply(d, d->rf.axl[0], d->rf.axh[1], MUL_MIXED);
+  if (s == 1 && t == 0) return multiply(d, d->rf.axl[1], d->rf.axh[0], MUL_MIXED);
+  return multiply(d, d->rf.axh[0], d->rf.axh[1], MUL_SIGNED);
 }
 OP(MULX) { set_prod(d, mulx_product(d, o)); }
 OP(ABS) {
@@ -867,24 +901,24 @@ OP(MULXAC) { store_mul(d, (o >> 8) & 1, mulx_product(d, o), 0); }
 OP(MULXMV) { store_mul(d, (o >> 8) & 1, mulx_product(d, o), 1); }
 static DSP_INLINE int64_t mulc_product(const GcDsp* d, uint16_t o) {
   const int s = (o >> 12) & 1, t = (o >> 11) & 1;
-  return multiply(d, acc_m(d, s), d->axh[t], MUL_SIGNED);
+  return multiply(d, acc_m(d, s), d->rf.axh[t], MUL_SIGNED);
 }
 OP(MULC) { set_prod(d, mulc_product(d, o)); }
-OP(CMPAXH) { const int r = (o >> 12) & 1, s = (o >> 11) & 1; sub_flags(d, d->ac[s], s16(d->axh[r]) << 16); }
+OP(CMPAXH) { const int r = (o >> 12) & 1, s = (o >> 11) & 1; sub_flags(d, d->ac[s], s16(d->rf.axh[r]) << 16); }
 OP(MULCMVZ) { store_mul(d, (o >> 8) & 1, mulc_product(d, o), 2); }
 OP(MULCAC) { store_mul(d, (o >> 8) & 1, mulc_product(d, o), 0); }
 OP(MULCMV) { store_mul(d, (o >> 8) & 1, mulc_product(d, o), 1); }
 static DSP_INLINE uint16_t reg18(const GcDsp* d, int idx) {
-  return idx == 0 ? d->axl[0] : idx == 1 ? d->axl[1] : idx == 2 ? d->axh[0] : d->axh[1];
+  return idx == 0 ? d->rf.axl[0] : idx == 1 ? d->rf.axl[1] : idx == 2 ? d->rf.axh[0] : d->rf.axh[1];
 }
 OP(MADDX) { const int s = (o >> 9) & 1, t = (o >> 8) & 1; set_prod(d, prod(d) + multiply(d, reg18(d, s * 2), reg18(d, 1 + t * 2), MUL_SIGNED)); }
 OP(MSUBX) { const int s = (o >> 9) & 1, t = (o >> 8) & 1; set_prod(d, prod(d) - multiply(d, reg18(d, s * 2), reg18(d, 1 + t * 2), MUL_SIGNED)); }
-OP(MADDC) { const int s = (o >> 9) & 1, t = (o >> 8) & 1; set_prod(d, prod(d) + multiply(d, acc_m(d, s), d->axh[t], MUL_SIGNED)); }
-OP(MSUBC) { const int s = (o >> 9) & 1, t = (o >> 8) & 1; set_prod(d, prod(d) - multiply(d, acc_m(d, s), d->axh[t], MUL_SIGNED)); }
+OP(MADDC) { const int s = (o >> 9) & 1, t = (o >> 8) & 1; set_prod(d, prod(d) + multiply(d, acc_m(d, s), d->rf.axh[t], MUL_SIGNED)); }
+OP(MSUBC) { const int s = (o >> 9) & 1, t = (o >> 8) & 1; set_prod(d, prod(d) - multiply(d, acc_m(d, s), d->rf.axh[t], MUL_SIGNED)); }
 OP(LSL16) { const int n = (o >> 8) & 1; d->ac[n] = shift_arith(d->ac[n], 16, true); flags40(d, d->ac[n], false, false); }
-OP(MADD) { const int s = (o >> 8) & 1; set_prod(d, prod(d) + multiply(d, d->axl[s], d->axh[s], MUL_SIGNED)); }
+OP(MADD) { const int s = (o >> 8) & 1; set_prod(d, prod(d) + multiply(d, d->rf.axl[s], d->rf.axh[s], MUL_SIGNED)); }
 OP(LSR16) { const int n = (o >> 8) & 1; d->ac[n] = shift_logical(d->ac[n], 16, false); flags40(d, d->ac[n], false, false); }
-OP(MSUB) { const int s = (o >> 8) & 1; set_prod(d, prod(d) - multiply(d, d->axl[s], d->axh[s], MUL_SIGNED)); }
+OP(MSUB) { const int s = (o >> 8) & 1; set_prod(d, prod(d) - multiply(d, d->rf.axl[s], d->rf.axh[s], MUL_SIGNED)); }
 OP(ADDPAXZ) {
   const int n = (o >> 8) & 1, s = (o >> 9) & 1;
   const int64_t p = prod(d);
@@ -933,7 +967,24 @@ const Named kNamed[] = {
 
 namespace {
 
+bool is_simple_word(const char* name, uint16_t o) {
+  static const char* const kNo[] = {"HALT", "LOOP", "LOOPI", "BLOOP", "BLOOPI", "IF", "J", "CALL", "RET", "RTI", "JR", "CALLR"};
+  for (const char* n : kNo) {
+    if (std::strcmp(name, n) == 0) return false;
+  }
+  auto stack_reg = [](unsigned r) { return (r & 31) >= 12 && (r & 31) <= 15; };
+  static const char* const kReg[] = {"LRI", "LR", "SR", "LRR", "LRRD", "LRRI", "LRRN", "SRR", "SRRD", "SRRI", "SRRN"};
+  for (const char* n : kReg) {
+    if (std::strcmp(name, n) == 0) return !stack_reg(o);
+  }
+  if (std::strcmp(name, "MRR") == 0) return !stack_reg(o) && !stack_reg(o >> 5);
+  return true;
+}
+
 void make_decoded() {
+  for (int cc = 0; cc < 16; cc++) {
+    for (int sr = 0; sr < 128; sr++) sCondTable[cc][sr] = condition_of(static_cast<uint16_t>(sr), cc) ? 1 : 0;
+  }
   int count = 0, extCount = 0;
   const DspOpInfo* ops = GcDsp_MainOps(&count);
   const DspOpInfo* extOps = GcDsp_ExtOps(&extCount);
@@ -947,11 +998,13 @@ void make_decoded() {
     const int ext = GcDsp_DecodeExt(word);
     const ExtKind kind = ext >= 0 ? ext_kind_for(extOps[ext].name) : K_NONE;
     dec.fn = op_unknown;
+    dec.simple = 0;
     for (const auto& n : dspops::kNamed) {
       if (std::strcmp(n.name, ops[op].name) == 0 && n.byKind[kind] != nullptr) {
         dec.fn = n.byKind[kind];
       }
     }
+    dec.simple = (dec.fn != op_unknown && is_simple_word(ops[op].name, word)) ? 1 : 0;
   }
 }
 void register_handlers() {
@@ -961,18 +1014,18 @@ void register_handlers() {
 
 DSP_NOINLINE void check_exceptions(GcDsp* d) {
   if (d->control & CTRL_INT) {
-    if (d->sr & SR_EIE) {
+    if (d->rf.sr & SR_EIE) {
       d->pending |= 1 << 7;
       d->control &= ~CTRL_INT;
     }
   }
   for (int i = 7; i >= 1; i--) {
-    if ((d->pending & (1 << i)) && ((d->sr & SR_IE) || i == 7)) {
+    if ((d->pending & (1 << i)) && ((d->rf.sr & SR_IE) || i == 7)) {
       push(d, 0, d->pc);
-      push(d, 1, d->sr);
+      push(d, 1, d->rf.sr);
       d->pc = static_cast<uint16_t>(2 * i);
       d->pending &= ~(1 << i);
-      d->sr &= i == 7 ? ~SR_EIE : ~SR_IE;
+      d->rf.sr &= i == 7 ? ~SR_EIE : ~SR_IE;
       return;
     }
   }
@@ -1015,10 +1068,10 @@ DSP_INLINE void step(GcDsp* d) {
   }
   dec.fn(d, opc);
   const uint16_t p = d->pc;
-  if (static_cast<uint16_t>(p - 1) == d->st[2] && d->st[2] != 0 && d->st[3] != 0) {
-    d->st[3]--;
-    if (d->st[3] > 0) {
-      d->pc = d->st[0];
+  if (static_cast<uint16_t>(p - 1) == d->rf.st[2] && d->rf.st[2] != 0 && d->rf.st[3] != 0) {
+    d->rf.st[3]--;
+    if (d->rf.st[3] > 0) {
+      d->pc = d->rf.st[0];
     } else {
       pop(d, 0);
       pop(d, 2);
@@ -1027,19 +1080,116 @@ DSP_INLINE void step(GcDsp* d) {
   }
 }
 
+DSP_NOINLINE int run_body(GcDsp* d, int budget, bool idle) {
+  struct Entry {
+    Handler fn;
+    uint16_t op;
+    uint16_t next;
+  };
+  Entry e[32];
+  const uint16_t start = d->pc, endWord = d->rf.st[2];
+  if (start >= 0x1000) return 0;
+  const uint16_t count = d->rf.st[3];
+  int len = 0;
+  for (uint16_t a = start;;) {
+    if (len >= 32) return 0;
+    const uint16_t op = d->iram[a];
+    const Decoded& dc = sDecoded[op];
+    if (!dc.simple) return 0;
+    const unsigned last = static_cast<unsigned>(a) + dc.size - 1;
+    if (last >= 0x1000) return 0;
+    e[len++] = {dc.fn, op, static_cast<uint16_t>(a + 1)};
+    if (last == endWord) break;
+    if (last > endWord) return 0;
+    a = static_cast<uint16_t>(a + dc.size);
+  }
+  int iters = budget / len;
+  if (iters > count) iters = count;
+  if (iters < 2) return 0;
+  const uint32_t gen0 = d->iramGen;
+  int used = 0, finished = 0;
+  bool bailed = false;
+  if (len == 1 && (e[0].op & 0xFF80) == 0x1B00) {
+    const int dr = (e[0].op >> 5) & 3;
+    const unsigned reg = e[0].op & 31;
+    const unsigned at = d->rf.ar[dr];
+    if (reg >= 4 && d->rf.wr[dr] == 0xFFFF && at + static_cast<unsigned>(iters) <= 0x1000) {
+      const uint16_t v = read_reg(d, static_cast<int>(reg));
+      std::fill(d->dram + at, d->dram + at + iters, v);
+      d->rf.ar[dr] = static_cast<uint16_t>(at + iters);
+      d->pc = static_cast<uint16_t>(start + 1);
+      used = finished = iters;
+      const uint16_t left = static_cast<uint16_t>(count - finished);
+      if (left > 0) {
+        d->rf.st[3] = left;
+        d->pc = d->rf.st[0];
+      } else {
+        d->rf.st[3] = 0;
+        pop(d, 0);
+        pop(d, 2);
+        pop(d, 3);
+      }
+      return used;
+    }
+  }
+  for (int it = 0; it < iters && !bailed; it++) {
+    int j = 0;
+    for (; j < len; j++) {
+      d->pc = e[j].next;
+      e[j].fn(d, e[j].op);
+      if (d->pending != 0 || (idle && d->waitingForCpu) || d->iramGen != gen0) {
+        bailed = true;
+        j++;
+        break;
+      }
+    }
+    used += j;
+    if (j == len) finished++;
+  }
+  const uint16_t left = static_cast<uint16_t>(count - finished);
+  if (used % len != 0) {
+    d->rf.st[3] = left;
+  } else if (left > 0) {
+    d->rf.st[3] = left;
+    d->pc = d->rf.st[0];
+  } else {
+    d->rf.st[3] = 0;
+    pop(d, 0);
+    pop(d, 2);
+    pop(d, 3);
+  }
+  return used;
+}
+
+template <bool kIdle> DSP_INLINE int run_steps(GcDsp* d, int steps) {
+  int n = 0;
+  while (n < steps && !(d->control & CTRL_HALT) && (!kIdle || !d->waitingForCpu)) {
+    if (d->rf.st[3] >= 2 && d->pc == d->rf.st[0] && d->rf.st[2] != 0 && d->pending == 0 && !(d->control & CTRL_INT)) {
+      const int used = run_body(d, steps - n, kIdle);
+      if (used != 0) {
+        n += used;
+        continue;
+      }
+    }
+    step(d);
+    n++;
+  }
+  return n;
+}
+
 void power_on(GcDsp* d) {
-  std::memset(d->ar, 0, sizeof(d->ar));
-  std::memset(d->ix, 0, sizeof(d->ix));
-  for (auto& w : d->wr) w = 0xFFFF;
-  std::memset(d->st, 0, sizeof(d->st));
+  std::memset(d->rf.ar, 0, sizeof(d->rf.ar));
+  std::memset(d->rf.ix, 0, sizeof(d->rf.ix));
+  for (auto& w : d->rf.wr) w = 0xFFFF;
+  std::memset(d->rf.st, 0, sizeof(d->rf.st));
   std::memset(d->stack, 0, sizeof(d->stack));
   std::memset(d->stackPtr, 0, sizeof(d->stackPtr));
   d->ac[0] = d->ac[1] = 0;
-  std::memset(d->axl, 0, sizeof(d->axl));
-  std::memset(d->axh, 0, sizeof(d->axh));
-  d->config = 0;
-  d->sr = SR_IE | SR_EIE;
-  d->pl = d->pm1 = d->ph = d->pm2 = 0;
+  std::memset(d->rf.axl, 0, sizeof(d->rf.axl));
+  std::memset(d->rf.axh, 0, sizeof(d->rf.axh));
+  d->rf.config = 0;
+  d->rf.sr = SR_IE | SR_EIE;
+  d->rf.pl = d->rf.pm1 = d->rf.ph = d->rf.pm2 = 0;
   d->pc = 0;
   for (auto& w : d->iram) w = 0x0021;
   std::memset(d->dram, 0, sizeof(d->dram));
@@ -1078,18 +1228,13 @@ void GcDsp_SetRomRoutine(GcDsp* dsp, uint16_t address, GcDspRomRoutine routine, 
   dsp->romRoutines[address] = {routine, user};
 }
 int GcDsp_Run(GcDsp* dsp, int steps) {
-  int n = 0;
-  while (n < steps && !(dsp->control & CTRL_HALT)) {
-    step(dsp);
-    n++;
-  }
-  return n;
+  return run_steps<false>(dsp, steps);
 }
 void GcDsp_WriteControl(GcDsp* dsp, uint16_t value) {
   const bool wasInit = dsp->control & CTRL_INIT;
   if (value & CTRL_RESET) {
     dsp->pc = 0x8000;
-    for (auto& w : dsp->wr) w = 0xFFFF;
+    for (auto& w : dsp->rf.wr) w = 0xFFFF;
   }
   dsp->control = static_cast<uint16_t>((dsp->control & ~(CTRL_INT | CTRL_HALT | CTRL_INIT)) |
                                        (value & (CTRL_INT | CTRL_HALT | CTRL_INIT)));
@@ -1115,18 +1260,13 @@ uint16_t GcDsp_Pc(const GcDsp* dsp) { return dsp->pc; }
 void GcDsp_SetPc(GcDsp* dsp, uint16_t pc) { dsp->pc = pc; }
 int64_t GcDsp_Acc(const GcDsp* dsp, int n) { return dsp->ac[n & 1]; }
 void GcDsp_SetAcc(GcDsp* dsp, int n, int64_t value) { dsp->ac[n & 1] = w40(value); }
-uint16_t GcDsp_Sr(const GcDsp* dsp) { return dsp->sr; }
+uint16_t GcDsp_Sr(const GcDsp* dsp) { return dsp->rf.sr; }
 uint16_t* GcDsp_Iram(GcDsp* dsp) { return dsp->iram; }
 uint16_t* GcDsp_Dram(GcDsp* dsp) { return dsp->dram; }
 uint32_t* GcDsp_PortRomState(GcDsp* dsp) { return dsp->portRomState; }
 int GcDsp_RunUntilIdle(GcDsp* dsp, int maxSteps) {
-  int n = 0;
   dsp->waitingForCpu = false;
-  while (n < maxSteps && !(dsp->control & CTRL_HALT) && !dsp->waitingForCpu) {
-    step(dsp);
-    n++;
-  }
-  return n;
+  return run_steps<true>(dsp, maxSteps);
 }
 void GcDsp_Log(GcDsp* dsp, const char* message) { log(dsp, message); }
 size_t GcDsp_SaveState(const GcDsp* d, uint8_t* out, size_t size, bool memories) {
@@ -1135,16 +1275,16 @@ size_t GcDsp_SaveState(const GcDsp* d, uint8_t* out, size_t size, bool memories)
     if (out != nullptr && n + bytes <= size) std::memcpy(out + n, p, bytes);
     n += bytes;
   };
-  put(d->ar, sizeof(d->ar));
-  put(d->ix, sizeof(d->ix));
-  put(d->wr, sizeof(d->wr));
-  put(d->st, sizeof(d->st));
+  put(d->rf.ar, sizeof(d->rf.ar));
+  put(d->rf.ix, sizeof(d->rf.ix));
+  put(d->rf.wr, sizeof(d->rf.wr));
+  put(d->rf.st, sizeof(d->rf.st));
   put(d->stack, sizeof(d->stack));
   put(d->stackPtr, sizeof(d->stackPtr));
   put(d->ac, sizeof(d->ac));
-  put(d->axl, sizeof(d->axl));
-  put(d->axh, sizeof(d->axh));
-  const uint16_t words[] = {d->config, d->sr, d->pl, d->pm1, d->ph, d->pm2, d->pc, d->control};
+  put(d->rf.axl, sizeof(d->rf.axl));
+  put(d->rf.axh, sizeof(d->rf.axh));
+  const uint16_t words[] = {d->rf.config, d->rf.sr, d->rf.pl, d->rf.pm1, d->rf.ph, d->rf.pm2, d->pc, d->control};
   put(words, sizeof(words));
   put(d->hw, sizeof(d->hw));
   const uint32_t longs[] = {d->dspMail, d->cpuMail, d->acsa, d->acea, d->acca};

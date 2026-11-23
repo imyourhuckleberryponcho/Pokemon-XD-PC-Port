@@ -191,6 +191,20 @@ int main(int argc, char** argv) {
     check(ep::ToJson(quiet).find("engine_changed") == std::string::npos && ep::ToJson(quiet).find("engine_started") == std::string::npos,
           "never switched: no engine_changed / engine_started in the file");
     const std::string before = ep::ToJson(quiet);
+    check(before.find("cheats") == std::string::npos, "no cheats: nothing about them in the file");
+    {
+      ep::Setup cheated = quiet;
+      cheated.cheatsUsed = {"2026-11-23 14:03: experience multiplier x5", "2026-11-23 14:05: every ball catches"};
+      cheated.cheatState = {"exp=x5", "catch_always=on"};
+      cheated.cheatWarned = true;
+      const fs::path cfile = ep::FileFor(root / "playthroughs" / "Card A", "pt_cheated");
+      ep::Setup back;
+      check(ep::WriteFile(cfile, cheated) && ep::ReadFile(cfile, back, error) && back.cheatsUsed == cheated.cheatsUsed && back.cheatState == cheated.cheatState &&
+                back.cheatWarned && ep::ToJson(back) == ep::ToJson(cheated),
+            "cheats: used list, choices and the warning's flag survive a write and a read");
+      check(ep::Label(cheated).find("cheats used") != std::string::npos && ep::Label(quiet).find("cheats used") == std::string::npos,
+            "cheats: the label says \"cheats used\" only then");
+    }
 
     ep::Setup switched = quiet;
     ep::SwitchEngine(switched, ep::Engine::Enhanced, "2026-11-09 20:15");

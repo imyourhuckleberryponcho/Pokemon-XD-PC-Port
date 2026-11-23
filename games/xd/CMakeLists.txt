@@ -412,6 +412,7 @@ foreach (_src ${XD_GAME_SOURCES})
     list(APPEND _defs "WS_DAMAGE_LOSS=PortXD_RealWsDamageLoss" "WS_DAMAGE_LOSS_ONLY=PortXD_RealWsDamageLossOnly")
     list(APPEND _defs "zokuseiGetWazaJoutai=PortXD_Gen4TypeJoutai" "wazaDB_GetAvg=PortXD_Gen4GetAvg"
       "fightOutPokemonGetZokuseiDataId=PortXD_Gen4GetType" "fightWaza_SetCritical=PortXD_Gen4SetCritical"
+      "fightOutPokemonIsZokuseiDataId=PortXD_ModIsType"
       "fightWaza_GetHitDamage=PortXD_Gen4GetHitDamage" "fightOutPokemonGetSoubiItemSoubiDataId=PortXD_Gen4GetSoubi"
       "fightSeqSelectDefensePokemonPtr=PortXD_RealSelectDefense" "fightOutPokemonGetWazaZokuseiDataId=PortXD_Gen4WazaType"
       "fightWaza_GetZokusei=PortXD_Gen4WazaZokusei")
@@ -451,10 +452,15 @@ foreach (_src ${XD_GAME_SOURCES})
       "fightSeqSideJoutaiCheck=PortXD_Gen4SideCheck" "WS_CRITICAL_CHECK=PortXD_Gen4CriticalCheck"
       "WS_TSUIKA_INDIRECT_ACT=PortXD_Gen4TsuikaIndirect" "WS_TSUIKA_DIRECT_ACT=PortXD_Gen4TsuikaDirect"
       "fightOutPokemonGetSoubiItemSoubiDataId=PortXD_Gen4GetSoubi" "fightWaza_GetZokusei=PortXD_Gen4WazaZokusei"
-      "WS_BADGECHECK=PortXD_ModBadgeCheck" "WS_TSUIKA_CHECK=PortXD_ModTsuikaCheck" "WS_SIZENKAIHUKU=PortXD_ModSizenkaifuku" "WS_GUARDCHECK=PortXD_ModGuardCheck" "WS_CONDCHG=PortXD_ModCondChg")
+      "WS_BADGECHECK=PortXD_ModBadgeCheck" "WS_TSUIKA_CHECK=PortXD_ModTsuikaCheck" "WS_SIZENKAIHUKU=PortXD_ModSizenkaifuku" "WS_GUARDCHECK=PortXD_ModGuardCheck" "WS_CONDCHG=PortXD_ModCondChg"
+      "WS_CHECK_TYPE=PortXD_ModCheckType"
+      "WS_WAZAEND=PortXD_ModWazaEnd")
   endif ()
   if (_src MATCHES "/fight/fightFloor\\.cpp$")
     list(APPEND _defs "fightOutPokemonGetCmpNimblenessWazaDataId=PortXD_ModCmpWaza" "wazaDB_GetPri=PortXD_ModPri")
+  endif ()
+  if (_src MATCHES "/fight/fightSide\\.cpp$")
+    list(APPEND _defs "fightSideIsJoutaiDataId=PortXD_RealSideJoutai")
   endif ()
   if (_src MATCHES "/fightSeq/fightSeqWSWaza\\.cpp$")
     list(APPEND _defs "WS_HP_DEC=PortXD_WsHpDec")
@@ -469,6 +475,7 @@ foreach (_src ${XD_GAME_SOURCES})
   endif ()
   if (_src MATCHES "/app/pokemon/pokemon\\.cpp$")
     list(APPEND _defs "pokemonCreateRndFit=PortXD_RealCreateRndFit")
+    list(APPEND _defs "pokemonGetTokuseiDataId=PortXD_RealPokemonTokusei")
   elseif (_src MATCHES "/fight/fightTrainer\\.cpp$")
     list(APPEND _defs "pokemonCreateRndFit=PortXD_FitMaybeShadow")
   elseif (_src MATCHES "/hero/heroMemberFunctions\\.cpp$")
@@ -477,6 +484,17 @@ foreach (_src ${XD_GAME_SOURCES})
     list(APPEND _defs "pokemonCreateRnd=PortXD_SpotRnd" "pokemonCreateRndFit=PortXD_SpotFit")
   elseif (_src MATCHES "/hero/heroPokemonGet\\.cpp$")
     list(APPEND _defs "pokemonCreateRndFit=PortXD_GiftFit")
+  endif ()
+  if (_src MATCHES "/fightSeq/fightSeqItemseq\\.cpp$")
+    list(APPEND _defs "HSD_Rand=PortXD_CatchRand" "pokemonDB_GetGet=PortXD_CatchRate" "fightFloor_GetFightKind=PortXD_ItemFightKind")
+  elseif (_src MATCHES "/fightSeq/fightSeqWSWaza\\.cpp$")
+    list(APPEND _defs "heroItemDecItemDataId=PortXD_BallDec" "WS_ADD_POKE=PortXD_WsAddPoke")
+  elseif (_src MATCHES "/fightSeq/fightSeqBasis\\.cpp$")
+    list(APPEND _defs "fightMsgctrlSetValue=PortXD_ExpMsgValue" "fightPokemonGetEffortFromPokemon=PortXD_ExpEffort" "pokemon_SetPoolExp=PortXD_PoolExp")
+  elseif (_src MATCHES "/app/fight/fightMenu\\.cpp$")
+    list(APPEND _defs "pokemonIsDarkPokemon=PortXD_MenuIsDark")
+  elseif (_src MATCHES "/app/hero/hero\\.cpp$")
+    list(APPEND _defs "heroDecPokedoru=PortXD_RealDecPokedoru" "heroDecPokecoupon=PortXD_RealDecPokecoupon" "heroCatchPokemon=PortXD_RealHeroCatch")
   endif ()
   if (_src MATCHES "/game/pokecolo\\.cpp$")
     list(APPEND _defs "GSmsgOpen=PortXD_MsgOpen")
@@ -679,6 +697,9 @@ add_executable(xd_battle_defs_test tests/xd_battle_defs_test.cpp)
 target_link_libraries(xd_battle_defs_test PRIVATE xd_datamods)
 target_include_directories(xd_battle_defs_test PRIVATE src/data)
 add_test(NAME xd_battle_defs_test COMMAND xd_battle_defs_test)
+add_executable(xd_pack_match_test tests/xd_pack_match_test.cpp src/pack_match.cpp)
+target_include_directories(xd_pack_match_test PRIVATE src)
+add_test(NAME xd_pack_match_test COMMAND xd_pack_match_test)
 add_executable(xd_sounds_test tests/xd_sounds_test.cpp)
 target_link_libraries(xd_sounds_test PRIVATE xd_datamods)
 add_test(NAME xd_sounds_test COMMAND xd_sounds_test)
@@ -807,7 +828,7 @@ add_executable(xd_cli_options_test tools/xd_cli_options_test.cpp)
 
 add_executable(xd_heap_model_test tools/xd_heap_model_test.cpp src/heap_model.cpp)
 
-add_library(xd_extra_sources STATIC launcher/xd_extra_sources.cpp launcher/xd_n3ds_dump.cpp)
+add_library(xd_extra_sources STATIC launcher/xd_extra_sources.cpp launcher/xd_n3ds_dump.cpp src/pack_match.cpp)
 target_include_directories(xd_extra_sources PUBLIC launcher src ${PROJECT_SOURCE_DIR}/launcher/include)
 target_link_libraries(xd_extra_sources PUBLIC engine_mods engine_settings xd_language_pack)
 add_executable(xd_extra_sources_test tools/xd_extra_sources_test.cpp)
@@ -921,9 +942,9 @@ set(XD_PROGRAM_LIBS xd_port engine_presence engine_net xd_legality xd_legality_d
 
 set(XD_PROGRAM_PORT_SOURCES src/boot.c src/cli_boot.cpp src/disc_tables.cpp src/disc_verify.c src/disc_choice.cpp src/game_new.cpp src/heap_check.cpp src/heap_model.cpp src/musyx_dsp_program.c
   src/renderdoc_capture.c src/screenshot.cpp src/bug_report.cpp src/settings_boot.cpp src/mods_boot.cpp src/languages_boot.cpp src/gslog_port.cpp src/state_dump.cpp src/timing_log.cpp src/cpu_cost_hooks.cpp src/fsys_unpack_cost.cpp src/dvd_open_cost.cpp src/bound_walk_cost.cpp src/perf_marks.cpp src/cpu_counters.cpp src/warp.cpp src/render_icon.cpp src/shader_prep.cpp src/pc_load.cpp src/dsp_coef.cpp
-  src/data/rel_link.cpp src/data/main_program_map.cpp src/dev_menu.cpp src/task_stacks.cpp src/input_ticks.cpp
-  src/particle_check.cpp src/settings_menu.cpp src/ui_kit2.cpp src/speedups.cpp src/move_split.cpp src/gen4_moves.cpp src/xg_calc_harness.cpp src/xg_calc_questions.cpp src/gen4_abilities.cpp src/gen4_ability_effects.cpp src/mod_battle.cpp src/script_hooks.cpp src/script_global_ext.cpp src/script_gifts.cpp src/script_events.cpp src/script_teams.cpp src/script_ext.cpp src/common_script.cpp src/online_battle.cpp src/battle_replay.cpp src/trainer_card.cpp src/trainer_card_game.cpp src/trainer_card_page.cpp src/online_lobby.cpp src/online_mirror.cpp src/online_room.cpp src/online_team.cpp src/online_commit.cpp src/online_draft.cpp src/online_draft_game.cpp src/online_vs_row.cpp src/added_rows.cpp src/species_tables.cpp src/gen4_pack.cpp src/gen57_pack.cpp src/pack_tables.cpp src/gen4_machines.cpp src/gen4_xg.cpp src/replay_pacing.cpp src/audio_categories.cpp src/button_icons.cpp src/settings_switches.cpp src/hook_defaults.cpp src/tm_names.cpp src/shiny_odds.cpp src/hd_textures.cpp src/texture_observers.cpp src/type_icons.cpp src/modern_types.cpp src/speedrun.cpp src/mods_reload.cpp src/pokedex_data.cpp src/pokedex_decks.cpp src/pokedex_page.cpp src/memo_sprites.cpp
-  src/widescreen.cpp src/save_picker.cpp src/playthrough.cpp src/challenges.cpp src/level_caps.cpp src/battles_won.cpp src/discord_presence.cpp src/walk_helper.cpp src/gen4_evolutions.cpp src/gen4_eevee.cpp src/pc_trade.cpp src/starter.cpp src/save_ext.cpp src/memo_overflow.cpp src/xd_rulesets.cpp src/gen_rules.cpp src/forms.cpp src/forms_battle.cpp src/forms_shop.cpp src/forms_summary.cpp)
+  src/data/rel_link.cpp src/data/main_program_map.cpp src/dev_menu.cpp src/task_stacks.cpp src/input_ticks.cpp src/cheats.cpp src/cheats_hooks.cpp
+  src/particle_check.cpp src/settings_menu.cpp src/ui_kit2.cpp src/speedups.cpp src/move_split.cpp src/gen4_moves.cpp src/xg_calc_harness.cpp src/xg_calc_questions.cpp src/gen4_abilities.cpp src/gen4_ability_effects.cpp src/mod_battle.cpp src/script_hooks.cpp src/script_global_ext.cpp src/script_gifts.cpp src/script_events.cpp src/script_teams.cpp src/script_ext.cpp src/common_script.cpp src/online_battle.cpp src/battle_replay.cpp src/trainer_card.cpp src/trainer_card_game.cpp src/trainer_card_page.cpp src/online_lobby.cpp src/online_mirror.cpp src/online_room.cpp src/online_team.cpp src/online_commit.cpp src/online_draft.cpp src/online_draft_game.cpp src/online_vs_row.cpp src/added_rows.cpp src/species_tables.cpp src/gen4_pack.cpp src/gen57_pack.cpp src/pack_match.cpp src/pack_tables.cpp src/gen4_machines.cpp src/gen4_xg.cpp src/replay_pacing.cpp src/audio_categories.cpp src/button_icons.cpp src/settings_switches.cpp src/hook_defaults.cpp src/tm_names.cpp src/shiny_odds.cpp src/hd_textures.cpp src/texture_observers.cpp src/type_icons.cpp src/modern_types.cpp src/speedrun.cpp src/mods_reload.cpp src/pokedex_data.cpp src/pokedex_decks.cpp src/pokedex_page.cpp src/memo_sprites.cpp
+  src/widescreen.cpp src/save_picker.cpp src/playthrough.cpp src/challenges.cpp src/level_caps.cpp src/battles_won.cpp src/discord_presence.cpp src/walk_helper.cpp src/gen4_evolutions.cpp src/gen4_eevee.cpp src/pc_trade.cpp src/starter.cpp src/save_ext.cpp src/memo_overflow.cpp src/xd_rulesets.cpp src/gen_rules.cpp src/forms.cpp src/forms_battle.cpp src/forms_shop.cpp src/forms_summary.cpp src/hidden_ability.cpp)
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/story_flag_names_data.cpp"
   COMMAND ${CMAKE_COMMAND} -DTEXT_FILE=${CMAKE_CURRENT_SOURCE_DIR}/data/story_flag_names.txt
           -DOUT=${CMAKE_CURRENT_BINARY_DIR}/story_flag_names_data.cpp -DSYMBOL=kStoryFlagNamesText -P ${CMAKE_CURRENT_SOURCE_DIR}/embed_text.cmake
@@ -1023,6 +1044,7 @@ target_link_libraries(xd PRIVATE xd_playthrough_files engine_save_thumbnail engi
 target_link_libraries(xd PRIVATE engine_pokedex)
 target_link_libraries(xd PRIVATE xd_language_pack) # the language pack's reader (src/languages_boot.cpp)
 set_property(SOURCE src/playthrough.cpp APPEND PROPERTY COMPILE_DEFINITIONS "XD_PORT_VERSION=\"${PROJECT_VERSION}\"")
+set_property(SOURCE src/shader_prep.cpp APPEND PROPERTY COMPILE_DEFINITIONS "XD_PORT_VERSION=\"${PROJECT_VERSION}\"") # (the launcher's shader-preparation key, shader_prep.cpp PreparedReport)
 target_link_libraries(xd PRIVATE xd_save_card) # the save in GameCube format on the card (src/save_card_filter.cpp)
 target_link_libraries(xd PRIVATE xd_trade xd_legality_disc) # online trading page (src/online_trade_page.inc)
 set(_xd_pipelines_db "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/initial_pipeline_cache.db")

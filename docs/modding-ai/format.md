@@ -142,7 +142,7 @@ One JSON object. Keys starting with `_` are comments.
 - `text`: messages by number (`"#N"`). `{00}` line break, `{XX}` or `{XX aa bb}` control codes, `{{` a brace. The sum of
   the new texts of one table cannot exceed the sum of the old ones (2 bytes per character). Common message tables and
   menu tables only; no map or story dialogue.
-- `add`: tables `pokemon`, `moves`, `items` (max 1024 each), `flags`, `floors` (rooms), `battles`, `trainers`, `trainer_pokemon` (and the other
+- `add`: tables `pokemon`, `moves`, `items` (max 4096 each), `flags`, `floors` (rooms), `battles`, `trainers`, `trainer_pokemon` (and the other
   decks' `_trainers` / `_pokemon`), see [story-scripts.md](../modding/story-scripts.md) and [change-data.md](../modding/change-data.md) for the last ones. Each new row: a unique new name as key, `"copy"`
   (existing row or an earlier new row), fields to change, and `"text"` (`name`, `doc`; species also `typeName`). Species
   numbers start at 415, moves at 375, items after the last item. Write names, never numbers, for new rows
@@ -160,15 +160,15 @@ One JSON object. Keys starting with `_` are comments.
   name) -> encoded to the game's DSP-ADPCM cry (32 kHz, 2 channels, max 3.5 s, longer is cut), two more members of `stm_se_nakigoe_archive.fsys`, one row each of `snd_file`,
   `snd_data` and the PDA waveform table `pokemon_nakigoe_data`; sets `voice`, `shout`, `nakigoeId`. `"dex": "own"` (default `"copy"`; not default because it adds rows and a
   playthrough is bound to its rows; NOTE the game's own marking (`pokemonSetOnZukanFlag`) writes the flag of species 0 whatever the species, so these flags are only for scripts: the Strategy Memo, keyed by species number, already treats a new species as its own entry) -> two new 1-bit level-3 rows at the end of `flag_data`, written into `mitaFlag` (seen) and `tukamaetaFlag` (caught); room for ~9,368 bits
-  (all 1,024 species fit). A **move** row may have `"animation": "<move>"` = copies that move's `wazawzxdataId`; or `"animation_attack"` / `"animation_damage"` / `"animation_status"` = a NEW row of `waza_wzx_data` (spare rows from 373) whose three resource ids are taken one each from the named moves' rows (`"none"` = no piece; `"animation"` names the move for the parts not named; filled at start-up by `species_tables.cpp`) (which animation it plays; the insides of a piece cannot be changed). Same file given twice is stored once. No game data goes into the mod; the files are made when the game starts. A species has its own Pokédex entry through `"height"` (decimetres), `"weight"` (hectograms) and
+  (all 4,096 species fit). A **move** row may have `"animation": "<move>"` = copies that move's `wazawzxdataId`; or `"animation_attack"` / `"animation_damage"` / `"animation_status"` = a NEW row of `waza_wzx_data` (spare rows from 373) whose three resource ids are taken one each from the named moves' rows (`"none"` = no piece; `"animation"` names the move for the parts not named; filled at start-up by `species_tables.cpp`) (which animation it plays; the insides of a piece cannot be changed). Same file given twice is stored once. No game data goes into the mod; the files are made when the game starts. A species has its own Pokédex entry through `"height"` (decimetres), `"weight"` (hectograms) and
   `"text": {"typeName": "...", "doc": "..."}` (the category line; `doc` is kept in the row but XD's PDA shows no
   description). A move has `"category": "physical"|"special"` (used only when the physical/special split setting is on;
   without it the move follows its type). Every move a mod adds can be picked by Metronome unless it has `"metronome": false` (needs the game build with the decomp's never-pick list; older builds ignore it) (the first one added by a mod
   and everything after it in the table; the Gen 4 pack's moves are skipped when they come first). The `"add"` file must be
   read before files that use the new names (name it so it sorts first).
-  Why 1024: the decomp's PC-only spare rows (`include/game/pcspare.h`, `PC_SPARE_SPECIES/MOVES/ITEMS` = 1024) in the
+  Why 4096 (1024 before 0.7.1): the decomp's PC-only spare rows (`include/game/pcspare.h`, `PC_SPARE_SPECIES/MOVES/ITEMS` = 4096) in the
   compiled tables the port cannot grow (model, cry, move-animation, item-parameter tables). The Gen 4 pack and all
-  mods share the 1024 (models and cries too: the pack's rows come first). Rooms stay at 32 (see story-scripts.md).
+  mods share the 4096 (models and cries too: the pack's rows come first). Rooms stay at 32 (see story-scripts.md).
 - Any field naming a species, move or item is checked against the table's end. A non-existent number is refused.
 
 Problems (unknown table, entry, field or name, a value that does not fit, a broken file) are reported at start-up and

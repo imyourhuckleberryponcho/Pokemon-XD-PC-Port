@@ -65,6 +65,22 @@ using SchedMutex = std::mutex;
 using SchedCv = std::condition_variable;
 #endif
 
+#ifdef _WIN32
+struct TimerCv : SchedCv {
+  HANDLE wake = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+  void notify_all() noexcept {
+    SchedCv::notify_all();
+    SetEvent(wake);
+  }
+  void notify_one() noexcept {
+    SchedCv::notify_one();
+    SetEvent(wake);
+  }
+};
+#else
+using TimerCv = SchedCv;
+#endif
+
 constexpr int kIdlePriority = 32;
 constexpr int kMainPriority = 16;
 
@@ -86,7 +102,7 @@ struct PThread {
 };
 
 SchedMutex gSched;
-SchedCv gTimerCv;
+TimerCv gTimerCv;
 std::unordered_map<void*, PThread*> gThreads;
 std::unordered_map<void*, std::deque<PThread*>> gQueues;
 PThread* gRunning = nullptr;
@@ -740,11 +756,25 @@ void timer_main() {
     const float scale = aurora::time::scale();
     const int64_t remainingUs = static_cast<int64_t>((next - now) * 8 / 324 / (scale > 0.0f ? scale : 1.0f));
 #ifdef _WIN32
-    constexpr int64_t kSpinUs = 1500;
+    static HANDLE hrTimer = CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
+    const int64_t kSpinUs = hrTimer != nullptr ? 700 : 1500;
 #else
     constexpr int64_t kSpinUs = 400;
 #endif
     if (remainingUs > kSpinUs + 500) {
+#ifdef _WIN32
+      if (hrTimer != nullptr) {
+        LARGE_INTEGER due;
+        due.QuadPart = -(remainingUs - kSpinUs) * 10;
+        if (SetWaitableTimerEx(hrTimer, &due, 0, nullptr, nullptr, nullptr, 0)) {
+          lock.unlock();
+          const HANDLE both[2] = {gTimerCv.wake, hrTimer};
+          WaitForMultipleObjects(2, both, FALSE, INFINITE);
+          lock.lock();
+          continue;
+        }
+      }
+#endif
       gTimerCv.wait_for(lock, std::chrono::microseconds(remainingUs - kSpinUs));
     } else if (scale > 1.0f && timer_relaxed_wait_ok()) {
       gTimerCv.wait_for(lock, std::chrono::microseconds(remainingUs > 50 ? remainingUs : 50));

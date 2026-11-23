@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <map>
@@ -214,6 +215,32 @@ std::vector<CryOut> gen4_cries(const DiscSource& pbr) {
     out.push_back(std::move(c));
   }
   return out;
+}
+
+void cry_build_xd(const CryStream& s, std::vector<uint8_t>& hdr, std::vector<uint8_t>& body, std::vector<std::string>& notes) {
+  Info in;
+  in.rate = s.rate;
+  in.nsamp = s.nsamp;
+  for (const auto& c : s.coefs) {
+    Chan ch;
+    for (int k = 0; k < 16; k++) ch.coefs[k] = c[(size_t)k];
+    in.chans.push_back(ch);
+  }
+  in.data = s.data;
+  const size_t cap = (size_t)kMaxBlocks * kBlock;
+  if (in.data.at(0).size() > cap) {
+    const uint32_t ns = (uint32_t)(cap / 8 * 14);
+    char buf[160];
+    std::snprintf(buf, sizeof buf, "cut at %u samples (%.2f s) of %u", ns, (double)ns / (double)s.rate, s.nsamp);
+    notes.push_back(buf);
+  }
+  build_xd(in, hdr, body);
+}
+std::vector<uint8_t> cry_wave_disp(const std::vector<uint8_t>& hdr, const std::vector<uint8_t>& body) {
+  CryOut c;
+  c.hdr = hdr;
+  c.body = body;
+  return gen4_wave(c);
 }
 
 }

@@ -37,6 +37,16 @@ FRAMING = {n: dict(share=1.0) for n in (517, 518, 524, 535, 546, 550, 562, 568, 
 FRAMING.update({n: dict(share=0.6) for n in (590, 591)})
 
 
+VIEW_RULES = 1
+
+
+def view_key(nat, pk_hash, wide=False):
+    """What a face view of the table was made from: the converted model's hash, this species' hand framing, wide or not, the rule's number.
+    A table entry is used only when the key is the same now (gen57_speed.py)."""
+    import hashlib
+    return hashlib.sha1(('%s|%r|%s|%d' % (pk_hash, sorted(FRAMING.get(nat, {}).items()), 'w' if wide else 'f', VIEW_RULES)).encode()).hexdigest()[:20]
+
+
 def head_bone(sk, want=None):
     names = list(sk.names)
     if want:

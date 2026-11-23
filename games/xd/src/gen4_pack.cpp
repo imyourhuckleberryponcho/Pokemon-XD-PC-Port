@@ -8,6 +8,7 @@
 #include "xd_gen4_abilities.h"
 #include "xd_xg.h"
 #include "xd_gen57.h"
+#include "pack_match.h"
 
 #include "pack_tables.h"
 #include "data/common_rel.h"
@@ -61,6 +62,7 @@ constexpr uint32_t kWaveOld = 389, kWaveSpare = XD_PC_SPARE_SPECIES;
 
 bool sLoaded = false;
 bool sSpots = false;
+bool sGen57Wanted = false;
 
 using xd::pack::PkxRow;
 using xd::pack::RowSpec;
@@ -171,12 +173,8 @@ void ResolveEvolutions(const engine::mods::LoadResult& result, const std::map<st
 
 namespace xd::gen4 {
 
-std::filesystem::path PackFolder() {
-  const std::filesystem::path base = xd::SettingsFolder() / L"extra_assets";
-  std::error_code ec;
-  if (!std::filesystem::exists(base / L"pbr_gen4" / L"gen4.json", ec) && std::filesystem::exists(base / L"usum_gen4" / L"gen4.json", ec)) return base / L"usum_gen4";
-  return base / L"pbr_gen4";
-}
+std::filesystem::path PackFolder() { return xd::packmatch::Gen4Folder(xd::SettingsFolder() / L"extra_assets", sGen57Wanted); }
+void SetGen57Wanted(bool wanted) { sGen57Wanted = wanted; }
 
 bool PackPresent(std::string* why) {
   std::string text;
@@ -308,10 +306,29 @@ bool TranslateForXG(const engine::mods::DataCatalog& catalog, const engine::mods
   for (uint32_t id = 77; id <= 123; id++) {
     if (const char* n = xd::gen4::Gen4AbilityName(id)) tables.packAbilities[id] = n;
   }
+  if (xd::gen57::Loaded()) {
+    const std::vector<std::string> names57 = xd::gen57::AbilityNamesForXG();
+    tables.packAbilities.resize(256);
+    for (uint32_t id = 124; id < 256; id++) tables.packAbilities[id] = names57[id];
+  }
   translator = std::make_unique<xg::Translator>(std::move(tables));
   std::string machines;
   ReadText(PackFolder() / L"machines.txt", machines);
   if (!translator->Run(files, machines, error)) return false;
+  if (xd::gen57::Loaded()) {
+    xg::Gen57Info info;
+    if (!xd::gen57::XgInfo(info)) {
+      error = "the Gen 5-7 pack's own files (abilities, battle code) cannot be read";
+      return false;
+    }
+    if (!translator->RunGen57(files, info, error)) {
+      error = "the Gen 5-7 Pokemon: " + error;
+      return false;
+    }
+    const xg::Translator::Counts& c = translator->Gen57Counts();
+    std::fprintf(stderr, "[gen57 xg] moves: %d by XG's own name, %d new rows with the port's battle code, %d new rows with a plain effect; abilities: %d by XG's own name, %d kept with the port's battle code, %d kept as a name only\n",
+                 c.movesByName, c.movesPortCode, c.movesStandIn, c.abilitiesByName, c.abilitiesPortCode, c.abilitiesNameOnly);
+  }
   if (const char* dump = std::getenv("XD_GEN4_XG_DUMP")) {
     std::error_code ec;
     std::filesystem::create_directories(dump, ec);

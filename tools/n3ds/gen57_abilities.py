@@ -120,6 +120,9 @@ TABLE = {
     197: ('Shields Down', {}, 'partial', 'Minior: Core form at half HP or less, Meteor form above it; the status immunity of the Meteor form is not built'),
     208: ('Schooling', {}, 'full', 'Wishiwashi: School Form at level 20 and HP above a quarter, Solo Form below: forms_battle.cpp'),
     209: ('Disguise', {}, 'partial', 'Mimikyu: the first damaging hit does no damage, it loses 1/8 HP and is Busted until the battle ends; the AI does not know it'),
+    216: ('Dancer', {'dancer': ['Swords Dance', 'Dragon Dance', 'Feather Dance', 'Teeter Dance', 'Petal Dance', 'Quiver Dance', 'Fiery Dance', 'Revelation Dance', 'Lunar Dance']}, 'partial',
+          "after another Pokemon uses a dance move the first Dancer of the others copies it at once with the move's own script (its own message, PP line and effects); only the first Dancer copies when there are two, and a dance move that failed is copied too"),
+    211: ('Power Construct', {}, 'partial', "Zygarde: Complete Forme (the form row from the dump) when its HP falls to half or less, checked when it comes in and at the end of each turn, kept for the rest of the battle: forms_battle.cpp; the Complete Forme keeps the base model (its own model is not made); only reachable through the hidden ability (Gen 5-7 rule sets)"),
     210: ('Battle Bond', {}, 'partial', 'Greninja: Ash-Greninja after a KO; the Water Shuriken change is not built'),
     163: ('Turboblaze', {}, 'full', "the foe's ability is ignored as Mold Breaker does it (needs the Gen 4 rules, where Mold Breaker lives)"),
     164: ('Teravolt', {}, 'full', "the foe's ability is ignored as Mold Breaker does it (needs the Gen 4 rules, where Mold Breaker lives)"),
@@ -135,16 +138,35 @@ TABLE = {
     217: ('Battery', {}, 'partial', 'ally only: does nothing in single battles (as in the games)'),
     222: ('Receiver', {}, 'partial', 'ally only: does nothing in single battles (as in the games)'),
     223: ('Power of Alchemy', {}, 'partial', 'ally only: does nothing in single battles (as in the games)'),
+
+    127: ('Unnerve', {'unnerve': True}, 'full', "foes' berries have no effect while it is out (the foe's berry effect is read as none)"),
+    130: ('Cursed Body', {'disable_on_hit': 30}, 'full', "30 % to Disable the move that hit it (the game's own Disable state on the attacker)"),
+    139: ('Harvest', {'end_of_turn': [{'restore_berry': True, 'when': 'weather:sun', 'message': '{name} harvested its berry!'},
+                                      {'restore_berry': True, 'chance': 50, 'when': '!weather:sun', 'message': '{name} harvested its berry!'}]}, 'full',
+          'the berry it used up (the game remembers it, as Recycle does) comes back at the end of the turn: 50 %, always in sun'),
+    167: ('Cheek Pouch', {'berry_eaten': [{'heal': 33.3}]}, 'full', 'a third of its HP back when it eats a berry; the heal follows the berry at the end of the move that made it eat'),
+    150: ('Imposter', {'switch_in': [{'transform': True, 'message': '{name} transformed into {foe}!'}]}, 'partial',
+          "the game's own Transform command on entering; no transform picture (the model is changed by the game's Transform script, not by the command)"),
+    151: ('Infiltrator', {'infiltrator': True}, 'partial', "its moves pass the foe's Reflect, Light Screen, Aurora Veil, Safeguard and Mist; Substitute is not bypassed"),
+    193: ('Wimp Out', {'half_hp': [{'switch_out': 'user'}]}, 'full', "when a hit takes it to half HP or less it goes back at the end of the move that hit it (Baton Pass's own switch-out, where U-turn's runs) and the replacement comes in (seen on the player's side; a wild Pokemon flees through the game's own forced-out script: written, not tested); the foe side's replacement was not seen"),
+    194: ('Emergency Exit', {'half_hp': [{'switch_out': 'user'}]}, 'partial', 'the same as Wimp Out'),
+    212: ('Corrosion', {'poison_any_type': True}, 'full', 'poison from its moves also works on Steel and Poison types'),
+    191: ('Delta Stream', {'strong_wind': True, 'switch_in': [{'message': 'The mysterious air current blows on regardless!'}]}, 'partial',
+          "while it is out Flying Pokemon take no extra damage from Rock, Ice and Electric moves; the weather is NOT removed and weather moves still work"),
+    225: ('RKS System', {'type_by_item': [{'item': '%s Memory' % n, 'type': t} for n, t in (
+        ('Fighting', 1), ('Flying', 2), ('Poison', 3), ('Ground', 4), ('Rock', 5), ('Bug', 6), ('Ghost', 7), ('Steel', 8), ('Fire', 10), ('Water', 11),
+        ('Grass', 12), ('Electric', 13), ('Psychic', 14), ('Ice', 15), ('Dragon', 16), ('Dark', 17), ('Fairy', 18))]}, 'full',
+          'its type follows the Memory it holds (the 17 Memory items are in the pack and sold at the prize desk under the Gen 5-7 rules); Multi-Attack takes the same type'),
     232: ('Prism Armor', {'damage_taken': [{'when': 'super_effective', 'mult': 0.75}]}, 'full', ''),
 }
 
 NOT_BUILT_WHY = {
 127: 'foes eating berries: berries are not tracked', 130: 'disabling the attacker: Disable is not a block',
-    131: 'ally only', 132: 'ally only', 139: 'berries are not tracked', 140: 'ally only', 142: 'powder / weather immunity not built', 149: 'disguise as a party member',
+    131: 'ally only', 132: 'ally only', 139: 'berries are not tracked', 140: 'ally only', 142: 'powder / weather immunity not built', 149: 'disguise as a party member (not built: needs the model and name of another party member)',
     150: 'Transform on entry', 151: 'passes screens and Substitute', 161: 'form change', 163: 'ignoring abilities needs the Gen 4 rules', 164: 'ignoring abilities needs the Gen 4 rules',
     165: 'ally only', 166: 'ally only', 167: 'berries are not tracked', 176: 'form change', 180: 'ally only', 191: 'no strong-wind weather',
-    193: 'switching out after a hit', 194: 'switching out after a hit', 197: 'form change', 203: 'moves that never make contact', 208: 'form change', 209: 'form change',
-    210: 'form change', 211: 'form change', 212: 'poisoning Steel / Poison', 213: 'never wakes up', 216: 'copying dance moves', 217: 'ally only',
+    197: 'form change', 203: 'moves that never make contact', 208: 'form change', 209: 'form change',
+    210: 'form change', 211: 'form change', 213: 'never wakes up', 216: 'copying dance moves', 217: 'ally only',
 220: 'reacting to every faint', 222: 'ally only', 223: 'ally only', 225: 'form change',
 }
 

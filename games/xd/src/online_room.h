@@ -56,6 +56,7 @@ struct Capabilities {
   std::string mods;
   std::string randomizer;
   uint64_t tables = 0;
+  bool cheats = false;
   std::string formatsDigest;
   std::string knownRuleSets = "xd,gen4,gen5,gen6,gen7";
   int knownMaxGen = 4;
@@ -78,6 +79,7 @@ bool Decode(const std::vector<uint8_t>& blob, Fingerprint& out);
 struct Verdict {
   std::vector<std::string> refuse;
   std::vector<std::string> restart;
+  std::vector<std::string> notes;
   bool Ok() const { return refuse.empty(); }
   bool NeedsRestart() const { return !restart.empty(); }
 };

@@ -534,6 +534,10 @@ ImU32 Rgb(uint32_t rgb, float alpha = 1.0f) {
 
 }
 
+bool ControlsPanel::AdapterPadShown() const {
+  return std::any_of(pads_.begin(), pads_.end(), [](const Pad& p) { return p.device == ec::Device::GameCube; });
+}
+
 int ControlsPanel::AssignedPad(const es::Registry& registry, int port) const {
   if (port < 0 || port >= ec::kPorts) {
     return -1;
@@ -689,6 +693,38 @@ bool ControlsPanel::DrawController(es::Registry& registry, const Options& option
     Wrapped(options.colors.dim, pads_.empty() ? std::string(Tr("No PC controller is plugged in. Plug one in: it shows "
                                                                "up here at once."))
                                               : std::string(Tr("No free PC controller for it right now.")));
+  }
+  if (!AdapterPadShown()) {
+    switch (adapterState_) {
+    case ec::AdapterState::NoDriver:
+      Wrapped(options.colors.accent,
+              Tr("A GameCube adapter is plugged in, but Windows has no driver for it that this program can use. "
+                 "Install the WinUSB driver for it with the free program Zadig (zadig.akeo.ie): choose the "
+                 "adapter (WUP-028), pick WinUSB, click Replace Driver. The switch on the adapter must be on "
+                 "\"Wii U\". The Read me has the steps."));
+      break;
+    case ec::AdapterState::NoPermission:
+      Wrapped(options.colors.accent,
+              Tr("A GameCube adapter is plugged in, but this user may not open it. Add the udev rule from the Read "
+                 "me (one small file), then unplug the adapter and plug it in again."));
+      break;
+    case ec::AdapterState::InUse:
+      Wrapped(options.colors.accent,
+              Tr("A GameCube adapter is plugged in, but another program is using it (Dolphin, or another copy of "
+                 "the game). Close that program, then unplug the adapter and plug it in again."));
+      break;
+    case ec::AdapterState::Reachable:
+      Wrapped(options.colors.dim,
+              Tr("A GameCube adapter is plugged in and working. Plug a controller into one of its four ports: it "
+                 "shows up here at once. (The switch on the adapter must be on \"Wii U\".)"));
+      break;
+    case ec::AdapterState::Unknown:
+      Wrapped(options.colors.accent,
+              Fmt(Tr("A GameCube adapter is plugged in, but the program cannot open it (error %d)."), adapterError_));
+      break;
+    case ec::AdapterState::NoLibrary:
+    case ec::AdapterState::NotPlugged: break;
+    }
   }
   if (pads_.size() > 0) {
     std::string list;

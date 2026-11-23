@@ -597,7 +597,7 @@ Blob* Writer::aobj_blob(const AnimObj* a, double (*tol)(int)) {
     std::vector<const Key*> nonslp;
     for (auto& k : keys)
       if (k.op != OP_SLP) nonslp.push_back(&k);
-    if (nonslp.size() < 2) {
+    if (nonslp.size() < 2 && t.kind != 40) {
       if (nonslp.empty()) fail("list index out of range");
       double v = nonslp[0]->value;
       keys = {Key{OP_CON, v, 0.0, (long long)std::max(a->end, 1.0)}, Key{OP_CON, v, 0.0, 0}};

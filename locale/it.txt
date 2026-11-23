@@ -2298,8 +2298,8 @@
 = From a %s disc. %s
 > Da un disco %s. %s
 
-= %s dump file (.3ds / .cci)
-> File dump di %s (.3ds / .cci)
+= %s dump file (.3ds / .cci / .cia)
+> File dump di %s (.3ds / .cci / .cia)
 
 = %s disc image
 > Immagine del disco %s
@@ -2313,8 +2313,8 @@
 = Disc images (ISO, RVZ, WBFS, CISO, GCZ...)
 > Immagini disco (ISO, RVZ, WBFS, CISO, GCZ...)
 
-= 3DS game dumps (3DS, CCI)
-> Dump di giochi 3DS (3DS, CCI)
+= 3DS game dumps (3DS, CCI, CIA)
+> Dump di giochi 3DS (3DS, CCI, CIA)
 
 = All files
 > Tutti i file
@@ -3996,17 +3996,8 @@
 = XD, light
 > XD, chiara
 
-= That is a folder. The converter needs the cartridge dump as one file (.3ds or .cci); an unpacked folder can't be used yet.
-> Questa è una cartella. Il convertitore ha bisogno del dump della cartuccia come un unico file (.3ds o .cci); una cartella decompressa non si può ancora usare.
-
-= That is a .cia file (an installable copy). The converter needs the decrypted cartridge dump (.3ds or .cci); a .cia can't be used yet.
-> Questo è un file .cia (una copia installabile). Il convertitore ha bisogno del dump della cartuccia decifrato (.3ds o .cci); un .cia non si può ancora usare.
-
 = That file can't be opened.
 > Questo file non può essere aperto.
-
-= That is not a 3DS cartridge dump (.3ds or .cci). A .cia, an .nds / .gba file or a disc image can't be used here.
-> Questo non è un dump di cartuccia 3DS (.3ds o .cci). Un .cia, un file .nds / .gba o un'immagine disco non si possono usare qui.
 
 = That dump has no game in it (its first partition is empty).
 > Questo dump non contiene alcun gioco (la sua prima partizione è vuota).
@@ -6324,8 +6315,8 @@
 = Ultra Sun / Ultra Moon dump file (for models)
 > File dump di Ultrasole / Ultraluna (per i modelli)
 
-= The decrypted Pokemon Ultra Sun or Ultra Moon dump (.3ds / .cci) the launcher's Extra assets page makes the Ultra Sun / Ultra Moon models from (empty: none chosen yet).
-> Il dump decifrato di Pokémon Ultrasole o Ultraluna (.3ds / .cci) da cui la pagina Risorse extra del launcher crea i modelli di Ultrasole / Ultraluna (vuoto: nessuno scelto per ora).
+= The decrypted Pokemon Ultra Sun or Ultra Moon dump (.3ds / .cci / .cia) the launcher's Extra assets page makes the Ultra Sun / Ultra Moon models from (empty: none chosen yet).
+> Il dump decifrato di Pokémon Ultrasole o Ultraluna (.3ds / .cci / .cia) da cui la pagina Risorse extra del launcher crea i modelli di Ultrasole / Ultraluna (vuoto: nessuno scelto per ora).
 
 = Developer menu (cheats)
 > Menu sviluppatore (trucchi)
@@ -7993,8 +7984,8 @@
 = There are a lot of assets to unpack and convert for the Gen 5, 6 and 7 Pokemon. This may take a while (often 15-30 minutes, longer on slower PCs). You can keep using the launcher or play while it works; the launcher stays open until it is done. If you close it, it continues where it stopped next time.
 > Ci sono moltissime risorse da estrarre e convertire per i Pokémon delle generazioni 5, 6 e 7. Può volerci del tempo (spesso 15-30 minuti, di più su PC lenti). Puoi continuare a usare il launcher o giocare mentre lavora; il launcher resta aperto finché non ha finito. Se lo chiudi, la prossima volta riprende da dove si era fermato.
 
-= The program usum_models, which ships with the game, converts the Pokemon models in your own Ultra Sun or Ultra Moon dump into XD's model format, in the folder extra_assets\\usum in your data folder. The dump must be a decrypted cartridge dump (.3ds or .cci); a .cia file, an encrypted dump or a folder can't be used yet. Your XD disc (the Disc page) is needed too: it says which models XD has. The models and the Gen 4 pack take about ten minutes; the Gen 5, 6 and 7 Pokemon (models, forms, moves, abilities, cries, faces and Pokedex pictures) take much longer, but they are made in the background: you can keep using the launcher or play meanwhile. Afterwards pick "Models: Ultra Sun / Ultra Moon" or the Gen 4 / Gen 5-7 choices in a New Game's setup.
-> Il programma usum_models, fornito con il gioco, converte i modelli dei Pokémon del tuo dump di Ultrasole o Ultraluna nel formato di modelli di XD, nella cartella extra_assets\\usum della tua cartella dati. Il dump deve essere un dump di cartuccia decrittato (.3ds o .cci); un file .cia, un dump crittografato o una cartella non possono ancora essere usati. Serve anche il tuo disco di XD (pagina Disco): indica quali modelli ha XD. I modelli e il pacchetto della gen. 4 richiedono circa dieci minuti; i Pokémon delle gen. 5-7 (modelli, forme, mosse, abilità, versi, volti e immagini del Pokédex) richiedono molto di più, ma vengono creati in background: puoi continuare a usare il launcher o giocare nel frattempo. Poi scegli « Modelli: Ultrasole / Ultraluna » o le scelte gen. 4 / gen. 5-7 nella configurazione di una Nuova partita.
+= The program usum_models, which ships with the game, converts the Pokemon models in your own Ultra Sun or Ultra Moon dump into XD's model format, in the folder extra_assets\\usum in your data folder. The dump must be a decrypted copy: a cartridge dump (.3ds or .cci) or a digital copy (.cia). An encrypted copy, an update or DLC .cia, or a folder can't be used. Your XD disc (the Disc page) is needed too: it says which models XD has. The models and the Gen 4 pack take about ten minutes; the Gen 5, 6 and 7 Pokemon (models, forms, moves, abilities, cries, faces and Pokedex pictures) take much longer, but they are made in the background: you can keep using the launcher or play meanwhile. Afterwards pick "Models: Ultra Sun / Ultra Moon" or the Gen 4 / Gen 5-7 choices in a New Game's setup.
+> Il programma usum_models, fornito con il gioco, converte i modelli dei Pokémon del tuo dump di Ultrasole o Ultraluna nel formato di modelli di XD, nella cartella extra_assets\\usum della tua cartella dati. Il dump deve essere una copia decrittata: un dump di cartuccia (.3ds o .cci) o una copia digitale (.cia). Una copia crittografata, un .cia di aggiornamento o di DLC o una cartella non possono essere usati. Serve anche il tuo disco di XD (pagina Disco): indica quali modelli ha XD. I modelli e il pacchetto della gen. 4 richiedono circa dieci minuti; i Pokémon delle gen. 5-7 (modelli, forme, mosse, abilità, versi, volti e immagini del Pokédex) richiedono molto di più, ma vengono creati in background: puoi continuare a usare il launcher o giocare nel frattempo. Poi scegli « Modelli: Ultrasole / Ultraluna » o le scelte gen. 4 / gen. 5-7 nella configurazione di una Nuova partita.
 
 = Writing Pokedex entries
 > Scrittura dei testi del Pokédex
@@ -8002,3 +7993,607 @@
 = There are a lot of assets to unpack and convert for the Gen 5, 6 and 7 Pokemon. This may take a while (often 45 minutes to 1.5 hours, longer on slower PCs). You can keep using the launcher or play while it works; the launcher stays open until it is done. If you close it, it continues where it stopped next time.
 > Ci sono moltissime risorse da estrarre e convertire per i Pokémon delle generazioni 5, 6 e 7. Può volerci del tempo (spesso 45 minuti - 1 ora e mezza, di più su PC lenti). Puoi continuare a usare il launcher o giocare mentre lavora; il launcher resta aperto finché non ha finito. Se lo chiudi, la prossima volta riprende da dove si era fermato.
 
+
+= That .cia is the game's update, not the game itself. Choose the game's own .cia (or .3ds / .cci) file.
+> Questo .cia è l'aggiornamento del gioco, non il gioco stesso. Scegli il file .cia (o .3ds / .cci) del gioco vero e proprio.
+
+= That .cia is the game's extra content (DLC), not the game itself. Choose the game's own .cia (or .3ds / .cci) file.
+> Questo .cia è il contenuto aggiuntivo (DLC) del gioco, non il gioco stesso. Scegli il file .cia (o .3ds / .cci) del gioco vero e proprio.
+
+= That .cia is not a game (it is an app, a system file or something else).
+> Questo .cia non è un gioco (è un'app, un file di sistema o qualcos'altro).
+
+= That .cia is encrypted. The converter only reads decrypted copies and does not decrypt anything itself: export the game again as a decrypted .cia with your own dumping tool.
+> Questo .cia è cifrato. Il convertitore legge solo copie decifrate e non decifra nulla da solo: esporta di nuovo il gioco come .cia decifrato con il tuo strumento di dump.
+
+= That is a folder. The converter needs the game as one file (.3ds, .cci or .cia); an unpacked folder can't be used yet.
+> Questa è una cartella. Il convertitore ha bisogno del gioco come un unico file (.3ds, .cci o .cia); una cartella decompressa non si può ancora usare.
+
+= That is not a 3DS game file (.3ds, .cci or .cia). An .nds / .gba file or a disc image can't be used here.
+> Questo non è un file di gioco 3DS (.3ds, .cci o .cia). Un file .nds / .gba o un'immagine disco non si possono usare qui.
+
+= The built-in layer "%s" has files for %zu archive(s) the game doesn't have (for example %s: they belong to a pack that is not loaded); skipped.
+> Il livello integrato «%s» contiene file per %zu archivi che il gioco non ha (per esempio %s: appartengono a un pacchetto non caricato); saltati.
+
+= {name}'s move was disabled!
+> La mossa di {name} è stata bloccata!
+
+= {name} harvested its berry!
+> {name} ha raccolto la sua bacca!
+
+= {name} transformed into {foe}!
+> {name} si è trasformato in {foe}!
+
+= The mysterious air current blows on regardless!
+> La misteriosa corrente d'aria continua a soffiare!
+
+= {name} became cloaked in a freezing light!
+> {name} è avvolto da una luce gelida!
+
+= {name} became cloaked in freezing air!
+> {name} è avvolto da aria gelida!
+
+= {name} is absorbing power!
+> {name} sta assorbendo energia!
+
+= The Pokemon now has its hidden ability!
+> Il Pokémon ha ora la sua abilità nascosta!
+
+= This Pokemon has no hidden ability.
+> Questo Pokémon non ha un'abilità nascosta.
+
+= This Pokemon already has its hidden ability.
+> Questo Pokémon ha già la sua abilità nascosta.
+
+= A Shadow Pokemon cannot use this yet.
+> Un Pokémon Ombra non può ancora usarlo.
+
+= {10} transformed into its Complete Forme!
+> {10} si trasforma nella Forma Perfetta!
+
+= the Gen 5-7 files were made together with Gen 4 files that are not installed any more, make the Ultra Sun / Ultra Moon files again
+> i file di 5a-7a generazione sono stati creati insieme a file di 4a generazione che non sono più installati, crea di nuovo i file di Ultrasole / Ultraluna
+
+= the Gen 5-7 files do not fit the Gen 4 files that are installed now, make the Ultra Sun / Ultra Moon files again
+> i file di 5a-7a generazione non corrispondono ai file di 4a generazione installati ora, crea di nuovo i file di Ultrasole / Ultraluna
+
+= The Gen 5-7 Pokemon can't be used: the Gen 5-7 files do not fit the Gen 4 files that are installed.
+> I Pokémon di 5a-7a generazione non possono essere usati: i file di 5a-7a generazione non corrispondono ai file di 4a generazione installati.
+
+= Make the Ultra Sun / Ultra Moon files again on the launcher's "Extra assets" page.\nThe game starts without them.
+> Crea di nuovo i file di Ultrasole / Ultraluna nella pagina «Extra assets» del launcher.\nIl gioco parte senza di loro.
+
+= These Gen 5-7 files were made together with the Gen 4 files of the Ultra Sun / Ultra Moon dump, so the game uses those Gen 4 files whenever Gen 5-7 Pokemon are on. They still work; make them again to use the Battle Revolution Gen 4 files with them too.
+> Questi file di 5a-7a generazione sono stati creati insieme ai file di 4a generazione del dump di Ultrasole / Ultraluna, quindi il gioco usa quei file di 4a generazione quando i Pokémon di 5a-7a generazione sono attivi. Funzionano ancora; creali di nuovo per usare con loro anche i file di 4a generazione di Battle Revolution.
+
+= These Gen 5-7 files were made together with Gen 4 files that are not installed any more, so the game will not use them. Make the Ultra Sun / Ultra Moon files again.
+> Questi file di 5a-7a generazione sono stati creati insieme a file di 4a generazione che non sono più installati, quindi il gioco non li userà. Crea di nuovo i file di Ultrasole / Ultraluna.
+
+= These Gen 5-7 files do not fit the Gen 4 files that are installed now, so the game will not use them. Make the Ultra Sun / Ultra Moon files again.
+> Questi file di 5a-7a generazione non corrispondono ai file di 4a generazione installati ora, quindi il gioco non li userà. Crea di nuovo i file di Ultrasole / Ultraluna.
+
+
+= A GameCube adapter is plugged in, but Windows has no driver for it that this program can use. Install the WinUSB driver for it with the free program Zadig (zadig.akeo.ie): choose the adapter (WUP-028), pick WinUSB, click Replace Driver. The switch on the adapter must be on "Wii U". The Read me has the steps.
+> Un adattatore GameCube è collegato, ma Windows non ha un driver che questo programma possa usare. Installa il driver WinUSB con il programma gratuito Zadig (zadig.akeo.ie): scegli l'adattatore (WUP-028), seleziona WinUSB, clicca Replace Driver. L'interruttore sull'adattatore deve essere su "Wii U". Il file Leggimi spiega i passaggi.
+
+= A GameCube adapter is plugged in, but this user may not open it. Add the udev rule from the Read me (one small file), then unplug the adapter and plug it in again.
+> Un adattatore GameCube è collegato, ma questo utente non può aprirlo. Aggiungi la regola udev del file Leggimi (un piccolo file), poi scollega e ricollega l'adattatore.
+
+= A GameCube adapter is plugged in, but another program is using it (Dolphin, or another copy of the game). Close that program, then unplug the adapter and plug it in again.
+> Un adattatore GameCube è collegato, ma un altro programma lo sta usando (Dolphin, o un'altra copia del gioco). Chiudi quel programma, poi scollega e ricollega l'adattatore.
+
+= A GameCube adapter is plugged in and working. Plug a controller into one of its four ports: it shows up here at once. (The switch on the adapter must be on "Wii U".)
+> Un adattatore GameCube è collegato e funziona. Collega un controller a una delle sue quattro porte: compare subito qui. (L'interruttore sull'adattatore deve essere su "Wii U".)
+
+= A GameCube adapter is plugged in, but the program cannot open it (error %d).
+> Un adattatore GameCube è collegato, ma il programma non riesce ad aprirlo (errore %d).
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= CATCHING
+> CATTURA
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= EXP
+> ESP
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= ITEMS
+> STRUMENTI
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= BATTLE
+> LOTTA
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Every ball catches
+> Ogni BALL cattura
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Snag any POKéMON
+> Cattura ogni POKéMON
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Balls never run out
+> BALL infinite
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= EXP multiplier
+> Moltiplicatore ESP
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Ignore level cap
+> Ignora limite livello
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Endless money
+> Soldi infiniti
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Endless COUPONS
+> COUPON infiniti
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Get any item
+> Ottieni strumento
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Shiny chance
+> Probabilità cromatico
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Perfect IVs
+> IV perfetti
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Perfect EVs
+> EV perfetti
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= No damage taken
+> Nessun danno subito
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Win every battle
+> Vinci ogni lotta
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Purify at once
+> Purifica subito
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= No SPOT POKéMON
+> Niente POKéMON SPOT
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Walk through walls
+> Attraversa i muri
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= ×%d
+> ×%d
+
+# CHECK (machine-made, unsure: native speaker please read)
+= cheats used
+> trucchi usati
+
+= Enable cheats
+> Attiva i trucchi
+
+= Turns the cheat menu on: a hot key (F5, or hold L + R and press Start on the controller; both can be changed in the controls) opens a menu of cheats over the game. Off: no cheat does anything. A playthrough that used a cheat is marked as such for good (it can't join competitive online rooms, and a speedrun with it is invalid). Never in Original.
+> Attiva il menu dei trucchi: un tasto (F5, o tieni premuti L + R e premi Start sul controller; entrambi si cambiano nei comandi) lo apre sopra il gioco. Disattivato: nessun trucco fa niente. Una partita che ha usato un trucco resta segnata per sempre (non può entrare nelle stanze online competitive, e uno speedrun con trucchi non è valido). Mai in Originale.
+
+= Cheat: every Poke Ball catches
+> Trucco: ogni Poké Ball cattura
+
+= A ball thrown at a wild Pokemon always catches it (Shadow Pokemon still need the Snag Ball).
+> Una ball lanciata a un Pokémon selvatico lo cattura sempre (i Pokémon Ombra richiedono ancora la Snag Ball).
+
+= Cheat: catch other trainers' Pokemon
+> Trucco: cattura i Pokémon degli altri allenatori
+
+= Poke Balls can be thrown at another trainer's Pokemon (not Shadow ones: those are always snagged). It is caught when the ball works, and that Pokemon is out of the battle, as a snagged Shadow Pokemon is.
+> Si possono lanciare Poké Ball al Pokémon di un altro allenatore (non agli Ombra: quelli si rubano sempre). Viene catturato quando la ball funziona, ed esce dallo scontro, come un Pokémon Ombra rubato.
+
+= Cheat: Poke Balls are never used up
+> Trucco: le Poké Ball non si consumano mai
+
+= A ball thrown in battle stays in the bag.
+> Una ball lanciata in battaglia resta nello zaino.
+
+= Cheat: experience multiplier
+> Trucco: moltiplicatore di esperienza
+
+= Experience Pokemon earn in battle is multiplied (x2, x5 or x10).
+> L'esperienza guadagnata in battaglia è moltiplicata (x2, x5 o x10).
+
+= Cheat: ignore the level cap
+> Trucco: ignora il limite di livello
+
+= The level-cap challenge rule does not hold Pokemon back (they level up to 100 as in the plain game).
+> La regola sfida «limite di livello» non trattiene più i Pokémon (salgono fino al livello 100 come nel gioco normale).
+
+= Cheat: infinite money
+> Trucco: soldi infiniti
+
+= Money is topped up and buying or paying never takes any.
+> I soldi vengono sempre ricaricati e comprare o pagare non ne toglie mai.
+
+= Cheat: infinite Poke Coupons
+> Trucco: Poké Coupon infiniti
+
+= Poke Coupons are topped up and spending them never takes any.
+> I Poké Coupon vengono sempre ricaricati e spenderli non ne toglie mai.
+
+= Cheat: shiny odds
+> Trucco: probabilità di cromatici
+
+= How often a Pokemon you receive from now on is shiny (caught, gifts, Shadow Pokemon, Poke Spot Pokemon).
+> Quanto spesso un Pokémon che ricevi da ora in poi è cromatico (catturato, regali, Pokémon Ombra, Pokémon dei Poké Spot).
+
+= 1 in 512
+> 1 su 512
+
+= 1 in 64
+> 1 su 64
+
+= 1 in 8
+> 1 su 8
+
+= Always
+> Sempre
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= 1 in %d
+> 1 su %d
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= BALLS
+> BALL
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= TMs
+> MT
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= BERRIES
+> BACCHE
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= COLOGNES
+> COLONIE
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= RARE CANDY
+> CARAMELLE RARE
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Pick any item and how many: they go into your BAG.
+> Scegli uno strumento e quanti: vanno nella BORSA.
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Left / right: how many. A puts them into your BAG (%s).
+> Sinistra / destra: quanti. A li mette nella BORSA (%s).
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Every BALL you throw catches on the first try.
+> Ogni BALL lanciata cattura al primo colpo.
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Throw BALLS at other trainers' POKéMON too. Shadow POKéMON are snagged as usual.
+> Lancia BALL anche ai POKéMON degli altri Allenatori. I Pokémon Ombra si catturano come sempre.
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= A BALL you throw stays in your BAG.
+> Una BALL lanciata resta nella BORSA.
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Your POKéMON get the usual EXP. Points.
+> I tuoi POKéMON ricevono i soliti Punti Esperienza.
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Your POKéMON get %d times the EXP. Points.
+> I tuoi POKéMON ricevono %d volte i Punti Esperienza.
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= The level cap challenge no longer holds your POKéMON back.
+> La sfida del limite di livello non frena più i tuoi POKéMON.
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= This playthrough has no level cap challenge.
+> Questa partita non ha la sfida del limite di livello.
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Your money never runs out: buying takes none of it.
+> I tuoi soldi non finiscono mai: comprare non costa nulla.
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Your POKé COUPONS never run out.
+> I tuoi POKé COUPON non finiscono mai.
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= How often a POKéMON is shiny. Normal: 1 in 8,192.
+> Quanto spesso un POKéMON è cromatico. Normale: 1 su 8.192.
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= POKéMON you get from now on have perfect IVs.
+> I POKéMON che ottieni da ora hanno IV perfetti.
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= POKéMON you get from now on have the most EVs the game allows.
+> I POKéMON che ottieni da ora hanno il massimo di EV consentito.
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Your POKéMON take no damage in battle.
+> I tuoi POKéMON non subiscono danni in lotta.
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Your first hit makes the foe's POKéMON faint. Shadow POKéMON keep 1 HP, so you can still snag them.
+> Il primo colpo manda KO il POKéMON avversario. I Pokémon Ombra restano con 1 PS, così puoi catturarli.
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= A Shadow POKéMON's heart opens at once: purify it at the next chance.
+> Il cuore di un Pokémon Ombra si apre subito: purificalo alla prima occasione.
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= No POKéMON come to the POKé SPOTS.
+> Nessun POKéMON arriva ai POKé SPOT.
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Walk through walls and everything else in your way.
+> Attraversa muri e tutto ciò che ti blocca.
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= BACK
+> INDIETRO
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= POCKET
+> TASCA
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= This pocket has nothing to give.
+> Questa tasca non ha nulla da dare.
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= In your BAG ×%d
+> Nella BORSA ×%d
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Total ×%d
+> Totale ×%d
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= %s? How many should go into your BAG?
+> %s? Quanti ne metti nella BORSA?
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= %s ×%d will be in your BAG.
+> %s ×%d sarà nella BORSA.
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Not possible now.
+> Non possibile ora.
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= the cheat menu key
+> il tasto del menu trucchi
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Cheats mark this save "cheats used" for good, even if you switch them off again later. A save with cheats can't join competitive online rooms.
+> I trucchi segnano questo salvataggio come "trucchi usati" per sempre, anche se poi li disattivi. Un salvataggio con trucchi non può entrare nelle stanze online competitive.
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Switch cheats on for this save?
+> Attivare i trucchi per questo salvataggio?
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Cheats are on. Press %s, or hold L and R and press START, to open the cheat menu at any time.
+> I trucchi sono attivi. Premi %s, oppure tieni premuti L e R e premi START, per aprire il menu trucchi quando vuoi.
+
+
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Cheats for this save. Once on, %s opens the cheat menu while you play.
+> Trucchi per questo salvataggio. Se attivi, %s apre il menu trucchi mentre giochi.
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Cheats for this save: %s opens the cheat menu.
+> Trucchi per questo salvataggio: %s apre il menu trucchi.
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= shiny
+> cromatico
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= always
+> sempre
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= every ball catches
+> ogni BALL cattura
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= snag any POKéMON
+> cattura ogni POKéMON
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= balls never run out
+> BALL infinite
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= no level cap
+> niente limite di livello
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= endless money
+> soldi infiniti
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= endless COUPONS
+> COUPON infiniti
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= perfect IVs
+> IV perfetti
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= perfect EVs
+> EV perfetti
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= no damage taken
+> nessun danno subito
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= win every battle
+> vinci ogni lotta
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= items given
+> strumenti ottenuti
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= purify at once
+> purifica subito
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= money given
+> soldi ottenuti
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= COUPONS given
+> COUPON ottenuti
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Cheats used
+> Trucchi usati
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Cheats used: %s
+> Trucchi usati: %s
+= Cheat: perfect IVs
+> Trucco: IV perfetti
+
+= Pokemon you receive from now on have all IVs at 31.
+> I Pokémon che ricevi da ora in poi hanno tutti gli IV a 31.
+
+= Cheat: maxed EVs
+> Trucco: EV al massimo
+
+= Pokemon you receive from now on have every effort value at the game's maximum (100).
+> I Pokémon che ricevi da ora in poi hanno ogni valore di sforzo al massimo del gioco (100).
+
+= Cheat: no damage taken
+> Trucco: nessun danno subito
+
+= Your Pokemon take no damage in battle.
+> I tuoi Pokémon non subiscono danni in battaglia.
+
+= Cheat: win every battle
+> Trucco: vinci ogni battaglia
+
+= The first hit on a foe's Pokemon makes it faint (a Shadow Pokemon is left with 1 HP so it can still be snagged). Nothing is forfeited: the battle goes on as a won one.
+> Il primo colpo al Pokémon avversario lo manda KO (un Pokémon Ombra resta con 1 PS per poterlo ancora rubare). Non si abbandona nulla: lo scontro continua come uno scontro vinto.
+
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= A opens the heart of every Shadow POKéMON in your party: purify them at the next chance.
+> A apre il cuore di ogni Pokémon Ombra della squadra: purificali alla prima occasione.
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Not in this version yet: the game has no safe switch for this.
+> Non ancora in questa versione: il gioco non ha un interruttore sicuro per questo.
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Every heart in your party will be open.
+> Ogni cuore della squadra sarà aperto.
+
+= ... and %zu more (see the log)
+> ... e altri %zu (vedi il registro)
+
+= Some of the packs or mods chosen for this New Game could not be loaded, even after starting the game again. The game carries on without them (the log says which).
+> Alcuni pacchetti o mod scelti per questa nuova partita non si sono potuti caricare, nemmeno dopo aver riavviato il gioco. Il gioco prosegue senza di essi (il registro dice quali).
+
+= The program file %s is missing. Your antivirus may have removed it: open Windows Security > Virus & threat protection > Protection history, restore it from there (and allow it), or unpack the game folder again. (Windows error %d)
+> Il file del programma %s manca. Forse l'antivirus lo ha rimosso: apri Sicurezza di Windows > Protezione da virus e minacce > Cronologia protezione, ripristinalo da lì (e consentilo), oppure decomprimi di nuovo la cartella del gioco. (Errore di Windows %d)

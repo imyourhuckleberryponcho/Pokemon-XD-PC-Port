@@ -203,6 +203,21 @@ if [ -x "$USUM_MODELS_DIR/usum_models" ]; then
 else
   echo "  usum_models: NOT included ($USUM_MODELS_DIR/usum_models is not there)"
 fi
+# The C++ converter of the same build (the default converter since 0.7.1; XD_USUM_CPP=0 = the frozen Python; docs/N3DS_CONVERTER_CPP.md; no Python at all) with the number lists it reads. It sits in
+# the same folder as the frozen Python (made here when there is none), runs from Contents/Resources/usum_models (the launcher resolves the link) and needs
+# only the system's libraries.
+if [ -x "$BIN/usum_models_cpp" ]; then
+  mkdir -p "$APP/Contents/Resources/usum_models"
+  [ -e "$APP/Contents/MacOS/usum_models" ] || ln -s "../Resources/usum_models" "$APP/Contents/MacOS/usum_models"
+  cp "$BIN/usum_models_cpp" "$APP/Contents/Resources/usum_models/usum_models_cpp"
+  chmod +x "$APP/Contents/Resources/usum_models/usum_models_cpp"
+  for f in usum_gen4_plan.json gen57_forms.json gen57_model_numbers.json gen57_cry_waves.json gen57_speed_numbers.json usum_dex_map.json gen57_tables.json gen4_tables.json; do
+    cp "$ROOT/tools/n3ds/$f" "$APP/Contents/Resources/usum_models/$f"
+  done
+  echo "  usum_models_cpp: included (the C++ converter, the default)"
+else
+  echo "  usum_models_cpp: NOT included ($BIN/usum_models_cpp is not there)"
+fi
 # Every helper program must stay runnable (PyInstaller's and ours): a lost execute bit shows as "Permission denied" in the launcher.
 for helper in pbr_models usum_models xd_languages; do
   if [ -d "$APP/Contents/Resources/$helper" ]; then
@@ -221,7 +236,7 @@ chmod +x "$APP/Contents/Resources/first_run_report.sh" "$DEST/first_run_report.s
 
 # Licences of what is inside (the same texts the Windows package carries).
 for f in "$ROOT/LICENSE" "$ROOT/third_party/aurora/LICENSE" "$ROOT/third_party/SDL/LICENSE.txt" \
-         "$ROOT/third_party/borealis/LICENSE" "$ROOT/third_party/monocypher/LICENCE.md"; do
+         "$ROOT/third_party/borealis/LICENSE" "$ROOT/third_party/monocypher/LICENCE.md" "$ROOT/third_party/libusb/COPYING"; do
   if [ -f "$f" ]; then cp "$f" "$APP/Contents/Resources/licenses/$(basename "$(dirname "$f")")-$(basename "$f")"; fi
 done
 

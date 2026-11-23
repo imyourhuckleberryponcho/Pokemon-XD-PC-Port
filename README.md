@@ -13,7 +13,7 @@ This repository contains **no game assets, ROMs, ISOs or executables**, and none
 You need your own legally obtained copy of the game (USA, `GXXE01`); the port reads everything from your disc
 image while it runs.
 
-## Status: public beta — version 0.7.0
+## Status: public beta — version 0.7.1
 
 **Playable from New Game into the story, with known bugs.** It is not finished: expect crashes, stalls and
 graphics differences, and keep backups of saves you care about. Downloads are on the [Releases](../../releases)
@@ -159,6 +159,21 @@ Saves, settings, mods, logs and bug reports live in one data folder (`%APPDATA%\
 - Launcher, Save page, "Where your data is kept": "Open data folder"; "Move my data..." (user folder <-> portable: it
   copies everything, checks the copy, switches, and puts the old folder in the recycle bin / trash so nothing is lost; the
   launcher then starts again); "Remove all game data..." (asks first, names the folder, offers to export your saves first).
+
+### New in 0.7.1
+
+- Runs better on weaker PCs: threads that only wait now sleep, the sound held back after a stutter shrinks back sooner (so sound stays in step with the picture), less work in the graphics translation and the cutscene video, and the sound chip about 20 percent faster (the sound is bit for bit the same). The log says at start-up whether this PC's graphics were prepared by the launcher.
+- Fewer freezes in the first battles: the launcher prepares the graphics the Battle Revolution models need too.
+- Hidden abilities in the Gen 5, 6 and 7 rule sets: a wild Pokemon at a Poke Spot has it 1 time in 20, and the Ability Patch from the Mt. Battle prize desk gives any Pokemon its hidden ability.
+- More abilities: Unnerve, Cursed Body, Harvest, Cheek Pouch, Imposter, Infiltrator (also past a Substitute), Corrosion, Dancer, Wimp Out and Emergency Exit (your own side), Power Construct, RKS System (17 Memories at the prize desk). Two-turn and trapping moves: Freeze Shock, Ice Burn, Geomancy, Phantom Force, Shell Trap, Beak Blast, Thousand Waves, Spirit Shackle, Anchor Shot. Not yet: Illusion, Sky Drop, Delta Stream's weather.
+- Gen 5-7 Pokemon also work on Pokemon XG.
+- A cheat menu (Enhanced): switch on "Enable cheats" in SETTINGS, then F5 (or hold L + R and press START) opens it: catching, EXP multiplier, money, items, Rare Candies, shiny chance, perfect IVs / EVs, no damage, win battles, instant purification. A save that used cheats is marked; it can't join competitive online rooms.
+- The Ultra Sun / Ultra Moon converter is now built into the program: about 3 times faster and uses far less memory.
+- A decrypted digital copy (.cia) of Ultra Sun / Ultra Moon works like a cartridge dump.
+- Nintendo's GameCube controller adapter is found (Windows needs the same driver Dolphin uses).
+- Mods can add up to 4096 new Pokemon, moves and items each (was 1024).
+- Fixed: a crash at New Game when both the Battle Revolution and the Ultra Sun / Ultra Moon models were made; new Pokemon showing blank (no name) with Gen 5-7 and the Fairy type both on; Gen 4 Pokemon missing their Ultra Sun / Ultra Moon models and a very long "check your mods" box; endless restarts when a New Game's Pokemon could not be loaded (XG); a plainer message when an antivirus removed the game's program; Pokedex pictures no longer caught mid-blink.
+
 
 ### New in 0.7.0
 

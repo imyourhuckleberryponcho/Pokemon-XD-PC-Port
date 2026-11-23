@@ -33,6 +33,7 @@ for sub in ('pbr_survey', 'pbr_convert'):
 import gen57_data as D
 import gen57_pack as P
 import gen57_all as A
+import gen57_speed as SP
 import concurrent.futures as cf
 
 FORMS_VERSION = 1
@@ -111,7 +112,8 @@ def stone_doc(u, i, lang, nat=None):
 _W = {}
 
 
-def _init(rom, xd_disc):
+def _init(rom, xd_disc, ladder=None):
+    _W['ladder'] = ladder or {}
     import pbr_models as PM
     import usum_models as UM
     PM.find_nod()
@@ -146,13 +148,8 @@ def _convert_form(job):
         p = u.personal(record)
 
 
-        for side, dec, atol, ctol, quant in ((256, 2600, 1, 1, 0), (256, 2600, 3, 2, 0), (128, 2600, 3, 2, 0), (128, 2600, 8, 3, 0), (128, 2600, 16, 3, 32),
-                                             (128, 2600, 16, 4, 16), (128, 2000, 24, 4, 16), (64, 1600, 24, 5, 12), (64, 1200, 32, 6, 8), (64, 900, 32, 6, 8), (64, 600, 32, 6, 8)):
-            pkx, info = gf_to_xd.convert(gm, texs, mots, xd_bytes, mode='role', log=lambda t: None,
-                                         opts=dict(ground=True, decimate=dec, fire=True, light=1.0, eyes=True, size_rule='mainline', max_side=side,
-                                                   height_cm=p.height_cm, hover_rule='model', match=False, anim_tol=atol, chan_tol=ctol, quant=quant), hover=None)
-            if len(pkx) <= 614400:
-                break
+        pkx, info, _step = SP.convert_ladder(gf_to_xd.convert, gm, texs, mots, xd_bytes, p.height_cm, start=_W.get('ladder', {}).get(nm, 0),
+                                             record=SP.record_path('form', nm))
         if len(pkx) > 614400:
             return 'overcap', dict(size=len(pkx))
     except BaseException as e:
@@ -292,7 +289,7 @@ def main():
 
     statuses = {}
     if not a.no_models:
-        with cf.ProcessPoolExecutor(max_workers=min(a.jobs, 14), initializer=_init, initargs=(a.rom, a.xd_disc)) as ex:
+        with cf.ProcessPoolExecutor(max_workers=min(a.jobs, 14), initializer=_init, initargs=(a.rom, a.xd_disc, SP.load(a.rom).get('forms', {}))) as ex:
             futs = {ex.submit(_convert_form, j): j for j in jobs}
             for i, f in enumerate(cf.as_completed(futs)):
                 job = futs[f]
@@ -423,6 +420,8 @@ def main():
                 bst=pr['rep']['bst'], notes=pr['notes'], model=mreport.get(pr['key'])) for pr in prepared]
     json.dump(rep, open(os.path.join(pack, 'forms_report.json'), 'w'), indent=1)
     shutil.rmtree(tmp, ignore_errors=True)
+    import gen57_patch
+    gen57_patch.add(pack)
     print('forms', len(prepared), 'rows;', len(item_rows), 'items;', len(toc_rows), 'models;', len(add_ids), 'new ability names')
 
 

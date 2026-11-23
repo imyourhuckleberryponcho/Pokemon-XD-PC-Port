@@ -48,6 +48,10 @@ Full page: [battle-effects.md](../modding/battle-effects.md). In short for an as
 - More blocks: `force_switch`, `terrain`, `side` (`aurora_veil`, `sticky_web`), `set_ability`, `cure_status`, `hurt_dealt`, `moody`, `stat: "best"`. Move keys: `crit`, `ignore_boosts`,
   `use_target_attack`, `defend_stat`, `first_turn_only`, `power_formula`, `protect`. Ability keys: `hit`, `hit_dealt`, `fainted`, `stat_dropped`, `any_faint`, `contrary`, `no_contact`, `convert`, `aura`,
   `breaks_auras`, `immune_moves`, `accuracy_against`, `accuracy_dealt`, `crit_when`. Tests: `target_status:x`, `user_status:x`, `terrain:x`, `{"move_in": [...]}`, `hp_crossed_half`.
+- 0.7.1: ability keys `unnerve`, `disable_on_hit` (percent), `poison_any_type`, `infiltrator`, `strong_wind`, `berry_eaten` (blocks), `half_hp` (blocks; `{"switch_out": "user"}` sends the owner back at the end of the move that hurt it), `type_by_item`, `dancer` (list of move names; the first other owner copies a dance move at once); move keys `needs_physical_hit` (Shell Trap), `heats_up` (Beak Blast), `type_from_user` (Multi-Attack)
+  (`[{"item","type"}]`); blocks `restore_berry`, `transform` (`{foe}` in its message); move key `charge` (`{"donor": "<a game two-turn move>", "message": "..."}`, up to 8: the donor's script is copied with
+  your charge words; donor `Fly` / `Dig` / `Dive` / `Bounce` = a vanish move, the donor's own words; status `trap` = Mean Look's state on the target (`"when": "!target_type:ghost"`); `effects` run after the hit, or with the second turn for a move with no damage); file part `hidden_abilities` (`{"<species name or National Dex number>": <ability name or number>}`;
+  only the Gen 5-7 rule sets use it; the chance of getting one is a placeholder rule in `games/xd/src/hidden_ability.cpp`).
 - Do not promise: `force_double` (not built), a Luau function that returns effects, the trainer AI knowing absorb / bounce abilities.
 - Random numbers: a block with `"chance"` below 100 draws one number of the game's own generator when it runs; never draw others. Online: the digest of the `battle`
   files is in the room fingerprint.

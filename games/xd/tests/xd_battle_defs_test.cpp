@@ -104,6 +104,70 @@ int main() {
   Defs gb;
   ParseFile("m", "battle/gb.json", R"({"moves": {"Hex": {"crit": "sometimes"}, "Flame Charge": {"protect": "x"}}})", Resolve, gb);
   CHECK(gb.moves.empty() && gb.problems.size() == 2);
+
+  Defs h;
+  ParseFile("m", "battle/h.json", R"({
+    "moves": { "Flame Charge": { "charge": { "donor": "Hex", "message": "{name} is charging!" }, "effects": [ {"status": "burn", "target": "target", "chance": 30} ] } },
+    "abilities": {
+      "Unnerve": { "id": 127, "unnerve": true },
+      "Cursed Body": { "id": 130, "disable_on_hit": 30 },
+      "Harvest": { "id": 139, "end_of_turn": [ {"restore_berry": true, "chance": 50, "when": "!weather:sun"} ] },
+      "Cheek Pouch": { "id": 167, "berry_eaten": [ {"heal": 33.3} ] },
+      "Imposter": { "id": 150, "switch_in": [ {"transform": true, "message": "{name} transformed into {foe}!"} ] },
+      "Wimp Out": { "id": 193, "half_hp": [ {"switch_out": "user"} ] },
+      "Corrosion": { "id": 212, "poison_any_type": true },
+      "Infiltrator": { "id": 151, "infiltrator": true },
+      "Delta Stream": { "id": 191, "strong_wind": true },
+      "RKS System": { "id": 225, "type_by_item": [ {"item": "Leftovers", "type": "fire"}, {"item": "No Such Memory", "type": "water"} ] }
+    },
+    "hidden_abilities": { "555": 161, "Hex": "Clear Body", "Bite": 999 }
+  })", Resolve, h);
+  Finish(h);
+  CHECK(h.moves.size() == 1 && h.moves[0].chargeDonor == 381 && h.moves[0].chargeMessage == "{name} is charging!" && h.moves[0].effects.size() == 1);
+  CHECK(h.abilities.size() == 10);
+  CHECK(h.abilities[0].unnerve && h.abilities[1].disableOnHit == 30 && h.abilities[6].poisonAnyType && h.abilities[7].infiltrator && h.abilities[8].strongWind);
+  CHECK(h.abilities[2].endOfTurn.size() == 1 && h.abilities[2].endOfTurn[0].kind == BlockKind::RestoreBerry && h.abilities[2].endOfTurn[0].chance == 50);
+  CHECK(h.abilities[3].berryEaten.size() == 1 && h.abilities[3].berryEaten[0].permille == 333);
+  CHECK(h.abilities[4].switchIn[0].kind == BlockKind::Transform && !h.abilities[4].switchIn[0].onUser);
+  CHECK(h.abilities[5].halfHp.size() == 1 && h.abilities[5].halfHp[0].kind == BlockKind::SwitchOut);
+  CHECK(h.abilities[9].typeByItem.size() == 1 && h.abilities[9].typeByItem[0].item == 200 && h.abilities[9].typeByItem[0].type == 10);
+  CHECK(h.hiddenNat.size() == 1 && h.hiddenNat.at(555) == 161 && h.hiddenRow.size() == 0);
+  CHECK(h.problems.size() >= 1);
+  const uint64_t hd = Digest(h);
+  Defs h2 = h;
+  h2.abilities[0].unnerve = false;
+  CHECK(Digest(h2) != hd);
+  Defs h3 = h;
+  h3.moves[0].chargeMessage = "other";
+  CHECK(Digest(h3) != hd);
+  Defs h4 = h;
+  h4.hiddenNat[555] = 1;
+  CHECK(Digest(h4) != hd);
+
+  Defs r3;
+  ParseFile("m", "battle/r3.json", R"({
+    "moves": { "Hex": { "needs_physical_hit": true }, "Bite": { "heats_up": true }, "Flame Charge": { "type_from_user": true } },
+    "abilities": { "Dancer": { "id": 216, "dancer": ["Hex", "Bite", "No Such Move"] } }
+  })", Resolve, r3);
+  Finish(r3);
+  CHECK(r3.moves.size() == 3 && r3.abilities.size() == 1);
+  CHECK(r3.abilities[0].dancer.size() == 2);
+  bool shell = false, beak = false, user = false;
+  for (const auto& m : r3.moves) { shell |= m.needsPhysicalHit; beak |= m.heatsUp; user |= m.typeFromUser; }
+  CHECK(shell && beak && user);
+  const uint64_t r3d = Digest(r3);
+  Defs r3b = r3;
+  r3b.abilities[0].dancer.pop_back();
+  CHECK(Digest(r3b) != r3d);
+  Defs r3c = r3;
+  r3c.moves[0].heatsUp = !r3c.moves[0].heatsUp;
+  CHECK(Digest(r3c) != r3d);
+  Defs none;
+  ParseFile("m", "battle/n.json", R"({"abilities": { "Moxie": { "id": 153, "ko": [ {"stat": "atk", "stages": 1} ] } }})", Resolve, none);
+  Finish(none);
+  Defs none2 = none;
+  none2.abilities[0].unnerve = false;
+  CHECK(Digest(none) == Digest(none2));
   Defs broken;
   ParseFile("m", "battle/c.json", "{ not json", Resolve, broken);
   CHECK(broken.problems.size() == 1);

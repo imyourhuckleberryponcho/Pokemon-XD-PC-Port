@@ -33,13 +33,15 @@ PBR_MODELS = os.path.join(ROOT, 'build', 'pbr_models_dist', 'pbr_models')
 
 
 USUM_MODELS = os.path.join(ROOT, 'build', 'usum_models_dist', 'usum_models')
+USUM_CPP_DATA = ('usum_gen4_plan.json', 'gen57_forms.json', 'gen57_model_numbers.json', 'gen57_cry_waves.json', 'gen57_speed_numbers.json', 'usum_dex_map.json', 'gen57_tables.json', 'gen4_tables.json')
 
 
 PROGRAMS = ['xd_launcher.exe', 'xd.exe']
 
 
 PIPELINE_LIST = 'initial_pipeline_cache.db'
-LIBRARIES = ['SDL3.dll', 'webgpu_dawn.dll', 'nod.dll', 'dxcompiler.dll', 'dxil.dll', 'zlib1.dll', 'libpng16.dll']
+LIBRARIES = ['SDL3.dll', 'webgpu_dawn.dll', 'nod.dll', 'dxcompiler.dll', 'dxil.dll', 'zlib1.dll', 'libpng16.dll',
+             'libusb-1.0.dll']
 RUNTIME = ['msvcp140.dll', 'msvcp140_1.dll', 'msvcp140_2.dll', 'msvcp140_atomic_wait.dll', 'vcruntime140.dll',
            'vcruntime140_1.dll']
 FONTS = ['Inter-Regular.ttf', 'Inter-SemiBold.ttf', 'InterDisplay-Bold.ttf', 'OFL.txt', 'NotoSansJP-Regular-subset.ttf',
@@ -98,6 +100,20 @@ folder next to that save's card (for your first save: @BACKUPS@). To go back to 
 launcher's Save page, pick the save, choose a backup under "Backups" and press "Restore..." (with the game
 closed); the save it replaces is backed up first. Still, copy the folder @CARDTOP@
 somewhere safe now and then.
+
+GameCube controller adapter
+---------------------------
+Nintendo's USB adapter for the Wii U / Switch (WUP-028, the black one with the four ports) works, like in Dolphin,
+but Windows needs a one-time step: a small driver for it.
+1. Plug the adapter in (both its USB plugs; the switch next to the cable on "Wii U", not "PC"), with a controller
+   in one of its ports.
+2. Download Zadig (free, zadig.akeo.ie), start it, open Options > List All Devices, choose "WUP-028" (the adapter,
+   USB ID 057E 0337), pick "WinUSB" as the driver and click "Replace Driver". Wait until it says it worked.
+3. Unplug the adapter and plug it in again. The launcher's Controls page then lists "Nintendo GameCube
+   Controller" and its Controller 1-4 tabs can use the four ports (set Controller 2-4 to Auto).
+If the adapter is plugged in but has no driver, the Controls page says so. Other programs that use the adapter
+through its Nintendo driver (the Dolphin "GameCube Adapter for Wii U" driver also uses WinUSB) are the same step.
+Details and the Linux / Mac steps: docs/GAMECUBE_ADAPTER.md.
 
 Settings inside the game
 ------------------------
@@ -184,6 +200,7 @@ NOTICES = """Parts made by others, used by this program
 Their licences are in this folder where the project ships them; otherwise see the links.
 
 SDL 3                  zlib licence                         https://libsdl.org
+libusb                LGPL 2.1 (separate library file)     https://libusb.info  (GameCube adapter; libusb-1.0 next to the programs, you may replace it)
 Dear ImGui             MIT licence                          https://github.com/ocornut/imgui
 Aurora                 MIT licence                          https://github.com/encounter/aurora
 Borealis               see its licence                      https://github.com/encounter/borealis
@@ -220,7 +237,8 @@ def licence_files(build_bin):
     build = os.path.dirname(build_bin)
     out = []
     for name, rel in (('SDL3', 'third_party/SDL/LICENSE.txt'), ('Aurora', 'third_party/aurora/LICENSE'),
-                      ('Borealis', 'third_party/borealis/LICENSE')):
+                      ('Borealis', 'third_party/borealis/LICENSE'),
+                      ('libusb (LGPL-2.1)', 'third_party/libusb/COPYING')):
         p = os.path.join(ROOT, rel)
         if os.path.isfile(p):
             out.append((name + '.txt', p))
@@ -304,6 +322,19 @@ def main():
     if os.path.isfile(os.path.join(USUM_MODELS, 'usum_models.exe')):
         shutil.copytree(USUM_MODELS, os.path.join(game, 'usum_models'))
         print('usum_models: the frozen Python converter (game/usum_models)')
+
+
+    cpp_usum = os.path.join(build, 'usum_models_cpp.exe')
+    if os.path.isfile(cpp_usum):
+        os.makedirs(os.path.join(game, 'usum_models'), exist_ok=True)
+        shutil.copy2(cpp_usum, os.path.join(game, 'usum_models'))
+        for f in USUM_CPP_DATA:
+            shutil.copy2(os.path.join(ROOT, 'tools', 'n3ds', f), os.path.join(game, 'usum_models'))
+
+        for f in RUNTIME if crt else []:
+            if os.path.isfile(os.path.join(crt, f)):
+                shutil.copy2(os.path.join(crt, f), os.path.join(game, 'usum_models'))
+        print('usum_models_cpp: the C++ converter, test switch XD_USUM_CPP=1 (game/usum_models)')
 
 
     lang_dir = os.path.join(game, 'xd_languages')

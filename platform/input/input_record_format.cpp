@@ -255,6 +255,12 @@ std::string FormatDevMenu(const DevMenuLine& d) {
   return line + d.action;
 }
 
+std::string FormatCheat(const DevMenuLine& d) {
+  char line[64];
+  std::snprintf(line, sizeof line, "CHEAT frame %u field %u ", d.frame, d.field);
+  return line + d.action;
+}
+
 std::string FormatPhoto(uint32_t frame, uint32_t field, const std::string& what) {
   char line[64];
   std::snprintf(line, sizeof line, "PHOTO frame %u field %u ", frame, field);
@@ -365,6 +371,17 @@ bool ParseLine(const std::string& line, Recording& into) {
       d.action += (i > 5 ? " " : "") + w[i];
     }
     into.devMenu.push_back(d);
+    return true;
+  }
+  if (w[0] == "CHEAT") {
+    DevMenuLine d;
+    if (!ParseFrameField(w, d.frame, d.field) || w.size() < 6) {
+      return false;
+    }
+    for (size_t i = 5; i < w.size(); i++) {
+      d.action += (i > 5 ? " " : "") + w[i];
+    }
+    into.cheats.push_back(d);
     return true;
   }
   if (w[0] == "SETTINGS") {

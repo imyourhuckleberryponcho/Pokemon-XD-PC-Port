@@ -140,7 +140,9 @@ unsigned sCapBoss = 0;
 unsigned sCapWonChanges = 0;
 bool sCapInStory = false;
 
+extern "C" int PortXD_CheatIgnoresLevelCap(void);
 void SetLimit(int level, const char* why) {
+  if (PortXD_CheatIgnoresLevelCap() != 0) level = 100;
   if (xdExpLevelLimit == level) return;
   std::fprintf(stderr, "[challenge] level_cap: the game's experience limit %d -> %d (%s)\n", xdExpLevelLimit, level, why);
   xdExpLevelLimit = static_cast<unsigned char>(level);

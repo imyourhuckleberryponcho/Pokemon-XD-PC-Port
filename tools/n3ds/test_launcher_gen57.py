@@ -64,6 +64,8 @@ def run_launcher(a, steps, log_name, timeout):
     env.pop('XD_CARD_DIR', None)
     env.update({'APPDATA': os.path.join(out, 'appdata'), 'XD_SETTINGS_DIR': data, 'XD_LAUNCHER_RENDER': '0', 'XD_LAUNCHER_SHADERS': '0', 'XD_WINDOW_OFFSCREEN': '1',
                 'XD_SKIP_DISC_HASH': '1'})
+    if os.environ.get('XD_USUM_CPP'):
+        env['XD_USUM_CPP'] = os.environ['XD_USUM_CPP']
     env['XD_LAUNCHER_SCRIPT'] = '|'.join(s.replace('%S%', shots) for s in steps)
     log = os.path.join(out, log_name)
     t = time.time()

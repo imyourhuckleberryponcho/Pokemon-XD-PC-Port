@@ -204,6 +204,12 @@ Process* StartProgram(const StartRequest& request, std::string& error) {
   }
   if (!started) {
     if (job != nullptr) CloseHandle(job);
+    if (startError == ERROR_FILE_NOT_FOUND || startError == ERROR_PATH_NOT_FOUND || startError == ERROR_VIRUS_INFECTED || startError == ERROR_VIRUS_DELETED) {
+      error = Fmt(Tr("The program file %s is missing. Your antivirus may have removed it: open Windows Security > Virus & threat protection > Protection history, "
+                     "restore it from there (and allow it), or unpack the game folder again. (Windows error %d)"),
+                  Utf8(fs::path(program).filename()).c_str(), static_cast<int>(startError));
+      return nullptr;
+    }
     error = Fmt(Tr("Windows error %d"), static_cast<int>(startError));
     return nullptr;
   }

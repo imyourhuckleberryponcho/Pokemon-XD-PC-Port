@@ -1,0 +1,116 @@
+diff --git a/lib/dolphin/thp/THPDec.cpp b/lib/dolphin/thp/THPDec.cpp
+--- a/lib/dolphin/thp/THPDec.cpp
++++ b/lib/dolphin/thp/THPDec.cpp
+@@ -5,6 +5,7 @@
+ #include <algorithm>
+ #include <array>
+ #include <cmath>
++#include <cstring>
+ 
+ namespace {
+ // Error codes
+@@ -295,31 +296,42 @@
+   }
+ }
+ 
++// Reads the scan's bits, most significant first. Bytes are taken from the data only as far as the bits asked for
++// need them (never a byte ahead), and fewer than 8 bits are ever kept over, so what is read is the same as reading
++// bit by bit from the data, without the index arithmetic for every bit (speed only; same output).
+ class BitReader {
+ public:
+-  BitReader(const u8* data, size_t byteOffset) noexcept : mData{data}, mBitPosition{byteOffset * 8} {}
++  BitReader(const u8* data, size_t byteOffset) noexcept : mData{data + byteOffset} {}
+ 
+   u32 read(u8 count) noexcept {
+-    u32 value = 0;
+-    for (u8 i = 0; i < count; ++i) {
+-      const size_t bytePosition = mBitPosition >> 3;
+-      value = (value << 1) | ((mData[bytePosition] >> (7 - (mBitPosition & 7))) & 1);
+-      ++mBitPosition;
+-    }
+-    return value;
+-  }
+-
+-  void byte_align() noexcept { mBitPosition = (mBitPosition + 7) & ~size_t{7}; }
++    while (mHave < count) {
++      mBits = (mBits << 8) | *mData++;
++      mHave += 8;
++    }
++    mHave -= count;
++    return static_cast<u32>(mBits >> mHave) & ((u32{1} << count) - 1);
++  }
++
++  u32 read_bit() noexcept {
++    if (mHave == 0) {
++      mBits = *mData++;
++      mHave = 8;
++    }
++    return static_cast<u32>(mBits >> --mHave) & 1;
++  }
++
++  void byte_align() noexcept { mHave = 0; }
+ 
+ private:
+   const u8* mData;
+-  size_t mBitPosition;
++  u32 mBits = 0; // (the low mHave bits are not yet used)
++  u8 mHave = 0;
+ };
+ 
+ bool decode_huffman(BitReader& reader, const HuffmanTable& table, u8& symbol) noexcept {
+   u32 code = 0;
+   for (size_t length = 1; length <= 16; ++length) {
+-    code = (code << 1) | reader.read(1);
++    code = (code << 1) | reader.read_bit();
+     const u32 firstCode = table.firstCodes[length];
+     const u32 count = table.counts[length];
+     if (code >= firstCode && code - firstCode < count) {
+@@ -460,6 +472,32 @@
+ 
+ std::array<u8, 64> inverse_dct(const std::array<s16, 64>& coefficients,
+                                const QuantizationTable& quantization) noexcept {
++  // Only the DC coefficient set (flat blocks, common in video): the row pass gives every column of row 0 the same value
++  // and the other rows 0, so all 8 columns go through the column pass with the same input: do it once. The same
++  // arithmetic on the same numbers as below, so the same pixels.
++  {
++    s32 any = 0;
++    for (size_t i = 1; i < 64; ++i) {
++      any |= coefficients[i];
++    }
++    if (any == 0) {
++      FloatRow input{};
++      input[0] = static_cast<float>(coefficients[0]) * quantization.values[0];
++      for (size_t row = 1; row < 8; ++row) {
++        input[row] = static_cast<float>(coefficients[row * 8]) * quantization.values[row * 8];
++      }
++      const FloatRow transformed = transform_column(input);
++      std::array<u8, 64> flat{};
++      for (size_t row = 0; row < 8; ++row) {
++        const float scaled = transformed[row] * 0.125f;
++        const u8 pixel = scaled <= 0.0f ? 0 : scaled >= 255.0f ? 255 : static_cast<u8>(scaled);
++        for (size_t column = 0; column < 8; ++column) {
++          flat[row * 8 + column] = pixel;
++        }
++      }
++      return flat;
++    }
++  }
+   std::array<float, 64> workspace{};
+   for (size_t row = 0; row < 8; ++row) {
+     const s16* rowCoefficients = &coefficients[row * 8];
+@@ -507,6 +545,15 @@
+ 
+ void write_block(u8* output, u16 width, u16 height, u16 blockX, u16 blockY, const std::array<u8, 64>& pixels) noexcept {
+   const size_t tilesPerRow = (width + 7) / 8;
++  if (blockX + 8 <= width && blockY + 8 <= height) {
++    // A whole block inside the picture (blocks start on multiples of 8): each row is 8 bytes in a row of its tile.
++    for (u16 row = 0; row < 8; ++row) {
++      const u16 y = blockY + row;
++      const size_t tile = static_cast<size_t>(y / 4) * tilesPerRow + blockX / 8;
++      std::memcpy(output + tile * 32 + static_cast<size_t>(y & 3) * 8, &pixels[row * 8], 8);
++    }
++    return;
++  }
+   for (u16 row = 0; row < 8 && blockY + row < height; ++row) {
+     for (u16 column = 0; column < 8 && blockX + column < width; ++column) {
+       const u16 x = blockX + column;

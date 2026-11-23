@@ -37,7 +37,7 @@ sys.path.insert(0, HERE)
 BASE_END = 8
 STAGES = [('tables', 8, 9), ('models', 9, 44), ('data', 44, 47), ('forms', 47, 55), ('faces', 55, 76), ('entries', 76, 78), ('pictures', 78, 95), ('check', 95, 100)]
 
-GEN57_VERSION = 2
+GEN57_VERSION = 5
 FIRST_PICTURE_ROW = 1
 
 
@@ -257,7 +257,8 @@ def make_gen57(a, converter_version):
     low_priority()
     skip = set(x for x in a.gen57_skip.split(',') if x)
     nats = [int(x) for x in a.gen57_only.split(',')] if a.gen57_only else list(range(A.FIRST, A.LAST + 1))
-    jobs = a.jobs or max(1, min(8, (os.cpu_count() or 2) - 2))
+    import gen57_memory
+    jobs = a.jobs or gen57_memory.workers_for(max(1, min(8, gen57_memory.cpu_count() - 2)), log)
     pack = os.path.join(work, 'pack')
     pack_f = os.path.join(work, 'pack_forms')
     gen4 = os.path.abspath(a.gen4_pack)

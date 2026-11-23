@@ -136,6 +136,8 @@ void PortInput_SetCheckValue(const char* name, uint32_t (*value)(void), uint32_t
 bool PortXD_DevMenuInit(void);
 void PortXD_DevMenuToggle(void);
 void PortXD_DevMenuFrame(void);
+void PortXD_CheatsFrame(void);
+void PortXD_CheatTopUp(void);
 void PortXD_ModReloadKey(void);
 void PortXD_ModReloadFrame(void);
 void PortXD_PcTradeFrame(void);
@@ -334,6 +336,8 @@ static void frame_hook(void) {
   PortXD_HeapCheckFrame();
   PortXD_ShadersFrame();
   PortXD_DevMenuFrame();
+  PortXD_CheatsFrame();
+  PortXD_CheatTopUp();
   PortXD_ModReloadFrame();
   PortXD_PcTradeFrame();
   PortPhoto_Frame(handle_events);

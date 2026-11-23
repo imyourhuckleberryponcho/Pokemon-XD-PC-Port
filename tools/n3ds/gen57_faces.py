@@ -96,6 +96,7 @@ def head_from_silhouette(path, view, share=0.22):
 
 
 def _link(link, target):
+    link = os.path.abspath(link)
     if os.path.lexists(link):
         if sys.platform == 'win32':
             subprocess.run(['cmd', '/c', 'rmdir', link], capture_output=True)
@@ -120,7 +121,7 @@ def run_renderer(xd_exe, disc, pack, gen4_pack, work, items, tag, size=RENDER, t
         f.write('format = 1\npreset = original\n')
     env = dict(os.environ, APPDATA=ad, XD_SETTINGS_DIR=st, XD_CARD_DIR=os.path.join(work, 'card_' + tag), XD_CACHE_DIR=os.path.join(work, 'cache_' + tag),
                XD_WINDOW_OFFSCREEN='1', SDL_WINDOW_ACTIVATE_WHEN_SHOWN='0', XD_NO_MESSAGE_BOXES='1', SDL_AUDIODRIVER='dummy', SDL_AUDIO_DRIVER='dummy',
-               XD_CHALLENGES='gen4_pokemon,gen57_pokemon', XD_RENDER_ICON=','.join(items), XD_RENDER_ICON_DIR=out, XD_RENDER_ICON_SIZE=str(size))
+               XD_DETERMINISTIC='1', XD_RENDER_ICON_POSE='0', XD_CHALLENGES='gen4_pokemon,gen57_pokemon', XD_RENDER_ICON=','.join(items), XD_RENDER_ICON_DIR=out, XD_RENDER_ICON_SIZE=str(size))
     try:
         with open(os.path.join(work, 'render_%s.log' % tag), 'w') as lg:
             subprocess.run([xd_exe, disc], env=env, stdout=lg, stderr=subprocess.STDOUT, timeout=timeout)

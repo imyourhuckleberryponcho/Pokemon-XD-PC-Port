@@ -1,6 +1,8 @@
 #ifndef XD_GEN57_H
 #define XD_GEN57_H
 
+#include "xd_gen4_xg.h"
+
 #include <mods.h>
 
 #include <cstdint>
@@ -26,6 +28,8 @@ void ApplyMainTables();
 
 void AppendAbilityTexts(std::vector<std::pair<uint32_t, std::string>>& texts);
 void InstallAbilityRows();
+bool XgInfo(xd::gen4::xg::Gen57Info& out);
+std::vector<std::string> AbilityNamesForXG();
 const char* AbilityName(uint32_t id);
 
 }

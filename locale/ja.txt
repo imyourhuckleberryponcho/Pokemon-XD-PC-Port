@@ -6449,14 +6449,14 @@
 = From a %s dump. %s
 > %s のダンプから。%s
 
-= %s dump file (.3ds / .cci)
-> %s のダンプファイル(.3ds / .cci)
+= %s dump file (.3ds / .cci / .cia)
+> %s のダンプファイル(.3ds / .cci / .cia)
 
 = Choose dump...
 > ダンプを選ぶ...
 
-= 3DS game dumps (3DS, CCI)
-> 3DSのゲームダンプ(3DS, CCI)
+= 3DS game dumps (3DS, CCI, CIA)
+> 3DSのゲームダンプ(3DS, CCI, CIA)
 
 = Looking at the dump file...
 > ダンプファイルを調べています...
@@ -7028,17 +7028,8 @@
 = Copy the ticked Pokemon into the PC boxes
 > チェックしたポケモンをPCボックスにコピーする
 
-= That is a folder. The converter needs the cartridge dump as one file (.3ds or .cci); an unpacked folder can't be used yet.
-> それはフォルダです。変換プログラムには、カートリッジダンプを1つのファイル(.3ds または .cci)として渡す必要があります。展開したフォルダはまだ使えません。
-
-= That is a .cia file (an installable copy). The converter needs the decrypted cartridge dump (.3ds or .cci); a .cia can't be used yet.
-> それは .cia ファイル(インストール用のコピー)です。変換プログラムには、復号済みのカートリッジダンプ(.3ds または .cci)が必要です。.cia はまだ使えません。
-
 = That file can't be opened.
 > そのファイルを開けません。
-
-= That is not a 3DS cartridge dump (.3ds or .cci). A .cia, an .nds / .gba file or a disc image can't be used here.
-> それは3DSのカートリッジダンプ(.3ds または .cci)ではありません。.cia、.nds / .gba ファイル、ディスクイメージはここでは使えません。
 
 = That dump has no game in it (its first partition is empty).
 > そのダンプにはゲームが入っていません(最初のパーティションが空です)。
@@ -7304,8 +7295,8 @@
 = Ultra Sun / Ultra Moon dump file (for models)
 > ウルトラサン / ウルトラムーンのダンプファイル(モデル用)
 
-= The decrypted Pokemon Ultra Sun or Ultra Moon dump (.3ds / .cci) the launcher's Extra assets page makes the Ultra Sun / Ultra Moon models from (empty: none chosen yet).
-> ランチャーの「追加アセット」ページが、ウルトラサン / ウルトラムーンのモデルを作るときに使う、復号済みのポケモンウルトラサンまたはウルトラムーンのダンプ(.3ds / .cci)です(空: まだ選んでいません)。
+= The decrypted Pokemon Ultra Sun or Ultra Moon dump (.3ds / .cci / .cia) the launcher's Extra assets page makes the Ultra Sun / Ultra Moon models from (empty: none chosen yet).
+> ランチャーの「追加アセット」ページが、ウルトラサン / ウルトラムーンのモデルを作るときに使う、復号済みのポケモンウルトラサンまたはウルトラムーンのダンプ(.3ds / .cci / .cia)です(空: まだ選んでいません)。
 
 = Reload mods while playing (developers)
 > プレイ中にMODを再読み込みする(開発者向け)
@@ -8067,8 +8058,8 @@
 = There are a lot of assets to unpack and convert for the Gen 5, 6 and 7 Pokemon. This may take a while (often 15-30 minutes, longer on slower PCs). You can keep using the launcher or play while it works; the launcher stays open until it is done. If you close it, it continues where it stopped next time.
 > 第5・第6・第7世代のポケモン用に、展開して変換するデータがとてもたくさんあります。時間がかかることがあります（たいてい15〜30分、遅いPCではもっと）。作業中もランチャーを使ったり、ゲームを遊んだりできます。終わるまでランチャーは開いたままです。閉じた場合は、次回、止まったところから続けます。
 
-= The program usum_models, which ships with the game, converts the Pokemon models in your own Ultra Sun or Ultra Moon dump into XD's model format, in the folder extra_assets\\usum in your data folder. The dump must be a decrypted cartridge dump (.3ds or .cci); a .cia file, an encrypted dump or a folder can't be used yet. Your XD disc (the Disc page) is needed too: it says which models XD has. The models and the Gen 4 pack take about ten minutes; the Gen 5, 6 and 7 Pokemon (models, forms, moves, abilities, cries, faces and Pokedex pictures) take much longer, but they are made in the background: you can keep using the launcher or play meanwhile. Afterwards pick "Models: Ultra Sun / Ultra Moon" or the Gen 4 / Gen 5-7 choices in a New Game's setup.
-> ゲームに同梱のプログラム usum_models が、お手持ちのウルトラサン／ウルトラムーンのダンプにあるポケモンのモデルを、XD のモデル形式に変換し、データフォルダー内の extra_assets\\usum に保存します。ダンプは復号済みのカートリッジダンプ（.3ds または .cci）である必要があります。.cia ファイル、暗号化されたダンプ、フォルダーはまだ使えません。XD のディスク（ディスクページ）も必要です。XD にどのモデルがあるかを調べるためです。モデルと第4世代パックは約10分、第5〜7世代のポケモン（モデル、フォルム、わざ、とくせい、なき声、顔、図鑑の画像）はずっと長くかかりますが、バックグラウンドで作られるので、その間もランチャーを使ったりゲームを遊んだりできます。終わったら、ニューゲームの設定で「モデル：ウルトラサン／ウルトラムーン」または第4世代・第5〜7世代の選択肢を選んでください。
+= The program usum_models, which ships with the game, converts the Pokemon models in your own Ultra Sun or Ultra Moon dump into XD's model format, in the folder extra_assets\\usum in your data folder. The dump must be a decrypted copy: a cartridge dump (.3ds or .cci) or a digital copy (.cia). An encrypted copy, an update or DLC .cia, or a folder can't be used. Your XD disc (the Disc page) is needed too: it says which models XD has. The models and the Gen 4 pack take about ten minutes; the Gen 5, 6 and 7 Pokemon (models, forms, moves, abilities, cries, faces and Pokedex pictures) take much longer, but they are made in the background: you can keep using the launcher or play meanwhile. Afterwards pick "Models: Ultra Sun / Ultra Moon" or the Gen 4 / Gen 5-7 choices in a New Game's setup.
+> ゲームに同梱のプログラム usum_models が、お手持ちのウルトラサン／ウルトラムーンのダンプにあるポケモンのモデルを、XD のモデル形式に変換し、データフォルダー内の extra_assets\\usum に保存します。ダンプは復号済みのコピー(カートリッジダンプの .3ds / .cci、またはデジタル版の .cia)である必要があります。暗号化されたコピー、アップデートや DLC の .cia、フォルダーは使えません。XD のディスク（ディスクページ）も必要です。XD にどのモデルがあるかを調べるためです。モデルと第4世代パックは約10分、第5〜7世代のポケモン（モデル、フォルム、わざ、とくせい、なき声、顔、図鑑の画像）はずっと長くかかりますが、バックグラウンドで作られるので、その間もランチャーを使ったりゲームを遊んだりできます。終わったら、ニューゲームの設定で「モデル：ウルトラサン／ウルトラムーン」または第4世代・第5〜7世代の選択肢を選んでください。
 
 = Writing Pokedex entries
 > ポケモン図鑑の説明文を書き込み中
@@ -8076,3 +8067,610 @@
 = There are a lot of assets to unpack and convert for the Gen 5, 6 and 7 Pokemon. This may take a while (often 45 minutes to 1.5 hours, longer on slower PCs). You can keep using the launcher or play while it works; the launcher stays open until it is done. If you close it, it continues where it stopped next time.
 > 第5・第6・第7世代のポケモン用に、展開して変換するデータがとてもたくさんあります。時間がかかることがあります（たいてい45分〜1時間半、遅いPCではもっと）。作業中もランチャーを使ったり、ゲームを遊んだりできます。終わるまでランチャーは開いたままです。閉じた場合は、次回、止まったところから続けます。
 
+
+= That .cia is the game's update, not the game itself. Choose the game's own .cia (or .3ds / .cci) file.
+> この .cia はゲームのアップデートで、ゲーム本体ではありません。ゲーム本体の .cia(または .3ds / .cci)ファイルを選んでください。
+
+= That .cia is the game's extra content (DLC), not the game itself. Choose the game's own .cia (or .3ds / .cci) file.
+> この .cia はゲームの追加コンテンツ(DLC)で、ゲーム本体ではありません。ゲーム本体の .cia(または .3ds / .cci)ファイルを選んでください。
+
+= That .cia is not a game (it is an app, a system file or something else).
+> この .cia はゲームではありません(アプリ、システムファイル、またはその他のものです)。
+
+= That .cia is encrypted. The converter only reads decrypted copies and does not decrypt anything itself: export the game again as a decrypted .cia with your own dumping tool.
+> この .cia は暗号化されています。変換プログラムは復号済みのコピーしか読めず、自分では何も復号しません。お使いのダンプツールで、ゲームを復号済みの .cia として書き出し直してください。
+
+= That is a folder. The converter needs the game as one file (.3ds, .cci or .cia); an unpacked folder can't be used yet.
+> それはフォルダです。変換プログラムには、ゲームを1つのファイル(.3ds、.cci または .cia)として渡す必要があります。展開したフォルダはまだ使えません。
+
+= That is not a 3DS game file (.3ds, .cci or .cia). An .nds / .gba file or a disc image can't be used here.
+> それは3DSのゲームファイル(.3ds、.cci または .cia)ではありません。.nds / .gba ファイルやディスクイメージはここでは使えません。
+
+= The built-in layer "%s" has files for %zu archive(s) the game doesn't have (for example %s: they belong to a pack that is not loaded); skipped.
+> 組み込みレイヤー「%s」には、ゲームに存在しない %zu 個のアーカイブ用のファイルがあります（例: %s。読み込まれていないパックのものです）。スキップしました。
+
+= {name}'s move was disabled!
+> {name}のわざが ふうじられた！
+
+= {name} harvested its berry!
+> {name}は きのみを しゅうかくした！
+
+= {name} transformed into {foe}!
+> {name}は {foe}に へんしんした！
+
+= The mysterious air current blows on regardless!
+> なぞの ほうそくの かぜが ふきつづけている！
+
+= {name} became cloaked in a freezing light!
+> {name}は こおりのひかりに つつまれた！
+
+= {name} became cloaked in freezing air!
+> {name}は こおりのくうきに つつまれた！
+
+= {name} is absorbing power!
+> {name}は ちからを すいこんでいる！
+
+= The Pokemon now has its hidden ability!
+> ポケモンは かくれとくせいに なった！
+
+= This Pokemon has no hidden ability.
+> このポケモンには かくれとくせいが ない。
+
+= This Pokemon already has its hidden ability.
+> このポケモンは すでに かくれとくせいを もっている。
+
+= A Shadow Pokemon cannot use this yet.
+> ダークポケモンには まだ つかえない。
+
+= {10} transformed into its Complete Forme!
+> {10}は　パーフェクトフォルムに　へんしんした！
+
+= the Gen 5-7 files were made together with Gen 4 files that are not installed any more, make the Ultra Sun / Ultra Moon files again
+> 第5〜7世代のファイルは、今はインストールされていない第4世代のファイルと一緒に作られています。ウルトラサン / ウルトラムーンのファイルを作り直してください
+
+= the Gen 5-7 files do not fit the Gen 4 files that are installed now, make the Ultra Sun / Ultra Moon files again
+> 第5〜7世代のファイルは、現在インストールされている第4世代のファイルと合いません。ウルトラサン / ウルトラムーンのファイルを作り直してください
+
+= The Gen 5-7 Pokemon can't be used: the Gen 5-7 files do not fit the Gen 4 files that are installed.
+> 第5〜7世代のポケモンを使えません: 第5〜7世代のファイルが、インストールされている第4世代のファイルと合いません。
+
+= Make the Ultra Sun / Ultra Moon files again on the launcher's "Extra assets" page.\nThe game starts without them.
+> ランチャーの「追加アセット」ページで、ウルトラサン / ウルトラムーンのファイルを作り直してください。\nゲームはそれらなしで始まります。
+
+= These Gen 5-7 files were made together with the Gen 4 files of the Ultra Sun / Ultra Moon dump, so the game uses those Gen 4 files whenever Gen 5-7 Pokemon are on. They still work; make them again to use the Battle Revolution Gen 4 files with them too.
+> この第5〜7世代のファイルは、ウルトラサン / ウルトラムーンのダンプの第4世代のファイルと一緒に作られているため、第5〜7世代のポケモンがオンの間はそちらの第4世代のファイルを使います。そのまま使えますが、作り直すとバトルレボリューションの第4世代のファイルも一緒に使えます。
+
+= These Gen 5-7 files were made together with Gen 4 files that are not installed any more, so the game will not use them. Make the Ultra Sun / Ultra Moon files again.
+> この第5〜7世代のファイルは、今はインストールされていない第4世代のファイルと一緒に作られているため、ゲームは使いません。ウルトラサン / ウルトラムーンのファイルを作り直してください。
+
+= These Gen 5-7 files do not fit the Gen 4 files that are installed now, so the game will not use them. Make the Ultra Sun / Ultra Moon files again.
+> この第5〜7世代のファイルは、現在インストールされている第4世代のファイルと合わないため、ゲームは使いません。ウルトラサン / ウルトラムーンのファイルを作り直してください。
+
+
+= A GameCube adapter is plugged in, but Windows has no driver for it that this program can use. Install the WinUSB driver for it with the free program Zadig (zadig.akeo.ie): choose the adapter (WUP-028), pick WinUSB, click Replace Driver. The switch on the adapter must be on "Wii U". The Read me has the steps.
+> GameCubeアダプターが接続されていますが、Windowsにこのプログラムが使えるドライバーがありません。無料のソフトZadig（zadig.akeo.ie）でWinUSBドライバーを入れてください。アダプター（WUP-028）を選び、WinUSBを選んで「Replace Driver」を押します。アダプターのスイッチは「Wii U」にしてください。手順はReadmeにあります。
+
+= A GameCube adapter is plugged in, but this user may not open it. Add the udev rule from the Read me (one small file), then unplug the adapter and plug it in again.
+> GameCubeアダプターが接続されていますが、このユーザーには開く権限がありません。Readmeにあるudevルール（小さなファイル1つ）を追加し、アダプターを抜いて挿し直してください。
+
+= A GameCube adapter is plugged in, but another program is using it (Dolphin, or another copy of the game). Close that program, then unplug the adapter and plug it in again.
+> GameCubeアダプターが接続されていますが、別のプログラム（Dolphinやゲームの別のコピー）が使用中です。そのプログラムを閉じてから、アダプターを抜いて挿し直してください。
+
+= A GameCube adapter is plugged in and working. Plug a controller into one of its four ports: it shows up here at once. (The switch on the adapter must be on "Wii U".)
+> GameCubeアダプターが接続され、動作しています。4つのポートのどれかにコントローラーを挿してください。ここにすぐ表示されます。（アダプターのスイッチは「Wii U」にしてください。）
+
+= A GameCube adapter is plugged in, but the program cannot open it (error %d).
+> GameCubeアダプターが接続されていますが、プログラムが開けません（エラー %d）。
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= CATCHING
+> ほかく
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= EXP
+> けいけんち
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= ITEMS
+> どうぐ
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= BATTLE
+> バトル
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Every ball catches
+> どのボールでも つかまる
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Snag any POKéMON
+> どの ポケモンも スナッチ
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Balls never run out
+> ボールが へらない
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= EXP multiplier
+> けいけんち ばいりつ
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Ignore level cap
+> レベルじょうげんを むし
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Endless money
+> おかねが へらない
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Endless COUPONS
+> クーポンが へらない
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Get any item
+> すきな どうぐを もらう
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Shiny chance
+> いろちがいの かくりつ
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Perfect IVs
+> こたいち さいこう
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Perfect EVs
+> どりょくち さいこう
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= No damage taken
+> ダメージを うけない
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Win every battle
+> どの バトルも かつ
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Purify at once
+> すぐに リライブ
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= No SPOT POKéMON
+> ポケスポットに こない
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Walk through walls
+> かべを すりぬける
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= ×%d
+> ×%d
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Always
+> かならず
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= 1 in %d
+> %dぶんの1
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= BALLS
+> ボール
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= TMs
+> わざマシン
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= BERRIES
+> きのみ
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= COLOGNES
+> コロン
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= RARE CANDY
+> ふしぎなアメ
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Pick any item and how many: they go into your BAG.
+> すきな どうぐと かずを えらぶと バッグに はいります。
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Left / right: how many. A puts them into your BAG (%s).
+> ひだり / みぎで かず。Aで バッグに いれます(%s)。
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Every BALL you throw catches on the first try.
+> なげた ボールで かならず いっぱつで つかまります。
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Throw BALLS at other trainers' POKéMON too. Shadow POKéMON are snagged as usual.
+> ほかの トレーナーの ポケモンにも ボールを なげられます。ダーク ポケモンは いつもどおり スナッチします。
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= A BALL you throw stays in your BAG.
+> なげた ボールは バッグに のこります。
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Your POKéMON get the usual EXP. Points.
+> ポケモンは いつもどおりの けいけんちを もらいます。
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Your POKéMON get %d times the EXP. Points.
+> ポケモンは %dばいの けいけんちを もらいます。
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= The level cap challenge no longer holds your POKéMON back.
+> レベルじょうげんの ルールが ポケモンを とめなくなります。
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= This playthrough has no level cap challenge.
+> この プレイには レベルじょうげんの ルールが ありません。
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Your money never runs out: buying takes none of it.
+> おかねが へりません。かいものを しても へりません。
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Your POKé COUPONS never run out.
+> ポケクーポンが へりません。
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= How often a POKéMON is shiny. Normal: 1 in 8,192.
+> いろちがいの ポケモンが でる かくりつ。ふつうは 8192ぶんの1。
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= POKéMON you get from now on have perfect IVs.
+> これから てにいれる ポケモンは こたいちが さいこうです。
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= POKéMON you get from now on have the most EVs the game allows.
+> これから てにいれる ポケモンは どりょくちが さいだいです。
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Your POKéMON take no damage in battle.
+> バトルで ポケモンが ダメージを うけません。
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Your first hit makes the foe's POKéMON faint. Shadow POKéMON keep 1 HP, so you can still snag them.
+> さいしょの こうげきで あいての ポケモンが たおれます。ダーク ポケモンは HP1で のこるので スナッチできます。
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= A Shadow POKéMON's heart opens at once: purify it at the next chance.
+> ダーク ポケモンの こころが すぐに ひらきます。つぎの きかいに リライブしてください。
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= No POKéMON come to the POKé SPOTS.
+> ポケスポットに ポケモンが きません。
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Walk through walls and everything else in your way.
+> かべや じゃまな ものを すりぬけて あるけます。
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= BACK
+> もどる
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= POCKET
+> ポケット
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= This pocket has nothing to give.
+> この ポケットには もらえる ものが ありません。
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= In your BAG ×%d
+> バッグに ×%d
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Total ×%d
+> ごうけい ×%d
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= %s? How many should go into your BAG?
+> %sを いくつ バッグに いれますか?
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= %s ×%d will be in your BAG.
+> %s ×%dが バッグに はいります。
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Not possible now.
+> いまは できません。
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= the cheat menu key
+> チートメニューの キー
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Cheats mark this save "cheats used" for good, even if you switch them off again later. A save with cheats can't join competitive online rooms.
+> チートを つかうと この セーブは ずっと「チートしよう」と しるされます。あとで オフに しても きえません。チートを つかった セーブは たいせんよう オンラインルームに はいれません。
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Switch cheats on for this save?
+> この セーブで チートを オンに しますか?
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Cheats are on. Press %s, or hold L and R and press START, to open the cheat menu at any time.
+> チートが オンに なりました。%sを おすか、L と R を おしながら START を おすと いつでも チートメニューが ひらきます。
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Enable cheats
+> チートを つかう
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Cheats for this save. Once on, %s opens the cheat menu while you play.
+> この セーブの チート。オンに すると プレイちゅうに %sで チートメニューが ひらきます。
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Cheats for this save: %s opens the cheat menu.
+> この セーブの チート。%sで チートメニューが ひらきます。
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= shiny
+> いろちがい
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= always
+> かならず
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= every ball catches
+> どのボールでも つかまる
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= snag any POKéMON
+> どの ポケモンも スナッチ
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= balls never run out
+> ボールが へらない
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= no level cap
+> レベルじょうげん なし
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= endless money
+> おかねが へらない
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= endless COUPONS
+> クーポンが へらない
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= perfect IVs
+> こたいち さいこう
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= perfect EVs
+> どりょくち さいこう
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= no damage taken
+> ダメージを うけない
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= win every battle
+> どの バトルも かつ
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= items given
+> どうぐを もらった
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= purify at once
+> すぐに リライブ
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= money given
+> おかねを もらった
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= COUPONS given
+> クーポンを もらった
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Cheats used
+> チートしよう
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Cheats used: %s
+> チートしよう: %s
+= cheats used
+> チート使用済み
+
+
+= Turns the cheat menu on: a hot key (F5, or hold L + R and press Start on the controller; both can be changed in the controls) opens a menu of cheats over the game. Off: no cheat does anything. A playthrough that used a cheat is marked as such for good (it can't join competitive online rooms, and a speedrun with it is invalid). Never in Original.
+> チートメニューを使えるようにします。キー（F5、またはコントローラーでL + Rを押したままStart）でゲームの上に開きます。どちらもコントロールの設定で変えられます。オフ：どのチートも働きません。チートを使ったプレイは永久に印が付き（対戦向けのオンラインルームには入れず、スピードランも無効になります）。オリジナルでは使えません。
+
+= Cheat: every Poke Ball catches
+> チート：すべてのモンスターボールで捕まえる
+
+= A ball thrown at a wild Pokemon always catches it (Shadow Pokemon still need the Snag Ball).
+> 野生のポケモンに投げたボールは必ず捕まえます（ダークポケモンには今までどおりスナグボールが必要です）。
+
+= Cheat: catch other trainers' Pokemon
+> チート：他のトレーナーのポケモンを捕まえる
+
+= Poke Balls can be thrown at another trainer's Pokemon (not Shadow ones: those are always snagged). It is caught when the ball works, and that Pokemon is out of the battle, as a snagged Shadow Pokemon is.
+> 他のトレーナーのポケモンにもモンスターボールを投げられます（ダークポケモンは除く：それは常にスナッチされます）。ボールが成功すると捕まえ、そのポケモンはスナッチされたダークポケモンと同じようにバトルから外れます。
+
+= Cheat: Poke Balls are never used up
+> チート：モンスターボールが減らない
+
+= A ball thrown in battle stays in the bag.
+> バトルで投げたボールはバッグに残ります。
+
+= Cheat: experience multiplier
+> チート：経験値の倍率
+
+= Experience Pokemon earn in battle is multiplied (x2, x5 or x10).
+> バトルで得る経験値が増えます（x2、x5、x10）。
+
+= Cheat: ignore the level cap
+> チート：レベル上限を無視する
+
+= The level-cap challenge rule does not hold Pokemon back (they level up to 100 as in the plain game).
+> チャレンジルール「レベル上限」がポケモンを止めなくなります（通常のゲームと同じくレベル100まで上がります）。
+
+= Cheat: infinite money
+> チート：お金が無限
+
+= Money is topped up and buying or paying never takes any.
+> お金は常に補充され、買い物や支払いでも減りません。
+
+= Cheat: infinite Poke Coupons
+> チート：ポケクーポンが無限
+
+= Poke Coupons are topped up and spending them never takes any.
+> ポケクーポンは常に補充され、使っても減りません。
+
+= Cheat: shiny odds
+> チート：色違いの確率
+
+= How often a Pokemon you receive from now on is shiny (caught, gifts, Shadow Pokemon, Poke Spot Pokemon).
+> これから受け取るポケモンが色違いになる頻度です（捕獲、もらうポケモン、ダークポケモン、ポケスポットのポケモン）。
+
+= 1 in 512
+> 512分の1
+
+= 1 in 64
+> 64分の1
+
+= 1 in 8
+> 8分の1
+
+
+= Cheat: perfect IVs
+> チート：完璧な個体値
+
+= Pokemon you receive from now on have all IVs at 31.
+> これから受け取るポケモンの個体値はすべて31になります。
+
+= Cheat: maxed EVs
+> チート：努力値を最大に
+
+= Pokemon you receive from now on have every effort value at the game's maximum (100).
+> これから受け取るポケモンの努力値はすべてゲームの最大値（100）になります。
+
+= Cheat: no damage taken
+> チート：ダメージを受けない
+
+= Your Pokemon take no damage in battle.
+> バトルで自分のポケモンがダメージを受けません。
+
+= Cheat: win every battle
+> チート：すべてのバトルに勝つ
+
+= The first hit on a foe's Pokemon makes it faint (a Shadow Pokemon is left with 1 HP so it can still be snagged). Nothing is forfeited: the battle goes on as a won one.
+> 相手のポケモンへの最初の一撃で相手はひんしになります（ダークポケモンはHP1が残り、スナッチできます）。何も放棄しません：バトルは勝利したものとして続きます。
+
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= A opens the heart of every Shadow POKéMON in your party: purify them at the next chance.
+> Aで てもちの ダーク ポケモン みんなの こころが ひらきます。つぎの きかいに リライブしてください。
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Not in this version yet: the game has no safe switch for this.
+> この バージョンでは まだ つかえません。ゲームに あんぜんな スイッチが ありません。
+
+# CHECK (machine-made, unsure: native speaker please read)
+
+= Every heart in your party will be open.
+> てもちの こころが すべて ひらきます。
+
+= ... and %zu more (see the log)
+> ... ほか %zu 件（ログを参照）
+
+= Some of the packs or mods chosen for this New Game could not be loaded, even after starting the game again. The game carries on without them (the log says which).
+> この新しいゲームに選ばれたパックまたは MOD の一部は、ゲームを再起動しても読み込めませんでした。ゲームはそれらなしで続けます（どれかはログに書かれています）。
+
+= The program file %s is missing. Your antivirus may have removed it: open Windows Security > Virus & threat protection > Protection history, restore it from there (and allow it), or unpack the game folder again. (Windows error %d)
+> プログラムファイル %s がありません。ウイルス対策ソフトが削除した可能性があります。Windows セキュリティ > ウイルスと脅威の防止 > 保護の履歴 を開き、そこから復元して（許可して）ください。または、ゲームのフォルダーをもう一度展開してください。（Windows エラー %d）

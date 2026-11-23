@@ -56,10 +56,42 @@ int main(int argc, char** argv) {
   check(hotReload != es::kNoSetting && r.Get(hotReload).AppliesTo("xd") && !r.Get(hotReload).AppliesTo("colo") &&
             r.Get(hotReload).original.i == 0 && r.Get(hotReload).enhanced.i == 0,
         "mod hot reload is XD's and off in every preset");
+  {
+    bool cheatsOk = r.Find("cheats.enabled") != es::kNoSetting;
+    int count = 0;
+    for (size_t i = 0; i < r.Count(); i++) {
+      const es::Definition& d = r.Get(i);
+      if (d.id.rfind("cheats.", 0) != 0) continue;
+      count++;
+      cheatsOk &= d.AppliesTo("xd") && !d.AppliesTo("colo") && d.original.i == 0 && d.enhanced.i == 0 && !d.preference;
+    }
+    check(cheatsOk && count >= 13, "the cheats are XD's, off in every preset and make a run not Original");
+    es::Registry c;
+    setup(c);
+    c.ApplyPreset(es::Preset::Enhanced);
+    std::map<std::string, std::string> env{{"XD_CHEATS", "catch_always;exp=x5;shiny=always"}};
+    xd_settings::ApplyEnvironment(c, [&](const char* n) -> const char* {
+      auto it = env.find(n);
+      return it == env.end() ? nullptr : it->second.c_str();
+    });
+    check(c.Bool("cheats.enabled").Get() && c.Bool("cheats.catch_always").Get() && c.Enum("cheats.exp").Get() == c.ChoiceIndex("cheats.exp", "x5") &&
+              c.Enum("cheats.shiny").Get() == c.ChoiceIndex("cheats.shiny", "always") && !c.Bool("cheats.money_infinite").Get(),
+          "XD_CHEATS turns the master switch and the named cheats on");
+    es::Registry o;
+    setup(o);
+    std::map<std::string, std::string> env2{{"XD_CHEATS", "catch_always"}, {"XD_PRESET", "original"}};
+    xd_settings::ApplyEnvironment(o, [&](const char* n) -> const char* {
+      auto it = env2.find(n);
+      return it == env2.end() ? nullptr : it->second.c_str();
+    });
+    check(!o.Bool("cheats.enabled").Get() && !o.Bool("cheats.catch_always").Get(), "XD_CHEATS is ignored under XD_PRESET=original");
+    c.ApplyPreset(es::Preset::Original);
+    check(c.CurrentPreset() == es::Preset::Original, "switching to Original");
+  }
   bool sharedForAll = true, controlsWork = true;
   for (size_t i = 0; i < r.Count(); i++) {
     const es::Definition& d = r.Get(i);
-    if (i != purify && i != devMenu && d.id != "system.language" && d.id != "system.mods_hot_reload" && d.id != "gameplay.replay_bar" && d.id.rfind("system.extra_disc.", 0) != 0 && d.id.rfind("playthrough.new_", 0) != 0) {
+    if (i != purify && i != devMenu && d.id != "system.language" && d.id != "system.mods_hot_reload" && d.id != "gameplay.replay_bar" && d.id.rfind("system.extra_disc.", 0) != 0 && d.id.rfind("playthrough.new_", 0) != 0 && d.id.rfind("cheats.", 0) != 0) {
       sharedForAll &= d.games.empty();
     }
     if (d.category == es::Category::Controls && d.id.rfind("controls.", 0) != 0) {

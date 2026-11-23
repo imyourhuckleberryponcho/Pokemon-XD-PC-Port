@@ -228,6 +228,8 @@ struct GameInfo {
     std::string converterFolder;
     std::string versionArgument;
     std::string converterOverrideEnv;
+    std::string converterTestStem;
+    std::string converterTestEnv;
     std::vector<std::string> converterArguments;
     std::string secondFolder;
     std::string secondManifestFile;
@@ -240,6 +242,7 @@ struct GameInfo {
     std::string thirdProvides;
     int thirdVersion = 0;
     std::string thirdWarning;
+    std::function<std::pair<int, std::string>(const std::filesystem::path&)> thirdCheck;
   };
   struct ExtraAssets {
     std::vector<ExtraSource> sources;

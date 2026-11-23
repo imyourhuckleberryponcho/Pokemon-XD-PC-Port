@@ -42,8 +42,11 @@ V3 mat_vec(const Mat& m, const V3& p) {
           m[8] * p[0] + m[9] * p[1] + m[10] * p[2]};
 }
 
+double (*mat_rot_sin)(double) = [](double x) { return std::sin(x); };
+double (*mat_rot_cos)(double) = [](double x) { return std::cos(x); };
+
 Mat mat_rot(double rx, double ry, double rz) {
-  double sx = std::sin(rx), cx = std::cos(rx), sy = std::sin(ry), cy = std::cos(ry), sz = std::sin(rz), cz = std::cos(rz);
+  double sx = mat_rot_sin(rx), cx = mat_rot_cos(rx), sy = mat_rot_sin(ry), cy = mat_rot_cos(ry), sz = mat_rot_sin(rz), cz = mat_rot_cos(rz);
   return {cy * cz, sx * sy * cz - cx * sz, cx * sy * cz + sx * sz, 0,
           cy * sz, sx * sy * sz + cx * cz, cx * sy * sz - sx * cz, 0,
           -sy, sx * cy, cx * cy, 0};

@@ -83,6 +83,9 @@ struct Setup {
   Engine startedEngine = Engine::Faithful;
   Engine StartedAs() const { return engineChanged.empty() ? engine : startedEngine; }
   bool PureFaithful() const { return engine == Engine::Faithful && engineChanged.empty(); }
+  std::vector<std::string> cheatsUsed;
+  std::vector<std::string> cheatState;
+  bool cheatWarned = false;
   std::vector<std::string> setupChanged;
   std::vector<std::string> challengeLog;
   std::vector<std::string> challengeState;

@@ -463,9 +463,13 @@ void PortFfMusic_Frame(int factor, int musicMode, int effectsMode, int fadeMs) {
   sMusicMode = musicMode;
   sEffectsMode = effectsMode;
   sFadeMs = fadeMs;
-  if (const char* m = EnvText("XD_FF_MUSIC")) sMusicMode = std::strcmp(m, "realtime") == 0 ? 1 : 0;
-  if (const char* m = EnvText("XD_FF_EFFECTS")) sEffectsMode = std::strcmp(m, "muted") == 0 ? 1 : std::strcmp(m, "tape") == 0 ? 2 : 0;
-  if (const char* m = EnvText("XD_FF_FADE_MS")) sFadeMs = std::max(20, std::atoi(m));
+  static const auto envCopy = [](const char* name) { const char* v = EnvText(name); return v != nullptr ? new std::string(v) : nullptr; };
+  static const std::string* const envMusic = envCopy("XD_FF_MUSIC");
+  static const std::string* const envEffects = envCopy("XD_FF_EFFECTS");
+  static const std::string* const envFade = envCopy("XD_FF_FADE_MS");
+  if (const char* m = envMusic != nullptr ? envMusic->c_str() : nullptr) sMusicMode = std::strcmp(m, "realtime") == 0 ? 1 : 0;
+  if (const char* m = envEffects != nullptr ? envEffects->c_str() : nullptr) sEffectsMode = std::strcmp(m, "muted") == 0 ? 1 : std::strcmp(m, "tape") == 0 ? 2 : 0;
+  if (const char* m = envFade != nullptr ? envFade->c_str() : nullptr) sFadeMs = std::max(20, std::atoi(m));
   const bool want = factor > 1 && sMusicMode == 1;
   static int wait = 0;
   if (want && !sOn) {

@@ -978,6 +978,9 @@ class App {
   void DrawSettingsPage();
   void DrawControlsPage();
   void UpdatePads();
+  void LookAtAdapter();
+  uint64_t adapterLookedAt_ = 0;
+  engine::controls::AdapterState lastAdapterState_ = engine::controls::AdapterState::Unknown;
   void FeedLiveInputs();
   void DrawModsPage();
   void DrawSavePage();
@@ -4268,6 +4271,14 @@ void App::ExtraLook(int index) {
                                          src.thirdProvides, status.kind == extra::Status::Kind::OutOfDate);
       workLeft = third.kind != extra::SecondStatus::Kind::Ready && extra::HasUnfinishedWork(ExtraFolder3(src));
       if (workLeft) third.detail = Tr("It was started and stopped. Press Make: it continues where it stopped.");
+      if (src.thirdCheck && third.kind == extra::SecondStatus::Kind::Ready) {
+        const auto verdict = src.thirdCheck(game_.settingsFolder / "extra_assets");
+        if (verdict.first != 0) {
+          third.kind = extra::SecondStatus::Kind::OutOfDate;
+          third.text = Fmt(Tr("%s: out of date, make again"), Tr(src.thirdProvides).c_str());
+          third.detail = Tr(verdict.second);
+        }
+      }
     }
     {
       std::lock_guard<std::mutex> lock(state.mutex);
@@ -4508,7 +4519,7 @@ void App::DrawExtraRow(int i) {
     ImGui::Dummy(ImVec2(0, 4 * scale_));
 
     std::string disc = registry_.Text(src.discSetting);
-    if (src.dump) ImGui::TextColored(kDim, Tr("%s dump file (.3ds / .cci)"), src.name.c_str());
+    if (src.dump) ImGui::TextColored(kDim, Tr("%s dump file (.3ds / .cci / .cia)"), src.name.c_str());
     else ImGui::TextColored(kDim, Tr("%s disc image"), src.name.c_str());
     const std::string chooseDisc = src.dump ? Lbl(Tr("Choose dump..."), "Choose dump...") : Lbl(Tr("Choose disc..."), "Choose disc...");
     ImGui::SetNextItemWidth(-std::max(250 * scale_, ImGui::CalcTextSize(src.dump ? Tr("Choose dump...") : Tr("Choose disc...")).x +
@@ -4519,7 +4530,7 @@ void App::DrawExtraRow(int i) {
     if (ImGui::Button(chooseDisc.c_str())) {
       static SDL_DialogFileFilter kFilters[2];
       kFilters[0] = {Tr("Disc images (ISO, RVZ, WBFS, CISO, GCZ...)"), "iso;gcm;rvz;wia;gcz;ciso;wbfs"};
-      if (src.dump) kFilters[0] = {Tr("3DS game dumps (3DS, CCI)"), "3ds;cci"};
+      if (src.dump) kFilters[0] = {Tr("3DS game dumps (3DS, CCI, CIA)"), "3ds;cci;cia"};
       kFilters[1] = {Tr("All files"), "*"};
       const std::string start = disc.empty() ? std::string() : Utf8(PathOf(disc).parent_path());
       extraPickedFor_ = i;
@@ -5109,6 +5120,35 @@ void App::UpdatePads() {
   controls_.SetPads(std::move(list));
 }
 
+void App::LookAtAdapter() {
+  const uint64_t tick = SDL_GetTicks();
+  if (adapterLookedAt_ != 0 && tick - adapterLookedAt_ < 3000) {
+    return;
+  }
+  adapterLookedAt_ = tick == 0 ? 1 : tick;
+  namespace ec = engine::controls;
+  if (const char* fake = std::getenv("XD_GC_ADAPTER_FAKE"); fake != nullptr && *fake != 0) {
+    const std::string f = Lower(fake);
+    ec::AdapterState s = ec::AdapterState::NotPlugged;
+    s = f == "nodriver" ? ec::AdapterState::NoDriver : f == "nopermission" ? ec::AdapterState::NoPermission
+        : f == "inuse" ? ec::AdapterState::InUse : f == "reachable" ? ec::AdapterState::Reachable
+        : f == "unknown" ? ec::AdapterState::Unknown : s;
+    controls_.SetAdapterState(s, -99);
+    return;
+  }
+  if (controls_.AdapterPadShown()) {
+    controls_.SetAdapterState(ec::AdapterState::Reachable, 0);
+    return;
+  }
+  const ec::AdapterProbe probe = ec::ProbeGameCubeAdapter();
+  if (probe.state != lastAdapterState_) {
+    lastAdapterState_ = probe.state;
+    Log("adapter: GameCube adapter state " + std::to_string(static_cast<int>(probe.state)) + " (libusb error " +
+        std::to_string(probe.libusbError) + ")");
+  }
+  controls_.SetAdapterState(probe.state, probe.libusbError);
+}
+
 void App::FeedLiveInputs() {
   engine::controls::RawInputs raw;
   if (controls_.Testing()) {
@@ -5142,6 +5182,7 @@ void App::DrawControlsPage() {
   Dim(Tr("Which PC controller and which keys play each of the four GameCube controllers. Controls are yours in every "
          "preset, Original too: they change how you press the buttons, never what the game does with them."));
   ImGui::Spacing();
+  LookAtAdapter();
   FeedLiveInputs();
   controls_.DrawPortTabs(registry_, options_);
   ImGui::BeginChild("##scroll", ImVec2(0, 0), ImGuiChildFlags_NavFlattened);

@@ -376,6 +376,7 @@ private:
     if (!mLayerFilter->onlyArchives.empty() && mLayerFilter->onlyArchives.count(archiveLower) == 0) return true;
     return mLayerFilter->skipArchives.count(archiveLower) > 0;
   }
+  std::map<std::string, std::set<std::string>> mLayerSkipped;
   void CollectExtraLayers() {
     for (const LoadOptions::ExtraLayer& layer : mOpt.extraLayers) {
       LoadResult::LayerResult r;
@@ -392,8 +393,14 @@ private:
         mLayerFilter = nullptr;
       }
       mResult.extraLayers.push_back(std::move(r));
+      const auto skipped = mLayerSkipped.find(LayerIdOf(layer));
+      if (skipped != mLayerSkipped.end() && !skipped->second.empty()) {
+        Say(Message::Level::Info, Fmt(Tr("The built-in layer \"%s\" has files for %zu archive(s) the game doesn't have (for example %s: they belong to a pack that is not loaded); skipped."),
+                                      layer.name.c_str(), skipped->second.size(), skipped->second.begin()->c_str()));
+      }
     }
   }
+  static std::string LayerIdOf(const LoadOptions::ExtraLayer& layer) { return kLayerPrefix + layer.id; }
 
   Layer& LayerFor(const std::string& path, bool& isNew) {
     const std::string key = Lower(path);
@@ -540,6 +547,13 @@ private:
       bool isNew = false;
       Layer& layer = LayerFor(archive, isNew);
       if (!layer.onDisc && layer.wholeFrom.empty()) {
+        if (IsLayerId(id)) {
+          mLayerSkipped[id].insert(archive);
+          if (isNew) {
+            mLayers.erase(Lower(archive));
+          }
+          continue;
+        }
         Say(Message::Level::Problem, Fmt(Tr("The mod \"%s\" changes %s inside %s, but the disc has no %s; ignored."),
                                          mod.manifest.name.c_str(), entryName.c_str(), archive.c_str(), archive.c_str()));
         if (isNew) {
@@ -1062,6 +1076,24 @@ std::string LoadResult::Report() const {
       out += (out.empty() ? "" : "\n\n") + m.text;
     }
   }
+  return out;
+}
+
+std::string LoadResult::ReportCapped(size_t maxMessages) const {
+  std::string out;
+  size_t shown = 0, more = 0;
+  for (const Message& m : messages) {
+    if (m.level == Message::Level::Info) continue;
+    if (shown >= maxMessages) { more++; continue; }
+    shown++;
+    std::string text = m.text;
+    if (text.size() > 240) {
+      text.resize(237);
+      text += "...";
+    }
+    out += (out.empty() ? "" : "\n\n") + text;
+  }
+  if (more > 0) out += "\n\n" + Fmt(Tr("... and %zu more (see the log)"), more);
   return out;
 }
 
