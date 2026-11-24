@@ -197,6 +197,29 @@ Saves, settings, mods, logs and bug reports live in one data folder: {p['data']}
 """
 
 
+NEW_073 = """New in 0.7.3
+------------
+- Save editor (launcher: Save, open a save, Edit save...): change your Pokemon (species, level, moves, IVs, EVs,
+  item, nature...), your trainer (name, money, Coupons, play time) and your bag; also Japanese saves. Nothing is
+  written until you press "Save changes", and the save as it was goes into the save backups first. A change that
+  alters the game marks the playthrough as "cheats used" (no competitive online rooms, no valid speedrun);
+  nicknames, names and moving Pokemon around do not. A Pokemon traded from a "cheats used" save says so first.
+- Choose your starter (New Game screen, Enhanced): pick any Pokemon your playthrough has instead of Eevee, and with
+  "Two starters" a second one. A page with search and a jump per generation opens after the name entry. A chosen
+  starter marks the playthrough as "cheats used".
+- Gen 4 Pokemon made from an Ultra Sun / Ultra Moon dump get their own faces and cries (Leafeon no longer shows
+  Umbreon's face, Cranidos no longer cries like Wartortle). The launcher says "out of date, make again": press Make
+  once on the Ultra Sun / Ultra Moon card (about 10 minutes).
+- Abilities and moves: Illusion, Delta Stream's strong winds, Sky Drop (with its rules: it fails on Flying types,
+  Pokemon of 200 kg or more and behind a Substitute), Phantom Force / Shadow Force can't be hit while gone, a wild
+  Pokemon with Wimp Out or Emergency Exit runs away, and Imposter shows the copied Pokemon.
+- New setting "Controller in the background": a controller keeps working while the game window is not in front
+  (off by default; controllers only, never the keyboard).
+- Smoother sound above 60 frames a second on slower PCs.
+- Linux: the GameCube controller adapter library comes with the download.
+"""
+
+
 NEW_072 = """New in 0.7.2
 ------------
 - Fixed: the game stopped when entering Kaminko's House (and could stop in other busy scenes). It hit every 0.7.1
@@ -408,7 +431,7 @@ The full history is on the GitHub releases page: """ + RELEASES_URL + """
 
 
 def new_in():
-    return NEW_072 + chr(10) + NEW_071 + chr(10) + NEW_070 + chr(10) + NEW_061 + chr(10) + NEW_060 + chr(10) + NEW_05X
+    return NEW_073 + chr(10) + NEW_072 + chr(10) + NEW_071 + chr(10) + NEW_070 + chr(10) + NEW_061 + chr(10) + NEW_060 + chr(10) + NEW_05X
 
 
 def known_issues(system):

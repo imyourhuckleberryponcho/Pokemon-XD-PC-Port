@@ -111,4 +111,7 @@ struct ModelResults {
 void make_gen57_data(const DataOptions& o, const Plan& plan, const ModelResults& mr);
 void make_gen57_forms_data(const DataOptions& o, const Plan& plan, const ModelResults& mr);
 
+struct DumpCry { Bytes hdr, body; int wave = -1; };
+std::map<int, DumpCry> dump_cries(Usum& u, const std::string& data_dir, const std::vector<int>& nats);
+
 }

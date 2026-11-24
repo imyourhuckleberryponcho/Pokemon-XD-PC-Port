@@ -16,6 +16,8 @@ Scenarios:
              (the question: B = keep it)
   browser    Disc page: A on "Choose...", the built-in file browser: down into a folder, A, pick a file, the disc
              setting holds it; B goes up; X cancels
+  editsave   Save page: the D-pad reaches "Edit save...", A opens the save editor, the rows take the focus, B closes it (asks first
+             when changes wait); on a COPY of a library save
   names      the prompt bar for an Xbox, a PlayStation and a Switch pad (screenshots; the Switch's A is the right-hand
              button: padtype only changes the names, the logical Confirm stays)
 """
@@ -167,6 +169,33 @@ def scenario_datafolder(r):
     check(not r2.has(r'not NavFlattened'), 'the Save page has no child window the pad cannot reach')
 
 
+def scenario_editsave(r):
+
+
+
+    sys.path.insert(0, os.path.join(ROOT, 'tools'))
+    import savepoints
+    entry = savepoints.find_entry('menusweep_agate')
+    if entry is None:
+        print('     (save point menusweep_agate is not in the library: editsave skipped)')
+        return
+    card = os.path.join(r.dir, 'appdata', 'Pokemon XD', 'USA', 'Card A')
+    os.makedirs(card, exist_ok=True)
+    shutil.copy2(os.path.join(entry, 'Card A', '01-GXXE-PokemonXD.gci'), card)
+    to_button = ['pad:right', 'pad:down:5', 'pad:right:4']
+    r.run('|'.join(['size:1280x1000', 'padmode:on', 'update:no', 'disc:' + DISC.replace('\\', '/'), 'wait:disc', 'page:save', 'wait:save'] + to_button +
+                   ['padwhere', 'pad:a', 'pad:down', 'padwhere', shot('edit_1'), 'pad:down:2', 'pad:a', 'padwhere', shot('edit_2'),
+                    'pad:right', 'padwhere', 'pad:b', 'padwhere', shot('edit_closed'),
+                    'editopen:1', 'editset:sel.level=44', 'pad:down', 'pad:b', 'pad:down', 'padwhere', shot('edit_ask'), 'pad:b', 'pad:down', 'padwhere', shot('edit_kept'), 'quit']),
+          timeout=300)
+    where = re.findall(r'pad focus: window "([^"]*)"', r.log)
+    check(r.count(r'edit: opened') == 2, 'A on "Edit save..." opened the page (and the script opened it again)')
+    check(any('editbody' in w for w in where), 'the D-pad moves into the editor rows (the body is a NavFlattened child): %s' % where[:6])
+    check(r.has(r'edit: asking whether to discard'), 'B with a change waiting asks about discarding (the page stays open)')
+    check(not r.has(r'not NavFlattened'), 'no child window the pad cannot reach')
+    check(not r.has(r'Exception|crash'), 'no crash')
+
+
 def scenario_quit(r):
     r.run('|'.join(['size:1280x800', 'padmode:on'] + UPD + ['pad:start', shot('menu'), 'pad:down', 'pad:a',
                     'wait:disc', shot('never')]))
@@ -267,10 +296,13 @@ def scenario_modextract(r):
 
 
     sys.path.insert(0, os.path.join(ROOT, 'tools'))
-    import savepoints
-    entry = savepoints.find_entry('menusweep_agate')
-    if entry is None:
-        check(False, 'the library save point menusweep_agate is needed')
+    try:
+        import savepoints
+        entry = savepoints.find_entry('menusweep_agate')
+    except ImportError:
+        savepoints, entry = None, None
+    if savepoints is None or entry is None:
+        print('SKIPPED modextract: needs tools/savepoints.py and the save point library menusweep_agate (private working tree only, not in the public copy)', flush=True)
         return
     card = os.path.join(r.dir, 'appdata', 'Pokemon XD', 'USA', 'Card A')
     os.makedirs(card)
@@ -452,6 +484,7 @@ SCENARIOS = {
     'tour': scenario_tour,
     'preset': scenario_preset,
     'quit': scenario_quit,
+    'editsave': scenario_editsave,
     'datafolder': scenario_datafolder,
     'keyboard': scenario_keyboard,
     'browser': scenario_browser,

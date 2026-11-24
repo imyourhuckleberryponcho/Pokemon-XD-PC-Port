@@ -60,6 +60,28 @@ extern "C" bool PortFolderClaim_Take(const char* folder) {
 }
 
 #ifdef __APPLE__
+extern "C" bool PortFolderClaim_IsFree(const char* folder) {
+  if (folder == nullptr || folder[0] == '\0') return true;
+  std::error_code ec;
+  std::filesystem::path full = std::filesystem::weakly_canonical(std::filesystem::path(folder), ec);
+  if (ec || full.empty()) return true;
+  std::string path = full.string();
+  while (path.size() > 1 && path.back() == '/') path.pop_back();
+  uint64_t hash = 0xCBF29CE484222325ull;
+  for (const unsigned char c : path) {
+    hash = (hash ^ c) * 0x100000001B3ull;
+  }
+  const char* tmp = std::getenv("TMPDIR");
+  char name[1100];
+  std::snprintf(name, sizeof name, "%s/PortFolderClaim-%016llx.lock", (tmp != nullptr && tmp[0] != '\0') ? tmp : "/tmp",
+                static_cast<unsigned long long>(hash));
+  const int fd = open(name, O_RDWR | O_CREAT | O_CLOEXEC, 0600);
+  if (fd < 0) return true;
+  const bool free = flock(fd, LOCK_EX | LOCK_NB) == 0;
+  close(fd);
+  return free;
+}
+
 extern "C" bool PortWindowIcon_Apply(SDL_Window*, const char*) { return false; }
 extern "C" bool PortWindowIcon_SetAppId(SDL_Window*, const char*) { return false; }
 extern "C" bool PortWindowIcon_OwnRGBA(int, uint8_t*) { return false; }

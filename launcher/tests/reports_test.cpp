@@ -284,7 +284,9 @@ static void SetTime(const fs::path& file, int year, int mon, int day, int h, int
   t.tm_isdst = -1;
   const auto sys = std::chrono::system_clock::from_time_t(std::mktime(&t));
   std::error_code ec;
-  fs::last_write_time(file, std::chrono::clock_cast<std::chrono::file_clock>(sys), ec);
+
+  const auto when = fs::file_time_type::clock::now() + std::chrono::duration_cast<fs::file_time_type::duration>(sys - std::chrono::system_clock::now());
+  fs::last_write_time(file, when, ec);
   CHECK(!ec);
 }
 

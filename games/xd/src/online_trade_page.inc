@@ -524,7 +524,9 @@ bool StepTrade(ImDrawList* dl, const Screen& sc, const PortMenuInput* in) {
   }
   if (confirming) {
     kit::Dim(dl, 150);
-    kit::Window(dl, sc, 70.f, 150.f, 570.f, 320.f, true);
+    const bool fromCheats = P.net->friendCard().fromCheats;
+    const float extra = fromCheats ? 62.f : 0.f;
+    kit::Window(dl, sc, 70.f, 150.f, 570.f, 320.f + extra, true);
     const std::string mine = P.net->offeredIndex() >= 0 ? entries[static_cast<size_t>(P.net->offeredIndex())].card.name : "?";
     const std::string theirs = P.net->friendCard().name;
     const std::string theirName = P.net->friendCard().name == P.net->friendCard().species
@@ -534,12 +536,15 @@ bool StepTrade(ImDrawList* dl, const Screen& sc, const PortMenuInput* in) {
       std::snprintf(b, sizeof(b), Tr("Trade %s for %s?"), mine.c_str(), theirName.c_str());
       kit::Para(dl, sc, 100.f, 172.f, 440.f, b, kit::kText, 1.f, 28.f, 3);
     }
+    if (fromCheats) {
+      kit::Para(dl, sc, 100.f, 256.f, 440.f, Tr("This Pokemon comes from a save with cheats. Receiving it marks your save as cheats used."), kit::kGold, 0.8f, 22.f, 3);
+    }
     if (s->iConfirmed()) {
-      kit::Ring(dl, sc, 116.f, 280.f, 14.f);
-      kit::Text(dl, sc, 140.f, 270.f, Tr("Waiting for your friend to answer..."), kit::kGood, 0.85f, 400.f);
+      kit::Ring(dl, sc, 116.f, 280.f + extra, 14.f);
+      kit::Text(dl, sc, 140.f, 270.f + extra, Tr("Waiting for your friend to answer..."), kit::kGood, 0.85f, 400.f);
     } else {
-      kit::Button(dl, sc, 160.f, 262.f, 140.f, Tr("YES"), P.yesNo == 0);
-      kit::Button(dl, sc, 340.f, 262.f, 140.f, Tr("NO"), P.yesNo == 1);
+      kit::Button(dl, sc, 160.f, 262.f + extra, 140.f, Tr("YES"), P.yesNo == 0);
+      kit::Button(dl, sc, 340.f, 262.f + extra, 140.f, Tr("NO"), P.yesNo == 1);
     }
   }
   return true;
@@ -571,6 +576,7 @@ void Follow() {
       char b[512];
       std::snprintf(b, sizeof(b), Tr("You received %s (%s)."), r.received.c_str(), TrWhere(r.where).c_str());
       P.notes.push_back(b);
+      if (r.receivedFromCheats) P.notes.push_back(Tr("Your save is now marked as cheats used."));
       if (P.live) {
         P.notes.push_back(r.evolved ? Tr("Your game makes the swap now, shows the evolution, and saves.") : Tr("Your game makes the swap now and saves."));
       } else {

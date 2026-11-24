@@ -206,6 +206,7 @@
    "Fire Lash": "Vine Whip"
   },
   "partial": {
+   "Sky Drop": "the lift works (the target is carried, hidden, loses its turn); it fails against Flying types, targets of 200 kg or more and a target behind a Substitute",
    "Autotomize": "Speed +2 only: the weight loss is not built",
    "Freeze-Dry": "Water Pokemon are not hit super effectively",
    "Magnetic Flux": "raises the user whatever its ability (should need Plus or Minus; it is made for allies)",
@@ -215,7 +216,6 @@
    "Synchronoise": "hits any target (should hit only one sharing a type)",
    "Echoed Voice": "power does not grow with use",
    "Clear Smog": "does not reset the target's stat changes",
-   "Sky Drop": "plain hit (no lifting turn)",
    "Incinerate": "does not burn up a berry",
    "Retaliate": "power not doubled after a faint",
    "Final Gambit": "plain hit of fixed power (should deal the user's HP and faint)",
@@ -742,7 +742,21 @@
     "props": {
      "charge": {
       "donor": "Fly",
-      "message": "{name} vanished instantly!"
+      "message": "{name} vanished instantly!",
+      "untouchable": true
+     }
+    }
+   },
+   "Sky Drop": {
+    "blocks": [],
+    "needs": [
+     "charge"
+    ],
+    "props": {
+     "charge": {
+      "donor": "Fly",
+      "message": "{name} took {foe} into the sky!",
+      "carry": true
      }
     }
    },
@@ -2162,6 +2176,14 @@
     "full",
     "a third of its HP back when it eats a berry; the heal follows the berry at the end of the move that made it eat"
    ],
+   "149": [
+    "Illusion",
+    {
+     "illusion": true
+    },
+    "full",
+    "sent out, it looks like (name, model, gauge face) the last Pokemon of its party that has not fainted; the first damaging hit from another Pokemon ends it with a message (the decomp shown-as)"
+   ],
    "150": [
     "Imposter",
     {
@@ -2225,8 +2247,8 @@
       }
      ]
     },
-    "partial",
-    "while it is out Flying Pokemon take no extra damage from Rock, Ice and Electric moves; the weather is NOT removed and weather moves still work"
+    "full",
+    "the game's 6th weather value (strong winds, the decomp 06fc3359) is on while it is out: no other weather can start, and Flying Pokemon take no extra damage from Rock, Ice and Electric moves"
    ],
    "225": [
     "RKS System",

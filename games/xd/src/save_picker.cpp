@@ -1,5 +1,6 @@
 #include "xd_save_picker.h"
 
+#include "xd_test_run.h"
 #include "xd_playthrough_files.h"
 #include "xd_randomizer.h"
 #include "xd_user_folder.h"
@@ -65,6 +66,16 @@ void SetEnv(const char* name, const char* value) {
 
 Intent sIntent = Intent::None;
 bool sIntentRead = false;
+
+uint32_t TestSkipIntroFrame() {
+  static const uint32_t frame = [] {
+    const char* v = std::getenv("XD_TEST_SKIP_INTRO");
+    if (v == nullptr || v[0] == '\0') return 0u;
+    if (xd::TestRunSwitchSet([](const char* n) { return std::getenv(n); }) == nullptr) return 0u;
+    return static_cast<uint32_t>(std::strtoul(v, nullptr, 10));
+  }();
+  return frame;
+}
 bool (*sSkipQuery)() = nullptr;
 
 }
@@ -82,6 +93,7 @@ void ReadIntent() {
   if (sIntentRead) return;
   sIntentRead = true;
   const char* v = std::getenv("XD_RESTART_INTENT");
+  if (v == nullptr && TestSkipIntroFrame() > 0) v = "continue";
   if (v != nullptr) {
     if (std::strcmp(v, "title") == 0) sIntent = Intent::Title;
     else if (std::strcmp(v, "newgame") == 0) sIntent = Intent::NewGame;
@@ -99,6 +111,16 @@ Intent Current() {
 void SetForRestart(Intent intent) { SetEnv("XD_RESTART_INTENT", IntentName(intent)[0] != 0 ? IntentName(intent) : nullptr); }
 
 void RegisterSkipLogosQuery(bool (*query)()) { sSkipQuery = query; }
+
+extern "C" uint32_t PortVI_GetFlipCount(void);
+extern "C" void PortVI_TestAdvanceFlips(uint32_t n);
+bool TestSkipIntroOn() { return TestSkipIntroFrame() > 0; }
+void TestSkipIntroLanded() {
+  const uint32_t target = TestSkipIntroFrame(), now = PortVI_GetFlipCount();
+  if (target == 0 || now >= target) return;
+  PortVI_TestAdvanceFlips(target - now);
+  std::fprintf(stderr, "[test skip] the game-frame counter jumped from %u to %u (XD_TEST_SKIP_INTRO)\n", now, target);
+}
 
 bool SkipLogos() { return Current() != Intent::None || (sSkipQuery != nullptr && sSkipQuery()); }
 

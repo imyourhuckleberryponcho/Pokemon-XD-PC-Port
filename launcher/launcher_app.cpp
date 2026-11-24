@@ -688,6 +688,15 @@ class App {
   uint64_t reportsLookedAt_ = 0;
   std::string reportSel_;
   SDL_Texture* reportShot_ = nullptr;
+  struct Thumb {
+    SDL_Texture* tex = nullptr;
+    int w = 0, h = 0;
+    std::filesystem::file_time_type stamp{};
+    bool exists = false;
+    uint64_t checked = 0;
+  };
+  std::map<std::string, Thumb> thumbs_;
+  void DrawThumbnail(const std::filesystem::path& file, float height, float maxWidth);
   std::string reportShotFor_ = "\x01";
   int reportShotW_ = 0, reportShotH_ = 0;
   reports::ExportOptions exportOptions_;
@@ -761,6 +770,24 @@ class App {
   bool MonsPick(const std::string& file);
   bool MonsConfirm();
   void DrawMons(const sl::Slot& slot, bool locked);
+  std::string editFor_;
+  GameInfo::Saves::EditView editView_;
+  std::string editError_;
+  std::string editMessage_;
+  bool editMessageOk_ = false;
+  bool editConfirm_ = false;
+  bool editUnderstood_ = false;
+  bool editAskBack_ = false;
+  std::map<std::string, std::string> editBuf_;
+  std::map<std::string, std::string> editBufSeen_;
+  std::string editChoiceId_, editChoiceFilter_;
+  std::string editPendingId_, editPendingValue_;
+  bool EditOpen(const sl::Slot& slot);
+  void EditClose();
+  void EditSet(const std::string& id, const std::string& value);
+  void EditSaveNow();
+  void DrawEditSave(bool locked);
+  void DrawEditRow(const GameInfo::Saves::EditRow& row, bool locked);
   std::string openSlot_;
   bool openSlotSet_ = false;
   bool backupsShown_ = false;
@@ -3460,6 +3487,62 @@ bool App::DoStep(const std::string& step) {
     }
     Log("no such backup: " + arg);
     return false;
+  } else if (verb == "editopen" || verb == "editset" || verb == "edittab" || verb == "editsave" || verb == "editconfirm" || verb == "editrevert" ||
+             verb == "editclose") {
+    page_ = Page::Save;
+    if (verb == "editopen") {
+      LookAtSlots(true);
+      const sl::Slot* slot = SlotByArg(arg);
+      if (slot == nullptr) {
+        Log("no such save: " + arg);
+        return false;
+      }
+      return EditOpen(*slot);
+    }
+    if (editFor_.empty()) {
+      Log("edit: no save is open for editing (editopen:<n> first)");
+      return false;
+    }
+    if (verb == "editset") {
+      const size_t eq = arg.find('=');
+      if (eq == std::string::npos) return false;
+      EditSet(arg.substr(0, eq), arg.substr(eq + 1));
+      Log(std::string("edit: ") + (editMessageOk_ ? "ok" : "refused: " + editMessage_));
+      return editMessageOk_;
+    }
+    if (verb == "edittab") {
+      editView_.tab = std::atoi(arg.c_str());
+      return true;
+    }
+    if (verb == "editsave") {
+      editConfirm_ = true;
+      editUnderstood_ = false;
+      return true;
+    }
+    if (verb == "editconfirm") {
+      std::string why;
+      if (SlotsLocked(why)) {
+        Log("edit: " + why);
+        return false;
+      }
+      if (!editView_.problems.empty()) {
+        Log("edit: blocked: " + editView_.problems[0]);
+        return false;
+      }
+      EditSaveNow();
+      return editMessageOk_;
+    }
+    if (verb == "editrevert") {
+      if (game_.saves.editRevert) game_.saves.editRevert(editView_);
+      editBuf_.clear();
+      editBufSeen_.clear();
+      return true;
+    }
+    if (verb == "editclose") {
+      EditClose();
+      return true;
+    }
+    return true;
   } else if (verb == "slot" || verb == "openslot" || verb == "showbackups" || verb == "newslot" ||
              verb == "renameslot" || verb == "dupslot" || verb == "deleteslot" || verb == "importslot" ||
              verb == "exportslot" || verb == "importfind" || verb == "importpick" || verb == "importconfirm" ||
@@ -4262,13 +4345,15 @@ void App::ExtraLook(int index) {
     extra::SecondStatus second;
     if (!src.secondFolder.empty()) {
       second = extra::ComputeSecondStatus(ExtraFolder2(src), src.secondManifestFile, src.secondManifestId, src.secondVersion,
-                                          src.secondProvides, status.kind == extra::Status::Kind::OutOfDate);
+                                          src.secondProvides, status.kind == extra::Status::Kind::OutOfDate, src.secondRecipe > 0 ? "recipe" : "",
+                                          src.secondRecipe, src.secondRecipeReason);
     }
     extra::SecondStatus third;
     bool workLeft = false;
     if (!src.thirdFolder.empty()) {
       third = extra::ComputeSecondStatus(ExtraFolder3(src), src.thirdManifestFile, src.thirdManifestId, src.thirdVersion,
-                                         src.thirdProvides, status.kind == extra::Status::Kind::OutOfDate);
+                                         src.thirdProvides, status.kind == extra::Status::Kind::OutOfDate, src.thirdRecipe > 0 ? "make" : "",
+                                         src.thirdRecipe, src.thirdRecipeReason);
       workLeft = third.kind != extra::SecondStatus::Kind::Ready && extra::HasUnfinishedWork(ExtraFolder3(src));
       if (workLeft) third.detail = Tr("It was started and stopped. Press Make: it continues where it stopped.");
       if (src.thirdCheck && third.kind == extra::SecondStatus::Kind::Ready) {
@@ -5497,6 +5582,11 @@ void App::DrawModsPage() {
 }
 
 void App::DrawSavePage() {
+  if (!editFor_.empty()) {
+    std::string why;
+    DrawEditSave(SlotsLocked(why));
+    return;
+  }
   PageTitle(SlotsOn() ? Tr("Your saves") : Tr("Your save"),
             SlotsOn() ? Tr("Your saves: which one the game loads, what is in each, and the backups the game keeps of it.")
             : game_.saveBackupsFolder.empty()
@@ -6368,9 +6458,10 @@ void App::DrawSlots() {
     const GameInfo::SaveRow row = i < slotRows_.size() ? slotRows_[i] : GameInfo::SaveRow();
     const bool loads = slots_.Active().id == s.id, open = openSlot_ == s.id;
     if (!inTable) {
-      inTable = ImGui::BeginTable("##saves", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_PadOuterX);
+      inTable = ImGui::BeginTable("##saves", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_PadOuterX);
       if (inTable) {
         ImGui::TableSetupColumn(Lbl(Tr("Save"), "Save").c_str(), ImGuiTableColumnFlags_WidthStretch, 1.5f);
+        ImGui::TableSetupColumn(Lbl(Tr("Picture"), "Picture").c_str(), ImGuiTableColumnFlags_WidthFixed, 64 * scale_);
         ImGui::TableSetupColumn(Lbl(Tr("Trainer"), "Trainer").c_str(), ImGuiTableColumnFlags_WidthStretch, 1.0f);
         ImGui::TableSetupColumn(Lbl(Tr("Play time"), "Play time").c_str(), ImGuiTableColumnFlags_WidthFixed,
                                 std::max(132 * scale_, ImGui::CalcTextSize(Tr("Play time")).x +
@@ -6429,6 +6520,10 @@ void App::DrawSlots() {
         ImGui::SetTooltip("%s", s.name.c_str());
       }
       ImGui::TableSetColumnIndex(1);
+      if (!row.thumbnail.empty()) {
+        DrawThumbnail(row.thumbnail, 36 * scale_, 62 * scale_);
+      }
+      ImGui::TableSetColumnIndex(2);
       ImGui::AlignTextToFramePadding();
       if (row.found) {
         ImGui::TextUnformatted(row.who.c_str());
@@ -6439,10 +6534,10 @@ void App::DrawSlots() {
         ImGui::SameLine();
         ImGui::TextColored(row.warn.empty() ? kGood : kBad, "[%s]", row.edition.c_str());
       }
-      ImGui::TableSetColumnIndex(2);
+      ImGui::TableSetColumnIndex(3);
       ImGui::AlignTextToFramePadding();
       ImGui::TextUnformatted(row.time.c_str());
-      ImGui::TableSetColumnIndex(3);
+      ImGui::TableSetColumnIndex(4);
       ImGui::AlignTextToFramePadding();
       ImGui::TextWrapped("%s", row.setup.c_str());
       if (!row.warn.empty()) {
@@ -6913,6 +7008,15 @@ void App::DrawSlotBox(const sl::Slot& slot, bool locked, bool& duplicate) {
       monsError_.clear();
     }
   }
+  if (found && game_.saves.editOpen) {
+    ImGui::SameLine();
+    if (ImGui::Button(Lbl(Tr("Edit save..."), "Edit save...").c_str())) {
+      EditOpen(slot);
+    }
+    if (Hot(ImGuiHoveredFlags_AllowWhenDisabled)) {
+      ImGui::SetTooltip("%s", Tr("Change Pokemon, the trainer and the bag of this save, while the game is closed. A backup is made first."));
+    }
+  }
   if (found && game_.saves.tradeOpen) {
     ImGui::SameLine();
     if (ImGui::Button((game_.saves.tradeName + "...").c_str())) {
@@ -6961,6 +7065,383 @@ void App::DrawSlotBox(const sl::Slot& slot, bool locked, bool& duplicate) {
   ImGui::PopID();
 }
 
+bool App::EditOpen(const sl::Slot& slot) {
+  editView_ = GameInfo::Saves::EditView();
+  editError_.clear();
+  editMessage_.clear();
+  editBuf_.clear();
+  editBufSeen_.clear();
+  editConfirm_ = editUnderstood_ = editAskBack_ = false;
+  if (!game_.saves.editOpen || !game_.saves.editOpen(sl::RootOf(SavesFolder(), slot.id), NamesDisc(), editView_, editError_)) {
+    editFor_.clear();
+    SlotDone(false, editError_.empty() ? std::string(Tr("The save can't be opened for editing.")) : editError_);
+    return false;
+  }
+  editFor_ = slot.id;
+  Log("edit: opened \"" + slot.name + "\"");
+  return true;
+}
+
+void App::EditClose() {
+  if (game_.saves.editClose) game_.saves.editClose();
+  editFor_.clear();
+  editView_ = GameInfo::Saves::EditView();
+  editConfirm_ = editUnderstood_ = editAskBack_ = false;
+  LookAtSlots(true);
+}
+
+void App::EditSet(const std::string& id, const std::string& value) {
+  if (!game_.saves.editSet) return;
+  const std::string why = game_.saves.editSet(id, value, editView_);
+  editMessageOk_ = why.empty();
+  editMessage_ = why;
+  if (!why.empty()) Log("edit: refused " + id + "=" + value + ": " + why);
+  editBuf_.clear();
+  editBufSeen_.clear();
+}
+
+void App::EditSaveNow() {
+  if (!game_.saves.editSave) return;
+  const GameInfo::Saves::TradeResult r = game_.saves.editSave(editView_);
+  editMessageOk_ = r.ok;
+  editMessage_ = r.message;
+  Log(std::string("edit: save ") + (r.ok ? "ok: " : "FAILED: ") + r.message);
+  editBuf_.clear();
+  editBufSeen_.clear();
+  editConfirm_ = editUnderstood_ = false;
+  if (r.ok) LookAtSlots(true);
+}
+
+void App::DrawEditRow(const GameInfo::Saves::EditRow& row, bool locked) {
+  using K = GameInfo::Saves::EditRow::Kind;
+  ImGui::PushID(row.id.c_str());
+  const bool off = locked || row.locked;
+  if (off) ImGui::BeginDisabled();
+  const float labelW = 150 * scale_;
+  std::string commit;
+  bool doCommit = false;
+  const ImVec2 start = ImGui::GetCursorScreenPos();
+  switch (row.kind) {
+  case K::Info:
+    ImGui::TextColored(kDim, "%s", row.label.c_str());
+    ImGui::SameLine(labelW);
+    ImGui::TextUnformatted(row.value.c_str());
+    break;
+  case K::Pick: {
+    const std::string text = row.label.empty() ? row.value : row.label + "  " + row.value;
+    if (ImGui::Selectable((text + "###pick").c_str(), row.selected, 0, ImVec2(0, 0))) {
+      commit = "1";
+      doCommit = true;
+    }
+    break;
+  }
+  case K::Button:
+    if (!row.label.empty()) {
+      ImGui::TextColored(kDim, "%s", row.label.c_str());
+      ImGui::SameLine(labelW);
+    }
+    if (ImGui::Button((row.value + "###btn").c_str())) {
+      commit = "1";
+      doCommit = true;
+    }
+    break;
+  case K::Toggle: {
+    bool on = row.value == "1";
+    if (ImGui::CalcTextSize(row.label.c_str()).x > labelW - 12 * scale_) {
+      if (ImGui::Checkbox((row.label + "###toggle").c_str(), &on)) {
+        commit = on ? "1" : "0";
+        doCommit = true;
+      }
+      break;
+    }
+    ImGui::TextColored(kDim, "%s", row.label.c_str());
+    ImGui::SameLine(labelW);
+    if (ImGui::Checkbox("##toggle", &on)) {
+      commit = on ? "1" : "0";
+      doCommit = true;
+    }
+    break;
+  }
+  case K::Choice: {
+    ImGui::TextColored(kDim, "%s", row.label.c_str());
+    ImGui::SameLine(labelW);
+    if (ImGui::Button((row.value + "###choice").c_str(), ImVec2(240 * scale_, 0))) {
+      editChoiceId_ = row.id;
+      editChoiceFilter_.clear();
+      ImGui::OpenPopup("###editchoice");
+    }
+    if (editChoiceId_ == row.id) {
+      ImGui::SetNextWindowSize(ImVec2(420 * scale_, 420 * scale_), ImGuiCond_Appearing);
+      if (ImGui::BeginPopup("###editchoice")) {
+        if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
+        pad::InputText("##filter", &editChoiceFilter_);
+        ImGui::Separator();
+        ImGui::BeginChild("##choices", ImVec2(0, 0), ImGuiChildFlags_NavFlattened);
+        const std::string needle = Lower(editChoiceFilter_);
+        for (const auto& [cid, shown] : row.choices) {
+          if (!needle.empty() && Lower(shown).find(needle) == std::string::npos) continue;
+          if (ImGui::Selectable((shown + "###" + cid).c_str(), shown == row.value)) {
+            commit = cid;
+            doCommit = true;
+            ImGui::CloseCurrentPopup();
+          }
+        }
+        ImGui::EndChild();
+        if (BackPressed()) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+      }
+    }
+    break;
+  }
+  case K::Number:
+  case K::Text: {
+    ImGui::TextColored(kDim, "%s", row.label.c_str());
+    ImGui::SameLine(labelW);
+    std::string& buf = editBuf_[row.id];
+    std::string& seen = editBufSeen_[row.id];
+    if (seen != row.value) {
+      buf = row.value;
+      seen = row.value;
+    }
+    ImGui::SetNextItemWidth((row.kind == K::Number ? 110 : 220) * scale_);
+    const bool enter = pad::InputText("##field", &buf,
+                                      row.kind == K::Number ? (ImGuiInputTextFlags_CharsDecimal | ImGuiInputTextFlags_EnterReturnsTrue)
+                                                            : ImGuiInputTextFlags_EnterReturnsTrue);
+    if (enter || ImGui::IsItemDeactivatedAfterEdit()) {
+      if (buf != row.value) {
+        commit = buf;
+        doCommit = true;
+      }
+    }
+    if (row.kind == K::Number) {
+      const long cur = std::atol(row.value.c_str());
+      ImGui::SameLine();
+      if (ImGui::Button("-##dec") && cur > row.min) {
+        commit = std::to_string(cur - 1);
+        doCommit = true;
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("+##inc") && cur < row.max) {
+        commit = std::to_string(cur + 1);
+        doCommit = true;
+      }
+    }
+    break;
+  }
+  }
+  if (off) ImGui::EndDisabled();
+  if (row.changed) {
+    const ImVec2 a(start.x - 3 * scale_, start.y - 1 * scale_), b(ImGui::GetItemRectMax().x + 3 * scale_, ImGui::GetItemRectMax().y + 1 * scale_);
+    ImGui::GetWindowDrawList()->AddRect(a, b, ImGui::GetColorU32(kWarn), 3 * scale_);
+  }
+  if (!row.note.empty()) Dim(row.note);
+  ImGui::PopID();
+  if (doCommit && editPendingId_.empty()) {
+    editPendingId_ = row.id;
+    editPendingValue_ = commit;
+  }
+}
+
+void App::DrawEditSave(bool locked) {
+  PageTitle(Tr("Edit save"), Tr("Change Pokemon, the trainer and the bag. Nothing is written until you press Save changes, and a backup of the save as it is goes first."));
+  const sl::Slot* slot = slots_.Find(editFor_);
+  if (slot == nullptr) {
+    EditClose();
+    return;
+  }
+  ImGui::PushID("editsave");
+  const size_t count = editView_.changes.size();
+  if (!editView_.thumbnail.empty()) {
+    DrawThumbnail(editView_.thumbnail, 78 * scale_, 140 * scale_);
+    ImGui::SameLine();
+  }
+  ImGui::BeginGroup();
+  ImGui::TextUnformatted(slot->name.c_str());
+  Dim(editView_.who);
+  if (locked) {
+    ImGui::TextColored(kBad, "%s", Tr("Close the game first: it has the memory card open."));
+  } else if (count == 0) {
+    Dim(Tr("No changes waiting."));
+  } else {
+    ImGui::TextColored(editView_.willMark ? kWarn : kGood, "%s",
+                       Fmt(count == 1 ? Tr("%d change waiting.") : Tr("%d changes waiting."), static_cast<int>(count)).c_str());
+    Dim(editView_.markText);
+  }
+  ImGui::EndGroup();
+  ImGui::Dummy(ImVec2(0, 4 * scale_));
+  for (size_t i = 0; i < editView_.tabs.size(); i++) {
+    if (i != 0) ImGui::SameLine();
+    const bool on = static_cast<int>(i) == editView_.tab;
+    if (on) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+    if (ImGui::Button((editView_.tabs[i].name + "###edittab" + std::to_string(i)).c_str())) {
+      editView_.tab = static_cast<int>(i);
+    }
+    if (on) ImGui::PopStyleColor();
+  }
+  if (!editMessage_.empty()) {
+    ImGui::PushStyleColor(ImGuiCol_Text, editMessageOk_ ? kGood : kBad);
+    ImGui::TextWrapped("%s", editMessage_.c_str());
+    ImGui::PopStyleColor();
+  }
+  const float footer = ImGui::GetFrameHeightWithSpacing() * 2 + 8 * scale_;
+  ImGui::BeginChild("##editbody", ImVec2(0, -footer), ImGuiChildFlags_NavFlattened);
+  if (editView_.tab >= 0 && editView_.tab < static_cast<int>(editView_.tabs.size())) {
+    const auto& tab = editView_.tabs[static_cast<size_t>(editView_.tab)];
+    bool twoColumns = false;
+    for (const auto& sec : tab.sections) twoColumns |= sec.column == 1;
+    const auto drawSection = [&](const GameInfo::Saves::EditSection& sec, size_t si) {
+      ImGui::PushID(static_cast<int>(si));
+      Heading(sec.title.c_str());
+      if (!sec.hint.empty()) Dim(sec.hint);
+      for (const auto& row : sec.rows) DrawEditRow(row, locked);
+      ImGui::Spacing();
+      ImGui::PopID();
+    };
+    if (twoColumns) {
+      if (ImGui::BeginTable("##cols", 2, ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableNextRow();
+        for (int col = 0; col < 2; col++) {
+          ImGui::TableSetColumnIndex(col);
+          for (size_t si = 0; si < tab.sections.size(); si++) {
+            if (tab.sections[si].column == col) drawSection(tab.sections[si], si);
+          }
+        }
+        ImGui::EndTable();
+      }
+    } else {
+      for (size_t si = 0; si < tab.sections.size(); si++) drawSection(tab.sections[si], si);
+    }
+  }
+  ImGui::EndChild();
+  const bool backClicked = ImGui::Button(Lbl(count == 0 ? Tr("Back") : Tr("Discard changes and go back"), "editback").c_str());
+  ImGui::SameLine();
+  if (count == 0 || locked) ImGui::BeginDisabled();
+  if (ImGui::Button(Lbl(Tr("Undo all changes"), "editrevert").c_str())) {
+    if (game_.saves.editRevert) game_.saves.editRevert(editView_);
+    editBuf_.clear();
+    editBufSeen_.clear();
+    editMessage_.clear();
+  }
+  ImGui::SameLine();
+  const bool saveClicked = ImGui::Button(Lbl(Tr("Save changes..."), "editsave").c_str());
+  if (count == 0 || locked) ImGui::EndDisabled();
+  if (backClicked) {
+    if (count == 0) EditClose();
+    else {
+      editAskBack_ = true;
+      Log("edit: asking whether to discard the changes");
+    }
+  }
+  if (saveClicked) {
+    editConfirm_ = true;
+    editUnderstood_ = false;
+  }
+  if (BackPressed() && !editConfirm_ && !editAskBack_ && !ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel)) {
+    if (count == 0) EditClose();
+    else {
+      editAskBack_ = true;
+      Log("edit: asking whether to discard the changes");
+    }
+  }
+  if (editConfirm_) ImGui::OpenPopup("###editconfirm");
+  ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+  if (ImGui::BeginPopupModal(Lbl(Tr("Save changes"), "editconfirm").c_str(), nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    editConfirm_ = false;
+    ImGui::BeginChild("##changes", ImVec2(560 * scale_, std::min(260 * scale_, ImGui::GetTextLineHeightWithSpacing() * (static_cast<float>(count) + 1))), ImGuiChildFlags_NavFlattened);
+    for (size_t i = 0; i < count; i++) {
+      const bool marks = i < editView_.changeMarks.size() && editView_.changeMarks[i];
+      ImGui::TextColored(marks ? kWarn : kDim, "%s", marks ? Tr("changes the game") : Tr("no effect on the game"));
+      ImGui::SameLine(190 * scale_);
+      ImGui::TextWrapped("%s", editView_.changes[i].c_str());
+    }
+    ImGui::EndChild();
+    ImGui::Separator();
+    ImGui::PushStyleColor(ImGuiCol_Text, editView_.willMark ? kWarn : kGood);
+    ImGui::PushTextWrapPos(560 * scale_);
+    ImGui::TextWrapped("%s", editView_.markText.c_str());
+    ImGui::PopTextWrapPos();
+    ImGui::PopStyleColor();
+    for (const std::string& p : editView_.problems) ImGui::TextColored(kBad, "%s", p.c_str());
+    for (const std::string& n : editView_.notes) Dim(n);
+    Dim(Tr("The save as it is now is kept in the save's backups first, so you can always put it back."));
+    if (editView_.willMark) ImGui::Checkbox(Lbl(Tr("I understand: mark this playthrough as cheats used"), "editunderstood").c_str(), &editUnderstood_);
+    const bool can = editView_.problems.empty() && (!editView_.willMark || editUnderstood_);
+    if (!can) ImGui::BeginDisabled();
+    if (ImGui::Button(Lbl(Tr("Save changes"), "editdosave").c_str())) {
+      EditSaveNow();
+      ImGui::CloseCurrentPopup();
+    }
+    if (!can) ImGui::EndDisabled();
+    ImGui::SameLine();
+    if (ImGui::Button(Lbl(Tr("Cancel"), "editcancel").c_str()) || BackPressed()) ImGui::CloseCurrentPopup();
+    ImGui::EndPopup();
+  }
+  if (editAskBack_) ImGui::OpenPopup("###editdiscard");
+  ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+  if (ImGui::BeginPopupModal(Lbl(Tr("Discard the changes?"), "editdiscard").c_str(), nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    editAskBack_ = false;
+    ImGui::TextUnformatted(Tr("The changes that were not saved are lost. The save itself is not changed."));
+    if (ImGui::Button(Lbl(Tr("Discard"), "editdiscardyes").c_str())) {
+      ImGui::CloseCurrentPopup();
+      EditClose();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(Lbl(Tr("Keep editing"), "editdiscardno").c_str()) || BackPressed()) ImGui::CloseCurrentPopup();
+    ImGui::EndPopup();
+  }
+  ImGui::PopID();
+  if (!editPendingId_.empty()) {
+    const std::string id = editPendingId_, value = editPendingValue_;
+    editPendingId_.clear();
+    EditSet(id, value);
+  }
+}
+
+void App::DrawThumbnail(const fs::path& file, float height, float maxWidth) {
+  Thumb& t = thumbs_[Utf8(file)];
+  const uint64_t tick = SDL_GetTicks();
+  if (t.checked == 0 || tick - t.checked > 1500) {
+    t.checked = tick == 0 ? 1 : tick;
+    std::error_code ec;
+    const bool exists = fs::is_regular_file(file, ec);
+    const fs::file_time_type stamp = exists ? fs::last_write_time(file, ec) : fs::file_time_type();
+    if (exists != t.exists || (exists && stamp != t.stamp) || (exists && t.tex == nullptr && t.w == 0)) {
+      if (t.tex != nullptr) {
+        SDL_DestroyTexture(t.tex);
+        t.tex = nullptr;
+      }
+      t.exists = exists;
+      t.stamp = stamp;
+      const icon::Image img = exists ? LoadPng(file) : icon::Image();
+      t.w = img.width;
+      t.h = img.height;
+      t.tex = img.width > 0 ? MakeTexture(renderer_, img) : nullptr;
+      t.exists = t.tex != nullptr;
+    }
+  }
+  float h = height, w = height * 4.0f / 3.0f;
+  if (t.tex != nullptr && t.w > 0 && t.h > 0) {
+    w = h * static_cast<float>(t.w) / static_cast<float>(t.h);
+    if (w > maxWidth) {
+      w = maxWidth;
+      h = w * static_cast<float>(t.h) / static_cast<float>(t.w);
+    }
+    ImGui::Image(TexId(t.tex), ImVec2(w, h));
+    return;
+  }
+  w = std::min(w, maxWidth);
+  const ImVec2 p = ImGui::GetCursorScreenPos();
+  ImGui::Dummy(ImVec2(w, h));
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  dl->AddRectFilled(p, ImVec2(p.x + w, p.y + h), ImGui::GetColorU32(ImGuiCol_FrameBg), 3 * scale_);
+  dl->AddRect(p, ImVec2(p.x + w, p.y + h), ImGui::GetColorU32(ImGuiCol_Border), 3 * scale_);
+  const char* text = Tr("no picture yet");
+  const ImVec2 ts = ImGui::CalcTextSize(text, nullptr, false, w - 4 * scale_);
+  if (ts.y <= h) {
+    dl->AddText(nullptr, 0.0f, ImVec2(p.x + (w - std::min(ts.x, w)) * 0.5f, p.y + (h - ts.y) * 0.5f), ImGui::GetColorU32(kDim), text, nullptr, w - 4 * scale_);
+  }
+}
+
 void App::DrawSaveSummary() {
   bool have;
   SaveSummary save;
@@ -6984,6 +7465,10 @@ void App::DrawSaveSummary() {
 }
 
 void App::DrawSaveContents(const SaveSummary& save) {
+  if (!save.thumbnail.empty()) {
+    DrawThumbnail(save.thumbnail, 150 * scale_, ImGui::GetContentRegionAvail().x);
+    ImGui::Dummy(ImVec2(0, 4 * scale_));
+  }
   if (ImGui::BeginTable("##facts", 2, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_PadOuterX)) {
     for (const auto& [label, value] : save.facts) {
       ImGui::TableNextRow();
@@ -8287,6 +8772,9 @@ int App::Run() {
   }
   choiceIcons_.push_back(ownIcon_);
   choiceIcons_.push_back(reportShot_);
+  for (auto& [name, t] : thumbs_) {
+    choiceIcons_.push_back(t.tex);
+  }
   choiceIcons_.insert(choiceIcons_.end(), ownIcons_.begin(), ownIcons_.end());
   choiceIcons_.insert(choiceIcons_.end(), groundTex_.begin(), groundTex_.end());
   for (SDL_Texture* tex : choiceIcons_) {

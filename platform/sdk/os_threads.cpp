@@ -594,7 +594,17 @@ bool cpu_idle() {
          !gIdleHandlersRunning;
 }
 
+bool uncapped() {
+  static const bool on = [] {
+    const char* u = std::getenv("XD_TEST_UNCAPPED");
+    const char* script = std::getenv("XD_INPUT_SCRIPT");
+    return gDeterministic && u != nullptr && u[0] == '1' && script != nullptr && script[0] != '\0';
+  }();
+  return on;
+}
+
 bool pace_to(std::unique_lock<SchedMutex>& lock, int64_t t) {
+  if (uncapped()) return true;
   const float scale = aurora::time::scale();
   const double speed = scale > 0.0f ? scale : 1.0;
   const auto due = gRealBase + std::chrono::microseconds(static_cast<int64_t>(

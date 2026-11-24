@@ -8674,3 +8674,814 @@
 
 = The program file %s is missing. Your antivirus may have removed it: open Windows Security > Virus & threat protection > Protection history, restore it from there (and allow it), or unpack the game folder again. (Windows error %d)
 > プログラムファイル %s がありません。ウイルス対策ソフトが削除した可能性があります。Windows セキュリティ > ウイルスと脅威の防止 > 保護の履歴 を開き、そこから復元して（許可して）ください。または、ゲームのフォルダーをもう一度展開してください。（Windows エラー %d）
+
+= Controller in the background
+> Controller in the background
+
+= Lets a controller keep working while the game's window isn't in front, for example when you watch the game through a streaming overlay in another program. Controllers only: the keyboard is never read in the background. It needs "Pause in the background" to be off, or the game waits for you instead.
+> Lets a controller keep working while the game's window isn't in front, for example when you watch the game through a streaming overlay in another program. Controllers only: the keyboard is never read in the background. It needs "Pause in the background" to be off, or the game waits for you instead.
+
+= It was made before the Gen 4 Pokemon had their own faces and cries (Leafeon looked like Umbreon). It still works; press Make to get the right faces and cries.
+> 第4世代のポケモンが専用の顔と鳴き声を持つ前に作られています（リーフィアがブラッキーに見えます）。まだ使えますが、「作成」を押すと正しい顔と鳴き声になります。
+
+= It was made by an older recipe than the Gen 4 faces and cries. It still works; press Make to make it again together with them.
+> 第4世代の顔と鳴き声より古い方法で作られています。まだ使えますが、「作成」を押すと、それらと一緒に作り直されます。
+
+= The randomizer is giving the starter.
+> ランダマイザーが最初のポケモンを決めています。
+
+= Starter
+> 最初のポケモン
+
+= Two starters
+> 最初のポケモン2匹
+
+= Turn its starter switch off to choose your own.
+> 自分で選ぶには、ランダマイザーの最初のポケモンの設定をオフにしてください。
+
+= Eevee: the game's own partner Pokemon. Choose: after you name yourself, pick your starter from every Pokemon of this playthrough (Pokemon of the generations you turned on). It starts at level 10 with the moves it would know, like Eevee. Kept with this playthrough.
+> イーブイ：ゲーム本来のパートナー。選ぶ：名前を決めたあと、このプレイで使える全ポケモン（オンにした世代）から最初のポケモンを選びます。イーブイと同じく、その時点で覚えている技を持つレベル10で始まります。このプレイと一緒に保存されます。
+
+= On: you pick a second starter, which joins your party in the second place at level 10. Off: one starter.
+> オン：2匹目の最初のポケモンを選びます。レベル10で手持ちの2番目に加わります。オフ：1匹だけ。
+
+= Eevee
+> イーブイ
+
+= Choose
+> 選ぶ
+
+= LEGENDARY AND MYTHICAL
+> 伝説・幻のポケモン
+
+= CHOOSE YOUR STARTER
+> 最初のポケモンを選ぶ
+
+= Starter %d of 2
+> 最初のポケモン %d/2
+
+= No Pokemon has that name.
+> その名前のポケモンはいません。
+
+= Generation %d
+> 第%d世代
+
+= Added by a mod
+> MODで追加
+
+= Legendary
+> 伝説
+
+= %s starts at level %d with the moves it would know by then, like Eevee.
+> %sはレベル%dで、その時点で覚える技を持って始まります（イーブイと同じ）。
+
+= Search:
+> 検索：
+
+= %d Pokemon
+> %d匹
+
+= Up / down: Pokemon   Left / right: 10 at a time   Y: next generation   X: search   A: choose
+> 上下：ポケモン　左右：10匹ずつ　Y：次の世代　X：検索　A：決定
+
+=    B: back
+> 　B：戻る
+
+= SEARCH BY NAME
+> 名前で検索
+
+= A: letter   X: delete   B: close
+> A：文字　X：消す　B：閉じる
+
+= Choose %s as your first starter?
+> %sを最初の1匹目にしますか？
+
+= Choose %s as your second starter?
+> %sを2匹目にしますか？
+
+= Choose %s as your starter?
+> %sを最初のポケモンにしますか？
+
+= Yes
+> はい
+
+= Choosing your starter marks this playthrough as cheats used.
+> 最初のポケモンを選ぶと、このプレイは「チート使用」として記録されます。
+
+= Attack
+> こうげき
+
+= Defense
+> ぼうぎょ
+
+= Sp. Atk
+> とくこう
+
+= Sp. Def
+> とくぼう
+
+= Picture
+> Picture
+
+= Edit save...
+> Edit save...
+
+= Change Pokemon, the trainer and the bag of this save, while the game is closed. A backup is made first.
+> Change Pokemon, the trainer and the bag of this save, while the game is closed. A backup is made first.
+
+= The save can't be opened for editing.
+> The save can't be opened for editing.
+
+= Edit save
+> Edit save
+
+= Change Pokemon, the trainer and the bag. Nothing is written until you press Save changes, and a backup of the save as it is goes first.
+> Change Pokemon, the trainer and the bag. Nothing is written until you press Save changes, and a backup of the save as it is goes first.
+
+= No changes waiting.
+> No changes waiting.
+
+= %d change waiting.
+> %d change waiting.
+
+= %d changes waiting.
+> %d changes waiting.
+
+= Discard changes and go back
+> Discard changes and go back
+
+= Undo all changes
+> Undo all changes
+
+= Save changes...
+> Save changes...
+
+= Save changes
+> Save changes
+
+= changes the game
+> changes the game
+
+= no effect on the game
+> no effect on the game
+
+= The save as it is now is kept in the save's backups first, so you can always put it back.
+> The save as it is now is kept in the save's backups first, so you can always put it back.
+
+= I understand: mark this playthrough as cheats used
+> I understand: mark this playthrough as cheats used
+
+= Discard the changes?
+> Discard the changes?
+
+= The changes that were not saved are lost. The save itself is not changed.
+> The changes that were not saved are lost. The save itself is not changed.
+
+= Discard
+> Discard
+
+= Keep editing
+> Keep editing
+
+= Choose your Pokemon XD disc on the Disc page first: the editor takes the game's lists and names from it.
+> Choose your Pokemon XD disc on the Disc page first: the editor takes the game's lists and names from it.
+
+= The disc can't be read: %s
+> The disc can't be read: %s
+
+= %ld hours %02ld minutes
+> %ld hours %02ld minutes
+
+= %s  Lv%d
+> %s  Lv%d
+
+= PC box %d of %d
+> PC box %d of %d
+
+= < Previous box
+> < Previous box
+
+= Next box >
+> Next box >
+
+= Box name
+> Box name
+
+= Moving a Pokemon
+> Moving a Pokemon
+
+= Pick the place it goes to (a Pokemon there swaps). Nothing here changes the game, so moving does not mark the save.
+> Pick the place it goes to (a Pokemon there swaps). Nothing here changes the game, so moving does not mark the save.
+
+= Cancel the move
+> Cancel the move
+
+= Empty place (%s)
+> Empty place (%s)
+
+= party %d
+> party %d
+
+= box %d, place %d
+> box %d, place %d
+
+= Add a new Pokemon: it goes to the first free place of the PC boxes (or the party).
+> Add a new Pokemon: it goes to the first free place of the PC boxes (or the party).
+
+= (choose)
+> (choose)
+
+= Into the party
+> Into the party
+
+= Add this Pokemon
+> Add this Pokemon
+
+= A Shadow Pokemon: its species, nature, gender and shininess stay as they are until it is purified.
+> A Shadow Pokemon: its species, nature, gender and shininess stay as they are until it is purified.
+
+= Locked on a Shadow Pokemon.
+> Locked on a Shadow Pokemon.
+
+= (nothing)
+> (nothing)
+
+= Friendship
+> Friendship
+
+= Nature
+> Nature
+
+= Gender
+> Gender
+
+= Female
+> Female
+
+= Male
+> Male
+
+= Male (this species has no choice)
+> Male (this species has no choice)
+
+= Female (this species has no choice)
+> Female (this species has no choice)
+
+= Ability
+> Ability
+
+= IV %s
+> IV %s
+
+= EV %s
+> EV %s
+
+= (no move)
+> (no move)
+
+= Only moves this species can learn
+> Only moves this species can learn
+
+= Move %d
+> Move %d
+
+= PP Ups, move %d
+> PP Ups, move %d
+
+= Heal (HP, PP, status)
+> Heal (HP, PP, status)
+
+= Move this Pokemon...
+> Move this Pokemon...
+
+= Release this Pokemon
+> Release this Pokemon
+
+= A Shadow Pokemon can't be released.
+> A Shadow Pokemon can't be released.
+
+= Good to know
+> Good to know
+
+= Everything above except nickname and place changes the game: the save is then marked as cheats used.
+> Everything above except nickname and place changes the game: the save is then marked as cheats used.
+
+= Name
+> Name
+
+= Your Pokemon keep counting as yours, and the playthrough's files follow the new name.
+> Your Pokemon keep counting as yours, and the playthrough's files follow the new name.
+
+= Play time, hours
+> Play time, hours
+
+= Play time, minutes
+> Play time, minutes
+
+= Pockets
+> Pockets
+
+= Poke Balls
+> Poke Balls
+
+= TMs & HMs
+> TMs & HMs
+
+= Berries
+> Berries
+
+= Colognes
+> Colognes
+
+= Battle CDs
+> Battle CDs
+
+= Item #%d
+> Item #%d
+
+= Remove %s
+> Remove %s
+
+= Nothing in this pocket.
+> Nothing in this pocket.
+
+= Add an item
+> Add an item
+
+= How many
+> How many
+
+= Add to the bag
+> Add to the bag
+
+= Parts tied to the story: key items, the Strategy Memo, opening a Shadow Pokemon's heart and the Purification Chamber. They are not in this version of the editor yet.
+> Parts tied to the story: key items, the Strategy Memo, opening a Shadow Pokemon's heart and the Purification Chamber. They are not in this version of the editor yet.
+
+= %s, %s
+> %s, %s
+
+= Bag
+> Bag
+
+= This save can only be looked at
+> This save can only be looked at
+
+= This changes your game: the save will be marked as cheats used.
+> This changes your game: the save will be marked as cheats used.
+
+= These changes don't change the game: no mark.
+> These changes don't change the game: no mark.
+
+= The save's card file can't be read.
+> The save's card file can't be read.
+
+= The save's card file is too short.
+> The save's card file is too short.
+
+= This save is empty: there is nothing to edit yet. Play and save once first.
+> This save is empty: there is nothing to edit yet. Play and save once first.
+
+= This is a Pokemon XG save: the editor does not handle those yet.
+> This is a Pokemon XG save: the editor does not handle those yet.
+
+= This playthrough uses mods, a randomizer or Pokemon of other generations. The editor knows only the original game's lists so far, so it only shows this save.
+> This playthrough uses mods, a randomizer or Pokemon of other generations. The editor knows only the original game's lists so far, so it only shows this save.
+
+= This save is in the Japanese layout: the editor does not write those yet.
+> This save is in the Japanese layout: the editor does not write those yet.
+
+= The editor is not open.
+> The editor is not open.
+
+= Choose a species first.
+> Choose a species first.
+
+= Choose an item first.
+> Choose an item first.
+
+= move #%d
+> move #%d
+
+= nothing
+> nothing
+
+= box %d slot %d
+> box %d slot %d
+
+= Key Items
+> Key Items
+
+= A name can't be empty.
+> A name can't be empty.
+
+= A name can have at most %d letters here (the game's own name entry).
+> A name can have at most %d letters here (the game's own name entry).
+
+= That name has a letter the game can't show.
+> That name has a letter the game can't show.
+
+= empty place
+> empty place
+
+= That place does not exist.
+> That place does not exist.
+
+= This save has no Pokemon section.
+> This save has no Pokemon section.
+
+= There is no Pokemon in that place.
+> There is no Pokemon in that place.
+
+= The level must be from 1 to 100.
+> The level must be from 1 to 100.
+
+= Eggs have no level to change.
+> Eggs have no level to change.
+
+= The game's tables don't have that species.
+> The game's tables don't have that species.
+
+= The game's tables have no experience curve for that species.
+> The game's tables have no experience curve for that species.
+
+= %s: level %d -> %d
+> %s: level %d -> %d
+
+= A Shadow Pokemon (or one that was) keeps its species: the Shadow list in the save names it.
+> A Shadow Pokemon (or one that was) keeps its species: the Shadow list in the save names it.
+
+= Eggs can't change species.
+> Eggs can't change species.
+
+= %s: species -> %s
+> %s: species -> %s
+
+= %s: nickname -> %s
+> %s: nickname -> %s
+
+= The game's tables don't have that item.
+> The game's tables don't have that item.
+
+= %s: held item %s -> %s
+> %s: held item %s -> %s
+
+= Friendship goes from 0 to 255.
+> Friendship goes from 0 to 255.
+
+= %s: friendship %d -> %d
+> %s: friendship %d -> %d
+
+= That is not a stat.
+> That is not a stat.
+
+= An IV goes from 0 to 31.
+> An IV goes from 0 to 31.
+
+= %s: IV %s %d -> %d
+> %s: IV %s %d -> %d
+
+= An EV goes from 0 to 255 here (the game's own highest is 100: the page says so when it is more).
+> An EV goes from 0 to 255 here (the game's own highest is 100: the page says so when it is more).
+
+= %s: EV %s %d -> %d
+> %s: EV %s %d -> %d
+
+= A Pokemon has four moves.
+> A Pokemon has four moves.
+
+= PP Ups go from 0 to 3.
+> PP Ups go from 0 to 3.
+
+= The game's tables don't have that move.
+> The game's tables don't have that move.
+
+= It already knows that move.
+> It already knows that move.
+
+= %s: move %s -> %s with %d PP Ups
+> %s: move %s -> %s with %d PP Ups
+
+= %s: move %s -> %s
+> %s: move %s -> %s
+
+= That move place is empty.
+> That move place is empty.
+
+= %s: %s PP Ups %d -> %d
+> %s: %s PP Ups %d -> %d
+
+= A Pokemon has a first and a second ability place.
+> A Pokemon has a first and a second ability place.
+
+= This species has only one ability.
+> This species has only one ability.
+
+= %s: ability place %d -> %d
+> %s: ability place %d -> %d
+
+= %s: healed (HP, PP, status)
+> %s: healed (HP, PP, status)
+
+= There are four PC marks.
+> There are four PC marks.
+
+= %s: PC marks changed
+> %s: PC marks changed
+
+= There are 25 natures.
+> There are 25 natures.
+
+= Nature, gender and shininess of a Shadow Pokemon can't be changed before it is purified: the Shadow list keeps the same number.
+> Nature, gender and shininess of a Shadow Pokemon can't be changed before it is purified: the Shadow list keeps the same number.
+
+= This species has no choice of gender.
+> This species has no choice of gender.
+
+= No personality value fits all of that.
+> No personality value fits all of that.
+
+= nature %d -> %d
+> nature %d -> %d
+
+= gender -> female
+> gender -> female
+
+= gender -> male
+> gender -> male
+
+= now shiny
+> now shiny
+
+= no longer shiny
+> no longer shiny
+
+= %s: %s (new personality value)
+> %s: %s (new personality value)
+
+= A Shadow Pokemon can't be released: it is not yours to let go before it is purified.
+> A Shadow Pokemon can't be released: it is not yours to let go before it is purified.
+
+= The party can't be left empty.
+> The party can't be left empty.
+
+= %s: released
+> %s: released
+
+= %s <-> %s: moved
+> %s <-> %s: moved
+
+= The party is full.
+> The party is full.
+
+= All the PC boxes are full.
+> All the PC boxes are full.
+
+= Nothing to copy the game's own record layout from: the save needs one Pokemon of its own that was not a Shadow Pokemon.
+> Nothing to copy the game's own record layout from: the save needs one Pokemon of its own that was not a Shadow Pokemon.
+
+= %s: new Pokemon, level %d
+> %s: new Pokemon, level %d
+
+= That box does not exist.
+> That box does not exist.
+
+= This save has no PC section.
+> This save has no PC section.
+
+= Box %d: name -> %s
+> Box %d: name -> %s
+
+= This save has no trainer section.
+> This save has no trainer section.
+
+= Trainer name %s -> %s
+> Trainer name %s -> %s
+
+= Money goes up to 999,999.
+> Money goes up to 999,999.
+
+= Money %u -> %u
+> Money %u -> %u
+
+= Poke Coupons go up to 99,999.
+> Poke Coupons go up to 99,999.
+
+= Poke Coupons %u -> %u
+> Poke Coupons %u -> %u
+
+= Play time goes up to 999 hours 59 minutes 59 seconds.
+> Play time goes up to 999 hours 59 minutes 59 seconds.
+
+= This save has no game-data section.
+> This save has no game-data section.
+
+= Play time %.0f:%02d -> %.0f:%02d hours
+> Play time %.0f:%02d -> %.0f:%02d hours
+
+= This save has no bag section.
+> This save has no bag section.
+
+= That bag place does not exist.
+> That bag place does not exist.
+
+= A stack holds 1 to 999.
+> A stack holds 1 to 999.
+
+= That item doesn't go in the %s pocket.
+> That item doesn't go in the %s pocket.
+
+= That item is in this pocket already: change its stack instead.
+> That item is in this pocket already: change its stack instead.
+
+= added %s x%d
+> added %s x%d
+
+= removed %s x%d
+> removed %s x%d
+
+= %s x%d -> %s x%d
+> %s x%d -> %s x%d
+
+= Bag (%s): %s
+> Bag (%s): %s
+
+= Bag (%s): removed item #%d x%d
+> Bag (%s): removed item #%d x%d
+
+= A stack holds at most 999.
+> A stack holds at most 999.
+
+= This pocket is full.
+> This pocket is full.
+
+= Bag (%s): reordered
+> Bag (%s): reordered
+
+= Nothing was changed.
+> Nothing was changed.
+
+= The new save did not pass the program's own check (%s).
+> The new save did not pass the program's own check (%s).
+
+= The new save does not read back the way it was edited.
+> The new save does not read back the way it was edited.
+
+= The game is running and has the memory card open. Close it first.
+> The game is running and has the memory card open. Close it first.
+
+= The save's card file is not there any more.
+> The save's card file is not there any more.
+
+= Nothing was written: %s
+> Nothing was written: %s
+
+= nothing was changed.
+> nothing was changed.
+
+= the changes would not work in the game:
+> the changes would not work in the game:
+
+= the save's card file can't be read.
+> the save's card file can't be read.
+
+= the save changed since it was opened here (the game, a restore or another program wrote to it). Open it again.
+> the save changed since it was opened here (the game, a restore or another program wrote to it). Open it again.
+
+= another playthrough already has files for a trainer with that name and ID. Pick another name.
+> another playthrough already has files for a trainer with that name and ID. Pick another name.
+
+= the backup of the save could not be made (%s).
+> the backup of the save could not be made (%s).
+
+= the new save file could not be written (is the disk full?).
+> the new save file could not be written (is the disk full?).
+
+= the new save file did not read back correctly.
+> the new save file did not read back correctly.
+
+= the game was started while the changes were prepared. Close it and try again.
+> the game was started while the changes were prepared. Close it and try again.
+
+= the playthrough's setup file can't be read (%s), so the mark could not be kept.
+> the playthrough's setup file can't be read (%s), so the mark could not be kept.
+
+= the playthrough's setup file could not be written.
+> the playthrough's setup file could not be written.
+
+= the save extension could not be made again for the new save.
+> the save extension could not be made again for the new save.
+
+= the save file could not be replaced (%s).
+> the save file could not be replaced (%s).
+
+= Saved %d change
+> Saved %d change
+
+= Saved %d changes
+> Saved %d changes
+
+= ; the playthrough is marked as "cheats used"
+> ; the playthrough is marked as "cheats used"
+
+= ; the playthrough is not marked
+> ; the playthrough is not marked
+
+= . The save as it was is in the backups (%s).
+> . The save as it was is in the backups (%s).
+
+= These parts are tied to the story. Changing them can make events skip or repeat, leave a playthrough stuck, or make the Strategy Memo and the story disagree. Make sure you have a backup you trust (one is made when you save) and only go on if you know what you are doing.
+> These parts are tied to the story. Changing them can make events skip or repeat, leave a playthrough stuck, or make the Strategy Memo and the story disagree. Make sure you have a backup you trust (one is made when you save) and only go on if you know what you are doing.
+
+= I understand: show the risky changes
+> I understand: show the risky changes
+
+= Key items
+> Key items
+
+= Story items (Disc Case, Mask of Ice...). The game may check for them to start or finish an event: removing one can block the story, adding one can skip a step.
+> Story items (Disc Case, Mask of Ice...). The game may check for them to start or finish an event: removing one can block the story, adding one can skip a step.
+
+= Remove
+> Remove
+
+= Add a key item
+> Add a key item
+
+= Add this key item
+> Add this key item
+
+= Strategy Memo
+> Strategy Memo
+
+= The game's list of Pokemon you have met. Adding a species lists it as met; removing one takes it out of the list. Entries past 500 are kept elsewhere and are not changed.
+> The game's list of Pokemon you have met. Adding a species lists it as met; removing one takes it out of the list. Entries past 500 are kept elsewhere and are not changed.
+
+= Species listed
+> Species listed
+
+= Add a species
+> Add a species
+
+= Add to the Strategy Memo
+> Add to the Strategy Memo
+
+= Remove a species
+> Remove a species
+
+= Remove from the Strategy Memo
+> Remove from the Strategy Memo
+
+= Shadow Pokemon hearts
+> Shadow Pokemon hearts
+
+= Opens the heart of a Shadow Pokemon you have caught: it is then ready to be purified. You still purify it yourself at the Relic Stone or in the Purification Chamber, so the game teaches the real moves and gives the stored experience. Nothing else about a Shadow Pokemon is changed.
+> Opens the heart of a Shadow Pokemon you have caught: it is then ready to be purified. You still purify it yourself at the Relic Stone or in the Purification Chamber, so the game teaches the real moves and gives the stored experience. Nothing else about a Shadow Pokemon is changed.
+
+= heart open
+> heart open
+
+= Open the heart (gauge %d)
+> Open the heart (gauge %d)
+
+= No caught Shadow Pokemon with a closed heart.
+> No caught Shadow Pokemon with a closed heart.
+
+= This playthrough plays with other lists than the original game's (mods, a randomizer or Pokemon of other generations). The game writes them next to the save while you play: start the game with this save once with this version, then edit it here. Until then it can only be looked at.
+> This playthrough plays with other lists than the original game's (mods, a randomizer or Pokemon of other generations). The game writes them next to the save while you play: start the game with this save once with this version, then edit it here. Until then it can only be looked at.
+
+= That Pokemon is not a Shadow Pokemon.
+> That Pokemon is not a Shadow Pokemon.
+
+= This Shadow Pokemon's record is kept in the save extension (More Shadow Pokemon): its heart can't be opened here yet.
+> This Shadow Pokemon's record is kept in the save extension (More Shadow Pokemon): its heart can't be opened here yet.
+
+= That Pokemon is purified already.
+> That Pokemon is purified already.
+
+= That Shadow Pokemon is not caught yet.
+> That Shadow Pokemon is not caught yet.
+
+= This save has no Shadow list.
+> This save has no Shadow list.
+
+= %s: heart opened (gauge %d -> 0)
+> %s: heart opened (gauge %d -> 0)
+
+= This save has no Strategy Memo.
+> This save has no Strategy Memo.
+
+= The Strategy Memo is full (500 entries): the rest are kept in the save extension, which the editor does not change yet.
+> The Strategy Memo is full (500 entries): the rest are kept in the save extension, which the editor does not change yet.
+
+= Strategy Memo: %s added
+> Strategy Memo: %s added
+
+= Strategy Memo: %s removed
+> Strategy Memo: %s removed
+
+= This Pokemon comes from a save with cheats. Receiving it marks your save as cheats used.
+> This Pokemon comes from a save with cheats. Receiving it marks your save as cheats used.
+
+= Your save is now marked as cheats used.
+> Your save is now marked as cheats used.
+

@@ -21,7 +21,7 @@ int main(int argc, char** argv) {
   }
   std::string cmd = argv[3], code, dieAt, resultFile;
   int give = -1, seconds = 90;
-  bool noConfirm = false, forceOffer = false;
+  bool noConfirm = false, forceOffer = false, fromCheats = false;
   xdnet::ConnectionConfig cfg;
   bool customNet = false;
   for (int i = 4; i < argc; i++) {
@@ -34,6 +34,7 @@ int main(int argc, char** argv) {
     else if (a == "--no-go-between") { cfg.useGoBetween = false; customNet = true; }
     else if (a == "--die-at") dieAt = next();
     else if (a == "--no-confirm") noConfirm = true;
+    else if (a == "--cheats") fromCheats = true;
     else if (a == "--force-offer") forceOffer = true;
     else if (a == "--seconds") seconds = std::atoi(next().c_str());
     else if (a == "--result") resultFile = next();
@@ -46,6 +47,7 @@ int main(int argc, char** argv) {
   Config tc;
   tc.rules = &disc.rules;
   tc.names = disc.names.get();
+  tc.fromCheats = fromCheats;
   Trader trader(tc);
   if (!trader.Load(card.data, error)) { std::fprintf(stderr, "save: %s\n", error.c_str()); return 2; }
 
@@ -164,7 +166,7 @@ int main(int argc, char** argv) {
       rc = 0;
       const Result& r = t.result();
       line += " | received " + r.received + (r.evolved ? " and it evolved: " + r.evolvedFrom + " -> " + r.evolvedInto : "") +
-              (r.newEntry ? " | new Pokedex entry" : "") + " | in " + r.where;
+              (r.newEntry ? " | new Pokedex entry" : "") + " | in " + r.where + (r.receivedFromCheats ? " | FROM A SAVE WITH CHEATS (the screen asks first; a live game marks the save)" : "");
     } else if (!s->myOfferVerdict().ok && s->myOfferJudged()) {
       line += " | friend refused my Pokemon: " + s->myOfferVerdict().text;
     } else if (!s->theirsVerdict().ok && !s->theirs().record.empty()) {

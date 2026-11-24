@@ -5,16 +5,25 @@
 #include <wincodec.h>
 #else
 #include <png.h>
+#include <unistd.h>
 #endif
 
 #include <dolphin/gx.h>
 #include <dolphin/mtx.h>
 #include <dolphin/gx/GXAurora.h>
 
+extern "C" {
+void GSlightSetupLights(void* cobj);
+void GSlightDeleteCurrentAll(void);
+void HSD_LObjAddCurrentAll(void* lobj);
+void HSD_LObjSetupInit(void* cobj);
+void HSD_LObjGetColor(void* lobj, GXColor* color);
+}
 enum GSgfxLayerID {};
 enum GSgfxLayerType {};
 #include <game/gsgfxlayer.h>
 struct GSgfxLayer : public GSgfxLayerData {};
+#include <game/gsmodellayout.h>
 #include <game/effects.h>
 
 #include <port_disc.h>
@@ -52,6 +61,9 @@ u32 GSmodelCanAnimate(_GSmodel* model);
 void GSmodelSetAnimIndex(_GSmodel* model, u32 index);
 void GSmodelSetAnimFrame(_GSmodel* model, f32 frame);
 void GSmodelSetAnimRate(_GSmodel* model, f32 rate);
+void GSmodelStopTexAnimation(_GSmodel* model);
+void GSmodelSetTexAnimFrame(_GSmodel* model, f32 frame);
+void GSmodelSetTexAnimRate(_GSmodel* model, f32 rate);
 f32 GSmodelGetAnimFrameCount(_GSmodel* model, u32 index);
 void GSmodelStartAnimation(_GSmodel* model);
 GScamera* GScameraCreate(void);
@@ -113,6 +125,7 @@ struct Job {
   bool failed = false;
   bool posed = false;
   bool retried = false;
+  int tries = 0;
   u32 fileGroup = 0;
   std::string note;
   std::vector<uint8_t> rgba;
@@ -369,10 +382,15 @@ void AimTighter(const Rect& r, int s) {
   ApplyView();
 }
 
+float PoseFrame();
+bool sOnlyOwnLights = false;
+void* sOwnLobj[3] = {};
+constexpr size_t kLightLobjOffset = 16;
 void UseOwnLights(bool on) {
   for (GSlight* l : sLights) {
     if (l != nullptr) GSlightSetActive(l, on ? 1 : 0);
   }
+  sOnlyOwnLights = on && PoseFrame() >= 0.f && sOwnLobj[0] != nullptr && sOwnLobj[1] != nullptr && sOwnLobj[2] != nullptr;
 }
 
 s32 LoadThread() {
@@ -404,6 +422,7 @@ _GSmodel* TitleModel(int n) { return static_cast<_GSmodel*>(GSresGetResourceAllG
 
 void StopPose(_GSmodel* m) {
   if (m != nullptr && GSmodelCanAnimate(m) != 0) GSmodelSetAnimRate(m, 0.f);
+  if (m != nullptr && PoseFrame() >= 0.f) GSmodelStopTexAnimation(m), GSmodelSetTexAnimRate(m, 0.f);
 }
 
 float PoseFrame() {
@@ -412,6 +431,45 @@ float PoseFrame() {
     return (e != nullptr && e[0] != '\0') ? static_cast<float>(std::atof(e)) : -1.f;
   }();
   return v;
+}
+
+uint32_t sShownFrame = 0;
+extern "C" uint32_t* __hsd_rand_seed_hold;
+void FreezeTexAnim(_GSmodel* m) {
+  GSmodelStopTexAnimation(m);
+  GSmodelSetTexAnimRate(m, 0.f);
+  GSmodelSetTexAnimFrame(m, 0.f);
+  if (GSmodelCanAnimate(m) != 0) {
+    GSmodelSetAnimRate(m, 0.f);
+    GSmodelSetAnimFrame(m, PoseFrame());
+  }
+}
+void ReseedEffects(uint32_t frame) {
+  if (PoseFrame() < 0.f || __hsd_rand_seed_hold == nullptr || sStep < Step::Settle || sStep > Step::Drawn) return;
+  uint32_t h = static_cast<uint32_t>(sCurrent) * 2654435761u + (frame - sShownFrame) * 40503u + 0x6D2B79F5u;
+  h ^= h >> 15, h *= 2246822519u, h ^= h >> 13;
+  *__hsd_rand_seed_hold = h;
+  if (sCurrent < sJobs.size() && sJobs[sCurrent].model != nullptr) FreezeTexAnim(sJobs[sCurrent].model);
+}
+
+void PoseLog(const char* what, const Job& job) {
+  static const char* base = std::getenv("XD_RENDER_ICON_POSELOG") != nullptr ? std::getenv("XD_RENDER_ICON_POSELOG") : std::getenv("GEN57_POSELOG");
+  if (base == nullptr || base[0] == 0 || job.model == nullptr) return;
+  static FILE* f = [] {
+    std::string name = std::string(base) + "." + std::to_string(
+#if defined(_WIN32)
+        GetCurrentProcessId()
+#else
+        getpid()
+#endif
+    ) + ".txt";
+    return std::fopen(name.c_str(), "a");
+  }();
+  if (f == nullptr) return;
+  const GSmodelLayout* m = reinterpret_cast<const GSmodelLayout*>(job.model);
+  std::fprintf(f, "%s %s flags=%08x idx=%d f=%.3f rate=%.3f bf=%.3f brate=%.3f tf=%.3f trate=%.3f ttype=%d blend=%.3f u21c=%d frame=%u since=%u model=%p t=%p,%p,%p,%p\n", job.name.c_str(), what, m->flags, m->animIndex, m->animFrame,
+               m->animRate, m->blendAnimFrame, m->blendAnimRate, m->texAnimFrame, m->texAnimRate, m->texAnimType, m->blendFactor, (int)m->unk21C, sFrame, sFrame - sShownFrame, (void*)job.model, (void*)TitleModel(0), (void*)TitleModel(1), (void*)TitleModel(2), (void*)TitleModel(3));
+  std::fflush(f);
 }
 
 Job* FindJob(const char* name) {
@@ -543,9 +601,12 @@ void OnRenderScreen(GSgfxLayer* layer, int pass, bool logo) {
   }
 }
 
+uint32_t sFirstPictureFrame = 0;
+
 void OnRender(GSgfxLayer* layer, int pass) {
   if (sStep != Step::Armed || sDrawnThisFrame || layer == nullptr) return;
   Job& job = sJobs[sCurrent];
+  if (PoseFrame() >= 0.f && job.refined && !job.face && (job.kind == Kind::Pokemon || job.kind == Kind::Trainer) && sFrame < sFirstPictureFrame + 12) return;
   if (job.kind == Kind::Logo || job.kind == Kind::Scene) {
     OnRenderScreen(layer, pass, job.kind == Kind::Logo);
     return;
@@ -555,6 +616,7 @@ void OnRender(GSgfxLayer* layer, int pass) {
   GSmodelSetRenderCamera(job.model, sCamera);
   if (own) UseOwnLights(true);
   const bool black = sModelPhase == 0;
+  PoseLog(black ? "black" : "white", job);
   DrawModel(layer, job.model, GXColor{0, 0, 0, 0}, 2);
   DrawModel(layer, job.model, black ? GXColor{0, 0, 0, 0} : GXColor{255, 255, 255, 255}, black ? 0 : 1);
   if (own) UseOwnLights(false);
@@ -570,6 +632,7 @@ void OnRender(GSgfxLayer* layer, int pass) {
     return;
   }
   sModelPhase = 0;
+  if (!job.refined) sFirstPictureFrame = sFrame;
   sStep = Step::Drawn;
   sStepFrame = sFrame;
 }
@@ -667,6 +730,19 @@ void Collect(uint32_t frame) {
     job.failed = true, job.note = note;
     return;
   }
+  if (PoseFrame() >= 0.f && job.kind == Kind::Pokemon && !job.offer && job.rgba.size() >= 4) {
+    size_t covered = 0, opaque = 0;
+    for (size_t i = 3; i < job.rgba.size(); i += 4) {
+      covered += job.rgba[i] > 12;
+      opaque += job.rgba[i] >= 242;
+    }
+    if (covered > 0 && opaque * 10 < covered) {
+      std::fprintf(stderr, "[render icon] %s: washed-out picture (%zu of %zu covered pixels opaque)\n", job.name.c_str(), opaque, covered);
+      job.failed = true, job.note = "washed-out picture";
+      job.rgba.clear();
+      return;
+    }
+  }
   job.width = job.height = sSize;
   if (job.offer) {
     WriteOfferPicture(job);
@@ -745,6 +821,18 @@ void WriteOfferPicture(Job& job) {
 void OnFrame(uint32_t frame) {
   if (sPrevious != nullptr) sPrevious(frame);
   sFrame = frame;
+  ReseedEffects(frame);
+  if (PoseFrame() >= 0.f && sStep >= Step::Settle && sStep <= Step::Drawn && sCurrent < sJobs.size() && sJobs[sCurrent].model != nullptr) {
+    for (int t = 0; t < 4; t++) {
+      if (sJobs[sCurrent].model == TitleModel(t)) {
+        std::fprintf(stderr, "[render icon] %s: the model became the title's own model %d (step %d)\n", sJobs[sCurrent].name.c_str(), t, (int)sStep);
+        sJobs[sCurrent].failed = true, sJobs[sCurrent].note = "the model was the title's own";
+        sJobs[sCurrent].model = nullptr;
+        sStep = Step::Next;
+        break;
+      }
+    }
+  }
   switch (sStep) {
   case Step::Boot:
     if (TitleModel(0) != nullptr) {
@@ -771,6 +859,16 @@ void OnFrame(uint32_t frame) {
           GSlightSetColor(sLights[i], colors[i]);
           GSlightSetActive(sLights[i], 0);
         }
+        for (int i = 0; i < 3; i++) {
+          if (sLights[i] == nullptr) continue;
+          void* lobj = *reinterpret_cast<void**>(reinterpret_cast<uint8_t*>(sLights[i]) + kLightLobjOffset);
+          GXColor got{};
+          if (lobj != nullptr) HSD_LObjGetColor(lobj, &got);
+          if (lobj != nullptr && got.r == colors[i]->r && got.g == colors[i]->g && got.b == colors[i]->b) sOwnLobj[i] = lobj;
+        }
+        if (PoseFrame() >= 0.f && (sOwnLobj[0] == nullptr || sOwnLobj[1] == nullptr || sOwnLobj[2] == nullptr)) {
+          std::fprintf(stderr, "[render icon] could not find the lights' objects: the game's other lights stay on in the pictures\n");
+        }
         sStreams[0] = AuroraReadbackCreateStream();
         sStreams[1] = AuroraReadbackCreateStream();
         sStreams[2] = AuroraReadbackCreateStream();
@@ -791,6 +889,12 @@ void OnFrame(uint32_t frame) {
   case Step::Loading: {
     Job& job = sJobs[sCurrent];
     if (sLoader == nullptr) {
+      for (int t = 0; t < 4 && job.model != nullptr; t++) {
+        if (job.model == TitleModel(t)) {
+          std::fprintf(stderr, "[render icon] %s: the loaded model is the title's own model %d\n", job.name.c_str(), t);
+          job.model = nullptr;
+        }
+      }
       if (job.model == nullptr) {
         job.failed = true, job.note = "the game could not load this model";
         sStep = Step::Next;
@@ -808,6 +912,7 @@ void OnFrame(uint32_t frame) {
         GSmodelSetAnimRate(job.model, 0.5f);
         GSmodelStartAnimation(job.model);
       }
+      sShownFrame = frame;
       sStep = Step::Settle;
       sStepFrame = frame;
     } else if (frame - sStepFrame > 60 * 30) {
@@ -837,7 +942,9 @@ void OnFrame(uint32_t frame) {
       }
       if (PoseFrame() >= 0.f && !job.posed && GSmodelCanAnimate(job.model) != 0) {
         GSmodelSetAnimFrame(job.model, PoseFrame());
+        GSmodelSetTexAnimFrame(job.model, 0.f);
         job.posed = true;
+        PoseLog("posed", job);
         sStepFrame = frame - 16;
         break;
       }
@@ -867,7 +974,7 @@ void OnFrame(uint32_t frame) {
     if (sJobs[sCurrent].failed && sJobs[sCurrent].kind == Kind::Pokemon && !sJobs[sCurrent].retried) {
       Job copy = sJobs[sCurrent];
       std::fprintf(stderr, "[render icon] %s: %s; will be tried once more at the end\n", copy.name.c_str(), copy.note.c_str());
-      copy.failed = false, copy.retried = true, copy.note.clear(), copy.sequence = nullptr, copy.model = nullptr, copy.refined = false;
+      copy.failed = false, copy.tries = copy.tries + 1, copy.retried = copy.tries >= 3, copy.note.clear(), copy.sequence = nullptr, copy.model = nullptr, copy.refined = false;
       sJobs[sCurrent].failed = false, sJobs[sCurrent].retried = true, sJobs[sCurrent].note = "retried";
       sJobs.push_back(copy);
     } else if (sJobs[sCurrent].failed) {
@@ -989,6 +1096,19 @@ std::string Folder(const char* env, const char* fallback) {
   return path;
 }
 
+}
+
+extern "C" void PortXD_ModelLights(void* cobj) {
+  if (!sOnlyOwnLights) {
+    GSlightSetupLights(cobj);
+    return;
+  }
+  GSlightDeleteCurrentAll();
+  for (int i = 0; i < 3; i++) {
+    *reinterpret_cast<void**>(reinterpret_cast<uint8_t*>(sOwnLobj[i]) + 0x18) = i < 2 ? sOwnLobj[i + 1] : nullptr;
+  }
+  HSD_LObjAddCurrentAll(sOwnLobj[0]);
+  HSD_LObjSetupInit(cobj);
 }
 
 extern "C" void PortXD_BackgroundGuardStart(void);

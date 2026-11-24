@@ -8,11 +8,13 @@ game's move scripts keep working. Choices:
 - skin: every vertex is skinned (a rigid piece = one bone, weight 1); weights in steps of 0.1, at most 4 bones;
 - materials: ONE picture each (the colour map, texture unit 0); the 3DS's second picture (shade / emission),
   normal map, rim light, phong and the outline (edge) pass are dropped: XD's own lighting is used;
-- eyes: the 3DS eye is an atlas picked by a UV animation: the idle's first frame picks the open eye, kept still;
+- eyes: the 3DS eye is an atlas picked by a UV animation: the idle's first frame picks the open eye (baked into the UVs);
+  the eye slide (V offset of the Eye / Mouth / Iris materials) is written as XD material animations per slot, and the
+  pure eye-slide motion '_blink' feeds XD's face records (blink / sleep / wake) where the slot is free;
 - animation slots: XD's own table (which XD animation plays for which kind of move) is kept; each slot gets the
   3DS motion that fits its role (idle, hit, faint, physical, special); mode 'native' keeps the 3DS timing,
   mode 'xd' stretches each motion to the length of XD's animation in that slot and smooths it;
-- NOT done: eye blinks / mouth animations, per-motion mesh visibility (the vines of Bulbasaur stay hidden), the
+- NOT done: per-motion mesh visibility (the vines of Bulbasaur stay hidden), the
   second picture's shading, decimation (3DS models have 3 to 6 times XD's triangles).
 """
 import math

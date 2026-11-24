@@ -463,6 +463,11 @@ struct Age {
   void Reset() { last = {}, age = 0.f; }
   float Tick() {
     const auto now = std::chrono::steady_clock::now();
+    if (xd::picker::TestSkipIntroOn()) {
+      if (last.time_since_epoch().count() != 0) age += 1.f / 60.f;
+      last = now;
+      return age;
+    }
     if (last.time_since_epoch().count() != 0) age += std::clamp(std::chrono::duration<float>(now - last).count(), 0.f, 0.1f);
     last = now;
     return age;

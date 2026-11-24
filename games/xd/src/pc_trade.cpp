@@ -44,6 +44,8 @@ void memoDataSet(int32_t kind, void* pokemon);
 uint16_t pokemonEvolutionCheck(void* pokemon, int32_t mode, uint16_t item, uint16_t* extra, PcEvoInfo* info);
 int32_t PortXD_FieldEvolve(void* pokemon, int32_t kind, int32_t item);
 int32_t PortXD_SaveForced(void);
+int PortXD_CheatsUsedHere(void);
+void PortXD_CheatsNoteReceived(const char* what);
 int32_t pokemonEvolutionAll(void* pokemon, uint16_t species, uint16_t extra, PcEvoInfo* info, void* hero, int writeMemo, int mode, int fade);
 void GSthreadSwitch(void);
 void* windowSearchID(int32_t id);
@@ -94,6 +96,7 @@ Bytes WireOf(const uint8_t* live) {
     state = d != nullptr && d->isRelive() ? 1 : 2;
   }
   w.push_back(state);
+  w.push_back(PortXD_CheatsUsedHere() != 0 ? 1 : 0);
   return w;
 }
 
@@ -175,6 +178,7 @@ class LiveTrader : public xd::trade::Trader {
     }
     if (!able) return {false, "After this trade you would have no Pokemon in your party that can battle."};
     result_.received = Name(incoming.species);
+    result_.receivedFromCheats = get.size() > kRec + 1 && get[kRec + 1] != 0;
     result_.where = at.box == -1 ? "party slot " + std::to_string(at.slot + 1)
                                  : "PC box " + std::to_string(at.box + 1) + ", place " + std::to_string(at.slot + 1);
     uint8_t kind = 0;
@@ -226,6 +230,7 @@ bool ApplyStaged(std::string& error) {
     return false;
   }
   uint8_t* got = At(s.place);
+  if (s.get.size() > kRec + 1 && s.get[kRec + 1] != 0) PortXD_CheatsNoteReceived("received a Pokemon from a save with cheats");
   pokemonBiosSetFriend(got, 0x46);
   memoDataSet(0, got);
   return true;

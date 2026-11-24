@@ -92,6 +92,10 @@ uint32_t pokemon_GetExp(void* pokemon);
 void pokemon_SetExp(void* pokemon, uint32_t exp);
 uint32_t pokemonGetLevelToExp(void* pokemon, uint8_t level);
 void* fightTrainerGetValidFightPokemonPtr(void* trainer, uint16_t index);
+void* fightFloorGetFightOutPokemonPtrToFightTrainerPtr(void* floor, void* fightOutPokemon);
+void* fightOutPokemon_GetMotoFightPokemonPtr(void* fop);
+int fightOutPokemon_GetIrekaetaFlag(void* fop);
+void fightOutPokemonCreate(void* fop, void* fp, void* seq);
 void* fightPokemon_GetPokemonBuffPtr(void* fp);
 void fightPokemon_SetLevelUpFlag(void* fp, uint8_t flag);
 void* fightPokemon_GetMotoPokemonPtr(void* fp);
@@ -134,6 +138,7 @@ uint32_t fightFloor_GetEncountDataId(void* floor);
 void* fightEncountDataBiosGetPtr(uint16_t id);
 uint32_t fightEncountDataBiosGetFightKind(void* enc);
 void fightWazaSetUseWazaStatus(void* fw, uint16_t waza);
+void fightFloorSetFightResultId(void* floor, int result);
 void* fightSeqSelectDefensePokemonPtr(void* atk, uint16_t waza, uint32_t type, uint32_t a, uint32_t b, uint32_t c, int32_t d);
 uint8_t fightFloor_GetFightType(int32_t floor);
 extern uint32_t ServerStatusFlag;
@@ -156,20 +161,27 @@ constexpr uint32_t kAmeukezara = 0x8041791Cu, kDokudoku = 0x804174FDu;
 constexpr uint32_t kRain = 0x8041783Cu, kSand = 0x80417858u, kSun = 0x80417874u;
 constexpr int kSlot = 163;
 constexpr uint8_t kPortOp = 0x53, kPortMark = 0xF1;
-enum : uint8_t { kCmdDispatch = 1, kCmdSetup = 2, kCmdAfter = 3, kCmdApply = 4, kCmdAbsorb = 5, kCmdForce = 6, kCmdVanish = 7, kCmdUnvanishA = 8, kCmdUnvanishB = 9, kCmdDance = 10 };
+enum : uint8_t { kCmdDispatch = 1, kCmdSetup = 2, kCmdAfter = 3, kCmdApply = 4, kCmdAbsorb = 5, kCmdForce = 6, kCmdVanish = 7, kCmdUnvanishA = 8, kCmdUnvanishB = 9, kCmdDance = 10, kCmdTraceStart = 11, kCmdTraceFail = 12, kCmdTraceEnd = 13 };
 constexpr uint8_t kSelf = 0x40;
 constexpr size_t kBlockSize = 0x2000;
 constexpr uint32_t kOffDispatch = 0x000, kOffHit = 0x040, kOffHitSwitch = 0x120, kOffSelf = 0x200, kOffFoe = 0x240, kOffAbsorb = 0x280,
                    kOffHail = 0x2C0, kOffHitForce = 0x300, kOffFoeSwitch = 0x3A0, kOffScripts = 0x420;
+constexpr uint16_t kTeleportMove = 100;
 constexpr uint32_t kRoarSeq = 28;
 constexpr int kMaxScripts = (kBlockSize - kOffScripts) / 0x40;
 constexpr uint32_t kScriptBase2 = 0x8F004000u;
 constexpr size_t kBlock2Size = 0x2000;
-constexpr uint32_t kOff2Switch = 0x000, kOff2Dance = 0x0C0, kOff2Charge = 0x100;
+constexpr uint32_t kOff2Switch = 0x000, kOff2Dance = 0x0C0, kOff2Skip = 0x0F0, kOff2Fail = 0x0E0, kOff2Charge = 0x100;
+constexpr uint32_t kSkipScript = kScriptBase2 + kOff2Skip;
 constexpr size_t kChargeStride = 0x300, kChargeCopy = 0x240;
 constexpr size_t kVanishCopy = 0x13A;
-constexpr uint32_t kVanishAfterA = 0x804140E6u, kVanishAfterB = 0x8041412Du;
 constexpr int kMaxCharge = 8;
+
+extern "C" void PortXD_SetStrongWinds(int on);
+extern "C" void PortXD_RebuildBattlerModel(void* fop);
+extern "C" void PortXD_SetCarried(void* target, void* carrier);
+extern "C" void PortXD_ReleaseCarried(void* target);
+extern "C" void PortXD_SetShownAs(void* fop, void* shownAs);
 
 xb::Defs sDefs;
 bool sLoaded = false;
@@ -183,7 +195,7 @@ uint8_t sScripts[kBlockSize];
 uint8_t sScripts2[kBlock2Size];
 bool sInstalled = false;
 std::map<int64_t, int> sChargeIndex;
-int sMsgDisabled = -1, sMsgTransformed = -1;
+int sMsgDisabled = -1, sMsgTransformed = -1, sMsgIllusion = -1;
 
 void PutBe32(uint8_t* p, uint32_t v) { p[0] = v >> 24; p[1] = v >> 16; p[2] = v >> 8; p[3] = v; }
 uint32_t GetBe32(const uint8_t* p) { return (uint32_t(p[0]) << 24) | (uint32_t(p[1]) << 16) | (uint32_t(p[2]) << 8) | p[3]; }
@@ -197,9 +209,12 @@ struct Mon {
   bool berryNoted = false;
   int charging = 0;
   bool heating = false;
+  bool skyRefused = false;
   bool shellArmed = false, shellHit = false;
 };
+int WeightOf(void* fop);
 Mon sMons[16];
+bool sWindOn = false;
 int sTerrain = 0;
 int sTerrainEnd = -1;
 xb::Absorb sImmune;
@@ -221,6 +236,7 @@ const xb::Absorb* sAbsorbEntry = nullptr;
 void* sBounceFop = nullptr;
 void* sPendingSwitch = nullptr;
 uint16_t sDanceMove = 0;
+bool sSwitchFaithful = false;
 void* sSwitchKeepAtk = nullptr;
 void* sCorrode = nullptr;
 bool sAnyUnnerve = false, sAnyWind = false, sAnyInfiltrator = false, sAnyDancer = false;
@@ -238,7 +254,7 @@ Mon& MonOf(void* fop) {
 void ResetBattle() {
   for (auto& m : sMons) m = Mon();
   for (auto& f : sFieldEnd) f = -1;
-  sTerrain = 0; sTerrainEnd = -1;
+  sTerrain = 0; sTerrainEnd = -1; sWindOn = false;
   sVeilEnd[0] = sVeilEnd[1] = -1; sWeb[0] = sWeb[1] = false;
   sDealt = 0; sDealtTo = nullptr; sRuleWeatherDone = false; sBounceFop = nullptr; sPendingSwitch = nullptr; sSwitchKeepAtk = nullptr;
 }
@@ -524,6 +540,7 @@ void DoTransform(void* user, void* foe, int messageId) {
   if (keepAtk != nullptr) fightFloor_SetAttackPokemonPtr(nullptr, keepAtk);
   if (keepDef != nullptr) fightFloor_SetDefPokemonAndAtkFightWazaTargetId(nullptr, keepDef);
   if (ok) {
+    PortXD_RebuildBattlerModel(user);
     fightMsgctrlSetValue(0xD, reinterpret_cast<uintptr_t>(fightOutPokemonGetNamePtr(foe)));
     Say(messageId, user);
   }
@@ -702,6 +719,7 @@ void SetupScripts() {
   {
     const auto* baton = static_cast<const uint8_t*>(PortXD_GameAddress(kBatonPass));
     if (baton != nullptr && baton[0] == 0x50 && baton[7] == 0x0A && baton[8] == 0x0B && baton[0x2E] == 0x53) {
+      PutPort(o, kCmdTraceStart);
       uint8_t* tail = o;
       std::memcpy(o, baton, 7); o += 7;
       std::memcpy(o, baton + 10, 0x30 - 10); o += 0x30 - 10;
@@ -828,6 +846,7 @@ void Load(const em::LoadResult& result, const std::vector<em::ModFolder>& found,
     sMsgWebHit = AddMessage("{name} was caught in a sticky web!", false);
     sMsgImmune = AddMessage("{name} is not affected!", false);
     sMsgDisabled = AddMessage("{name}'s move was disabled!", false);
+    sMsgIllusion = AddMessage("{name}'s Illusion wore off!", false);
     sSpikyHurt = xb::Block();
     sSpikyHurt.kind = xb::BlockKind::Hurt;
     sSpikyHurt.messageId = AddMessage("{name} was hurt!", true);
@@ -943,15 +962,34 @@ void EnsureInstalled() {
     if (baton != nullptr && baton[0] == 0x50 && baton[7] == 0x0A && baton[8] == 0x0B && baton[0x2E] == 0x53) {
       uint8_t* tail = o;
       std::memcpy(o, baton, 7); o += 7;
-      std::memcpy(o, baton + 10, 0x30 - 10); o += 0x30 - 10;
-      Relocate(tail, static_cast<size_t>(o - tail), 0x80415C93u, kWazaEnd);
+      std::memcpy(o, baton + 13, 0x30 - 13); o += 0x30 - 13;
+      Relocate(tail, static_cast<size_t>(o - tail), 0x80415C93u, kScriptBase2 + kOff2Fail);
+      {
+        uint8_t* fl = sScripts2 + kOff2Fail;
+        PutPort(fl, kCmdTraceFail);
+        *fl++ = 0x29; PutBe32(fl, kWazaEnd);
+      }
+      static const struct { uint8_t at, op; int mode; } kChain[] = {{0, 0x50, -1}, {7, 0x51, -1}, {13, 0xE1, -1}, {16, 0x52, -1}, {19, 0x59, -1}, {21, 0x4D, -1},
+                                                                    {23, 0x4E, 0}, {26, 0x74, -1}, {33, 0x4F, 0}, {40, 0x53, -1}};
+      bool ok = true;
+      for (const auto& c : kChain) if (tail[c.at] != c.op || tail[c.at + 1] != 0x11) ok = false;
+      if (ok) {
+        for (const auto& c : kChain) { tail[c.at + 1] = 0x12; if (c.mode == 0) tail[c.at + 2] = 0x00; }
+        tail[6] = 0x00;
+        sSwitchFaithful = true;
+      } else Log("Baton Pass's script is not as read: the switch-out chain is not made", "");
     }
+    PutPort(o, kCmdTraceEnd);
     *o++ = 0x29; PutBe32(o, kWazaEnd);
     {
       uint8_t* d = sScripts2 + kOff2Dance;
       *d++ = 0x00; *d++ = 0x02; *d++ = 0x04;
       PutPort(d, kCmdDance);
       *d++ = 0x29; PutBe32(d, kWazaEnd);
+    }
+    {
+      uint8_t* k = sScripts2 + kOff2Skip;
+      *k++ = 0x29; PutBe32(k, kWazaEnd);
     }
     int ci = 0;
     for (const auto& m : sDefs.moves) {
@@ -977,17 +1015,6 @@ void EnsureInstalled() {
           if (dst[i] == 0x2B && dst[i + 1] == 0x00 && dst[i + 2] == 0x80 && dst[i + 6] == ((m.chargeDonor >> 8) & 0xFF) && dst[i + 7] == (m.chargeDonor & 0xFF)) {
             dst[i + 6] = static_cast<uint8_t>(m.id >> 8); dst[i + 7] = static_cast<uint8_t>(m.id & 0xFF); vanishes++; i += 7;
           }
-        }
-        for (size_t i = 0; i + 6 <= copyLen; i++) {
-          if ((dst[i] != 0xC5 && dst[i] != 0xC6) || dst[i + 1] != 0x29) continue;
-          const uint32_t to = GetBe32(dst + i + 2);
-          uint8_t cmd = 0;
-          if (dst[i] == 0xC5 && to == kWazaEnd) cmd = kCmdVanish;
-          else if (dst[i] == 0xC6 && to == kVanishAfterA) cmd = kCmdUnvanishA;
-          else if (dst[i] == 0xC6 && to == kVanishAfterB) cmd = kCmdUnvanishB;
-          if (cmd == 0) continue;
-          dst[i] = kPortOp; dst[i + 1] = kPortMark; dst[i + 2] = cmd; dst[i + 3] = 0; dst[i + 4] = 0; dst[i + 5] = 0;
-          vanishes++; i += 5;
         }
         tables = vanishes;
       }
@@ -1030,6 +1057,12 @@ bool PortCommand(uint8_t id) {
   case kCmdDispatch: {
     if (it == sMoves.end()) { fightSeq_JumpWazaSeq(PortXD_GameAddress(kFailedWithMessage)); return true; }
     const xb::MoveDef& m = *it->second;
+    if (m.chargeCarry && atk != nullptr && MonOf(atk).skyRefused) {
+      Mon& sm = MonOf(atk);
+      sm.skyRefused = false; sm.charging = 0;
+      fightSeq_JumpWazaSeq(PortXD_GameAddress(kFailedWithMessage));
+      return true;
+    }
     if (m.chargeDonor != 0) {
       const auto ci = sChargeIndex.find(move);
       if (ci != sChargeIndex.end()) { fightSeq_JumpWazaSeq(PortXD_GameAddress(kScriptBase2 + kOff2Charge + static_cast<uint32_t>(kChargeStride) * ci->second)); return true; }
@@ -1069,6 +1102,12 @@ bool PortCommand(uint8_t id) {
     RunBlocks(it->second->effects, run, ab != nullptr && ab->removesSecondary && id == kCmdAfter);
     return false;
   }
+  case kCmdTraceStart: case kCmdTraceFail: case kCmdTraceEnd: {
+    Log(id == kCmdTraceStart ? "switch chain: start" : id == kCmdTraceFail ? "switch chain: nobody can come in (the check jumped to the end)" : "switch chain: done",
+        std::string(" attacker ") + (atk == nullptr ? "none" : OnPlayersSide(atk) ? "player's" : "foe's") + ", defender " + (def == nullptr ? "none" : OnPlayersSide(def) ? "player's" : "foe's") +
+        ", defender irekae flag " + std::to_string(def != nullptr ? fightOutPokemon_GetIrekaetaFlag(def) : -1));
+    return false;
+  }
   case kCmdDance: {
     if (atk == nullptr || sDanceMove == 0) return false;
     const uint16_t copy = sDanceMove;
@@ -1091,17 +1130,6 @@ bool PortCommand(uint8_t id) {
     const auto* bytes = static_cast<const uint8_t*>(PortXD_GameAddress(roar + 35));
     if (bytes == nullptr || bytes[0] != 0x90) { Log("Roar's script is not as read: forced switch left out", ""); return false; }
     fightSeq_JumpWazaSeq(PortXD_GameAddress(roar + 35));
-    return true;
-  }
-  case kCmdVanish: case kCmdUnvanishA: case kCmdUnvanishB: {
-    const auto vit = sMoves.find(move);
-    const int64_t donor = vit != sMoves.end() ? vit->second->chargeDonor : 19;
-    const uint16_t state = donor == 91 ? 0x20 : donor == 291 ? 0x21 : 0x1F;
-    if (atk != nullptr) {
-      if (id == kCmdVanish) { if (fightOutPokemonCheckWriteJoutaiDataId(atk, state) == 2) fightOutPokemonWriteJoutaiDataId(atk, state, 0); }
-      else if (fightOutPokemonIsJoutaiDataId(atk, state) == 1) fightOutPokemonInitJoutaiDataId(atk, state);
-    }
-    fightSeq_JumpWazaSeq(PortXD_GameAddress(id == kCmdVanish ? kWazaEnd : id == kCmdUnvanishA ? kVanishAfterA : kVanishAfterB));
     return true;
   }
   case kCmdAbsorb: {
@@ -1227,6 +1255,7 @@ uint8_t WazaType(void* fop, uint8_t type) {
 }
 
 bool StrongWindOn();
+void WindSync(void* leaving);
 int32_t Damage(void* attacker, void* defender, uint16_t waza, uint16_t type, int32_t damage) {
   if (!sLoaded || attacker == nullptr || defender == nullptr || damage <= 2) return damage;
   if (xd::forms::DisguiseIntact(defender) && wazaDB_GetIryoku(waza) > 0) return 0;
@@ -1435,6 +1464,21 @@ bool StrongWindOn() {
   return s.found;
 }
 
+int32_t ScanWindExcept(void* f, uint16_t, void* data) {
+  auto* s = static_cast<FieldScan*>(data);
+  if (Alive(f) && f != s->holder) { const xb::AbilityDef* a = AbilityOf(f); if (a != nullptr && a->strongWind) s->found = true; }
+  return 1;
+}
+void WindSync(void* leaving) {
+  if (!sLoaded || !sAnyWind) return;
+  FieldScan s; s.holder = leaving;
+  fightFloorLoopValidFightOutPokemon(nullptr, ScanWindExcept, &s, 0);
+  if (s.found == sWindOn) return;
+  sWindOn = s.found;
+  PortXD_SetStrongWinds(sWindOn ? 1 : 0);
+  Log(sWindOn ? "Delta Stream: strong winds begin (the game's weather value 6)" : "Delta Stream: the strong winds stop", "");
+}
+
 uint16_t SoubiKind(void* fop, uint16_t kind) {
   if (sLoaded && sAnyUnnerve && kind != 0 && fop != nullptr && IsBerry(fightOutPokemonGetSoubiItemDataId(fop))) {
     FieldScan s; s.holder = fop;
@@ -1495,6 +1539,14 @@ bool SideIgnored(void* side, uint16_t id) {
   static int told = 0;
   if (ignored && told++ < 4) Log(("Infiltrator: the other side's screen state " + std::to_string(id) + " is not seen").c_str(), "");
   return ignored;
+}
+
+bool VanishUntouchable(uint16_t waza) { const auto it = sMoves.find(waza); return it != sMoves.end() && it->second->chargeUntouchable; }
+
+int64_t VanishDonorOf(uint16_t waza) {
+  const auto it = sMoves.find(waza);
+  if (it == sMoves.end() || it->second->chargeDonor == 0) return 0;
+  return wazaDB_GetSeqId(static_cast<uint16_t>(it->second->chargeDonor)) == wazaDB_GetSeqId(19) ? it->second->chargeDonor : 0;
 }
 
 bool IgnoresSubstitute(void* attacker) {
@@ -1640,6 +1692,25 @@ bool TryDance() {
   return true;
 }
 
+void IllusionSetup(void* fop) {
+  if (!sLoaded || fop == nullptr) return;
+  const xb::AbilityDef* a = AbilityOf(fop);
+  if (a == nullptr || !a->illusion) return;
+  void* trainer = fightFloorGetFightOutPokemonPtrToFightTrainerPtr(nullptr, fop);
+  if (trainer == nullptr) return;
+  void* own = fightOutPokemon_GetMotoFightPokemonPtr(fop);
+  for (int i = 5; i >= 0; i--) {
+    void* fp = fightTrainerGetValidFightPokemonPtr(trainer, static_cast<uint16_t>(i));
+    if (fp == nullptr || fp == own) continue;
+    void* pk = fightPokemon_GetPokemonBuffPtr(fp);
+    if (pk == nullptr || pokemon_GetHp(pk) == 0) continue;
+    PortXD_SetShownAs(fop, pk);
+    Log("Illusion: sent out as party slot ", std::to_string(i));
+    return;
+  }
+}
+void IllusionBroken(void* fop) { EnsureInstalled(); Say(sMsgIllusion, fop); Log("Illusion: the disguise is broken", ""); }
+
 bool WazaEndHook() {
   if (sLoaded) { CheckBerry(Target(0x12)); CheckBerry(Target(0x11)); }
   if (sPendingSwitch == nullptr) {
@@ -1651,18 +1722,25 @@ bool WazaEndHook() {
   if (!sLoaded || !Alive(p)) return false;
   EnsureInstalled();
   if (!OnPlayersSide(p) && fightEncountDataBiosGetFightKind(fightEncountDataBiosGetPtr(static_cast<uint16_t>(fightFloor_GetEncountDataId(nullptr)))) == 0xC) {
-    const auto* table = static_cast<const uint8_t*>(PortXD_GameAddress(kWazaEffectTbl + 4 * kRoarSeq));
-    const uint32_t roar = table != nullptr ? GetBe32(table) : 0;
-    const auto* bytes = roar != 0 ? static_cast<const uint8_t*>(PortXD_GameAddress(roar + 35)) : nullptr;
-    if (bytes != nullptr && bytes[0] == 0x90) {
-      Log("Wimp Out / Emergency Exit: a wild Pokemon flees (the game's own forced-out script ends the battle)", "");
-      fightFloor_SetDefPokemonAndAtkFightWazaTargetId(nullptr, p);
-      fightSeq_JumpWazaSeq(PortXD_GameAddress(roar + 35));
+    const auto* table = static_cast<const uint8_t*>(PortXD_GameAddress(kWazaEffectTbl + 4 * wazaDB_GetSeqId(kTeleportMove)));
+    const uint32_t tele = table != nullptr ? GetBe32(table) : 0;
+    const auto* bytes = tele != 0 ? static_cast<const uint8_t*>(PortXD_GameAddress(tele + 28)) : nullptr;
+    if (bytes != nullptr && bytes[0] == 0xEF) {
+      Log("Wimp Out / Emergency Exit: a wild Pokemon flees (the game's own Teleport script ends the battle)", "");
+      sSwitchKeepAtk = Target(0x11);
+      fightFloor_SetAttackPokemonPtr(nullptr, p);
+      fightWazaSetUseWazaStatus(fightOutPokemon_GetFightWazaPtr(p), kTeleportMove);
+      fightFloorSetFightResultId(nullptr, 2);
+      fightSeq_JumpWazaSeq(PortXD_GameAddress(tele + 33));
       return true;
     }
   }
-  sSwitchKeepAtk = Target(0x11);
-  fightFloor_SetAttackPokemonPtr(nullptr, p);
+  if (sSwitchFaithful) {
+    fightFloor_SetDefPokemonAndAtkFightWazaTargetId(nullptr, p);
+  } else {
+    sSwitchKeepAtk = Target(0x11);
+    fightFloor_SetAttackPokemonPtr(nullptr, p);
+  }
   Log("Wimp Out / Emergency Exit: the owner goes back at the end of the move", "");
   fightSeq_JumpWazaSeq(PortXD_GameAddress(kScriptBase2 + kOff2Switch));
   return true;
@@ -1670,6 +1748,7 @@ bool WazaEndHook() {
 
 void HitAfter(void* attacker, void* defender) {
   FlushDrops();
+  WindSync(nullptr);
   if (sLoaded) { CheckBerry(attacker); CheckBerry(defender); }
   if (sLoaded && attacker != nullptr && defender != nullptr && attacker != defender && Alive(defender) &&
       wazaDB_GetIryoku(fightOutPokemon_GetUseWazaDataId(attacker)) > 0 && xd::forms::DisguiseIntact(defender)) {
@@ -1749,6 +1828,7 @@ void HitAfter(void* attacker, void* defender) {
       }
     }
   }
+  if (const auto sit = sMoves.find(move); sit != sMoves.end() && sit->second->chargeCarry && defender != nullptr) { PortXD_ReleaseCarried(defender); Log("Sky Drop: the target is let go", ""); }
   if (const auto mit = sMoves.find(move); mit != sMoves.end() && mit->second->chargeDonor != 0 && Alive(attacker) && !mit->second->effects.empty()) {
     Run run; run.user = attacker; run.other = defender; run.move = move;
     RunBlocks(mit->second->effects, run);
@@ -1788,6 +1868,12 @@ void MoveStarting(void* attacker, uint16_t move) {
       }
     } else {
       cm.charging = static_cast<int>(move);
+      if (cit->second->chargeCarry) {
+        void* foe = Target(0x12);
+        cm.skyRefused = foe != nullptr && (HasType(foe, 2) || WeightOf(foe) >= 2000 || fightOutPokemonIsJoutaiDataId(foe, 0x14) == 1);
+        if (cm.skyRefused) Log("Sky Drop: the target cannot be lifted (Flying type, 200 kg or more, or a Substitute): the move fails", "");
+        else if (foe != nullptr && foe != attacker && Alive(foe)) { PortXD_SetCarried(foe, attacker); Log("Sky Drop: the target is carried: state set = ", std::to_string(fightOutPokemonIsJoutaiDataId(foe, 0x57))); }
+      }
     }
   }
   { const auto pit = sMoves.find(move); MonOf(attacker).protect = pit != sMoves.end() ? pit->second->protectKind : 0; }
@@ -1803,6 +1889,7 @@ void Appear(void* p) {
   Tick();
   EnsureInstalled();
   FlushDrops();
+  WindSync(nullptr);
   Mon& m = MonOf(p);
   m = Mon();
   m.fop = p;
@@ -1827,6 +1914,7 @@ void SwitchingOut(void* p) {
   if (!sLoaded || !Alive(p)) return;
   Tick();
   MonOf(p).type = -1;
+  WindSync(p);
   const xb::AbilityDef* a = AbilityOf(p);
   if (a == nullptr || a->switchOut.empty()) return;
   EnsureInstalled();
@@ -1851,6 +1939,7 @@ int32_t EachMon(void* fop, uint16_t, void*) {
 void EndOfTurn() {
   if (!sLoaded) return;
   Tick();
+  WindSync(nullptr);
   EnsureInstalled();
   FlushDrops();
   for (auto& m : sMons) { m.heating = false; m.shellArmed = false; m.shellHit = false; }
@@ -2031,6 +2120,35 @@ bool SetRules(const std::string& name) {
 extern "C" {
 
 static int InfiltratorIgnoresSubstitute(void* attacker, void*, uint16_t) { return xd::modbattle::IgnoresSubstitute(attacker) ? 1 : 0; }
+void fightOutPokemonSetVisibility(void* fop, int visible);
+void fightSeqVanishOff(void* fop);
+extern "C" void* (*PortXD_StrongWindsBlockSeq)(void);
+namespace {
+void* StrongWindsBlock() { std::fprintf(stderr, "[mod battle] Delta Stream: a weather move was refused by the strong winds\n"); return nullptr; }
+struct WindHookInstaller { WindHookInstaller() { PortXD_StrongWindsBlockSeq = &StrongWindsBlock; } } sWindHookInstaller;
+}
+extern "C" void (*PortXD_IllusionBroken)(void* fop);
+extern "C" void (*PortXD_CarriedChanged)(void* fop, int carried);
+extern "C" void* (*PortXD_CarriedSkipSeq)(void* fop);
+namespace {
+void CarriedChanged(void* fop, int carried) { if (carried) fightOutPokemonSetVisibility(fop, 0); else fightSeqVanishOff(fop); }
+void* CarriedSkip(void*) { std::fprintf(stderr, "[mod battle] Sky Drop: the carried Pokemon's move is skipped\n"); return PortXD_GameAddress(xd::modbattle::kSkipScript); }
+struct CarryHookInstaller { CarryHookInstaller() { PortXD_CarriedChanged = &CarriedChanged; PortXD_CarriedSkipSeq = &CarriedSkip; } } sCarryHookInstaller;
+}
+void PortXD_ModOutCreate(void* fop, void* fp, void* seq) {
+  fightOutPokemonCreate(fop, fp, seq);
+  xd::modbattle::IllusionSetup(fop);
+}
+namespace { struct IllusionHookInstaller { IllusionHookInstaller() { PortXD_IllusionBroken = &xd::modbattle::IllusionBroken; } } sIllusionHookInstaller; }
+extern "C" int (*PortXD_VanishKind)(uint16_t waza);
+namespace {
+int VanishKindOf(uint16_t waza) {
+  const int64_t it = xd::modbattle::VanishDonorOf(waza);
+  if (it != 0 && xd::modbattle::VanishUntouchable(waza)) return 0x58;
+  return it == 91 ? 0x20 : it == 291 ? 0x21 : it != 0 ? 0x1F : 0;
+}
+struct VanishHookInstaller { VanishHookInstaller() { PortXD_VanishKind = &VanishKindOf; } } sVanishHookInstaller;
+}
 extern "C" int (*PortXD_IgnoresSubstitute)(void* attacker, void* target, uint16_t waza);
 namespace {
 struct SubstituteHookInstaller { SubstituteHookInstaller() { PortXD_IgnoresSubstitute = &InfiltratorIgnoresSubstitute; } } sSubstituteHookInstaller;

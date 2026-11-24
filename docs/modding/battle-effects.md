@@ -164,9 +164,10 @@ One text or a list (all must be true). `"!"` in front turns it round (`"!contact
 | `disable_on_hit` | `30`: a percent. A damaging move that hits it is disabled for its user (the game's own Disable) (Cursed Body) |
 | `poison_any_type` | `true`: poison from its moves (the poison status moves, Toxic) works on Steel and Poison types (Corrosion). Seen working: the Steel Metagross was badly poisoned and lost HP at the turn end |
 | `infiltrator` | `true`: its moves ignore the foe's Reflect, Light Screen, Aurora Veil, Safeguard and Mist, and its hits go past a Substitute (Infiltrator) |
-| `strong_wind` | `true`: while it is out, Flying Pokémon take no extra damage from Rock, Ice and Electric moves (Delta Stream). The weather is not removed |
+| `strong_wind` | `true`: Delta Stream. While it is out the game's 6th weather (strong winds) is on: no other weather can start (a weather move fails) and Flying Pokémon take no extra damage from Rock, Ice and Electric moves. It ends when the last Pokémon with it has left or fainted (0.7.3) |
+| `illusion` | `true`: Illusion. Sent out, the Pokémon shows the name, model and status face of the last Pokémon of its party that has not fainted. Its stats, types and moves stay its own. The first damaging hit from another Pokémon ends it (a Substitute that takes the hit, recoil and its own damage do not) and says "... Illusion wore off!" (0.7.3) |
 | `berry_eaten` | a list of blocks that run when its owner has just eaten a berry (Cheek Pouch: `{"heal": 33.3}`). It runs right after the move in which the berry was eaten (round 3; it used to wait for the end of the turn) |
-| `half_hp` | a list of blocks that run when a hit takes its owner to half HP or less (it did not faint). `{"switch_out": "user"}` sends the owner back at the END of the move that hurt it (Baton Pass's own switch-out script, where U-turn's runs; Wimp Out / Emergency Exit). Seen to trigger and never to stop the battle; the replacement itself was not seen in a test battle. Wild Pokémon do not flee |
+| `half_hp` | a list of blocks that run when a hit takes its owner to half HP or less (it did not faint). `{"switch_out": "user"}` sends the owner back at the END of the move that hurt it (Baton Pass's own switch-out script, where U-turn's runs; Wimp Out / Emergency Exit). Seen to trigger and never to stop the battle; a wild Pokémon with it runs away from the battle (the game's own Teleport ending) |
 | `dancer` | `["Swords Dance", "Dragon Dance"]`: right after another Pokemon uses one of these moves, the first owner of this ability among the others uses the same move at once (its own message, PP line and effects; no turn is used) (Dancer) |
 | `type_by_item` | `[{"item": "Fire Memory", "type": "Fire"}]`: its type follows the item it holds (RKS System). An item the game does not have is left out |
 
@@ -179,7 +180,7 @@ One text or a list (all must be true). `"!"` in front turns it round (`"!contact
 }
 ```
 
-`"charge"` makes the move a two-turn move: the first time it is used the user only charges up (the words in `message`), the next turn it is locked into the move and the
+`"charge"` makes the move a two-turn move (0.7.3: `"untouchable": true` on a vanish move (donor Fly) makes the vanished turn out of reach of every move, as Phantom Force; `"carry": true` makes it Sky Drop: the target is lifted with the user, hidden, loses its turn, and is let go after the hit; a target that is a Flying type, weighs 200 kg or more or stands behind a Substitute makes it fail): the first time it is used the user only charges up (the words in `message`), the next turn it is locked into the move and the
 move happens. `"donor"` is one of the game's own two-turn moves (Razor Wind, Skull Bash, Sky Attack, SolarBeam): the game's own script of that move is used (the lock, the PP, the
 messages of the hit), only the words of the first turn are yours. The move's `effects` run after its hit (a move with no damage, such as Geomancy: with the second turn). Moves that
 vanish for the first turn: use `"donor": "Fly"` (or Dig, Dive, Bounce: one script for all four). The script is copied, its "which move is this" tests and its two state commands answer for your move,

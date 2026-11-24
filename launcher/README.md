@@ -39,6 +39,8 @@ Choose your disc, how you want to play, your controls and mods, then press **Pla
     game switches full screen; every change works at once and is kept.
   - *Pause in the background* (System tab, on in Enhanced, off in Original): the game and its sound stop while its
     window isn't in front and carry on when you come back, as if no time had passed.
+  - *Controller in the background* (System tab, off in every preset): a controller keeps working while the game's window isn't in front (for a stream
+    overlay); SDL's joystick background-events switch, so controllers only, never the keyboard. Needs *Pause in the background* off.
 - **Controls**: a tab for each of the four GameCube controllers, each in cards:
   - *Controller N*: which PC controller plays as it (Automatic = the first free one, None = keyboard only, or one
     of those plugged in, listed by name; plugging one in or out shows at once). Controller presets: Auto (the
@@ -314,7 +316,10 @@ and choose which one the game loads; the game is not changed.
     choose from (a picture of the screen at the last save, trainer, play time, and the save's rules under the list);
     choosing another one than the circle's makes it the save the game loads and starts the game again straight into it.
     The pictures are made on this PC each time the game saves (`playthroughs\Card A\<key>.png` in the save's folder);
-    docs/PLAY_SETUP.md "Choosing a save at CONTINUE". The launcher's rows do not show them yet.
+    docs/PLAY_SETUP.md "Choosing a save at CONTINUE". The launcher shows them too (0.7.2): a small picture in each save's row
+    (column "Picture"), a larger one at the top of the open save's box, and a plain "no picture yet" frame until the game has
+    saved once (`GameInfo::SaveRow::thumbnail`, `SaveSummary::thumbnail`; the file is looked at again every 1.5 s, so a save the
+    game makes meanwhile shows up). Same on Windows, Linux and Mac.
   - **Above the list**: **New...**: a new, empty save (asks for a name; "Save 2" is offered). It is chosen and
     opened, and the game offers New Game. **Import from Dolphin / GameCube...** opens a panel (README section "Importing a
     save from Dolphin or a GameCube" below). Only a USA Pokemon XD save the game's own save reader accepts can come in.
@@ -340,6 +345,34 @@ check refuses); tick some and "Copy the ticked Pokemon into the PC boxes". One w
 of the XD save goes to `<card root>\save_backups\colosseum_import_<time>\`. Hooks `GameInfo::Saves::monsOpen / monsDo`; XD's
 code `games/xd/launcher/xd_colosseum_page.cpp`. Script steps `monsfile:<file>`, `monspick:<n,n|all>`, `monsconfirm`.
 Tests: `python tools/test_colosseum_import.py`. Never tried on a real Colosseum save.
+
+## Edit save (Save page)
+
+An open save's box has **Edit save...** when the game offers a save editor (`GameInfo::Saves::editOpen`; XD: docs/SAVE_EDITOR.md). It
+replaces the Save page with a page of its own: the save's picture and trainer on top, a line about the changes waiting (and whether saving
+marks the playthrough), tabs (XD: Pokemon / Trainer / Bag / Careful), and at the bottom **Back**, **Undo all changes** and **Save changes...**.
+
+The launcher knows nothing of what a row means: the game describes TABS of SECTIONS of ROWS (`GameInfo::Saves::EditView`: info lines, numbers,
+text, choices picked from a searchable list, tick boxes, buttons, selectable list entries) and takes every change back through `editSet(row id,
+value)`, which answers "" or the plain reason it was refused; the view is made again after each call. Changed rows get an amber frame. Two
+column tabs (`EditSection::column`) put a list on the left and the chosen entry's fields on the right.
+
+**Save changes...** opens a window with every change (those that change the game in amber), the mark line, the hard-block problems in red,
+the "good to know" lines, and, when the changes mark the playthrough, a tick box "I understand: mark this playthrough as cheats used" that
+must be ticked before **Save changes** works. The game writes (backup first); the page then shows the new save. The page is greyed out while the
+game runs ("Close the game first").
+
+Controller: every list is a `NavFlattened` child, number / text fields are `pad::InputText`, numbers also have - / + buttons, and B (`BackPressed`)
+closes the windows, then the page (a question first when changes are waiting).
+
+Script steps: `editopen:<n|name>` (the save's row), `editset:<row id>=<value>`, `edittab:<n>`, `editsave` (the window), `editconfirm` (writes),
+`editrevert`, `editclose`. Test: `python tools/test_save_editor.py --build <bin>`.
+
+## The pictures on the Save page
+
+Each save's row has a small **Picture** (the screenshot the game keeps at every save, `playthroughs\Card A\<key>.png`, docs/PLAY_SETUP.md
+"Thumbnails"), the open save's box and the Edit save page show it larger, and a plain "no picture yet" frame stands in until the game has saved
+once (`GameInfo::SaveRow::thumbnail`, `SaveSummary::thumbnail`; the file is looked at again every 1.5 s).
 
 ## GBA trade (Save page)
 

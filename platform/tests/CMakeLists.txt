@@ -6,6 +6,10 @@ aurora_copy_runtime_dlls(gx_triangle)
 add_executable(gx_lines gx_lines.c)
 target_link_libraries(gx_lines PRIVATE aurora::core aurora::gx aurora::main aurora::vi aurora::mtx)
 aurora_copy_runtime_dlls(gx_lines)
+if (APPLE)
+  target_link_options(gx_triangle PRIVATE "-Wl,-U,_MEM1Start")
+  target_link_options(gx_lines PRIVATE "-Wl,-U,_MEM1Start")
+endif ()
 
 add_executable(gx_wgpipe gx_wgpipe.cpp)
 target_link_libraries(gx_wgpipe PRIVATE platform_sdk aurora::core aurora::gx aurora::main aurora::vi aurora::mtx)
@@ -15,7 +19,7 @@ add_executable(gx_indexed gx_indexed.cpp)
 target_link_libraries(gx_indexed PRIVATE platform_sdk aurora::core aurora::gx aurora::main aurora::vi aurora::mtx)
 aurora_copy_runtime_dlls(gx_indexed)
 
-if (CMAKE_SIZEOF_VOID_P EQUAL 8)
+if (WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 8) # (windows.h, psapi, MSVC link options: Windows only)
 foreach (_variant normal low2gb lowimage)
   add_executable(addr_space_${_variant} addr_space.cpp)
   target_link_libraries(addr_space_${_variant} PRIVATE aurora::core aurora::gx aurora::main aurora::vi psapi)
@@ -72,9 +76,15 @@ aurora_copy_runtime_dlls(card_timing_test)
 
 add_executable(disc_drive_test disc_drive_test.cpp ../sdk/disc_drive.cpp)
 
+if (WIN32) # (the test includes windows.h: not built on Linux / Mac)
 add_executable(os_reset_test os_reset_test.cpp)
 target_link_libraries(os_reset_test PRIVATE platform_sdk)
 aurora_copy_runtime_dlls(os_reset_test)
+endif ()
+
+add_executable(background_controller_test background_controller_test.cpp)
+target_link_libraries(background_controller_test PRIVATE ${AURORA_SDL3_TARGET})
+aurora_copy_runtime_dlls(background_controller_test)
 
 add_executable(keyboard_defaults_test keyboard_defaults_test.cpp)
 target_link_libraries(keyboard_defaults_test PRIVATE platform_input aurora::pad aurora::core aurora::gx)
@@ -93,18 +103,24 @@ endif ()
 
 add_executable(game_clock_test game_clock_test.cpp ../sdk/game_clock.cpp)
 
+if (WIN32) # (the test includes windows.h: not built on Linux / Mac)
 add_executable(log_zip_test log_zip_test.cpp)
 target_link_libraries(log_zip_test PRIVATE platform_os ZLIB::ZLIB)
+endif ()
 
 add_executable(battle_replay_file_test battle_replay_file_test.cpp)
 target_link_libraries(battle_replay_file_test PRIVATE platform_os)
 
+if (WIN32) # (the test includes windows.h: not built on Linux / Mac)
 add_executable(folder_claim_test folder_claim_test.cpp)
 target_link_libraries(folder_claim_test PRIVATE platform_os)
+endif ()
 
+if (WIN32) # (the test includes windows.h: not built on Linux / Mac)
 add_executable(user_folder_test user_folder_test.cpp)
 target_link_libraries(user_folder_test PRIVATE platform_os)
 aurora_copy_runtime_dlls(user_folder_test)
+endif ()
 
 if (EXISTS "${XD_SNAPSHOT_DIR}/include/game/gc_fused.h")
   set(_gc_fused_dir "${XD_SNAPSHOT_DIR}/include")

@@ -204,6 +204,7 @@ void VISetNextFrameBuffer(void* fb) {
   PortCARD_OnFlip(sFrameBufferFlips);
 }
 uint32_t PortVI_GetFlipCount(void) { return sFrameBufferFlips; }
+void PortVI_TestAdvanceFlips(uint32_t n) { sFrameBufferFlips += n; }
 
 static BOOL sBlack;
 void VISetBlack(BOOL black) { sBlack = black; }

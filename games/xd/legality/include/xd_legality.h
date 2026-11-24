@@ -37,6 +37,8 @@ struct SpeciesRules {
   std::vector<uint16_t> eggMoves;
   std::vector<Evolution> evolutions;
   uint16_t evolvesFrom = 0;
+  uint8_t sexRatio = 0xFF;
+  uint16_t initFriend = 70;
 };
 
 struct MoveRules {
@@ -48,6 +50,7 @@ struct MoveRules {
 struct ItemRules {
   bool exists = false;
   uint16_t soubi = 0;
+  uint8_t bagKind = 0;
 };
 
 struct Rules {

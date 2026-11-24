@@ -60,7 +60,8 @@ struct SecondStatus {
   int species = 0;
 };
 SecondStatus ComputeSecondStatus(const std::filesystem::path& folder, const std::string& manifestFile, const std::string& expectedId,
-                                 int wantedVersion, const std::string& provides, bool firstOutOfDate);
+                                 int wantedVersion, const std::string& provides, bool firstOutOfDate, const std::string& recipeKey = std::string(),
+                                 int wantedRecipe = 0, const std::string& recipeReason = std::string());
 
 std::string QueryVersion(const std::filesystem::path& converter, const std::filesystem::path& logFile, int waitMs,
                          const std::string& versionArgument = {});

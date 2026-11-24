@@ -132,6 +132,8 @@ std::vector<std::string> WorldModIds(const Setup& setup);
 
 std::string Now();
 
+std::string TablesStamp(const Setup& setup);
+
 bool IsEngineSetting(const settings::Definition& def);
 std::string ApplyEngine(settings::Registry& registry, Engine engine);
 Engine DefaultEngine(const settings::Registry& registry);

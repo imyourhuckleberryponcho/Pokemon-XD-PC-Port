@@ -100,11 +100,12 @@ Bytes Trader::Wire(const xd::save::Pokemon& p) const {
   ShadowState st = ShadowState::Never;
   if (const xd::save::ShadowEntry* e = save_.ShadowOf(p)) st = e->Purified() ? ShadowState::Purified : ShadowState::Unpurified;
   w.push_back(static_cast<uint8_t>(st));
+  w.push_back(cfg_.fromCheats ? 1 : 0);
   return w;
 }
 
 bool Trader::Parse(const Bytes& wire, xd::save::Pokemon& out, ShadowState& shadow) {
-  if (wire.size() != kWireSize || wire[kPokemonSize] > 2) return false;
+  if (wire.size() != kWireSize || wire[kPokemonSize] > 2 || wire[kPokemonSize + 1] > 1) return false;
   out = xd::save::ParsePokemon(wire.data(), kOrder);
   shadow = static_cast<ShadowState>(wire[kPokemonSize]);
   return true;
@@ -114,7 +115,9 @@ Card Trader::DescribeWire(const Bytes& wire) const {
   xd::save::Pokemon p;
   ShadowState sh;
   if (!Parse(wire, p, sh)) return Card{};
-  return Describe(p);
+  Card c = Describe(p);
+  c.fromCheats = wire[kPokemonSize + 1] != 0;
+  return c;
 }
 
 Verdict Trader::Judge(const xd::legality::Rules& rules, const xd::save::Pokemon& p, ShadowState sh) {
@@ -189,6 +192,7 @@ Verdict Trader::Prepare(const Bytes& give, const Bytes& get) {
   xd::save::Pokemon incoming;
   ShadowState inShadow;
   Parse(get, incoming, inShadow);
+  result_.receivedFromCheats = get[kPokemonSize + 1] != 0;
 
   xd::save::Save work = save_;
   int box = -2, slot = -1;

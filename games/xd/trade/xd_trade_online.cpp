@@ -14,8 +14,8 @@ namespace xd::trade {
 
 namespace {
 
-std::vector<uint8_t> FingerprintOf(bool xg) { return {'X', static_cast<uint8_t>(xg ? 'G' : 'D'), 'T', '1'}; }
-bool IsEditionFingerprint(const std::vector<uint8_t>& f) { return f.size() == 4 && f[0] == 'X' && (f[1] == 'D' || f[1] == 'G') && f[2] == 'T' && f[3] == '1'; }
+std::vector<uint8_t> FingerprintOf(bool xg) { return {'X', static_cast<uint8_t>(xg ? 'G' : 'D'), 'T', '2'}; }
+bool IsEditionFingerprint(const std::vector<uint8_t>& f) { return f.size() == 4 && f[0] == 'X' && (f[1] == 'D' || f[1] == 'G') && f[2] == 'T' && f[3] == '2'; }
 
 bool ReadBytes(const fs::path& p, Bytes& out) {
   std::ifstream in(p, std::ios::binary);

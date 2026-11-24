@@ -9,6 +9,8 @@ extern "C" {
 
 bool PortFolderClaim_Take(const char* folder);
 
+bool PortFolderClaim_IsFree(const char* folder);
+
 #ifdef __cplusplus
 }
 #endif

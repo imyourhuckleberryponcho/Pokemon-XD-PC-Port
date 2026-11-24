@@ -6,7 +6,7 @@
 
 namespace xdnet::trade {
 
-constexpr uint8_t kVersion = 1;
+constexpr uint8_t kVersion = 2;
 constexpr size_t kMaxRecord = 1000;
 
 struct Verdict {

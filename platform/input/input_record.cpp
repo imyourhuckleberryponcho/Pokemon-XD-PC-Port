@@ -577,6 +577,17 @@ const char* PortInput_ReplaySettingsAt(size_t index, uint32_t* frame) {
   return rec->settings[index].action.c_str();
 }
 
+const char* PortInput_ReplayPlaythroughNote(const char* prefix) {
+  std::lock_guard<std::mutex> lock(sLock);
+  const Recording* rec = sPlayer != nullptr ? &sPlayer->recording() : sTicks != nullptr ? sTickRec : nullptr;
+  if (rec == nullptr || prefix == nullptr) return nullptr;
+  const size_t n = std::strlen(prefix);
+  for (const DevMenuLine& d : rec->playthroughNotes) {
+    if (d.action.compare(0, n, prefix) == 0) return d.action.c_str();
+  }
+  return nullptr;
+}
+
 uint32_t PortInput_ReplayRecordedFrame(void) {
   std::lock_guard<std::mutex> lock(sLock);
   if (sTicks != nullptr) {

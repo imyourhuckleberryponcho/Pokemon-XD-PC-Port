@@ -15,7 +15,7 @@ struct FaceView {
   std::string how;
 };
 
-bool face_view(const GfModel& gm, const Bytes& pkx, int nat, bool wide, FaceView* out);
+bool face_view(const GfModel& gm, const Bytes& pkx, int nat, bool wide, FaceView* out, bool baked = false);
 std::string view_key(int nat, const std::string& file_hash, bool wide);
 double framing_share(int nat);
 Bytes fsys_pkx(const Bytes& fsys);
@@ -27,6 +27,9 @@ struct FacesArgs {
   const Garc* models = nullptr;
   std::map<int, int> nat_group;
   std::set<int> nats;
+  struct ExtraModel { std::string fsys; int row = 0; };
+  std::map<int, ExtraModel> extra;
+  std::string extra_pack;
   int jobs = 8, xd_runs = 1;
   bool eol_crlf = false;
   RunProcessFn run;

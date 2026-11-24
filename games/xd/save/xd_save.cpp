@@ -183,92 +183,8 @@ const uint8_t* Save::SectionData(int id) const {
   return nullptr;
 }
 
-bool ReadSave(const std::vector<uint8_t>& file, Save& out, ReadReport& report, std::string& error) {
-  report = ReadReport{};
-  if (file.size() != kFileSize) {
-    error = "not a Pokemon XD save: " + std::to_string(file.size()) + " bytes (XD's is " + std::to_string(kFileSize) +
-            ")";
-    return false;
-  }
-
-  {
-    uint32_t sumBe = 0, sumLe = 0;
-    for (size_t i = 0; i < 0xE90; i++) {
-      sumBe += Read32(file.data() + i * 4, ByteOrder::GameCube);
-      sumLe += Read32(file.data() + i * 4, ByteOrder::PC);
-    }
-    report.bannerSumOk = sumBe == Read32(file.data() + 0x3A40, ByteOrder::GameCube) ||
-                         sumLe == Read32(file.data() + 0x3A40, ByteOrder::PC);
-    if (!report.bannerSumOk) {
-      report.warnings.push_back("the banner block's checksum is wrong (the game would just redraw the banner)");
-    }
-  }
-
-  std::array<std::vector<uint8_t>, kSlotCount> decrypted;
-  for (int s = 0; s < kSlotCount; s++) {
-    const uint8_t* slot = file.data() + SlotOffset(s);
-    SlotReport& r = report.slots[s];
-    r.written = slot[0] == 1 && slot[1] == 1 && slot[2] == 1;
-    if (!r.written) {
-      continue;
-    }
-    for (ByteOrder order : {ByteOrder::GameCube, ByteOrder::PC}) {
-      std::vector<uint8_t> copy(slot, slot + kSlotSize);
-      if (DecryptSaveData(copy.data() + kSlotHeaderSize, order)) {
-        r.checksumOk = true;
-        r.order = order;
-        r.saveCount = static_cast<int32_t>(Read32(slot + 4, order));
-        decrypted[s] = std::move(copy);
-        break;
-      }
-    }
-    if (!r.checksumOk) {
-      r.saveCount = static_cast<int32_t>(Read32(slot + 4, ByteOrder::GameCube));
-      continue;
-    }
-    const uint8_t* data = decrypted[s].data() + kSlotHeaderSize;
-    const uint16_t gameSize = Read16(data + 0x18, r.order);
-    if (gameSize == 0x88) {
-      const uint32_t at = kSectionBase + (Read16(data + 0x38, r.order) | static_cast<uint32_t>(Read16(data + 0x3A, r.order)) << 16);
-      uint32_t sum;
-      SlotHeaderSum(slot, &sum);
-      r.headerSumOk = at + 0x3C <= kDataSize && Read32(data + at + 0x38, r.order) == sum;
-    } else {
-      r.headerSumOk = true;
-    }
-  }
-
-  int best = -1;
-  for (int s = 0; s < kSlotCount; s++) {
-    const SlotReport& r = report.slots[s];
-    if (!r.written || r.saveCount <= 0) {
-      continue;
-    }
-    if (!r.checksumOk || !r.headerSumOk) {
-      report.warnings.push_back("slot " + std::to_string(s) + " (save counter " + std::to_string(r.saveCount) + ") " +
-                                (r.checksumOk ? "fails the header check" : "fails its checksums") + ": not used");
-      continue;
-    }
-    if (best < 0 || r.saveCount > report.slots[best].saveCount) {
-      best = s;
-    }
-  }
-  if (best < 0) {
-    bool anyWritten = false;
-    for (const SlotReport& r : report.slots) {
-      anyWritten |= r.written && r.saveCount > 0;
-    }
-    error = anyWritten ? "no save slot passes its checks (the save is damaged)"
-                       : "the file holds no saved game yet (both slots are empty: the game made the file but "
-                         "never saved into it)";
-    return false;
-  }
-
-  out = Save{};
-  out.slot = best;
-  out.order = report.slots[best].order;
-  out.saveCount = report.slots[best].saveCount;
-  out.slotBytes = std::move(decrypted[best]);
+void Reparse(Save& out, ReadReport& report) {
+  out.sections.clear();
   const ByteOrder order = out.order;
   const uint8_t* data = out.slotBytes.data() + kSlotHeaderSize;
 
@@ -356,6 +272,95 @@ bool ReadSave(const std::vector<uint8_t>& file, Save& out, ReadReport& report, s
       se.heartGauge = static_cast<int32_t>(Read32(e + 0x24, order));
     }
   }
+}
+
+bool ReadSave(const std::vector<uint8_t>& file, Save& out, ReadReport& report, std::string& error) {
+  report = ReadReport{};
+  if (file.size() != kFileSize) {
+    error = "not a Pokemon XD save: " + std::to_string(file.size()) + " bytes (XD's is " + std::to_string(kFileSize) +
+            ")";
+    return false;
+  }
+
+  {
+    uint32_t sumBe = 0, sumLe = 0;
+    for (size_t i = 0; i < 0xE90; i++) {
+      sumBe += Read32(file.data() + i * 4, ByteOrder::GameCube);
+      sumLe += Read32(file.data() + i * 4, ByteOrder::PC);
+    }
+    report.bannerSumOk = sumBe == Read32(file.data() + 0x3A40, ByteOrder::GameCube) ||
+                         sumLe == Read32(file.data() + 0x3A40, ByteOrder::PC);
+    if (!report.bannerSumOk) {
+      report.warnings.push_back("the banner block's checksum is wrong (the game would just redraw the banner)");
+    }
+  }
+
+  std::array<std::vector<uint8_t>, kSlotCount> decrypted;
+  for (int s = 0; s < kSlotCount; s++) {
+    const uint8_t* slot = file.data() + SlotOffset(s);
+    SlotReport& r = report.slots[s];
+    r.written = slot[0] == 1 && slot[1] == 1 && slot[2] == 1;
+    if (!r.written) {
+      continue;
+    }
+    for (ByteOrder order : {ByteOrder::GameCube, ByteOrder::PC}) {
+      std::vector<uint8_t> copy(slot, slot + kSlotSize);
+      if (DecryptSaveData(copy.data() + kSlotHeaderSize, order)) {
+        r.checksumOk = true;
+        r.order = order;
+        r.saveCount = static_cast<int32_t>(Read32(slot + 4, order));
+        decrypted[s] = std::move(copy);
+        break;
+      }
+    }
+    if (!r.checksumOk) {
+      r.saveCount = static_cast<int32_t>(Read32(slot + 4, ByteOrder::GameCube));
+      continue;
+    }
+    const uint8_t* data = decrypted[s].data() + kSlotHeaderSize;
+    const uint16_t gameSize = Read16(data + 0x18, r.order);
+    if (gameSize == 0x88) {
+      const uint32_t at = kSectionBase + (Read16(data + 0x38, r.order) | static_cast<uint32_t>(Read16(data + 0x3A, r.order)) << 16);
+      uint32_t sum;
+      SlotHeaderSum(slot, &sum);
+      r.headerSumOk = at + 0x3C <= kDataSize && Read32(data + at + 0x38, r.order) == sum;
+    } else {
+      r.headerSumOk = true;
+    }
+  }
+
+  int best = -1;
+  for (int s = 0; s < kSlotCount; s++) {
+    const SlotReport& r = report.slots[s];
+    if (!r.written || r.saveCount <= 0) {
+      continue;
+    }
+    if (!r.checksumOk || !r.headerSumOk) {
+      report.warnings.push_back("slot " + std::to_string(s) + " (save counter " + std::to_string(r.saveCount) + ") " +
+                                (r.checksumOk ? "fails the header check" : "fails its checksums") + ": not used");
+      continue;
+    }
+    if (best < 0 || r.saveCount > report.slots[best].saveCount) {
+      best = s;
+    }
+  }
+  if (best < 0) {
+    bool anyWritten = false;
+    for (const SlotReport& r : report.slots) {
+      anyWritten |= r.written && r.saveCount > 0;
+    }
+    error = anyWritten ? "no save slot passes its checks (the save is damaged)"
+                       : "the file holds no saved game yet (both slots are empty: the game made the file but "
+                         "never saved into it)";
+    return false;
+  }
+
+  out = Save{};
+  out.slot = best;
+  out.order = report.slots[best].order;
+  out.saveCount = report.slots[best].saveCount;
+  out.slotBytes = std::move(decrypted[best]);
+  Reparse(out, report);
   return true;
 }
 

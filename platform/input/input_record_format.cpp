@@ -414,7 +414,15 @@ bool ParseLine(const std::string& line, Recording& into) {
     if (ParseFrameField(w, frame, field)) into.modReloads.push_back(frame);
     return true;
   }
-  if (w[0] == "PHOTO" || w[0] == "PLAYTHROUGH") {
+  if (w[0] == "PLAYTHROUGH") {
+    DevMenuLine d;
+    if (ParseFrameField(w, d.frame, d.field) && w.size() >= 6) {
+      for (size_t i = 5; i < w.size(); i++) d.action += (i > 5 ? " " : "") + w[i];
+      into.playthroughNotes.push_back(d);
+    }
+    return true;
+  }
+  if (w[0] == "PHOTO") {
     return true;
   }
   if (w[0] == "IRQSITE") {

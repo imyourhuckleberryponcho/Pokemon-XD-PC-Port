@@ -37,6 +37,16 @@ double hand_share(int nat) {
   static const int whole[] = {517, 518, 524, 535, 546, 550, 562, 568, 577, 602, 607, 608, 609, 611, 618, 626, 710, 712, 748, 761, 764, 773, 779, 780, 788, 790, 805};
   for (int n : whole) if (n == nat) return 1.0;
   if (nat == 590 || nat == 591) return 0.6;
+  static const int g4whole[] = {421, 455, 456, 468, 476, 488};
+  for (int n : g4whole) if (n == nat) return 1.0;
+  switch (nat) {
+    case 483: return 0.30;
+    case 430: return 0.50;
+    case 441: return 0.60;
+    case 479: return 0.45;
+    case 408: case 409: return 0.6;
+    default: break;
+  }
   return 0.0;
 }
 
@@ -161,7 +171,23 @@ std::string view_key(int nat, const std::string& file_hash, bool wide) {
   return sha1_hex((const uint8_t*)s.data(), s.size()).substr(0, 20);
 }
 
-bool face_view(const GfModel& gm, const Bytes& pkx_bytes, int nat, bool wide, FaceView* out) {
+static bool hand_camera(int nat, FaceView* out) {
+  struct Cam { int nat; double x, y, z, r, yaw, pitch; const char* how; };
+  static const Cam cams[] = {
+      {398, -0.9, 17.4, 0.0, 3.4, 18.0, 6.0, "hand camera: Staraptor's head"},
+      {452, -1.0, 7.8, 0.0, 9.0, 0.0, 0.0, "hand camera: Drapion's head and claws"},
+      {442, 0.0, 2.2, 0.0, 6.5, 18.0, 6.0, "hand camera: Spiritomb's swirl and keystone"},
+  };
+  for (const Cam& c : cams) {
+    if (c.nat != nat) continue;
+    out->x = c.x, out->y = c.y, out->z = c.z, out->r = c.r, out->yaw = c.yaw, out->pitch = c.pitch, out->how = c.how;
+    return true;
+  }
+  return false;
+}
+
+bool face_view(const GfModel& gm, const Bytes& pkx_bytes, int nat, bool wide, FaceView* out, bool baked) {
+  if (baked && !wide && hand_camera(nat, out)) return true;
   const bool whole = wide;
   const double fscale = wide ? 2.2 : 1.0;
   Skeleton sk(gm.bones);
@@ -199,16 +225,30 @@ bool face_view(const GfModel& gm, const Bytes& pkx_bytes, int nat, bool wide, Fa
     hi[c] = np_percentile(col, 95);
     ctr[c] = (lo[c] + hi[c]) * 0.5;
   }
-  const double half = std::max(std::max(hi[0] - lo[0], hi[1] - lo[1]), 0.8 * (hi[2] - lo[2])) * 0.5;
+  double half = std::max(std::max(hi[0] - lo[0], hi[1] - lo[1]), 0.8 * (hi[2] - lo[2])) * 0.5;
   pbr::ReadResult rr = pbr::hsd_read_pkx(pkx_bytes, false);
   const pbr::Model& m = rr.model;
+  const std::vector<int> order = dfs_order_of(sk);
+  if (baked) {
+    double conv = 0, orig = 0;
+    for (size_t p = 0; p < order.size() && 2 + p < m.joints.size(); p++) {
+      const auto& jp = m.joints[2 + p].pos;
+      const auto& bt = sk.bind_t[(size_t)order[p]];
+      conv += std::sqrt((jp[0] * jp[0] + jp[1] * jp[1]) + jp[2] * jp[2]);
+      orig += std::sqrt((bt[0] * bt[0] + bt[1] * bt[1]) + bt[2] * bt[2]);
+    }
+    if (orig > 0 && conv > 0) {
+      const double s = conv / orig;
+      for (int k = 0; k < 3; k++) ctr[k] *= s;
+      half *= s;
+    }
+  }
   std::vector<pbr::Mat> wm = m.world_static();
   if (wm.size() < 2) throw std::runtime_error("the model has no root joint");
   const pbr::Mat& root = wm[1];
   const double sf = std::sqrt((root[0] * root[0] + root[4] * root[4]) + root[8] * root[8]);
   double c[3];
   for (int i = 0; i < 3; i++) c[i] = ((root[(size_t)i * 4] * ctr[0] + root[(size_t)i * 4 + 1] * ctr[1]) + root[(size_t)i * 4 + 2] * ctr[2]) + root[(size_t)i * 4 + 3];
-  const std::vector<int> order = dfs_order_of(sk);
   int jh = -1;
   for (size_t p = 0; p < order.size(); p++) if (order[p] == hb) jh = 2 + (int)p;
   const pbr::Animation* anim = nullptr;
@@ -321,7 +361,8 @@ struct Faces {
     std::vector<Todo> todo;
     int hits = 0;
     for (int nat : nats) {
-      const fs::path f = fs::path(a.pack) / "files" / ("pkx_n3_" + std::to_string(nat) + ".fsys");
+      const auto ex = a.extra.find(nat);
+      const fs::path f = ex != a.extra.end() ? fs::path(ex->second.fsys) : fs::path(a.pack) / "files" / ("pkx_n3_" + std::to_string(nat) + ".fsys");
       if (!fs::exists(f)) { why[nat] = "model not in the pack"; continue; }
       Bytes data = read_bytes(f);
       const std::string h = sha1_hex(data.data(), data.size()).substr(0, 20);
@@ -352,7 +393,7 @@ struct Faces {
           auto g = a.nat_group.find(t.nat);
           if (g == a.nat_group.end()) throw std::runtime_error("no model group in the dump");
           GfModel gm = load_model_only(*a.models, g->second);
-          ok = face_view(gm, fsys_pkx(read_bytes(t.file)), t.nat, wide, &v);
+          ok = face_view(gm, fsys_pkx(read_bytes(t.file)), t.nat, wide, &v, a.extra.count(t.nat) != 0);
           if (!ok) w = "no head bone";
         } catch (const std::exception& e) {
           w = std::string("camera: ") + e.what();
@@ -361,6 +402,7 @@ struct Faces {
         {
           std::lock_guard<std::mutex> g(mu);
           if (ok) views[t.nat] = v; else why[t.nat] = w;
+          if (a.extra.count(t.nat)) { char b[200]; snprintf(b, sizeof b, "Gen 4 face view %d: %.3f %.3f %.3f r %.3f (%s)", t.nat, v.x, v.y, v.z, v.r, ok ? v.how.c_str() : w.c_str()); a.log(b); }
         }
         a.progress(++done, total, "face cameras");
       }
@@ -371,9 +413,11 @@ struct Faces {
     (void)label;
   }
 
-  static std::string face_item(int nat, const FaceView& v, const std::string& name) {
+  std::string face_item(int nat, const FaceView& v, const std::string& name) const {
     char b[256];
-    snprintf(b, sizeof b, "pokemon:%d:face=%.4f/%.4f/%.4f/%.4f/%.1f/%.1f:%s", nat + 31, v.x, v.y, v.z, v.r, v.yaw, v.pitch, name.c_str());
+    const auto ex = a.extra.find(nat);
+    const int row = ex != a.extra.end() ? ex->second.row : nat + 31;
+    snprintf(b, sizeof b, "pokemon:%d:face=%.4f/%.4f/%.4f/%.4f/%.1f/%.1f:%s", row, v.x, v.y, v.z, v.r, v.yaw, v.pitch, name.c_str());
     return b;
   }
 
@@ -590,33 +634,38 @@ struct Faces {
   }
 
   void cut(const std::vector<int>& nats, const Why& why) {
-    const fs::path out = fs::path(a.pack) / "textures" / "faces";
-    fs::create_directories(out);
-    std::vector<std::pair<int, std::string>> rep;
-    for (int nat : nats) {
-      const fs::path src = fs::path(a.work) / "render" / (std::to_string(nat) + ".png");
-      if (fs::exists(src)) {
-        try {
-          write_bytes(out / (std::to_string(nat) + ".png"), png_encode(round_face(png_decode(read_bytes(src)))));
-          rep.push_back({nat, "rendered"});
-          continue;
-        } catch (const std::exception& e) {
-          std::string m = std::string("cut: ") + e.what();
-          rep.push_back({nat, "box icon (" + m.substr(0, 100) + ")"});
-          continue;
+    for (int part = 0; part < 2; part++) {
+      const fs::path root = part == 0 ? fs::path(a.pack) : fs::path(a.extra_pack);
+      if (part == 1 && (a.extra.empty() || a.extra_pack.empty())) break;
+      const fs::path out = root / "textures" / "faces";
+      fs::create_directories(out);
+      std::vector<std::pair<int, std::string>> rep;
+      for (int nat : nats) {
+        if ((a.extra.count(nat) != 0) != (part == 1)) continue;
+        const fs::path src = fs::path(a.work) / "render" / (std::to_string(nat) + ".png");
+        if (fs::exists(src)) {
+          try {
+            write_bytes(out / (std::to_string(nat) + ".png"), png_encode(round_face(png_decode(read_bytes(src)))));
+            rep.push_back({nat, "rendered"});
+            continue;
+          } catch (const std::exception& e) {
+            std::string m = std::string("cut: ") + e.what();
+            rep.push_back({nat, "box icon (" + m.substr(0, 100) + ")"});
+            continue;
+          }
         }
+        auto w = why.find(nat);
+        rep.push_back({nat, (part == 1 ? "not drawn (" : "box icon (") + (w != why.end() && !w->second.empty() ? w->second : std::string("render missing")) + ")"});
       }
-      auto w = why.find(nat);
-      rep.push_back({nat, "box icon (" + (w != why.end() && !w->second.empty() ? w->second : std::string("render missing")) + ")"});
+      std::string s = rep.empty() ? "{}" : "{\n";
+      for (size_t i = 0; i < rep.size(); i++) s += " \"" + std::to_string(rep[i].first) + "\": " + jstr(rep[i].second) + (i + 1 < rep.size() ? ",\n" : "\n");
+      if (!rep.empty()) s += "}";
+      write_text(root / (part == 0 ? "faces.json" : "faces_gen4.json"), s, a.eol_crlf);
+      int ok = 0;
+      std::string fb;
+      for (auto& r : rep) { if (r.second == "rendered") ok++; else fb += (fb.empty() ? "" : ", ") + std::to_string(r.first); }
+      a.log(std::string(part == 0 ? "faces: " : "Gen 4 faces: ") + std::to_string(ok) + " rendered, " + std::to_string((int)rep.size() - ok) + (part == 0 ? " from the box icon" : " not drawn") + (fb.empty() ? "" : ": " + fb));
     }
-    std::string s = rep.empty() ? "{}" : "{\n";
-    for (size_t i = 0; i < rep.size(); i++) s += " \"" + std::to_string(rep[i].first) + "\": " + jstr(rep[i].second) + (i + 1 < rep.size() ? ",\n" : "\n");
-    if (!rep.empty()) s += "}";
-    write_text(fs::path(a.pack) / "faces.json", s, a.eol_crlf);
-    int ok = 0;
-    std::string fb;
-    for (auto& r : rep) { if (r.second == "rendered") ok++; else fb += (fb.empty() ? "" : ", ") + std::to_string(r.first); }
-    a.log("faces: " + std::to_string(ok) + " rendered, " + std::to_string((int)rep.size() - ok) + " from the box icon" + (fb.empty() ? "" : ": " + fb));
   }
 };
 

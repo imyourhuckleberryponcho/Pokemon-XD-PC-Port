@@ -288,6 +288,7 @@ void Prepare(bool wanted, bool spots, engine::mods::LoadOptions& options, std::v
   if (xd::xg::On()) sGoods.clear();
   ReadText(pack / L"evolutions.txt", sEvoText);
   options.extraLayers.push_back({"pbr_gen4", "Gen 4 Pokemon", pack});
+  options.builtInFolders["gen4"] = pack;
   Absorb(tables);
   sRows = std::move(tables.rows);
   Register();

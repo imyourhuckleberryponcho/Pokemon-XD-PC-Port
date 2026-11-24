@@ -135,11 +135,15 @@ const std::vector<launcher::GameInfo::ExtraSource>& ExtraSources() {
     usum.secondManifestId = "usum-gen4";
     usum.secondProvides = Tr("Gen 4 Pokemon");
     usum.secondVersion = 2;
+    usum.secondRecipe = 1;
+    usum.secondRecipeReason = Tr("It was made before the Gen 4 Pokemon had their own faces and cries (Leafeon looked like Umbreon). It still works; press Make to get the right faces and cries.");
     usum.thirdFolder = "usum_gen57";
     usum.thirdManifestFile = "gen57.json";
     usum.thirdManifestId = "ultra-sun-moon-gen57";
     usum.thirdProvides = Tr("Gen 5-7 Pokemon");
     usum.thirdVersion = 1;
+    usum.thirdRecipe = 6;
+    usum.thirdRecipeReason = Tr("It was made by an older recipe than the Gen 4 faces and cries. It still works; press Make to make it again together with them.");
     usum.thirdWarning = Tr("There are a lot of assets to unpack and convert for the Gen 5, 6 and 7 Pokemon. This may take a while "
                            "(often 45 minutes to 1.5 hours, longer on slower PCs). You can keep using the launcher or play while it works; "
                            "the launcher stays open until it is done. If you close it, it continues where it stopped next time.");

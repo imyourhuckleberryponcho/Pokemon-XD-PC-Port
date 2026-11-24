@@ -45,6 +45,9 @@ uint32_t sBetweenTotal = 0;
 double sBetweenStart = 0.0;
 uint32_t sBetweenDraws = 1;
 constexpr double kSlowMs = 8.0;
+double sBudgetMs = 8.0;
+bool sBudgetRead = false;
+double sPerPictureMs = 0.0;
 constexpr uint32_t kPausePictures = 150;
 constexpr uint32_t kStrikePictures = 60;
 uint32_t sPause = 0;
@@ -67,6 +70,7 @@ bool sFastToo = false;
 struct Counts {
   uint32_t fields = 0, pictures = 0, between = 0;
   uint32_t rhythm = 0, partial = 0, unmatched = 0, fast = 0, busy = 0, full = 0, slow = 0;
+  uint32_t budgetHooks = 0, budgetDropped = 0;
   uint64_t blended = 0, plain = 0;
   float use = 0.f;
   double ms = 0.0;
@@ -95,10 +99,10 @@ void Log(uint32_t field) {
   const Counts& c = sCounts;
   std::fprintf(stderr,
                "[frame rate] %u fields: %u game pictures, %u in-between pictures (%.0f%%); none because: rhythm %u, "
-               "next picture begun %u, no match %u, fast-forward %u, frozen %u, no room %u, PC too slow %u; per in-between picture %.0f draws "
+               "next picture begun %u, no match %u, fast-forward %u, frozen %u, no room %u, PC too slow %u; left out for the sound budget: %u pictures in %u hooks; per in-between picture %.0f draws "
                "blended, %.0f as they are, %.2f ms of extra work; fullest frame buffer %.0f%%; last comparison: %u transform sets, %u 3D, %u found, %u moved, %u jumped, %u new, %u unknown, %u unsteady; slipped %u\n",
                c.fields, c.pictures, c.between, c.pictures ? 100.0 * c.between / c.pictures : 0.0, c.rhythm, c.partial,
-               c.unmatched, c.fast, c.busy, c.full, c.slow, c.between ? static_cast<double>(c.blended) / c.between : 0.0,
+               c.unmatched, c.fast, c.busy, c.full, c.slow, c.budgetDropped, c.budgetHooks, c.between ? static_cast<double>(c.blended) / c.between : 0.0,
                c.between ? static_cast<double>(c.plain) / c.between : 0.0, c.between ? c.ms / c.between : 0.0, c.use * 100.0, c.last.draws, c.last.perspective,
                c.last.matched, c.last.moved, c.last.jumped, c.last.fresh, c.last.unknown, c.last.unsteady, c.last.slipped);
   std::fflush(stderr);
@@ -299,7 +303,19 @@ void PortFrameRate_BeforePresent(void) {
     return;
   }
   const bool high = sPerField > 1.0 && sPresentAndBegin != nullptr;
-  const uint32_t total = high ? TakeSlots() + TakeSlots() : 2;
+  uint32_t total = high ? TakeSlots() + TakeSlots() : 2;
+  if (!sBudgetRead) {
+    sBudgetRead = true;
+    if (const char* e = std::getenv("XD_FRAME_RATE_BUDGET")) sBudgetMs = std::atof(e);
+  }
+  if (high && sBudgetMs > 0.0 && sPerPictureMs > 0.0) {
+    const uint32_t afford = std::max<uint32_t>(1, static_cast<uint32_t>(sBudgetMs / sPerPictureMs));
+    if (total - 1 > afford) {
+      sCounts.budgetHooks++;
+      sCounts.budgetDropped += total - 1 - afford;
+      total = afford + 1;
+    }
+  }
   const uint32_t count = total - 1;
   if (!PortFreeze_RedrawBegin()) {
     sCounts.busy++;
@@ -326,6 +342,7 @@ void PortFrameRate_BeforePresent(void) {
   sBetween = true;
   sBetweenShown = true;
   sLastHadBetween = true;
+  if (high && count > 0) sPerPictureMs = sPerPictureMs == 0.0 ? spent / count : sPerPictureMs * 0.7 + (spent / count) * 0.3;
   sBetweenStart = spent;
   sBetweenDraws = count;
   sCounts.ms += spent;

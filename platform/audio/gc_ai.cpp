@@ -1,5 +1,6 @@
 #include <dolphin/ai.h>
 #include <port_audio.h>
+#include <settings.h>
 #include "time_stretch.h"
 
 #include <SDL3/SDL_audio.h>
@@ -354,9 +355,32 @@ void reserve_init() {
   r.log = l != nullptr && l[0] == '1';
 }
 
+constexpr double kHighRateReserveMs = 80.0;
+double sMinReserveMs = kTargetQueuedMs;
+void reserve_refresh_floor() {
+  static unsigned counter = 0;
+  if (counter++ % 200 != 0) return;
+  const engine::settings::Registry& reg = engine::settings::Global();
+  const size_t i = reg.Find("video.frame_rate");
+  int hz = 0;
+  if (i != engine::settings::kNoSetting) {
+    const engine::settings::Value v = reg.ValueOf(i);
+    const auto& choices = reg.Get(i).choices;
+    if (v.i >= 0 && static_cast<size_t>(v.i) < choices.size()) {
+      const std::string& id = choices[static_cast<size_t>(v.i)].id;
+      hz = id == "monitor" ? 1000 : std::atoi(id.c_str());
+    }
+  }
+  const double floorMs = hz > 61 ? kHighRateReserveMs : static_cast<double>(kTargetQueuedMs);
+  if (floorMs != sMinReserveMs) {
+    sMinReserveMs = floorMs;
+    if (sReserve.log) std::fprintf(stderr, "[platform/audio] sound reserve floor %.0f ms (frame rate %s)\n", floorMs, hz > 61 ? "above 60" : "60 or below");
+  }
+}
+
 double reserve_wanted(double waitMs) {
   const double w = waitMs * 0.75 + 20.0;
-  return w < kTargetQueuedMs ? kTargetQueuedMs : w > kMaxReserveMs ? kMaxReserveMs : w;
+  return w < sMinReserveMs ? sMinReserveMs : w > kMaxReserveMs ? kMaxReserveMs : w;
 }
 
 int reserve_max_queued_bytes() {
@@ -367,6 +391,10 @@ int reserve_max_queued_bytes() {
 int reserve_on_block(int queuedBytes, bool counted) {
   Reserve& r = sReserve;
   reserve_init();
+  if (r.adaptive) {
+    reserve_refresh_floor();
+    if (r.targetMs < sMinReserveMs) r.targetMs = sMinReserveMs;
+  }
   const uint64_t now = SDL_GetTicksNS();
   double waitMs = 0;
   if (r.lastArrivalNs != 0) waitMs = static_cast<double>(now - r.lastArrivalNs) / 1e6;

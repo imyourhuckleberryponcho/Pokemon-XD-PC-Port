@@ -304,7 +304,8 @@ std::vector<std::string> ListNames(const fs::path& jsonFile) {
 }
 
 SecondStatus ComputeSecondStatus(const fs::path& folder, const std::string& manifestFile, const std::string& expectedId,
-                                 int wantedVersion, const std::string& provides, bool firstOutOfDate) {
+                                 int wantedVersion, const std::string& provides, bool firstOutOfDate, const std::string& recipeKey,
+                                 int wantedRecipe, const std::string& recipeReason) {
   SecondStatus st;
   std::ifstream in(folder / manifestFile, std::ios::binary);
   const std::string json((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
@@ -325,6 +326,12 @@ SecondStatus ComputeSecondStatus(const fs::path& folder, const std::string& mani
                           version, wantedVersion)
                     : std::string(Tr("It was made by an older version of the converter. It still works; make it again to get "
                                      "the improvements."));
+    return st;
+  }
+  if (!recipeKey.empty() && JsonNumber(json, recipeKey) < wantedRecipe) {
+    st.kind = SecondStatus::Kind::OutOfDate;
+    st.text = Fmt(Tr("%s: out of date, make again"), Tr(provides).c_str());
+    st.detail = Tr(recipeReason.c_str());
     return st;
   }
   st.kind = SecondStatus::Kind::Ready;

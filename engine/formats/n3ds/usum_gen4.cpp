@@ -315,6 +315,18 @@ void write_gen4_source(const Gen4SourceOptions& o, const std::function<void(cons
   else if (prod.compare(0, 9, "CTR-P-BND") == 0) name = "Pokemon Sun";
   else if (prod.compare(0, 9, "CTR-P-BNE") == 0) name = "Pokemon Moon";
   pf.write("gen4src.txt", "usum_gen4 source: " + name + ", gen4 values " + (o.values_on ? "on" : "off") + "\n");
+  {
+    std::vector<int> dexes;
+    for (int dex = 387; dex <= 493; dex++) {
+      if (dex != 438) dexes.push_back(dex);
+    }
+    const std::map<int, DumpCry> cries = dump_cries(u, o.data_dir, dexes);
+    for (const auto& kv : cries) {
+      pf.write_bytes("cries/" + std::to_string(kv.first) + ".hdr", kv.second.hdr);
+      pf.write_bytes("cries/" + std::to_string(kv.first) + ".body", kv.second.body);
+    }
+    if (log) log("gen4 source: " + std::to_string(cries.size()) + " cries of the dump");
+  }
   if (log) log("gen4 source: 107 species, 467 moves");
 }
 

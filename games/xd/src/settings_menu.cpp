@@ -76,6 +76,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -1017,6 +1018,7 @@ const Row kRows[] = {
     {"gameplay.tm_move_names", [] { return Tr("TMs show their move"); }, 0, true, ""},
     {"video.battle_revolution_models", [] { return Tr("Battle Revolution models"); }, 0, true, ""},
     {"system.pause_on_focus_loss", [] { return Tr("Pause in the background"); }, 0, true, ""},
+    {"system.background_controller", [] { return Tr("Controller in the background"); }, 0, false, ""},
     {"system.discord_presence", [] { return Tr("Discord presence"); }, 0, false, ""},
     {"cheats.enabled", [] { return Tr("Enable cheats"); }, 0, true, ""},
     {nullptr, [] { return Tr("Back"); }, 0, false, ""},
@@ -2172,7 +2174,7 @@ void CoverRoomResume();
 
 namespace ng {
 
-enum class Kind { Original, RuleSet, Pokemon, Looks, Engine, Timer, Setting, Mod, Randomizer, RandomizerSwitch, RandomizerCode, RandomizerPaste, MoreShadows, Challenges, ShinyOdds, ShinyShadow, ShinyGift, ShinySpot, Start };
+enum class Kind { Original, RuleSet, Pokemon, Looks, Engine, Timer, Setting, Mod, Randomizer, RandomizerSwitch, RandomizerCode, RandomizerPaste, MoreShadows, Challenges, ShinyOdds, ShinyShadow, ShinyGift, ShinySpot, Starter, StarterTwo, Start };
 struct SRow {
   Kind kind;
   const Row* setting = nullptr;
@@ -2202,6 +2204,7 @@ struct State {
   uint64_t moreShadowsSeed = 0;
   std::string moreShadowsNote;
   int shinyOdds = 0;
+  int starterChoose = 0, starterTwo = 0;
   int shinyUnlock = 0;
   std::vector<bool> rules;
   int timer[4] = {0, 0, 0, 0};
@@ -2444,6 +2447,12 @@ const Row* SettingRow(const char* id) {
   return nullptr;
 }
 
+std::string StarterBlockedWhy() {
+  if (s.rStyle == 0 || xd::xg::Off(xd::xg::Feature::Randomizer) != nullptr) return {};
+  const auto& schema = xd::randomizer::GetSchema();
+  return CodeSettings(s.rCode).Get(schema, "starter") != 0 ? std::string(Tr("The randomizer is giving the starter.")) : std::string();
+}
+
 void BuildRows() {
   s.rows.clear();
   s.rows.push_back({Kind::Original});
@@ -2486,6 +2495,8 @@ void BuildRows() {
     s.rows.push_back({Kind::RandomizerPaste});
   }
   if (xd::xg::Off(xd::xg::Feature::Randomizer) == nullptr) s.rows.push_back({Kind::MoreShadows});
+  s.rows.push_back({Kind::Starter});
+  if (s.starterChoose != 0) s.rows.push_back({Kind::StarterTwo});
   for (int i = 0; i < static_cast<int>(xd::challenges::Rules().size()); i++) {
     if (xd::rulesets::IsOwnedId(xd::challenges::Rules()[i].id)) continue;
     s.rows.push_back({Kind::Challenges, nullptr, -1, i});
@@ -2510,7 +2521,11 @@ engine::playthrough::Setup Chosen() {
       std::find(rules.begin(), rules.end(), "gen57_pokemon") == rules.end()) {
     rules.insert(rules.begin(), "gen57_pokemon");
   }
-  engine::playthrough::Setup setup = xd::pt::SetupOf(s.engine, s.defaults.mods, s.rStyle != 0 ? s.rCode : std::string(), rules, options);
+  std::vector<std::string> allOptions = options;
+  if (StarterBlockedWhy().empty()) {
+    for (const std::string& o : xd::starter::ChoiceOptions(s.starterChoose != 0, s.starterTwo != 0)) allOptions.push_back(o);
+  }
+  engine::playthrough::Setup setup = xd::pt::SetupOf(s.engine, s.defaults.mods, s.rStyle != 0 ? s.rCode : std::string(), rules, allOptions);
   {
     engine::rulesets::Choice c = s.choice;
     if (s.rStyle != 0 && xd::xg::Off(xd::xg::Feature::Gen4Pokemon) == nullptr && xd::randomizer::CodeIncludesGen4(s.rCode) && !c.HasGen(4)) c.gens = {3, 4};
@@ -2567,6 +2582,8 @@ std::string RowLabel(const SRow& r) {
   case Kind::ShinyShadow: return Tr("Shiny Shadow Pokemon");
   case Kind::ShinyGift: return Tr("Shiny gift Pokemon");
   case Kind::ShinySpot: return Tr("Shiny Bonsly / Munchlax");
+  case Kind::Starter: return Tr("Starter");
+  case Kind::StarterTwo: return Tr("Two starters");
   case Kind::Challenges:
     if (!RuleBlockedWhy(xd::challenges::Rules()[r.sw].id).empty()) {
       return Fmt(Tr("%s (not available)"), xd::challenges::Rules()[r.sw].label());
@@ -2619,6 +2636,12 @@ std::string RowInfo(const SRow& r) {
     return Fmt(Tr("Code: %s. It holds the seed and every switch: a friend who uses it gets the same game. "
                   "Left / right or A: a new random seed."),
                s.rCode.c_str());
+  case Kind::Starter:
+    if (!StarterBlockedWhy().empty()) return StarterBlockedWhy() + " " + Tr("Turn its starter switch off to choose your own.");
+    return std::string(Tr("Choosing your starter marks this playthrough as cheats used.")) + " " + Tr("Eevee: the game's own partner Pokemon. Choose: after you name yourself, pick your starter from every Pokemon of this playthrough "
+              "(Pokemon of the generations you turned on). It starts at level 10 with the moves it would know, like Eevee. Kept with this playthrough.");
+  case Kind::StarterTwo:
+    return Tr("On: you pick a second starter, which joins your party in the second place at level 10. Off: one starter.");
   case Kind::ShinyOdds:
     return Tr("How often a Pokemon is shiny: Original 1 in 8192 (the GameCube game), Modern 1 in 4096 (Gen 6 and later), or 1 in 1024, "
               "512, 128. Applies where the game allows shiny Pokemon (Poke Spot Pokemon, your Eevee, trades). Kept with this "
@@ -2685,6 +2708,8 @@ void Open(void*) {
     xd::randomizer::MoreShadowsPlan plan;
     if (xd::randomizer::ParseMoreShadows(s.defaults.moreShadows, plan)) s.moreShadows = plan.amount, s.moreShadowsSeed = plan.seed;
   }
+  s.starterChoose = xd::starter::ChooseOn(s.defaults.options) ? 1 : 0;
+  s.starterTwo = xd::starter::TwoOn(s.defaults.options) ? 1 : 0;
   s.shinyOdds = xd::shiny::OddsIndexOf(s.defaults.options);
   s.shinyUnlock = xd::shiny::UnlocksOf(s.defaults.options);
   s.rules.assign(xd::challenges::Rules().size(), false);
@@ -2747,7 +2772,7 @@ void Close(void*) {
     s.rStyle = 0;
     s.choice = engine::rulesets::Default(xd::rulesets::Registry());
     s.choice.looks.preset = "original_xd", s.choice.looks.sources = {"xd"};
-    s.shinyOdds = 0, s.shinyUnlock = 0;
+    s.shinyOdds = 0, s.shinyUnlock = 0, s.starterChoose = 0, s.starterTwo = 0;
     s.rules.assign(s.rules.size(), false);
   }
   const es::Registry& reg = es::Global();
@@ -2789,6 +2814,12 @@ void RowValues(const SRow& r, std::string& left, std::string& right, std::string
     value = ValueText(*r.setting);
   } else if (r.kind == Kind::ShinyOdds) {
     value = xd::shiny::kOdds[s.shinyOdds].name;
+  } else if (r.kind == Kind::Starter) {
+    left = Tr("Eevee"), right = Tr("Choose");
+    set = s.starterChoose != 0 && StarterBlockedWhy().empty() ? 1 : 0;
+  } else if (r.kind == Kind::StarterTwo) {
+    left = Tr("On"), right = Tr("Off");
+    set = s.starterTwo != 0 ? 0 : 1;
   } else if (r.kind == Kind::ShinyShadow) {
     left = "On", right = "Off";
     set = (s.shinyUnlock & xd::shiny::kUnlockShadow) != 0 ? 0 : 1;
@@ -2868,7 +2899,8 @@ void Draw(ImDrawList* dl, float dt) {
     const float labelW = static_cast<float>(TextWidth(label.c_str())), room = 321.f - 8.f - 74.f;
     const float indent =
         r.kind == Kind::RandomizerSwitch && SwitchParent(r.sw) >= 0 ? 16.f : 0.f;
-    const bool dim = r.kind == Kind::Challenges && (NeededOff(r.sw) != nullptr || !RuleBlockedWhy(xd::challenges::Rules()[r.sw].id).empty());
+    const bool dim = (r.kind == Kind::Challenges && (NeededOff(r.sw) != nullptr || !RuleBlockedWhy(xd::challenges::Rules()[r.sw].id).empty())) ||
+                     ((r.kind == Kind::Starter || r.kind == Kind::StarterTwo) && !StarterBlockedWhy().empty());
     const uint8_t* ink = dim ? grey : white;
     DrawText(dl, sc, 74.f + indent, std::floor(mid - static_cast<float>(sFontW + 1) / 2.f), label.c_str(), ink,
              labelW > room - indent ? (room - indent) / labelW : 1.f);
@@ -3282,6 +3314,19 @@ bool Frame(void*, const PortMenuInput* in) {
       event = kSoundMove;
     }
     break;
+  case Kind::Starter:
+    if ((left || right || a) && StarterBlockedWhy().empty()) {
+      s.starterChoose = left ? 0 : right ? 1 : 1 - s.starterChoose;
+      BuildRows();
+      event = kSoundMove;
+    }
+    break;
+  case Kind::StarterTwo:
+    if ((left || right || a) && StarterBlockedWhy().empty()) {
+      s.starterTwo = left ? 1 : right ? 0 : 1 - s.starterTwo;
+      event = kSoundMove;
+    }
+    break;
   case Kind::ShinyOdds:
     if (left || right || a) {
       s.shinyOdds = (s.shinyOdds + (left ? xd::shiny::kOddsCount - 1 : 1)) % xd::shiny::kOddsCount;
@@ -3647,6 +3692,8 @@ bool Frame(void*, const PortMenuInput* in) {
 }
 const PortMenuPage kPage{"starter choice", Open, Frame, nullptr, nullptr};
 }
+
+#include "starter_page.inc"
 
 std::string ruleText;
 bool RuleFrame(void*, const PortMenuInput* in) {
@@ -4856,6 +4903,10 @@ bool PortXD_OpenContinueRefusal(const std::string& head, const std::string& red,
 }
 bool PortXD_OpenEngineQuestion() { return PortMenu_Open(&ng::kEnginePage); }
 bool PortXD_OpenStarterPick() { return PortMenu_Open(&ng::sk::kPage); }
+bool PortXD_OpenStarterChoose(int two) {
+  ng::sch::two = two != 0;
+  return PortMenu_Open(&ng::sch::kPage);
+}
 bool PortXD_ShowRuleMessage(const std::string& text) {
   if (PortMenu_Active() || PortMenu_Pending()) return false;
   ng::ruleText = text;

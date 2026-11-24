@@ -213,6 +213,13 @@ std::vector<Definition> StandardSettings() {
               "as a console does.",
               false, true)
           .Implemented(),
+      D::Bool("system.background_controller", C::System, "Controller in the background",
+              "Lets a controller keep working while the game's window isn't in front, for example when you watch the game "
+              "through a streaming overlay in another program. Controllers only: the keyboard is never read in the "
+              "background. It needs \"Pause in the background\" to be off, or the game waits for you instead.",
+              false, false)
+          .Preference()
+          .Implemented(),
       D::Enum("system.disc_timing", C::System, "Loading speed",
               "How long the game waits for the disc. GameCube: as long as the GameCube's disc drive takes, so "
               "every load lasts as long as on the console. Fast: loads finish at the next frame. GameCube drive "

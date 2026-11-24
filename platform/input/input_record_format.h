@@ -108,6 +108,7 @@ struct Recording {
   std::vector<DevMenuLine> devMenu;
   std::vector<DevMenuLine> cheats;
   std::vector<DevMenuLine> settings;
+  std::vector<DevMenuLine> playthroughNotes;
   bool settingsSinceMenu = false;
   bool hasEnd = false;
   uint32_t endFrame = 0, endField = 0;

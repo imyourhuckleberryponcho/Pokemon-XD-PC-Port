@@ -46,7 +46,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DECOMP_CONFIG = ROOT.parent / "Pokemon-XD-Decomp" / "config" / "GXXE01"
 ADDR_TSV = ROOT / "games" / "xd" / "src" / "data" / "disc_table_addresses.tsv"
 MANUAL_TSV = ROOT / "games" / "xd" / "src" / "data" / "disc_table_manual.tsv"
-GENERATOR_VERSION = 2
+GENERATOR_VERSION = 3
 
 PC_TARGET = "x86_64-pc-windows-msvc"
 
@@ -81,6 +81,12 @@ GC_BYTES_TABLES = {
     ("game/menuReliveHall.cpp", "relivehallAisyou2ColorTbl"):
         "GSgfxColAu8 colours read byte by byte: the PC copy's u32s are written byte-swapped",
 }
+
+
+
+
+
+PC_ONLY_TAIL_ROWS = {("game/pxdvs/app/joutai/joutaiData.c", "joutai_data")}
 
 
 class GenError(Exception):
@@ -156,6 +162,9 @@ def clang_args(flags, lang, target, extra=()):
 
 def parse(path, flags, lang, target, extra=()):
     ci = cindex()
+    if target.startswith(("i686", "i386")) and any(str(path).replace("\\", "/").endswith(s) for s, _ in PC_ONLY_TAIL_ROWS):
+        text = Path(path).read_text(encoding="utf-8", errors="replace").replace("#ifndef __MWERKS__", "#if 0")
+        return ci.Index.create().parse(str(path), args=clang_args(flags, lang, target, extra), unsaved_files=[(str(path), text)])
     return ci.Index.create().parse(str(path), args=clang_args(flags, lang, target, extra))
 
 
@@ -707,7 +716,7 @@ def analyse_file(args):
             if (src, label) in KEEP_COMPILED:
                 raise GenError(KEEP_COMPILED[(src, label)])
             gc_bytes = (src, label) in GC_BYTES_TABLES
-            if any(n in cond_inside or n in cond_directive for n in lines) and not gc_bytes:
+            if any(n in cond_inside or n in cond_directive for n in lines) and not gc_bytes and (src, label) not in PC_ONLY_TAIL_ROWS:
                 raise GenError("defined under #if (it may be the PC's own version)")
             if has_call(pv):
                 raise GenError("its initialiser runs code")

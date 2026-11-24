@@ -70,6 +70,7 @@ fi
 if [ -n "$EXPECTED" ] && [ -f "$EXPECTED" ]; then
   while read -r t; do
     [ -n "$t" ] || continue
+    [ "$t" = xd_audio_test ] && continue # (EXCLUDE_FROM_ALL: a hand-run sound test, not part of the build)
     if [ ! -x "$BIN/$t" ]; then
       echo "NOT BUILT   $t (the build system has it, the bin folder does not)" | tee -a "$SUMMARY"
       FAILED="$FAILED $t(not built)"; MISSING=$((MISSING + 1))

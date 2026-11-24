@@ -35,8 +35,14 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'tools'))
 sys.path.insert(0, os.path.join(ROOT, 'tools', 'publish'))
 sys.dont_write_bytecode = True
-import sign_update
-import test_updater as tu
+try:
+    import sign_update
+    import test_updater as tu
+except ImportError as e:
+
+
+    print('SKIPPED the launcher updater scenario: %s (tools/publish/sign_update.py and tools/test_updater.py are not part of the public copy)' % e)
+    sys.exit(0)
 
 check = tu.check
 APP = 'Pokemon XD.app'

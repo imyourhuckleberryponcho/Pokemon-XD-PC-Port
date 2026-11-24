@@ -224,6 +224,24 @@ RowBridge build_row_bridge(Usum& u, const Json& tables, const XdTablesCache& xd,
   return {r.row, r.rep, r.notes};
 }
 
+std::map<int, DumpCry> dump_cries(Usum& u, const std::string& data_dir, const std::vector<int>& nats) {
+  const Json cw = read_json(data_dir + "/gen57_cry_waves.json");
+  const Garc& cg = u.garc("a/0/7/3");
+  std::map<int, DumpCry> out;
+  for (int nat : nats) {
+    const Json* wj = cw.find(std::to_string(nat));
+    if (!wj) continue;
+    const size_t w = (size_t)wj->i;
+    if (4368 + w >= cg.count()) continue;
+    DumpCry c;
+    c.wave = (int)w;
+    std::vector<std::string> notes;
+    pbr::cry_build_xd(parse_cwav(cwar_first(cg.read(4368 + w))), c.hdr, c.body, notes);
+    out[nat] = std::move(c);
+  }
+  return out;
+}
+
 void make_gen57_data(const DataOptions& o, const Plan& plan, const ModelResults& mr) {
   auto log = [&](const std::string& s) { if (o.log) o.log(s); };
   Usum u(o.rom);

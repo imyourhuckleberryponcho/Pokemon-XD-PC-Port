@@ -15,7 +15,7 @@ namespace xd::trade {
 using Bytes = std::vector<uint8_t>;
 using xdnet::trade::Verdict;
 
-constexpr size_t kWireSize = xd::save::kPokemonSize + 1;
+constexpr size_t kWireSize = xd::save::kPokemonSize + 2;
 
 enum class ShadowState : uint8_t { Never = 0, Purified = 1, Unpurified = 2 };
 
@@ -33,6 +33,7 @@ struct Card {
   uint32_t otId = 0;
   uint16_t speciesNumber = 0;
   int hp = 0, maxHp = 0;
+  bool fromCheats = false;
 };
 
 struct Entry {
@@ -49,6 +50,7 @@ struct Config {
   const xd::legality::Rules* rules = nullptr;
   const xd::save::GameNames* names = nullptr;
   const xd::legality::Rules* originalRules = nullptr;
+  bool fromCheats = false;
   bool original = false;
 };
 
@@ -58,6 +60,7 @@ struct Result {
   std::string received;
   bool newEntry = false;
   std::string where;
+  bool receivedFromCheats = false;
 };
 
 class Trader {

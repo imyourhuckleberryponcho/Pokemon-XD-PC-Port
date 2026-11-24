@@ -13,7 +13,7 @@ This repository contains **no game assets, ROMs, ISOs or executables**, and none
 You need your own legally obtained copy of the game (USA, `GXXE01`); the port reads everything from your disc
 image while it runs.
 
-## Status: public beta — version 0.7.2
+## Status: public beta — version 0.7.3
 
 **Playable from New Game into the story, with known bugs.** It is not finished: expect crashes, stalls and
 graphics differences, and keep backups of saves you care about. Downloads are on the [Releases](../../releases)
@@ -159,6 +159,17 @@ Saves, settings, mods, logs and bug reports live in one data folder (`%APPDATA%\
 - Launcher, Save page, "Where your data is kept": "Open data folder"; "Move my data..." (user folder <-> portable: it
   copies everything, checks the copy, switches, and puts the old folder in the recycle bin / trash so nothing is lost; the
   launcher then starts again); "Remove all game data..." (asks first, names the folder, offers to export your saves first).
+
+### New in 0.7.3
+
+- Save editor (launcher: Save, open a save, Edit save...): change your Pokemon (species, level, moves, IVs, EVs, item, nature...), your trainer (name, money, Coupons, play time) and your bag; also Japanese saves. Nothing is written until you press "Save changes", and the save as it was goes into the save backups first. A change that alters the game marks the playthrough as "cheats used" (no competitive online rooms, no valid speedrun); nicknames, names and moving Pokemon around do not. A Pokemon traded from a "cheats used" save says so first.
+- Choose your starter (New Game screen, Enhanced): pick any Pokemon your playthrough has instead of Eevee, and with "Two starters" a second one. A page with search and a jump per generation opens after the name entry. A chosen starter marks the playthrough as "cheats used".
+- Gen 4 Pokemon made from an Ultra Sun / Ultra Moon dump get their own faces and cries (Leafeon no longer shows Umbreon's face, Cranidos no longer cries like Wartortle). The launcher says "out of date, make again": press Make once on the Ultra Sun / Ultra Moon card (about 10 minutes).
+- Abilities and moves: Illusion, Delta Stream's strong winds, Sky Drop (with its rules: it fails on Flying types, Pokemon of 200 kg or more and behind a Substitute), Phantom Force / Shadow Force can't be hit while gone, a wild Pokemon with Wimp Out or Emergency Exit runs away, and Imposter shows the copied Pokemon.
+- New setting "Controller in the background": a controller keeps working while the game window is not in front (off by default; controllers only, never the keyboard).
+- Smoother sound above 60 frames a second on slower PCs.
+- Linux: the GameCube controller adapter library comes with the download.
+
 
 ### New in 0.7.2
 

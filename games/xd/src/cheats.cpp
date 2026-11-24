@@ -369,6 +369,8 @@ void PortXD_CheatsSetWarned(int warned) {
   sWarned = warned != 0;
   if (sWarned) PortXD_PlaythroughCheatsChanged();
 }
+void PortXD_CheatsNoteUsed(const char* name) { NoteUsed(name); }
+void PortXD_CheatsNoteReceived(const char* what) { NoteUsed(what == nullptr ? "received a Pokemon from a save with cheats" : what); }
 int PortXD_CheatsUsedHere(void) {
   std::lock_guard<std::mutex> lock(sUsedLock);
   return sUsed.empty() ? 0 : 1;

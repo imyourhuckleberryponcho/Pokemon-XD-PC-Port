@@ -36,6 +36,8 @@ Defaults NewGameDefaults();
 engine::playthrough::Setup SetupOf(engine::playthrough::Engine engine, const std::vector<ModChoice>& mods,
                                    const std::string& randomizer = {}, const std::vector<std::string>& challenges = {},
                                    const std::vector<std::string>& options = {});
+const std::vector<std::string>& CurrentOptions();
+void OptionsChanged(const std::vector<std::string>& options, const std::string& note);
 const std::string& LoadedRandomizer();
 std::string BootRandomizer();
 void RandomizerMade(const std::string& code);

@@ -16,6 +16,8 @@ Intent Current();
 void ReadIntent();
 void SetForRestart(Intent intent);
 bool SkipLogos();
+void TestSkipIntroLanded();
+bool TestSkipIntroOn();
 void RegisterSkipLogosQuery(bool (*query)());
 void Drive(PADStatus* status, int menuId, bool titleOpen, int select);
 void Done(const char* why);

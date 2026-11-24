@@ -376,6 +376,7 @@ void CoverDrive(PADStatus* status, const WinWorkLayout* w) {
                    PortVI_GetFlipCount(), C.blocked, static_cast<unsigned>(C.prevHeld));
       C.kind = Cover::None;
       PortInput_LatchHeld();
+      xd::picker::TestSkipIntroLanded();
     }
     return;
   }

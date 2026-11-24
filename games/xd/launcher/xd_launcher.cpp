@@ -10,6 +10,7 @@
 #include "xd_colosseum_page.h"
 #include "xd_modextract_page.h"
 #include "xd_gba_page.h"
+#include "xd_saveedit_page.h"
 #include "xd_languages.h"
 #include "xd_presence.h"
 #include "xd_settings.h"
@@ -23,6 +24,7 @@
 #include <i18n.h>
 #include <gs_formats.h>
 #include <port_disc.h>
+#include <port_folder_claim.h>
 #include <port_log.h>
 #include <save_backups.h>
 #include <update.h>
@@ -281,6 +283,7 @@ launcher::GameInfo::SaveRow SaveRowOf(const fs::path& cardRoot) {
   row.who = TrainerText(xd::save::DisplayUtf8(save.trainerName), save.trainerGender);
   row.time = PlayTime(save.playTimeSeconds);
   const xd::playthrough::SaveId id = xd::playthrough::SaveIdOf(data);
+  if (id.found) row.thumbnail = xd::playthrough::SetupFolder() / (id.key + ".png");
   std::error_code ec;
   ep::Setup setup;
   if (!id.found || !fs::exists(xd::playthrough::SetupFileFor(id), ec)) {
@@ -505,6 +508,7 @@ void ReadSetup(const std::vector<uint8_t>& data, SaveSummary& out) {
     return;
   }
   const fs::path file = xd::playthrough::SetupFileFor(id);
+  out.thumbnail = xd::playthrough::SetupFolder() / (id.key + ".png");
   std::error_code ec;
   if (!fs::exists(file, ec)) {
     out.setup = {{Tr("Setup"), Tr("Faithful, no mods (no setup file)")}};
@@ -1341,6 +1345,7 @@ int main(int argc, char** argv) {
     game.saves.findImportable = FindImportable;
     game.saves.tradeOpen = xd::gbapage::Open;
     game.saves.tradeDo = xd::gbapage::Trade;
+    xd::saveeditpage::Install(game, SaveFileOf, [](const fs::path& cardRoot) { return PortFolderClaim_IsFree(Utf8(cardRoot).c_str()); });
     game.saves.monsOpen = xd::colosseumpage::Open;
     game.saves.monsDo = xd::colosseumpage::Import;
     game.saves.monsOpen2 = xd::modextractpage::Open;

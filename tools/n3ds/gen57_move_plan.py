@@ -50,10 +50,11 @@ ANIM = {
 
 
 PARTIAL = {
+    'Sky Drop': 'the lift works (the target is carried, hidden, loses its turn); it fails against Flying types, targets of 200 kg or more and a target behind a Substitute',
     'Autotomize': 'Speed +2 only: the weight loss is not built',     'Freeze-Dry': 'Water Pokemon are not hit super effectively', 'Magnetic Flux': 'raises the user whatever its ability (should need Plus or Minus; it is made for allies)',
     'Gear Up': 'raises the user whatever its ability (should need Plus or Minus; it is made for allies)', 'Aromatic Mist': 'ally only: does nothing in single battles (as in the games)',
     'Smack Down': 'does not ground a Flying target', 'Synchronoise': 'hits any target (should hit only one sharing a type)',
-    'Echoed Voice': 'power does not grow with use', 'Clear Smog': 'does not reset the target\'s stat changes', 'Sky Drop': 'plain hit (no lifting turn)',
+    'Echoed Voice': 'power does not grow with use', 'Clear Smog': 'does not reset the target\'s stat changes', 
     'Incinerate': 'does not burn up a berry', 'Retaliate': 'power not doubled after a faint', 'Final Gambit': 'plain hit of fixed power (should deal the user\'s HP and faint)',
     'Water Pledge': 'no combination with the other Pledges', 'Fire Pledge': 'no combination with the other Pledges', 'Grass Pledge': 'no combination with the other Pledges',
     'Fusion Flare': 'power not doubled after Fusion Bolt', 'Fusion Bolt': 'power not doubled after Fusion Flare', 'Flying Press': 'plain Fighting hit (not also Flying)',
@@ -132,7 +133,10 @@ PLAN = {
     'Ice Burn': {'blocks': [{'status': 'burn', 'target': 'target', 'chance': 30}], 'needs': ['charge'],
                  'props': {'charge': {'donor': 'Razor Wind', 'message': '{name} became cloaked in freezing air!'}}},
 
-    'Phantom Force': {'blocks': [], 'needs': ['charge'], 'props': {'charge': {'donor': 'Fly', 'message': '{name} vanished instantly!'}}},
+    'Phantom Force': {'blocks': [], 'needs': ['charge'], 'props': {'charge': {'donor': 'Fly', 'message': '{name} vanished instantly!', 'untouchable': True}}},
+
+
+    'Sky Drop': {'blocks': [], 'needs': ['charge'], 'props': {'charge': {'donor': 'Fly', 'message': '{name} took {foe} into the sky!', 'carry': True}}},
 
 
     'Thousand Waves': {'blocks': [{'status': 'trap', 'target': 'target', 'when': '!target_type:ghost', 'message': '{name} can no longer escape!'}], 'ok': True},

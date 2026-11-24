@@ -63,6 +63,30 @@ extern "C" bool PortFolderClaim_Take(const char* folder) {
   return false;
 }
 
+extern "C" bool PortFolderClaim_IsFree(const char* folder) {
+  if (folder == nullptr || folder[0] == '\0') return true;
+  std::error_code ec;
+  std::filesystem::path full = std::filesystem::weakly_canonical(std::filesystem::path(folder), ec);
+  if (ec || full.empty()) return true;
+  std::string path = full.string();
+  while (path.size() > 1 && path.back() == '/') path.pop_back();
+  uint64_t hash = 0xCBF29CE484222325ull;
+  for (const unsigned char c : path) {
+    hash = (hash ^ c) * 0x100000001B3ull;
+  }
+  sockaddr_un address{};
+  address.sun_family = AF_UNIX;
+  const int length = std::snprintf(address.sun_path + 1, sizeof address.sun_path - 1, "PortFolderClaim-%016llx",
+                                   static_cast<unsigned long long>(hash));
+  const int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+  if (fd < 0) return true;
+  const auto size = static_cast<socklen_t>(offsetof(sockaddr_un, sun_path) + 1 + length);
+  const bool bound = bind(fd, reinterpret_cast<const sockaddr*>(&address), size) == 0;
+  const bool busy = !bound && errno == EADDRINUSE;
+  close(fd);
+  return !busy;
+}
+
 extern "C" bool PortWindowIcon_Apply(SDL_Window* window, const char* pathUtf8) {
   if (window == nullptr) return false;
   std::error_code ec;

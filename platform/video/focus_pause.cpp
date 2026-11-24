@@ -7,6 +7,7 @@
 #include <aurora/aurora.h>
 #include <imgui.h>
 
+#include <SDL3/SDL_hints.h>
 #include <SDL3/SDL_timer.h>
 #include <SDL3/SDL_video.h>
 
@@ -38,6 +39,17 @@ bool SettingOn() {
   const es::Registry& reg = es::Global();
   const size_t i = reg.Find("system.pause_on_focus_loss");
   return i != es::kNoSetting && reg.ValueOf(i).i != 0;
+}
+
+void ApplyBackgroundController() {
+  static int sApplied = -1;
+  const es::Registry& reg = es::Global();
+  const size_t i = reg.Find("system.background_controller");
+  const int want = (i != es::kNoSetting && reg.ValueOf(i).i != 0) ? 1 : 0;
+  if (want == sApplied) return;
+  sApplied = want;
+  SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, want ? "1" : "0");
+  std::fprintf(stderr, "[focus pause] controller input in the background: %s\n", want ? "on" : "off");
 }
 
 bool InFront() {
@@ -110,6 +122,7 @@ extern "C" {
 
 void PortFocusPause_Init(uint32_t (*progress)(void), bool testRun) {
   sProgress = progress;
+  ApplyBackgroundController();
   if (EnvIs("XD_PAUSE_ON_FOCUS", "0")) {
     sAllowed = false;
   } else {
@@ -125,6 +138,7 @@ void PortFocusPause_Init(uint32_t (*progress)(void), bool testRun) {
 void PortFocusPause_SetHold(bool (*hold)(void)) { sHold = hold; }
 
 void PortFocusPause_Frame(void) {
+  ApplyBackgroundController();
   if (PortMenu_Active() || PortMenu_Pending() || PortFreeze_Active()) return;
   if (sHold != nullptr && sHold()) return;
   if (sNextTest < sTests.size() && sProgress != nullptr && sProgress() >= sTests[sNextTest].frame) {

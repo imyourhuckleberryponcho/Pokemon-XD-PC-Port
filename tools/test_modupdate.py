@@ -36,7 +36,11 @@ import secrets
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'tools', 'publish'))
 sys.dont_write_bytecode = True
-import sign_update
+try:
+    import sign_update
+except ImportError as e:
+    print('SKIPPED the mod update scenarios: %s (tools/publish/sign_update.py is not part of the public copy)' % e)
+    sys.exit(0)
 
 OK = True
 

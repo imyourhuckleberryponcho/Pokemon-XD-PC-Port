@@ -246,13 +246,18 @@ def repo_root():
     return os.path.normpath(os.path.join(HERE, '..', '..'))
 
 
+def _no_comments(t):
+    """The public export strips every comment of the .inc files: compare what is left (no // lines, no empty lines)."""
+    return [l.rstrip() for l in t.split(chr(10)) if l.strip() and not l.lstrip().startswith('//')]
+
+
 def generate(check=False):
     text = inc_text()
     bad = 0
     for rel in INC_FILES:
         p = os.path.join(repo_root(), rel)
         have = open(p, encoding='utf-8', newline='').read().replace(chr(13) + chr(10), chr(10)) if os.path.exists(p) else None
-        if have != text:
+        if (have is None) or _no_comments(have) != _no_comments(text):
             bad += 1
             if not check:
                 with open(p, 'w', encoding='utf-8', newline='\n') as f:

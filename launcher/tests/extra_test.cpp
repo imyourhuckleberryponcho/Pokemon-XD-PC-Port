@@ -192,6 +192,10 @@ static void TestSecond(const fs::path& root) {
   CHECK(st.kind == K::OutOfDate && !st.detail.empty());
   st = ex::ComputeSecondStatus(pack, "gen4.json", "battle-revolution-gen4", 1, "Gen 4 Pokemon", true);
   CHECK(st.kind == K::OutOfDate && st.text.find("out of date") != std::string::npos);
+  st = ex::ComputeSecondStatus(pack, "gen4.json", "battle-revolution-gen4", 1, "Gen 4 Pokemon", false, "recipe", 1, "older recipe");
+  CHECK(st.kind == K::OutOfDate && st.text.find("make again") != std::string::npos && st.detail == "older recipe");
+  Write(pack / "gen4.json", "{\n \"id\": \"battle-revolution-gen4\",\n \"version\": 1,\n \"recipe\": 1,\n \"species\": 107\n}");
+  CHECK(ex::ComputeSecondStatus(pack, "gen4.json", "battle-revolution-gen4", 1, "Gen 4 Pokemon", false, "recipe", 1, "older recipe").kind == K::Ready);
   st = ex::ComputeSecondStatus(pack, "gen4.json", "another-pack", 1, "Gen 4 Pokemon", false);
   CHECK(st.kind == K::NotMade);
   Write(pack / "gen4.json", "{ not json");

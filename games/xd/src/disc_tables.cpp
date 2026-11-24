@@ -428,6 +428,32 @@ extern "C" int PortXD_FillDiscTables(char* error, unsigned errorSize) {
         fixups++;
       }
     }
+    if (!kXDDiscTablesCompiledIn) {
+      const XDDiscTable* rows = nullptr;
+      const XDDiscTable* number = nullptr;
+      for (const XDDiscTable* t : sTables) {
+        if (std::strcmp(t->name, "joutai_data") == 0) rows = t;
+        else if (std::strcmp(t->name, "joutai_data_number") == 0) number = t;
+      }
+      if (rows != nullptr && number != nullptr && rows->pcStride == 20 && rows->pcSize == 90 * 20) {
+        static const uint8_t kTail[3][3] = {{5, 0x34, 2}, {5, 0x35, 2}, {7, 0, 3}};
+        static const uint16_t kStatus[3] = {0x00D8, 0x00D8, 0x0009};
+        const DWORD old = make_writable(rows->pc, rows->pcSize);
+        uint8_t* base = static_cast<uint8_t*>(rows->pc);
+        for (int i = 0; i < 3; i++) {
+          uint8_t* row = base + 20 * (87 + i);
+          std::memset(row, 0, 20);
+          row[0] = kTail[i][0]; row[1] = kTail[i][1]; row[2] = kTail[i][2];
+          std::memcpy(row + 8, &kStatus[i], 2);
+        }
+        if (old != 0) { DWORD ignored; VirtualProtect(rows->pc, rows->pcSize, old, &ignored); }
+        const DWORD old2 = make_writable(number->pc, 4);
+        const uint32_t n = 90;
+        std::memcpy(number->pc, &n, 4);
+        if (old2 != 0) { DWORD ignored; VirtualProtect(number->pc, 4, old2, &ignored); }
+        std::fprintf(stderr, "[disc tables] joutai_data: 3 PC-only rows added (90 rows)\n");
+      }
+    }
     if (kXDDiscTablesCompiledIn) {
       for (const XDDiscTable* t : sTables) {
         const int d = compare_compiled(t, dest(t));

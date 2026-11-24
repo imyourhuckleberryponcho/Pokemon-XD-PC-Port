@@ -124,8 +124,26 @@ std::string Label(const Setup& setup) {
     label += (i == 0 ? kDot + std::string("Challenge: ") : std::string(", ")) + name;
   }
   if (!setup.moreShadows.empty()) label += kDot + std::string("More Shadow Pokemon: ") + setup.moreShadows.substr(0, setup.moreShadows.find(':'));
-  for (size_t i = 0; i < setup.options.size(); i++) {
-    label += (i == 0 ? kDot + std::string("Options: ") : std::string(", ")) + setup.options[i];
+  std::vector<std::string> starters;
+  std::vector<std::string> others;
+  for (const std::string& o : setup.options) {
+    const bool first = o.rfind("starter=", 0) == 0, second = o.rfind("starter2=", 0) == 0;
+    if (first || second) {
+      const size_t colon = o.find(':');
+      if (colon != std::string::npos && colon + 1 < o.size()) {
+        starters.push_back(o.substr(colon + 1));
+        continue;
+      }
+    }
+    others.push_back(o);
+  }
+  if (!starters.empty()) {
+    label += kDot + std::string(starters.size() > 1 ? "Starters: " : "Starter: ");
+    for (size_t i = 0; i < starters.size(); i++) label += (i > 0 ? " + " : "") + starters[i];
+    others.erase(std::remove_if(others.begin(), others.end(), [](const std::string& o) { return o == "starter_choose=on" || o == "starter_two=on"; }), others.end());
+  }
+  for (size_t i = 0; i < others.size(); i++) {
+    label += (i == 0 ? kDot + std::string("Options: ") : std::string(", ")) + others[i];
   }
   if (!setup.ruleSetChanged.empty() && !setup.ruleSetStarted.empty()) label += kDot + std::string("rules were ") + setup.ruleSetStarted;
   if (!world.empty()) {
@@ -721,6 +739,30 @@ std::vector<std::string> EngineSettingNames(const settings::Registry& reg) {
     if (IsEngineSetting(d) && d.implemented) names.push_back(Tr(d.name));
   }
   return names;
+}
+
+std::string TablesStamp(const Setup& s) {
+  std::string text;
+  for (const ModUse& m : s.mods) {
+    if (m.applies == mods::Applies::NewPlaythrough) text += "mod:" + m.id + "@" + m.version + ";";
+  }
+  for (const AddedRowRef& r : s.addedRows) text += "row:" + r.mod + "/" + r.table + "/" + r.name + "/" + r.label + "=" + std::to_string(r.id) + ";";
+  text += "rando:" + s.randomizer + "/" + s.randomizerVersion + "/" + s.seed + ";";
+  text += "shadows:" + s.moreShadows + ";edition:" + s.edition + ";";
+  for (const std::string& c : s.challenges) text += "ch:" + c + ";";
+  for (const std::string& o : s.options) text += "opt:" + o + ";";
+  if (s.rules.present) {
+    text += "rules:" + s.rules.ruleSet + ";gens:";
+    for (int g : s.rules.gens) text += std::to_string(g) + ",";
+    for (const auto& [k, v] : s.rules.mechanics) text += k + "=" + v + ",";
+    for (const std::string& o : s.rules.pokemonOptions) text += "po:" + o + ",";
+    text += ";";
+  }
+  uint64_t h = 0xCBF29CE484222325ull;
+  for (unsigned char c : text) h = (h ^ c) * 0x100000001B3ull;
+  char out[24];
+  std::snprintf(out, sizeof out, "%016llx", static_cast<unsigned long long>(h));
+  return out;
 }
 
 std::string Now() {

@@ -124,7 +124,10 @@ bool Fill(const XDCommonTables& tables, DiscRules& out, std::string& error, cons
   for (uint32_t i = 1; i < nItemIds; i++) {
     const uint16_t slot = itemIndex[i];
     r.items[i].exists = slot < nPrime && items[slot].name != 0;
-    if (r.items[i].exists) r.items[i].soubi = items[slot].itemSoubiDataId;
+    if (r.items[i].exists) {
+      r.items[i].soubi = items[slot].itemSoubiDataId;
+      r.items[i].bagKind = items[slot].kind;
+    }
   }
   if (const uint8_t* mach = machines ? machines : DolAt(kMachineTable, kMachineBytes)) {
     const uint32_t n = kMachineBytes / 8;
@@ -149,6 +152,8 @@ bool Fill(const XDCommonTables& tables, DiscRules& out, std::string& error, cons
     s.exists = d.numPokemon != 0;
     s.national = d.numPokemon;
     s.growth = d.growDataId;
+    s.sexRatio = d.sexRatio;
+    s.initFriend = d.initFriend;
     s.abilities[0] = d.tokuseiDataId[0];
     s.abilities[1] = d.tokuseiDataId[1];
     const BasisStatus& b = d.basisStatus[0];

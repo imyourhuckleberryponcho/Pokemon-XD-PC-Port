@@ -169,6 +169,8 @@ struct ReadReport {
 
 bool ReadSave(const std::vector<uint8_t>& file, Save& out, ReadReport& report, std::string& error);
 
+void Reparse(Save& save, ReadReport& report);
+
 Pokemon ParsePokemon(const uint8_t* p, ByteOrder order);
 
 struct TableCounts {

@@ -14,7 +14,7 @@ struct FullArgs {
   bool eol_crlf = false;
 };
 
-const int GEN57_MAKE_VERSION = 5;
+const int GEN57_MAKE_VERSION = 6;
 const char* kConverterVersion = "0.2.0";
 
 int run_process(const std::string& exe, const std::vector<std::string>& args, const std::map<std::string, std::string>* env, const std::string& logfile,
@@ -329,7 +329,8 @@ int run_full(FullArgs& a) {
       Json m = Json::parse(read_all(fs::path(out) / "mod.json"));
       Json g4 = Json::parse(read_all(fs::path(a.gen4_pack) / "gen4.json"));
       base_done = m.find("version") && m.find("version")->s == kConverterVersion && m.find("count") && m.find("count")->i >= 1 &&
-                  (!m.find("dump") || m.find("dump")->s == fp) && g4.find("version") && g4.find("version")->i == 2;
+                  (!m.find("dump") || m.find("dump")->s == fp) && g4.find("version") && g4.find("version")->i == 2 &&
+                  g4.find("cries") && g4.find("cries")->i >= 1;
     } catch (const std::exception&) {}
   }
   say("stage base 0 8");
@@ -469,6 +470,12 @@ int run_full(FullArgs& a) {
                                  [&](const std::string& l) { if (l.compare(0, 5, "error") == 0) lines.push_back(l); });
       if (!lines.empty()) throw Fail(lines[0]);
       if (rc != 0) throw Fail("the Gen 4 pack builder stopped (exit " + std::to_string(rc) + ")");
+      {
+        const fs::path gj = fs::path(a.gen4_pack) / "gen4.json";
+        Json g4j = Json::parse(read_all(gj));
+        g4j.set("recipe", Json(1));
+        write_all(gj, eolfix(g4j.dump(1, true), a.eol_crlf));
+      }
       if (!std::getenv("USUM_KEEP_SOURCE")) wipe(src);
     }
     wipe(repd);
@@ -513,7 +520,7 @@ int run_full(FullArgs& a) {
   if (!fs::is_regular_file(fs::path(a.gen4_pack) / "files" / "GSfsys.toc")) throw Fail("The Gen 4 pack is not there yet (" + a.gen4_pack + "): it is made first.");
   if (plan_all.items.empty()) {
     PlanOptions p2 = po;
-    p2.packs = {"g57", "form"};
+    p2.packs = {"g57", "form", "gen4"};
     plan_all = make_plan(r, d, g, *disc, p2);
   }
   size_t nspecies = 0;
@@ -586,6 +593,34 @@ int run_full(FullArgs& a) {
       fa.data_dir = a.data_dir; fa.dump_fp = fp; fa.models = &g; fa.jobs = a.jobs; fa.xd_runs = xd_runs(); fa.eol_crlf = a.eol_crlf;
       for (auto& it : plan_all.items) if (it.pack == "g57" && it.skip.empty()) fa.nat_group[it.nat] = it.group;
       for (int n = 494; n <= 807; n++) if (only57.empty() || only57.count(n)) fa.nats.insert(n);
+      Json gen4species;
+      const fs::path gen4json = fs::path(a.gen4_pack) / "data" / "02_species.json";
+      const bool gen4_from_dump = [&] {
+        try { return Json::parse(read_all(fs::path(a.gen4_pack) / "gen4.json")).find("generated_from")->s.compare(0, 6, "CTR-P-") == 0; } catch (const std::exception&) { return false; }
+      }();
+      if (gen4_from_dump) {
+        try {
+          gen4species = Json::parse(read_all(gen4json));
+          const Json* add = gen4species.find("add");
+          const Json* pk = add ? add->find("pokemon") : nullptr;
+          std::map<int, int> rowOf;
+          if (pk) for (auto& kv : pk->o) {
+            const Json* np = kv.second.find("numPokemon");
+            const Json* pr = kv.second.find("pkxDataId");
+            if (np && pr && pr->i != 418) rowOf[(int)np->i] = (int)pr->i;
+          }
+          for (auto& it : plan_all.items) {
+            if (it.pack != "gen4" || it.nat == 438 || !it.skip.empty() || !rowOf.count(it.nat)) continue;
+            const fs::path f = fs::path(a.gen4_pack) / "files" / ("pkx_g4_" + it.model + ".fsys");
+            if (!fs::exists(f)) continue;
+            fa.extra[it.nat] = {f.string(), rowOf[it.nat]};
+            fa.nat_group[it.nat] = it.group;
+            fa.nats.insert(it.nat);
+          }
+          fa.extra_pack = fs::absolute(a.gen4_pack).string();
+          log("Gen 4 faces: " + std::to_string(fa.extra.size()) + " species to draw");
+        } catch (const std::exception& e) { log(std::string("Gen 4 faces: not drawn (") + e.what() + ")"); fa.extra.clear(); }
+      }
       fa.run = [](const std::string& exe, const std::vector<std::string>& args, const std::map<std::string, std::string>* env, const std::string& lf) { return run_process(exe, args, env, lf); };
       fa.progress = [](int dn, int tt, const std::string& w) { say("progress " + std::to_string(dn) + " " + std::to_string(tt) + " " + w); };
       fa.log = log;
@@ -594,6 +629,27 @@ int run_full(FullArgs& a) {
         say("progress 1 1 faces (not drawn: xd was not found)");
       } else {
         try { make_faces(fa); } catch (const Fail&) { throw; } catch (const std::exception& e) { throw Fail(std::string("The faces could not be drawn (") + e.what() + ")."); }
+        if (!fa.extra.empty()) {
+          try {
+            const std::string before = read_all(gen4json);
+            if (eolfix(gen4species.dump(1, true), a.eol_crlf) != before) {
+              log("Gen 4 faces: the species file does not read back as it is (left alone: the species keep their stand-ins' faces)");
+            } else {
+              Json* pk = gen4species.find("add")->find("pokemon");
+              int n = 0;
+              for (auto& kv : pk->o) {
+                const Json* np = kv.second.find("numPokemon");
+                if (!np || !fa.extra.count((int)np->i)) continue;
+                const fs::path png = fs::path(a.gen4_pack) / "textures" / "faces" / (std::to_string(np->i) + ".png");
+                if (!fs::exists(png)) continue;
+                kv.second.set("face", Json("textures/faces/" + std::to_string(np->i) + ".png"));
+                n++;
+              }
+              write_all(gen4json, eolfix(gen4species.dump(1, true), a.eol_crlf));
+              log("Gen 4 faces: " + std::to_string(n) + " species rows point at their own face");
+            }
+          } catch (const std::exception& e) { log(std::string("Gen 4 faces: species file not changed (") + e.what() + ")"); }
+        }
       }
     }
     mark("faces");

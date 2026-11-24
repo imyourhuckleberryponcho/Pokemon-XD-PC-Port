@@ -336,7 +336,7 @@ void ParseMove(Ctx& c, const std::string& name, const js::Value& v) {
   if (const js::Value* x = Get(v, "charge")) {
     std::string donor; int64_t did = 0;
     if (x->kind != js::Value::Kind::Object || !Get(*x, "donor") || !Str(*Get(*x, "donor"), donor) || !c.resolve("move", donor, did)) { c.Problem(x->line, "\"charge\" is { \"donor\": \"Razor Wind\", \"message\": \"{name} is charging!\" } (the donor is one of the game's own two-turn moves)"); ok = false; }
-    else { m.chargeDonor = did; if (const js::Value* mm = Get(*x, "message")) Str(*mm, m.chargeMessage); }
+    else { m.chargeDonor = did; if (const js::Value* mm = Get(*x, "message")) Str(*mm, m.chargeMessage); if (const js::Value* u = Get(*x, "untouchable")) m.chargeUntouchable = u->kind == js::Value::Kind::Bool && u->boolean; if (const js::Value* u = Get(*x, "carry")) m.chargeCarry = u->kind == js::Value::Kind::Bool && u->boolean; }
   }
   if (ok) c.defs.moves.push_back(std::move(m));
 }
@@ -347,7 +347,7 @@ void ParseAbility(Ctx& c, const std::string& name, const js::Value& v) {
   if (v.kind != js::Value::Kind::Object) { c.Problem(v.line, "the ability \"" + name + "\" must be an object"); return; }
   static const std::set<std::string> known = {"id", "text", "switch_in", "end_of_turn", "ko", "contact", "switch_out", "before_move", "damage_dealt",
                                               "damage_taken", "stat_mods", "absorb", "stat_drop_block", "status_block", "priority", "reflect_status",
-                                              "remove_secondary", "script", "acts_as", "_note", "unnerve", "disable_on_hit", "poison_any_type", "strong_wind", "infiltrator", "berry_eaten", "half_hp", "type_by_item", "hit", "hit_dealt", "fainted", "stat_dropped", "any_faint", "convert", "aura", "breaks_auras",
+                                              "remove_secondary", "script", "acts_as", "_note", "unnerve", "disable_on_hit", "poison_any_type", "strong_wind", "infiltrator", "illusion", "berry_eaten", "half_hp", "type_by_item", "hit", "hit_dealt", "fainted", "stat_dropped", "any_faint", "convert", "aura", "breaks_auras",
                                               "immune_moves", "dancer", "accuracy_against", "accuracy_dealt", "crit_when", "contrary", "blocks_priority", "no_contact"};
   for (const auto& k : v.order) if (!known.count(k)) { c.Problem(v.line, "unknown key \"" + k + "\" in the ability \"" + name + "\""); return; }
   double n = 0;
@@ -469,7 +469,7 @@ void ParseAbility(Ctx& c, const std::string& name, const js::Value& v) {
   flag("breaks_auras", a.breaksAuras);
   flag("remove_secondary", a.removesSecondary);
   flag("script", a.script);
-  flag("unnerve", a.unnerve); flag("poison_any_type", a.poisonAnyType); flag("strong_wind", a.strongWind); flag("infiltrator", a.infiltrator);
+  flag("unnerve", a.unnerve); flag("poison_any_type", a.poisonAnyType); flag("strong_wind", a.strongWind); flag("infiltrator", a.infiltrator); flag("illusion", a.illusion);
   if (ok) c.defs.abilities.push_back(std::move(a));
 }
 
@@ -592,7 +592,7 @@ uint64_t Digest(const Defs& d) {
   std::sort(mv.begin(), mv.end(), [](auto* a, auto* b) { return a->id < b->id; });
   h.Add(mv.size());
   for (auto* m : mv) { h.Add(static_cast<uint64_t>(m->id)); h.Add(m->effects); h.Add(m->power); h.Add(m->accuracy); h.Add(m->script);
-    if (m->chargeDonor != 0) { h.Add(0x0714u); h.Add(static_cast<uint64_t>(m->chargeDonor)); h.Add(m->chargeMessage); }
+    if (m->chargeDonor != 0) { h.Add(0x0714u); h.Add(static_cast<uint64_t>(m->chargeDonor)); h.Add(m->chargeMessage); if (m->chargeUntouchable) h.Add(0x0715u); if (m->chargeCarry) h.Add(0x0717u); }
     if (m->crit || m->ignoreBoosts || m->useTargetAttack || m->defendWithDef || m->firstTurnOnly || m->powerFormula || m->neverMiss || m->protectKind || m->needsPhysicalHit || m->heatsUp || m->typeFromUser)
       h.Add(static_cast<uint64_t>(m->crit * 1 + m->ignoreBoosts * 2 + m->useTargetAttack * 4 + m->defendWithDef * 8 + m->firstTurnOnly * 16 + m->powerFormula * 32 + m->neverMiss * 256 + m->protectKind * 1024 + m->needsPhysicalHit * 2048 + m->heatsUp * 4096 + m->typeFromUser * 8192)); }
   std::vector<const AbilityDef*> ab;
@@ -619,8 +619,8 @@ uint64_t Digest(const Defs& d) {
   }
   for (const auto& f : d.fieldNames) h.Add(f);
   for (const auto& a : d.abilities) {
-    if (!(a.unnerve || a.disableOnHit || a.poisonAnyType || a.strongWind || a.infiltrator || !a.berryEaten.empty() || !a.halfHp.empty() || !a.typeByItem.empty() || !a.dancer.empty())) continue;
-    h.Add(0x0711u); h.Add(static_cast<uint64_t>(a.id)); h.Add(a.unnerve); h.Add(static_cast<uint64_t>(a.disableOnHit)); h.Add(a.poisonAnyType); h.Add(a.strongWind); h.Add(a.infiltrator); for (int dm : a.dancer) h.Add(static_cast<uint64_t>(dm));
+    if (!(a.unnerve || a.disableOnHit || a.poisonAnyType || a.strongWind || a.infiltrator || a.illusion || !a.berryEaten.empty() || !a.halfHp.empty() || !a.typeByItem.empty() || !a.dancer.empty())) continue;
+    h.Add(0x0711u); h.Add(static_cast<uint64_t>(a.id)); h.Add(a.unnerve); h.Add(static_cast<uint64_t>(a.disableOnHit)); h.Add(a.poisonAnyType); h.Add(a.strongWind); h.Add(a.infiltrator); if (a.illusion) h.Add(0x0716u); for (int dm : a.dancer) h.Add(static_cast<uint64_t>(dm));
     h.Add(a.berryEaten); h.Add(a.halfHp); for (const auto& t : a.typeByItem) { h.Add(static_cast<uint64_t>(t.item)); h.Add(static_cast<uint64_t>(t.type)); }
   }
   for (const auto& kv : d.hiddenNat) { h.Add(0x0712u); h.Add(static_cast<uint64_t>(kv.first)); h.Add(static_cast<uint64_t>(kv.second)); }

@@ -62,3 +62,19 @@ extern "C" bool PortFolderClaim_Take(const char* folder) {
   if (lock == nullptr) return true;
   return GetLastError() != ERROR_ALREADY_EXISTS;
 }
+
+extern "C" bool PortFolderClaim_IsFree(const char* folder) {
+  if (folder == nullptr || folder[0] == '\0') return true;
+  const std::wstring path = canonical(folder);
+  if (path.empty()) return true;
+  uint64_t hash = 0xCBF29CE484222325ull;
+  for (const wchar_t c : path) {
+    hash = (hash ^ static_cast<uint16_t>(c)) * 0x100000001B3ull;
+  }
+  wchar_t name[64];
+  swprintf(name, 64, L"Local\\PortFolderClaim-%016llx", static_cast<unsigned long long>(hash));
+  const HANDLE lock = OpenMutexW(SYNCHRONIZE, FALSE, name);
+  if (lock == nullptr) return true;
+  CloseHandle(lock);
+  return false;
+}

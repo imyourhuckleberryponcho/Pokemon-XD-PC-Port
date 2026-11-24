@@ -8598,3 +8598,815 @@
 
 = The program file %s is missing. Your antivirus may have removed it: open Windows Security > Virus & threat protection > Protection history, restore it from there (and allow it), or unpack the game folder again. (Windows error %d)
 > Die Programmdatei %s fehlt. Möglicherweise hat Ihr Virenschutz sie entfernt: Öffnen Sie Windows-Sicherheit > Viren- & Bedrohungsschutz > Schutzverlauf, stellen Sie sie dort wieder her (und erlauben Sie sie) oder entpacken Sie den Spielordner erneut. (Windows-Fehler %d)
+
+= Controller in the background
+> Controller im Hintergrund
+
+= Lets a controller keep working while the game's window isn't in front, for example when you watch the game through a streaming overlay in another program. Controllers only: the keyboard is never read in the background. It needs "Pause in the background" to be off, or the game waits for you instead.
+> Lässt einen Controller weiterarbeiten, während das Fenster des Spiels nicht im Vordergrund ist, zum Beispiel wenn du das Spiel über ein Streaming-Overlay in einem anderen Programm verfolgst. Nur Controller: Die Tastatur wird im Hintergrund nie gelesen. „Im Hintergrund pausieren“ muss ausgeschaltet sein, sonst wartet das Spiel auf dich.
+
+= It was made before the Gen 4 Pokemon had their own faces and cries (Leafeon looked like Umbreon). It still works; press Make to get the right faces and cries.
+> Es wurde erstellt, bevor die Gen-4-Pokemon eigene Gesichter und Schreie hatten (Folipurba sah wie Nachtara aus). Es funktioniert weiter; Erstellen drücken, um die richtigen Gesichter und Schreie zu bekommen.
+
+= It was made by an older recipe than the Gen 4 faces and cries. It still works; press Make to make it again together with them.
+> Es wurde nach einem älteren Rezept als die Gen-4-Gesichter und -Schreie erstellt. Es funktioniert weiter; Erstellen drücken, um es zusammen mit ihnen neu zu erstellen.
+
+= The randomizer is giving the starter.
+> Der Randomizer vergibt das Starter-Pokémon.
+
+= Starter
+> Starter
+
+= Two starters
+> Zwei Starter
+
+= Turn its starter switch off to choose your own.
+> Schalte dort den Starter-Schalter aus, um selbst zu wählen.
+
+= Eevee: the game's own partner Pokemon. Choose: after you name yourself, pick your starter from every Pokemon of this playthrough (Pokemon of the generations you turned on). It starts at level 10 with the moves it would know, like Eevee. Kept with this playthrough.
+> Evoli: das Partner-Pokémon des Spiels. Wählen: Nach der Namenseingabe suchst du dein Starter-Pokémon aus allen Pokémon dieses Spieldurchgangs aus (der eingeschalteten Generationen). Es beginnt auf Level 10 mit den Attacken, die es dann kennt, wie Evoli. Wird mit diesem Spieldurchgang gespeichert.
+
+= On: you pick a second starter, which joins your party in the second place at level 10. Off: one starter.
+> An: Du wählst einen zweiten Starter, der auf Level 10 an zweiter Stelle ins Team kommt. Aus: ein Starter.
+
+= Eevee
+> Evoli
+
+= Choose
+> Wählen
+
+= LEGENDARY AND MYTHICAL
+> LEGENDÄRE UND MYTHISCHE
+
+= CHOOSE YOUR STARTER
+> WÄHLE DEIN STARTER-POKÉMON
+
+= Starter %d of 2
+> Starter %d von 2
+
+= No Pokemon has that name.
+> Kein Pokémon hat diesen Namen.
+
+= Generation %d
+> Generation %d
+
+= Added by a mod
+> Von einer Mod hinzugefügt
+
+= Legendary
+> Legendär
+
+= %s starts at level %d with the moves it would know by then, like Eevee.
+> %s beginnt auf Level %d mit den Attacken, die es dann kennt, wie Evoli.
+
+= Search:
+> Suche:
+
+= %d Pokemon
+> %d Pokémon
+
+= Up / down: Pokemon   Left / right: 10 at a time   Y: next generation   X: search   A: choose
+> Hoch / runter: Pokémon   Links / rechts: 10 auf einmal   Y: nächste Generation   X: Suche   A: wählen
+
+=    B: back
+>    B: zurück
+
+= SEARCH BY NAME
+> SUCHE NACH NAMEN
+
+= A: letter   X: delete   B: close
+> A: Buchstabe   X: löschen   B: schließen
+
+= Choose %s as your first starter?
+> %s als erstes Starter-Pokémon wählen?
+
+= Choose %s as your second starter?
+> %s als zweites Starter-Pokémon wählen?
+
+= Choose %s as your starter?
+> %s als Starter-Pokémon wählen?
+
+= Yes
+> Ja
+
+= Choosing your starter marks this playthrough as cheats used.
+> Wenn du dein Starter-Pokémon wählst, wird dieser Spieldurchgang als „Cheats benutzt“ markiert.
+
+= Picture
+> Bild
+
+= Edit save...
+> Spielstand bearbeiten...
+
+= Change Pokemon, the trainer and the bag of this save, while the game is closed. A backup is made first.
+> Pokémon, Trainer und Beutel dieses Spielstands ändern, solange das Spiel geschlossen ist. Vorher wird eine Sicherung angelegt.
+
+= The save can't be opened for editing.
+> Der Spielstand kann nicht zum Bearbeiten geöffnet werden.
+
+= Edit save
+> Spielstand bearbeiten
+
+= Change Pokemon, the trainer and the bag. Nothing is written until you press Save changes, and a backup of the save as it is goes first.
+> Pokémon, Trainer und Beutel ändern. Es wird nichts geschrieben, bis du auf Änderungen speichern drückst; vorher wird der jetzige Stand gesichert.
+
+= No changes waiting.
+> Keine Änderungen vorgemerkt.
+
+= %d change waiting.
+> %d Änderung vorgemerkt.
+
+= %d changes waiting.
+> %d Änderungen vorgemerkt.
+
+= Discard changes and go back
+> Änderungen verwerfen und zurück
+
+= Undo all changes
+> Alle Änderungen rückgängig
+
+= Save changes...
+> Änderungen speichern...
+
+= Save changes
+> Änderungen speichern
+
+= changes the game
+> ändert das Spiel
+
+= no effect on the game
+> ohne Wirkung auf das Spiel
+
+= The save as it is now is kept in the save's backups first, so you can always put it back.
+> Der jetzige Stand wird zuerst in den Sicherungen abgelegt, du kannst ihn also immer zurückholen.
+
+= I understand: mark this playthrough as cheats used
+> Verstanden: diesen Spieldurchgang als „Cheats benutzt“ markieren
+
+= Discard the changes?
+> Änderungen verwerfen?
+
+= The changes that were not saved are lost. The save itself is not changed.
+> Nicht gespeicherte Änderungen gehen verloren. Der Spielstand selbst bleibt unverändert.
+
+= Discard
+> Verwerfen
+
+= Keep editing
+> Weiter bearbeiten
+
+= Choose your Pokemon XD disc on the Disc page first: the editor takes the game's lists and names from it.
+> Wähle zuerst auf der Seite Disc deine Pokémon-XD-Disc: der Editor liest die Listen und Namen des Spiels davon.
+
+= The disc can't be read: %s
+> Die Disc kann nicht gelesen werden: %s
+
+= %ld hours %02ld minutes
+> %ld Stunden %02ld Minuten
+
+= %s  Lv%d
+> %s  Lv%d
+
+= PC box %d of %d
+> PC-Box %d von %d
+
+= < Previous box
+> < Vorherige Box
+
+= Next box >
+> Nächste Box >
+
+= Box name
+> Box-Name
+
+= Moving a Pokemon
+> Pokémon verschieben
+
+= Pick the place it goes to (a Pokemon there swaps). Nothing here changes the game, so moving does not mark the save.
+> Wähle den Zielplatz (ein Pokémon dort wird getauscht). Das ändert nichts am Spiel, Verschieben markiert den Spielstand also nicht.
+
+= Cancel the move
+> Verschieben abbrechen
+
+= Empty place (%s)
+> Leerer Platz (%s)
+
+= party %d
+> Team %d
+
+= box %d, place %d
+> Box %d, Platz %d
+
+= Add a new Pokemon: it goes to the first free place of the PC boxes (or the party).
+> Neues Pokémon hinzufügen: es kommt auf den ersten freien Platz der PC-Boxen (oder des Teams).
+
+= (choose)
+> (wählen)
+
+= Into the party
+> Ins Team
+
+= Add this Pokemon
+> Dieses Pokémon hinzufügen
+
+= A Shadow Pokemon: its species, nature, gender and shininess stay as they are until it is purified.
+> Ein Crypto-Pokémon: Art, Wesen, Geschlecht und Schillern bleiben bis zur Läuterung unverändert.
+
+= Locked on a Shadow Pokemon.
+> Bei einem Crypto-Pokémon gesperrt.
+
+= (nothing)
+> (nichts)
+
+= Friendship
+> Freundschaft
+
+= Nature
+> Wesen
+
+= Gender
+> Geschlecht
+
+= Female
+> Weiblich
+
+= Male
+> Männlich
+
+= Male (this species has no choice)
+> Männlich (diese Art hat keine Wahl)
+
+= Female (this species has no choice)
+> Weiblich (diese Art hat keine Wahl)
+
+= Ability
+> Fähigkeit
+
+= Attack
+> Angriff
+
+= Defense
+> Verteidigung
+
+= Sp. Atk
+> Sp.-Ang.
+
+= Sp. Def
+> Sp.-Vert.
+
+
+= IV %s
+> IV %s
+
+= EV %s
+> EV %s
+
+= (no move)
+> (keine Attacke)
+
+= Only moves this species can learn
+> Nur Attacken, die diese Art lernen kann
+
+= Move %d
+> Attacke %d
+
+= PP Ups, move %d
+> AP-Ups, Attacke %d
+
+= Heal (HP, PP, status)
+> Heilen (KP, AP, Status)
+
+= Move this Pokemon...
+> Dieses Pokémon verschieben...
+
+= Release this Pokemon
+> Dieses Pokémon freilassen
+
+= A Shadow Pokemon can't be released.
+> Ein Crypto-Pokémon kann nicht freigelassen werden.
+
+= Good to know
+> Gut zu wissen
+
+= Everything above except nickname and place changes the game: the save is then marked as cheats used.
+> Alles oben außer Spitzname und Platz ändert das Spiel: der Spielstand wird dann als „Cheats benutzt“ markiert.
+
+= Name
+> Name
+
+= Your Pokemon keep counting as yours, and the playthrough's files follow the new name.
+> Deine Pokémon zählen weiter als deine, und die Dateien des Durchgangs folgen dem neuen Namen.
+
+= Play time, hours
+> Spielzeit, Stunden
+
+= Play time, minutes
+> Spielzeit, Minuten
+
+= Pockets
+> Fächer
+
+= Poke Balls
+> Pokébälle
+
+= TMs & HMs
+> TMs & VMs
+
+= Berries
+> Beeren
+
+= Colognes
+> Parfums
+
+= Battle CDs
+> Kampf-CDs
+
+= Item #%d
+> Item Nr. %d
+
+= Remove %s
+> %s entfernen
+
+= Nothing in this pocket.
+> Nichts in diesem Fach.
+
+= Add an item
+> Item hinzufügen
+
+= How many
+> Wie viele
+
+= Add to the bag
+> Zum Beutel hinzufügen
+
+= Parts tied to the story: key items, the Strategy Memo, opening a Shadow Pokemon's heart and the Purification Chamber. They are not in this version of the editor yet.
+> Teile, die an die Handlung gebunden sind: Basis-Items, Strategie-Memo, das Öffnen des Herzens eines Crypto-Pokémon und die Läuterungskammer. Sie sind in dieser Version des Editors noch nicht enthalten.
+
+= %s, %s
+> %s, %s
+
+= Bag
+> Beutel
+
+= This save can only be looked at
+> Dieser Spielstand kann nur angesehen werden
+
+= This changes your game: the save will be marked as cheats used.
+> Das ändert dein Spiel: der Spielstand wird als „Cheats benutzt“ markiert.
+
+= These changes don't change the game: no mark.
+> Diese Änderungen ändern das Spiel nicht: keine Markierung.
+
+= The save's card file can't be read.
+> Die Kartendatei des Spielstands kann nicht gelesen werden.
+
+= The save's card file is too short.
+> Die Kartendatei des Spielstands ist zu kurz.
+
+= This save is empty: there is nothing to edit yet. Play and save once first.
+> Dieser Spielstand ist leer: es gibt noch nichts zu bearbeiten. Spiele und speichere zuerst einmal.
+
+= This is a Pokemon XG save: the editor does not handle those yet.
+> Das ist ein Pokémon-XG-Spielstand: der Editor kann diese noch nicht bearbeiten.
+
+= This playthrough uses mods, a randomizer or Pokemon of other generations. The editor knows only the original game's lists so far, so it only shows this save.
+> Dieser Durchgang nutzt Mods, einen Randomizer oder Pokémon anderer Generationen. Der Editor kennt bisher nur die Listen des Originalspiels und zeigt diesen Spielstand deshalb nur an.
+
+= This save is in the Japanese layout: the editor does not write those yet.
+> Dieser Spielstand hat das japanische Layout: der Editor schreibt diese noch nicht.
+
+= The editor is not open.
+> Der Editor ist nicht geöffnet.
+
+= Choose a species first.
+> Wähle zuerst eine Art.
+
+= Choose an item first.
+> Wähle zuerst ein Item.
+
+= move #%d
+> Attacke Nr. %d
+
+= nothing
+> nichts
+
+= box %d slot %d
+> Box %d Platz %d
+
+= Key Items
+> Basis-Items
+
+= A name can't be empty.
+> Ein Name darf nicht leer sein.
+
+= A name can have at most %d letters here (the game's own name entry).
+> Ein Name darf hier höchstens %d Buchstaben haben (wie bei der Namenseingabe des Spiels).
+
+= That name has a letter the game can't show.
+> Dieser Name enthält einen Buchstaben, den das Spiel nicht zeigen kann.
+
+= empty place
+> leerer Platz
+
+= That place does not exist.
+> Diesen Platz gibt es nicht.
+
+= This save has no Pokemon section.
+> Dieser Spielstand hat keinen Pokémon-Abschnitt.
+
+= There is no Pokemon in that place.
+> An diesem Platz ist kein Pokémon.
+
+= The level must be from 1 to 100.
+> Das Level muss von 1 bis 100 gehen.
+
+= Eggs have no level to change.
+> Eier haben kein Level, das man ändern könnte.
+
+= The game's tables don't have that species.
+> Die Tabellen des Spiels kennen diese Art nicht.
+
+= The game's tables have no experience curve for that species.
+> Die Tabellen des Spiels haben keine Erfahrungskurve für diese Art.
+
+= %s: level %d -> %d
+> %s: Level %d -> %d
+
+= A Shadow Pokemon (or one that was) keeps its species: the Shadow list in the save names it.
+> Ein Crypto-Pokémon (oder ein ehemaliges) behält seine Art: die Crypto-Liste im Spielstand nennt sie.
+
+= Eggs can't change species.
+> Eier können die Art nicht wechseln.
+
+= %s: species -> %s
+> %s: Art -> %s
+
+= %s: nickname -> %s
+> %s: Spitzname -> %s
+
+= The game's tables don't have that item.
+> Die Tabellen des Spiels kennen dieses Item nicht.
+
+= %s: held item %s -> %s
+> %s: getragenes Item %s -> %s
+
+= Friendship goes from 0 to 255.
+> Freundschaft geht von 0 bis 255.
+
+= %s: friendship %d -> %d
+> %s: Freundschaft %d -> %d
+
+= That is not a stat.
+> Das ist kein Basiswert.
+
+= An IV goes from 0 to 31.
+> Ein IV geht von 0 bis 31.
+
+= %s: IV %s %d -> %d
+> %s: IV %s %d -> %d
+
+= An EV goes from 0 to 255 here (the game's own highest is 100: the page says so when it is more).
+> Ein EV geht hier von 0 bis 255 (das Spiel selbst erlaubt höchstens 100: die Seite weist darauf hin, wenn es mehr ist).
+
+= %s: EV %s %d -> %d
+> %s: EV %s %d -> %d
+
+= A Pokemon has four moves.
+> Ein Pokémon hat vier Attacken.
+
+= PP Ups go from 0 to 3.
+> AP-Ups gehen von 0 bis 3.
+
+= The game's tables don't have that move.
+> Die Tabellen des Spiels kennen diese Attacke nicht.
+
+= It already knows that move.
+> Es kennt diese Attacke schon.
+
+= %s: move %s -> %s with %d PP Ups
+> %s: Attacke %s -> %s mit %d AP-Ups
+
+= %s: move %s -> %s
+> %s: Attacke %s -> %s
+
+= That move place is empty.
+> Dieser Attackenplatz ist leer.
+
+= %s: %s PP Ups %d -> %d
+> %s: %s AP-Ups %d -> %d
+
+= A Pokemon has a first and a second ability place.
+> Ein Pokémon hat einen ersten und einen zweiten Fähigkeitsplatz.
+
+= This species has only one ability.
+> Diese Art hat nur eine Fähigkeit.
+
+= %s: ability place %d -> %d
+> %s: Fähigkeitsplatz %d -> %d
+
+= %s: healed (HP, PP, status)
+> %s: geheilt (KP, AP, Status)
+
+= There are four PC marks.
+> Es gibt vier PC-Markierungen.
+
+= %s: PC marks changed
+> %s: PC-Markierungen geändert
+
+= There are 25 natures.
+> Es gibt 25 Wesen.
+
+= Nature, gender and shininess of a Shadow Pokemon can't be changed before it is purified: the Shadow list keeps the same number.
+> Wesen, Geschlecht und Schillern eines Crypto-Pokémon lassen sich vor der Läuterung nicht ändern: die Crypto-Liste behält dieselbe Zahl.
+
+= This species has no choice of gender.
+> Diese Art hat keine Geschlechterwahl.
+
+= No personality value fits all of that.
+> Kein Persönlichkeitswert passt zu all dem.
+
+= nature %d -> %d
+> Wesen %d -> %d
+
+= gender -> female
+> Geschlecht -> weiblich
+
+= gender -> male
+> Geschlecht -> männlich
+
+= now shiny
+> jetzt schillernd
+
+= no longer shiny
+> nicht mehr schillernd
+
+= %s: %s (new personality value)
+> %s: %s (neuer Persönlichkeitswert)
+
+= A Shadow Pokemon can't be released: it is not yours to let go before it is purified.
+> Ein Crypto-Pokémon kann nicht freigelassen werden: vor der Läuterung gehört es nicht dir.
+
+= The party can't be left empty.
+> Das Team darf nicht leer bleiben.
+
+= %s: released
+> %s: freigelassen
+
+= %s <-> %s: moved
+> %s <-> %s: verschoben
+
+= The party is full.
+> Das Team ist voll.
+
+= All the PC boxes are full.
+> Alle PC-Boxen sind voll.
+
+= Nothing to copy the game's own record layout from: the save needs one Pokemon of its own that was not a Shadow Pokemon.
+> Nichts, wovon das Datensatz-Layout des Spiels kopiert werden könnte: der Spielstand braucht ein eigenes Pokémon, das kein Crypto-Pokémon war.
+
+= %s: new Pokemon, level %d
+> %s: neues Pokémon, Level %d
+
+= That box does not exist.
+> Diese Box gibt es nicht.
+
+= This save has no PC section.
+> Dieser Spielstand hat keinen PC-Abschnitt.
+
+= Box %d: name -> %s
+> Box %d: Name -> %s
+
+= This save has no trainer section.
+> Dieser Spielstand hat keinen Trainer-Abschnitt.
+
+= Trainer name %s -> %s
+> Trainername %s -> %s
+
+= Money goes up to 999,999.
+> Geld geht bis 999.999.
+
+= Money %u -> %u
+> Geld %u -> %u
+
+= Poke Coupons go up to 99,999.
+> Pokétaler gehen bis 99.999.
+
+= Poke Coupons %u -> %u
+> Poké-Coupons %u -> %u
+
+= Play time goes up to 999 hours 59 minutes 59 seconds.
+> Die Spielzeit geht bis 999 Stunden 59 Minuten 59 Sekunden.
+
+= This save has no game-data section.
+> Dieser Spielstand hat keinen Spieldaten-Abschnitt.
+
+= Play time %.0f:%02d -> %.0f:%02d hours
+> Spielzeit %.0f:%02d -> %.0f:%02d Stunden
+
+= This save has no bag section.
+> Dieser Spielstand hat keinen Beutel-Abschnitt.
+
+= That bag place does not exist.
+> Diesen Beutelplatz gibt es nicht.
+
+= A stack holds 1 to 999.
+> Ein Stapel fasst 1 bis 999.
+
+= That item doesn't go in the %s pocket.
+> Dieses Item gehört nicht ins Fach %s.
+
+= That item is in this pocket already: change its stack instead.
+> Dieses Item ist schon in diesem Fach: ändere stattdessen seinen Stapel.
+
+= added %s x%d
+> %s x%d hinzugefügt
+
+= removed %s x%d
+> %s x%d entfernt
+
+= %s x%d -> %s x%d
+> %s x%d -> %s x%d
+
+= Bag (%s): %s
+> Beutel (%s): %s
+
+= Bag (%s): removed item #%d x%d
+> Beutel (%s): Item Nr. %d x%d entfernt
+
+= A stack holds at most 999.
+> Ein Stapel fasst höchstens 999.
+
+= This pocket is full.
+> Dieses Fach ist voll.
+
+= Bag (%s): reordered
+> Beutel (%s): neu geordnet
+
+= Nothing was changed.
+> Nichts wurde geändert.
+
+= The new save did not pass the program's own check (%s).
+> Der neue Spielstand hat die eigene Prüfung des Programms nicht bestanden (%s).
+
+= The new save does not read back the way it was edited.
+> Der neue Spielstand liest sich nicht so zurück, wie er bearbeitet wurde.
+
+= The game is running and has the memory card open. Close it first.
+> Das Spiel läuft und hat die Speicherkarte geöffnet. Schließe es zuerst.
+
+= The save's card file is not there any more.
+> Die Kartendatei des Spielstands ist nicht mehr da.
+
+= Nothing was written: %s
+> Es wurde nichts geschrieben: %s
+
+= nothing was changed.
+> nichts wurde geändert.
+
+= the changes would not work in the game:
+> die Änderungen würden im Spiel nicht funktionieren:
+
+= the save's card file can't be read.
+> die Kartendatei des Spielstands kann nicht gelesen werden.
+
+= the save changed since it was opened here (the game, a restore or another program wrote to it). Open it again.
+> der Spielstand hat sich seit dem Öffnen hier geändert (das Spiel, eine Wiederherstellung oder ein anderes Programm hat hineingeschrieben). Öffne ihn erneut.
+
+= another playthrough already has files for a trainer with that name and ID. Pick another name.
+> ein anderer Durchgang hat schon Dateien für einen Trainer mit diesem Namen und dieser ID. Wähle einen anderen Namen.
+
+= the backup of the save could not be made (%s).
+> die Sicherung des Spielstands konnte nicht angelegt werden (%s).
+
+= the new save file could not be written (is the disk full?).
+> die neue Spielstanddatei konnte nicht geschrieben werden (Datenträger voll?).
+
+= the new save file did not read back correctly.
+> die neue Spielstanddatei ließ sich nicht richtig zurücklesen.
+
+= the game was started while the changes were prepared. Close it and try again.
+> das Spiel wurde gestartet, während die Änderungen vorbereitet wurden. Schließe es und versuche es erneut.
+
+= the playthrough's setup file can't be read (%s), so the mark could not be kept.
+> die Einrichtungsdatei des Durchgangs kann nicht gelesen werden (%s), die Markierung konnte also nicht gehalten werden.
+
+= the playthrough's setup file could not be written.
+> die Einrichtungsdatei des Durchgangs konnte nicht geschrieben werden.
+
+= the save extension could not be made again for the new save.
+> die Spielstand-Erweiterung konnte für den neuen Spielstand nicht neu erstellt werden.
+
+= the save file could not be replaced (%s).
+> die Spielstanddatei konnte nicht ersetzt werden (%s).
+
+= Saved %d change
+> %d Änderung gespeichert
+
+= Saved %d changes
+> %d Änderungen gespeichert
+
+= ; the playthrough is marked as "cheats used"
+> ; der Durchgang ist als „Cheats benutzt“ markiert
+
+= ; the playthrough is not marked
+> ; der Durchgang ist nicht markiert
+
+= . The save as it was is in the backups (%s).
+> . Der Stand von vorher liegt in den Sicherungen (%s).
+
+= These parts are tied to the story. Changing them can make events skip or repeat, leave a playthrough stuck, or make the Strategy Memo and the story disagree. Make sure you have a backup you trust (one is made when you save) and only go on if you know what you are doing.
+> Diese Teile hängen mit der Handlung zusammen. Änderungen können dazu führen, dass Ereignisse übersprungen oder wiederholt werden, ein Durchgang hängen bleibt oder das Strategie-Memo und die Handlung nicht mehr zusammenpassen. Habe eine Sicherung, der du vertraust (beim Speichern wird eine angelegt), und mach nur weiter, wenn du weißt, was du tust.
+
+= I understand: show the risky changes
+> Verstanden: die riskanten Änderungen zeigen
+
+= Key items
+> Basis-Items
+
+= Story items (Disc Case, Mask of Ice...). The game may check for them to start or finish an event: removing one can block the story, adding one can skip a step.
+> Handlungs-Items (CD-Box, Eismaske...). Das Spiel kann sie prüfen, um ein Ereignis zu starten oder zu beenden: eines zu entfernen kann die Handlung blockieren, eines hinzuzufügen kann einen Schritt überspringen.
+
+= Remove
+> Entfernen
+
+= Add a key item
+> Basis-Item hinzufügen
+
+= Add this key item
+> Dieses Basis-Item hinzufügen
+
+= Strategy Memo
+> Strategie-Memo
+
+= The game's list of Pokemon you have met. Adding a species lists it as met; removing one takes it out of the list. Entries past 500 are kept elsewhere and are not changed.
+> Die Liste des Spiels über die Pokémon, denen du begegnet bist. Eine Art hinzuzufügen führt sie als begegnet; sie zu entfernen nimmt sie aus der Liste. Einträge über 500 werden anderswo gehalten und nicht geändert.
+
+= Species listed
+> Gelistete Arten
+
+= Add a species
+> Art hinzufügen
+
+= Add to the Strategy Memo
+> Zum Strategie-Memo hinzufügen
+
+= Remove a species
+> Art entfernen
+
+= Remove from the Strategy Memo
+> Aus dem Strategie-Memo entfernen
+
+= Shadow Pokemon hearts
+> Herzen der Crypto-Pokémon
+
+= Opens the heart of a Shadow Pokemon you have caught: it is then ready to be purified. You still purify it yourself at the Relic Stone or in the Purification Chamber, so the game teaches the real moves and gives the stored experience. Nothing else about a Shadow Pokemon is changed.
+> Öffnet das Herz eines gefangenen Crypto-Pokémon: es ist dann bereit zur Läuterung. Du läuterst es weiterhin selbst am Relikt-Stein oder in der Läuterungskammer, damit das Spiel die echten Attacken beibringt und die gespeicherte Erfahrung gibt. Sonst wird nichts an einem Crypto-Pokémon geändert.
+
+= heart open
+> Herz offen
+
+= Open the heart (gauge %d)
+> Herz öffnen (Anzeige %d)
+
+= No caught Shadow Pokemon with a closed heart.
+> Kein gefangenes Crypto-Pokémon mit geschlossenem Herz.
+
+= This playthrough plays with other lists than the original game's (mods, a randomizer or Pokemon of other generations). The game writes them next to the save while you play: start the game with this save once with this version, then edit it here. Until then it can only be looked at.
+> Dieser Durchgang spielt mit anderen Listen als das Originalspiel (Mods, Randomizer oder Pokémon anderer Generationen). Das Spiel schreibt sie beim Spielen neben den Spielstand: starte das Spiel einmal mit diesem Spielstand in dieser Version und bearbeite ihn dann hier. Bis dahin kann er nur angesehen werden.
+
+= That Pokemon is not a Shadow Pokemon.
+> Dieses Pokémon ist kein Crypto-Pokémon.
+
+= This Shadow Pokemon's record is kept in the save extension (More Shadow Pokemon): its heart can't be opened here yet.
+> Der Datensatz dieses Crypto-Pokémon liegt in der Spielstand-Erweiterung (Mehr Crypto-Pokémon): sein Herz kann hier noch nicht geöffnet werden.
+
+= That Pokemon is purified already.
+> Dieses Pokémon ist schon geläutert.
+
+= That Shadow Pokemon is not caught yet.
+> Dieses Crypto-Pokémon ist noch nicht gefangen.
+
+= This save has no Shadow list.
+> Dieser Spielstand hat keine Crypto-Liste.
+
+= %s: heart opened (gauge %d -> 0)
+> %s: Herz geöffnet (Anzeige %d -> 0)
+
+= This save has no Strategy Memo.
+> Dieser Spielstand hat kein Strategie-Memo.
+
+= The Strategy Memo is full (500 entries): the rest are kept in the save extension, which the editor does not change yet.
+> Das Strategie-Memo ist voll (500 Einträge): der Rest liegt in der Spielstand-Erweiterung, die der Editor noch nicht ändert.
+
+= Strategy Memo: %s added
+> Strategie-Memo: %s hinzugefügt
+
+= Strategy Memo: %s removed
+> Strategie-Memo: %s entfernt
+
+= This Pokemon comes from a save with cheats. Receiving it marks your save as cheats used.
+> Dieses Pokémon stammt aus einem Spielstand mit Cheats. Es zu erhalten markiert deinen Spielstand als „Cheats benutzt“.
+
+= Your save is now marked as cheats used.
+> Dein Spielstand ist jetzt als „Cheats benutzt“ markiert.
+

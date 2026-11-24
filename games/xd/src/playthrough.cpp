@@ -6,6 +6,7 @@
 #include "discord_presence.h"
 #include "xd_challenges.h"
 #include "xd_shiny.h"
+#include "xd_starter.h"
 #include "xd_gen4.h"
 #include "xd_gen57.h"
 #include "xd_gen_rules.h"
@@ -22,6 +23,7 @@
 #include "xd_memo_overflow.h"
 #include "xd_user_folder.h"
 #include "xd_xg.h"
+#include "tables_file.h"
 
 #include <mods.h>
 #include <playthrough.h>
@@ -149,6 +151,7 @@ const char* const kCardStateText[] = {"no save", "a save without a setup file", 
                                       "a save whose setup file can't be read"};
 
 xp::SaveId sCardId;
+bool sTablesDue = true;
 CardState sCardState = CardState::NoSave;
 ep::Setup sCardSetup;
 bool sRestarted = false;
@@ -564,6 +567,12 @@ bool RestartForRoom(bool gen4, bool gen4Rules, const std::string& ruleSet) {
   return true;
 }
 
+static std::vector<std::string> TestOptions() {
+  std::vector<std::string> o = xd::shiny::TestSwitch();
+  for (const std::string& s : xd::starter::TestOptions()) o.push_back(s);
+  return o;
+}
+
 Defaults NewGameDefaults() {
   Defaults d;
   d.restarted = sRestarted;
@@ -571,7 +580,7 @@ Defaults NewGameDefaults() {
   if (sRestarted) d.randomizer = RandomizerOf(sRestartSetup);
   if (sRestarted) d.moreShadows = MoreShadowsOf(sRestartSetup);
   if (sRestarted) d.challenges = sRestartSetup.challenges;
-  d.options = sRestarted ? sRestartSetup.options : xd::shiny::TestSwitch();
+  d.options = sRestarted ? sRestartSetup.options : TestOptions();
   d.rules = sRestarted ? xd::rulesets::ChoiceOf(sRestartSetup) : xd::rulesets::LauncherDefaults(xd::gen4::PackPresent());
   std::vector<std::string> ids = sLibraryOn;
   for (const ep::ModUse& l : sLoaded) {
@@ -629,6 +638,27 @@ ep::Setup SetupOf(ep::Engine engine, const std::vector<ModChoice>& mods, const s
 }
 
 const std::string& LoadedRandomizer() { return sLoadedRandomizer; }
+
+static std::vector<std::string> sRunStarter;
+static bool sRunStarterInit = false;
+const std::vector<std::string>& CurrentOptions() {
+  if (sChosen == Chosen::NewGame) return sCurrent.options;
+  if (!sRunStarterInit) {
+    sRunStarterInit = true;
+    sRunStarter = xd::starter::TestOptions();
+  }
+  return sRunStarter;
+}
+
+void OptionsChanged(const std::vector<std::string>& options, const std::string& note) {
+  if (sChosen == Chosen::NewGame) {
+    sCurrent.options = options;
+    sPendingSetup.options = options;
+  } else {
+    sRunStarter = options;
+  }
+  if (!note.empty()) Note(note);
+}
 
 std::string RandomizerOf(const ep::Setup& s) {
   return s.randomizer.empty() || xd::xg::Off(xd::xg::Feature::Randomizer) != nullptr ? std::string() : s.seed;
@@ -1072,7 +1102,7 @@ bool TitleInputImpl(PADStatus* status, int select, u16 newButtons) {
     } else {
       ep::Setup s = SetupOf(EngineNow(), {}, sLoadedRandomizer,
                             sRestarted ? sRestartSetup.challenges : xd::challenges::TestSwitch(),
-                            sRestarted ? sRestartSetup.options : xd::shiny::TestSwitch());
+                            sRestarted ? sRestartSetup.options : TestOptions());
       s.moreShadows = sLoadedMoreShadows;
       s.mods = sLoaded;
       if (sRestarted && sRestartSetup.rules.present) s.rules = sRestartSetup.rules;
@@ -1247,7 +1277,9 @@ void PortXD_PlaythroughSaveWritten(const uint8_t* file, size_t size) {
     const fs::path f = xp::SetupFileFor(id);
     std::error_code ec;
     if (!fs::exists(f, ec)) {
-      ep::Setup s = xd::pt::SetupOf(EngineNow(), {}, sLoadedRandomizer, xd::challenges::TestSwitch(), xd::shiny::Active());
+      std::vector<std::string> runOptions = xd::shiny::Active();
+      for (const std::string& o : xd::pt::CurrentOptions()) runOptions.push_back(o);
+      ep::Setup s = xd::pt::SetupOf(EngineNow(), {}, sLoadedRandomizer, xd::challenges::TestSwitch(), runOptions);
       s.moreShadows = sLoadedMoreShadows;
       s.mods = sLoaded;
       s.addedRows = CurrentAddedRows();
@@ -1372,10 +1404,18 @@ void PortXD_PlaythroughSaveWritten(const uint8_t* file, size_t size) {
     }
   }
   sCardId = id;
+  sTablesDue = true;
   xd::picker::ThumbnailAfterSave(xp::SetupFolder() / (id.key + ".png"));
 }
 
 void PortXD_PlaythroughFrame(void) {
+  if (sTablesDue && sCardState == CardState::Setup && sCardId.found && !sRestartNow && xd::speedrun::MapStarted()) {
+    sTablesDue = false;
+    const char* off = std::getenv("XD_TABLES_FILE");
+    if (off == nullptr || std::strcmp(off, "0") != 0) {
+      xd::tablesfile::Write(xp::SetupFolder() / (sCardId.key + ".tables"), ep::TablesStamp(sCardSetup));
+    }
+  }
   xd::picker::ThumbnailFrame();
   xd::discord::Frame();
   xd::battles::Frame();

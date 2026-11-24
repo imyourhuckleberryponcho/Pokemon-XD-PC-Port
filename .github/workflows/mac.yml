@@ -383,9 +383,11 @@ jobs:
           cat logs/package_check.txt
           # One start of the packaged program without a disc: which libraries the system really loads.
           mkdir -p "$RUNNER_TEMP/pk/settings" "$RUNNER_TEMP/pk/card" "$RUNNER_TEMP/pk/cache"
-          ( cd "$APP/Contents/MacOS" && DYLD_PRINT_LIBRARIES=1 XD_TEST_RUN=1 XD_NO_MESSAGE_BOXES=1 XD_CRASH_REPORT=0 \
+          # (DYLD_PRINT_LIBRARIES is set by the perl wrapper itself, just before it starts ./xd: set outside, it listed perl's own
+          #  libraries from /usr/local/Cellar/perl, which belong to the harness, not to the app)
+          ( cd "$APP/Contents/MacOS" && XD_TEST_RUN=1 XD_NO_MESSAGE_BOXES=1 XD_CRASH_REPORT=0 \
               XD_SETTINGS_DIR="$RUNNER_TEMP/pk/settings" XD_CARD_DIR="$RUNNER_TEMP/pk/card" XD_CACHE_DIR="$RUNNER_TEMP/pk/cache" \
-              perl -e 'alarm 120; exec @ARGV' ./xd > "$GITHUB_WORKSPACE/logs/package_start.txt" 2>&1
+              perl -e 'alarm 120; $ENV{DYLD_PRINT_LIBRARIES} = 1; exec @ARGV' ./xd > "$GITHUB_WORKSPACE/logs/package_start.txt" 2>&1
             echo "exit code $?" >> "$GITHUB_WORKSPACE/logs/package_start.txt" )
           grep -v "^dyld\[[0-9]*\]: <.*> /System/\|^dyld\[[0-9]*\]: <.*> /usr/lib/" logs/package_start.txt | head -n 120
           PROBLEMS_EXTRA=""
@@ -433,7 +435,7 @@ jobs:
           PROBLEMS=""
           grep -q "does NOT verify\|SIGNING FAILED\|signing failed" logs/package.log && PROBLEMS="$PROBLEMS signing"
           grep -q -E "^[^ ]+: (/usr/local|/opt/|@rpath)" logs/package_check.txt && PROBLEMS="$PROBLEMS library-paths"
-          grep -q "/usr/local/\|/opt/homebrew/" logs/package_start.txt && PROBLEMS="$PROBLEMS loaded-from-outside"
+          grep -v "/Cellar/perl/\|/libperl\.dylib" logs/package_start.txt | grep -q "/usr/local/\|/opt/homebrew/" && PROBLEMS="$PROBLEMS loaded-from-outside"
           grep -q "^exit code 1$" logs/package_start.txt || PROBLEMS="$PROBLEMS start"
           grep -q "mac: low memory self-test: OK" logs/package_start.txt || PROBLEMS="$PROBLEMS low-memory"
           PROBLEMS="$PROBLEMS$PROBLEMS_EXTRA"
@@ -779,7 +781,10 @@ jobs:
           row "the replay video encoder (picture + sound)" "$O_ENCODER" "logs/encoder_*.txt"
           row "portable data folder, command-line options" "$O_PORTABLE" "logs/portable_test.txt"
           [ -s logs/tests_failed.txt ] && say "tests that failed or are not built: $(cat logs/tests_failed.txt)"
-          [ -f logs/launcher_modupdate_test.log ] && { grep -q -E "^(ALL OK|ALL PASSED)" logs/launcher_modupdate_test.log && say "info      mod-update scenarios passed" || say "info      mod-update scenarios did not all pass (first run off Windows): logs/launcher_modupdate_test.log"; }
+          [ -f logs/launcher_modupdate_test.log ] && { grep -q -E "^(ALL OK|ALL PASSED)" logs/launcher_modupdate_test.log && say "info      mod-update scenarios passed" || grep -q "^SKIPPED" logs/launcher_modupdate_test.log || say "info      mod-update scenarios did not all pass (first run off Windows): logs/launcher_modupdate_test.log"; }
+          for f in logs/launcher_pad_test.log logs/updater_posix_test.log logs/launcher_modupdate_test.log; do
+            [ -f "$f" ] && grep "^SKIPPED" "$f" | while read -r l; do echo "info      $f: $l" | tee -a "$V"; done
+          done
           if [ $BAD = 0 ]; then say "VERDICT: CLEAN"; else say "VERDICT: PROBLEMS (see the rows above)"; fi
           { echo "### Verdict"; echo '```'; cat "$V"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           exit $BAD

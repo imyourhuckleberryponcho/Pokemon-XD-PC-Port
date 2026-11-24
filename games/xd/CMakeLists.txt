@@ -358,6 +358,9 @@ foreach (_src ${XD_GAME_SOURCES})
       "fightSeqAttackPokemonJoutaiCheck=PortXD_RealAttackJoutaiCheck"
       "fightOutPokemonGetSoubiItemSoubiDataId=PortXD_Gen4GetSoubi")
   endif ()
+  if (_src MATCHES "/fightActionFlow[.]cpp$")
+    list(APPEND _defs "fightOutPokemonCreate=PortXD_ModOutCreate")   # 0.7.2 Illusion: the send-out asks the port, which calls the game's own function and then sets the disguise
+  endif ()
   if (_src MATCHES "/fightSeq/fightSeq[.]cpp$")
     list(APPEND _defs "fightFloor_GetFightKindDarkpokemonHypermodeFlag=PortXD_HyperFlag" "pokemonGetDarkPokemonHyperJoutaiKakuritu=PortXD_HyperChance")
   endif ()
@@ -511,7 +514,8 @@ foreach (_src ${XD_GAME_SOURCES})
   endif ()
   if (_src MATCHES "/GSmodel/GSmodel\\.cpp$")
     list(APPEND _defs "GSboundIsInViewFast=PortXD_ModelBoundInView" "modelShadowUpdate=PortXD_ModelShadowUpdate"
-      "GSgfxPerfbarCPUEntry=PortXD_ModelPerfEntry")
+      "GSgfxPerfbarCPUEntry=PortXD_ModelPerfEntry"
+      "GSlightSetupLights=PortXD_ModelLights")
   elseif (_src MATCHES "/GSparticle/peBank\\.cpp$")
     list(APPEND _defs "GSboundIsInViewFast=PortXD_DrawBoundInView")
   elseif (_src MATCHES "/GSmsg/sprite\\.cpp$")
@@ -753,12 +757,12 @@ target_include_directories(xd_save_names PUBLIC save/include)
 target_link_libraries(xd_save_names PUBLIC xd_save xd_port)
 xd_use_decomp_headers(xd_save_names)
 
-add_library(xd_legality STATIC legality/xd_legality.cpp)
+add_library(xd_legality STATIC legality/xd_legality.cpp legality/xd_legality_tables.cpp)
 target_include_directories(xd_legality PUBLIC legality/include)
 target_link_libraries(xd_legality PUBLIC xd_save)
 add_executable(xd_legality_test legality/tests/xd_legality_test.cpp)
 target_link_libraries(xd_legality_test PRIVATE xd_legality)
-add_library(xd_legality_disc STATIC legality/xd_legality_disc.cpp)
+add_library(xd_legality_disc STATIC legality/xd_legality_disc.cpp legality/xd_legality_tables_disc.cpp)
 target_include_directories(xd_legality_disc PUBLIC legality/include PRIVATE src src/data)
 target_link_libraries(xd_legality_disc PUBLIC xd_legality xd_save_names)
 xd_use_decomp_headers(xd_legality_disc)
@@ -787,6 +791,15 @@ add_executable(xd_colosseum_test colosseum/tests/xd_colosseum_test.cpp)
 target_link_libraries(xd_colosseum_test PRIVATE xd_colosseum)
 add_executable(colo_test_save tools/colo_test_save.cpp)
 target_link_libraries(colo_test_save PRIVATE xd_colosseum engine_memcard)
+
+add_library(xd_saveedit STATIC saveedit/xd_saveedit.cpp saveedit/xd_saveedit_write.cpp)
+target_include_directories(xd_saveedit PUBLIC saveedit/include)
+target_link_libraries(xd_saveedit PUBLIC xd_legality xd_save engine_memcard engine_saveext engine_playthrough engine_i18n)
+add_executable(xd_saveedit_test saveedit/tests/xd_saveedit_test.cpp)
+target_link_libraries(xd_saveedit_test PRIVATE xd_saveedit)
+add_executable(xd_save_edit tools/xd_save_edit.cpp)
+target_link_libraries(xd_save_edit PRIVATE xd_saveedit xd_legality_disc)
+aurora_copy_runtime_dlls(xd_save_edit)
 
 add_executable(xd_save_dump tools/xd_save_dump.cpp)
 target_link_libraries(xd_save_dump PRIVATE xd_save xd_save_names engine_memcard)
@@ -833,6 +846,7 @@ add_executable(report_scrub_test tools/report_scrub_test.cpp src/report_scrub.cp
 target_compile_features(report_scrub_test PRIVATE cxx_std_17)
 
 add_executable(xd_heap_model_test tools/xd_heap_model_test.cpp src/heap_model.cpp)
+target_include_directories(xd_heap_model_test PRIVATE ${PROJECT_SOURCE_DIR}/platform/os/include) # (port_win_compat.h)
 
 add_library(xd_extra_sources STATIC launcher/xd_extra_sources.cpp launcher/xd_n3ds_dump.cpp src/pack_match.cpp)
 target_include_directories(xd_extra_sources PUBLIC launcher src ${PROJECT_SOURCE_DIR}/launcher/include)
@@ -840,9 +854,9 @@ target_link_libraries(xd_extra_sources PUBLIC engine_mods engine_settings xd_lan
 add_executable(xd_extra_sources_test tools/xd_extra_sources_test.cpp)
 target_link_libraries(xd_extra_sources_test PRIVATE xd_extra_sources xd_settings_list)
 
-add_executable(xd_launcher WIN32 launcher/xd_launcher.cpp launcher/xd_gba_page.cpp launcher/xd_colosseum_page.cpp launcher/xd_modextract_page.cpp src/disc_verify.c src/xd_rulesets.cpp)
+add_executable(xd_launcher WIN32 launcher/xd_launcher.cpp launcher/xd_gba_page.cpp launcher/xd_saveedit_page.cpp launcher/xd_colosseum_page.cpp launcher/xd_modextract_page.cpp src/disc_verify.c src/xd_rulesets.cpp)
 target_include_directories(xd_launcher PRIVATE src tools)
-target_link_libraries(xd_launcher PRIVATE engine_rulesets engine_playthrough xd_modrules xd_playthrough_files xd_randomizer xd_extra_sources engine_card_sources xd_gba_disc xd_legality_disc xd_colosseum xd_extract) # (Save page: the randomizer's style)
+target_link_libraries(xd_launcher PRIVATE engine_rulesets engine_playthrough xd_modrules xd_playthrough_files xd_randomizer xd_extra_sources engine_card_sources xd_gba_disc xd_legality_disc xd_colosseum xd_saveedit xd_extract) # (Save page: the randomizer's style)
 target_link_libraries(xd_launcher PRIVATE launcher_ui xd_settings_list engine_disc_check platform_os xd_save
   xd_save_names engine_memcard ${AURORA_SDL3_TARGET})
 target_compile_options(xd_launcher PRIVATE ${XD_FLAG_UTF8})
@@ -852,6 +866,9 @@ if (APPLE)
 endif ()
 if (NOT WIN32 AND NOT APPLE)
   set_target_properties(xd_launcher PROPERTIES BUILD_RPATH "\$ORIGIN")
+  if (TARGET xd_libusb)
+    add_dependencies(xd_launcher xd_libusb) # bin/libusb-1.0.so.0 comes with the program even when only this target is built
+  endif ()
   add_custom_command(TARGET xd_launcher POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/resources/xd_icon.png"
       "$<TARGET_FILE_DIR:xd_launcher>/icon.png"
@@ -949,7 +966,7 @@ set(XD_PROGRAM_LIBS xd_port engine_presence engine_net xd_legality xd_legality_d
 set(XD_PROGRAM_PORT_SOURCES src/boot.c src/cli_boot.cpp src/disc_tables.cpp src/disc_verify.c src/disc_choice.cpp src/game_new.cpp src/heap_check.cpp src/heap_model.cpp src/musyx_dsp_program.c
   src/renderdoc_capture.c src/screenshot.cpp src/bug_report.cpp src/report_scrub.cpp src/settings_boot.cpp src/mods_boot.cpp src/languages_boot.cpp src/gslog_port.cpp src/state_dump.cpp src/timing_log.cpp src/cpu_cost_hooks.cpp src/fsys_unpack_cost.cpp src/dvd_open_cost.cpp src/bound_walk_cost.cpp src/perf_marks.cpp src/cpu_counters.cpp src/warp.cpp src/render_icon.cpp src/shader_prep.cpp src/pc_load.cpp src/dsp_coef.cpp
   src/data/rel_link.cpp src/data/main_program_map.cpp src/dev_menu.cpp src/task_stacks.cpp src/input_ticks.cpp src/text_guard.cpp src/cheats.cpp src/cheats_hooks.cpp
-  src/particle_check.cpp src/settings_menu.cpp src/ui_kit2.cpp src/speedups.cpp src/move_split.cpp src/gen4_moves.cpp src/xg_calc_harness.cpp src/xg_calc_questions.cpp src/gen4_abilities.cpp src/gen4_ability_effects.cpp src/mod_battle.cpp src/script_hooks.cpp src/script_global_ext.cpp src/script_gifts.cpp src/script_events.cpp src/script_teams.cpp src/script_ext.cpp src/common_script.cpp src/online_battle.cpp src/battle_replay.cpp src/trainer_card.cpp src/trainer_card_game.cpp src/trainer_card_page.cpp src/online_lobby.cpp src/online_mirror.cpp src/online_room.cpp src/online_team.cpp src/online_commit.cpp src/online_draft.cpp src/online_draft_game.cpp src/online_vs_row.cpp src/added_rows.cpp src/species_tables.cpp src/gen4_pack.cpp src/gen57_pack.cpp src/pack_match.cpp src/pack_tables.cpp src/gen4_machines.cpp src/gen4_xg.cpp src/replay_pacing.cpp src/audio_categories.cpp src/button_icons.cpp src/settings_switches.cpp src/hook_defaults.cpp src/tm_names.cpp src/shiny_odds.cpp src/hd_textures.cpp src/texture_observers.cpp src/type_icons.cpp src/modern_types.cpp src/speedrun.cpp src/mods_reload.cpp src/pokedex_data.cpp src/pokedex_decks.cpp src/pokedex_page.cpp src/memo_sprites.cpp
+  src/particle_check.cpp src/settings_menu.cpp src/ui_kit2.cpp src/speedups.cpp src/move_split.cpp src/gen4_moves.cpp src/xg_calc_harness.cpp src/xg_calc_questions.cpp src/gen4_abilities.cpp src/gen4_ability_effects.cpp src/mod_battle.cpp src/script_hooks.cpp src/script_global_ext.cpp src/script_gifts.cpp src/script_events.cpp src/script_teams.cpp src/script_ext.cpp src/common_script.cpp src/online_battle.cpp src/tables_file.cpp src/battle_replay.cpp src/trainer_card.cpp src/trainer_card_game.cpp src/trainer_card_page.cpp src/online_lobby.cpp src/online_mirror.cpp src/online_room.cpp src/online_team.cpp src/online_commit.cpp src/online_draft.cpp src/online_draft_game.cpp src/online_vs_row.cpp src/added_rows.cpp src/species_tables.cpp src/gen4_pack.cpp src/gen57_pack.cpp src/pack_match.cpp src/pack_tables.cpp src/gen4_machines.cpp src/gen4_xg.cpp src/replay_pacing.cpp src/audio_categories.cpp src/button_icons.cpp src/settings_switches.cpp src/hook_defaults.cpp src/tm_names.cpp src/shiny_odds.cpp src/hd_textures.cpp src/texture_observers.cpp src/type_icons.cpp src/modern_types.cpp src/speedrun.cpp src/mods_reload.cpp src/pokedex_data.cpp src/pokedex_decks.cpp src/pokedex_page.cpp src/memo_sprites.cpp
   src/widescreen.cpp src/save_picker.cpp src/playthrough.cpp src/challenges.cpp src/level_caps.cpp src/battles_won.cpp src/discord_presence.cpp src/walk_helper.cpp src/gen4_evolutions.cpp src/gen4_eevee.cpp src/pc_trade.cpp src/starter.cpp src/save_ext.cpp src/memo_overflow.cpp src/xd_rulesets.cpp src/gen_rules.cpp src/forms.cpp src/forms_battle.cpp src/forms_shop.cpp src/forms_summary.cpp src/hidden_ability.cpp)
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/story_flag_names_data.cpp"
   COMMAND ${CMAKE_COMMAND} -DTEXT_FILE=${CMAKE_CURRENT_SOURCE_DIR}/data/story_flag_names.txt
@@ -1017,6 +1034,9 @@ if (NOT WIN32)
 endif ()
 if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set_target_properties(xd PROPERTIES BUILD_RPATH "\$ORIGIN")
+  if (TARGET xd_libusb)
+    add_dependencies(xd xd_libusb) # bin/libusb-1.0.so.0 next to xd (SDL loads it by name; ./build.sh release xd builds only this target)
+  endif ()
 endif ()
 if (NOT MSVC)
   target_compile_options(xd PRIVATE ${XD_FLAGS_GAME_CODE} $<$<COMPILE_LANGUAGE:CXX>:-Wno-c++11-narrowing>)

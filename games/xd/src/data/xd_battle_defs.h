@@ -111,6 +111,8 @@ struct MoveDef {
   bool heatsUp = false;
   int powerFormula = 0;
   bool neverMiss = false;
+  bool chargeCarry = false;
+  bool chargeUntouchable = false;
   int64_t chargeDonor = 0;
   std::string chargeMessage;
   int chargeMessageId = -1;
@@ -160,6 +162,7 @@ struct AbilityDef {
   bool poisonAnyType = false;
   std::vector<int> dancer;
   bool strongWind = false;
+  bool illusion = false;
   bool infiltrator = false;
   std::vector<Block> berryEaten;
   std::vector<Block> halfHp;

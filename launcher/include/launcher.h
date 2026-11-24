@@ -36,6 +36,7 @@ struct SaveSummary {
   std::vector<std::string> partyColumns;
   std::vector<std::vector<std::string>> party;
   std::vector<std::string> notes;
+  std::filesystem::path thumbnail;
   std::vector<std::pair<std::string, std::string>> setup;
   std::vector<std::string> setupNotes;
   std::string shareCode;
@@ -120,6 +121,7 @@ struct GameInfo {
     std::string setup;
     std::string edition;
     std::string warn;
+  std::filesystem::path thumbnail;
   };
   struct ImportCheck {
     std::string name;
@@ -200,6 +202,56 @@ struct GameInfo {
     std::string monsSaveLabel2;
     std::string monsStays2;
     std::string monsCopy2;
+    struct EditRow {
+      enum class Kind {
+        Info,
+        Number,
+        Text,
+        Choice,
+        Toggle,
+        Button,
+        Pick,
+      };
+      Kind kind = Kind::Info;
+      std::string id;
+      std::string label;
+      std::string value;
+      std::string note;
+      long min = 0, max = 0;
+      int maxLen = 0;
+      std::vector<std::pair<std::string, std::string>> choices;
+      bool changed = false;
+      bool selected = false;
+      bool locked = false;
+    };
+    struct EditSection {
+      std::string title, hint;
+      int column = 0;
+      std::vector<EditRow> rows;
+    };
+    struct EditTab {
+      std::string name;
+      std::vector<EditSection> sections;
+    };
+    struct EditView {
+      std::string who;
+      std::filesystem::path thumbnail;
+      std::vector<EditTab> tabs;
+      int tab = 0;
+      std::vector<std::string> changes;
+      std::vector<char> changeMarks;
+      bool willMark = false;
+      std::string markText;
+      std::vector<std::string> problems;
+      std::vector<std::string> notes;
+      bool readOnly = false;
+      std::string readOnlyWhy;
+    };
+    std::function<bool(const std::filesystem::path& cardRoot, const std::string& discPath, EditView& out, std::string& error)> editOpen;
+    std::function<std::string(const std::string& id, const std::string& value, EditView& view)> editSet;
+    std::function<void(EditView& view)> editRevert;
+    std::function<TradeResult(EditView& view)> editSave;
+    std::function<void()> editClose;
     std::string tradeFileTypes = "sav";
     std::string tradeName = "GBA trade";
     std::string exportName = "save.gci";
@@ -236,11 +288,15 @@ struct GameInfo {
     std::string secondManifestId;
     std::string secondProvides;
     int secondVersion = 0;
+    int secondRecipe = 0;
+    std::string secondRecipeReason;
     std::string thirdFolder;
     std::string thirdManifestFile;
     std::string thirdManifestId;
     std::string thirdProvides;
     int thirdVersion = 0;
+    int thirdRecipe = 0;
+    std::string thirdRecipeReason;
     std::string thirdWarning;
     std::function<std::pair<int, std::string>(const std::filesystem::path&)> thirdCheck;
   };
