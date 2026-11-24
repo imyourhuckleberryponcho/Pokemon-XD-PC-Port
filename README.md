@@ -13,7 +13,7 @@ This repository contains **no game assets, ROMs, ISOs or executables**, and none
 You need your own legally obtained copy of the game (USA, `GXXE01`); the port reads everything from your disc
 image while it runs.
 
-## Status: public beta — version 0.7.1
+## Status: public beta — version 0.7.2
 
 **Playable from New Game into the story, with known bugs.** It is not finished: expect crashes, stalls and
 graphics differences, and keep backups of saves you care about. Downloads are on the [Releases](../../releases)
@@ -159,6 +159,19 @@ Saves, settings, mods, logs and bug reports live in one data folder (`%APPDATA%\
 - Launcher, Save page, "Where your data is kept": "Open data folder"; "Move my data..." (user folder <-> portable: it
   copies everything, checks the copy, switches, and puts the old folder in the recycle bin / trash so nothing is lost; the
   launcher then starts again); "Remove all game data..." (asks first, names the folder, offers to export your saves first).
+
+### New in 0.7.2
+
+- Fixed: the game stopped when entering Kaminko's House (and could stop in other busy scenes). It hit every 0.7.1 player, with or without extra models.
+- Fixed: a missing name no longer crashes shops, item use, evolution or battle messages; it shows "????" instead.
+- Fixed: "can't load or save" after making the Battle Revolution models in a playthrough with Gen 5-7 Pokemon (the save check no longer looks at picture numbers; nothing in the save had changed).
+- Fixed: bug reports no longer contain the Windows user name (also with a portable game folder, or a disc on OneDrive, the Desktop or Downloads).
+- Fixed: "????" items with the randomizer on Pokemon XG. New randomizer codes only give real items on XD too; old codes still give exactly the same game.
+- Fixed: making the Ultra Sun / Ultra Moon pack works again with an XD disc in .rvz, .gcz, .wia or .ciso format.
+- Fixed: making the Gen 5-7 pack no longer fails as a whole when some Pokedex pictures can't be drawn (they show "?" and are counted; making the pack again fills them in).
+- Fixed (Linux): the language pack, Gen 5-7 pack and other helpers no longer fail with "exit code 127".
+- Fixed: updating from a very deep folder on Windows; a Colosseum save import or GBA trade no longer loses Strategy Memo entries.
+
 
 ### New in 0.7.1
 

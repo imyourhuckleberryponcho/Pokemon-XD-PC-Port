@@ -4,6 +4,7 @@
 
 #include <gc_memcard.h>
 #include <save_backups.h>
+#include <saveext.h>
 #include <xd_save.h>
 
 #include <algorithm>
@@ -107,6 +108,7 @@ bool RemapCardSave(const SaveId& id, const xd::save::IdRemap& map, size_t& chang
     error = "the save is not a .gci file (a card image can't be adjusted: " + error + ")";
     return false;
   }
+  const std::vector<uint8_t> dataBefore = gci.data;
   if (!xd::save::RemapIds(gci.data, map, changed, error)) return false;
   if (changed == 0) return true;
   const std::vector<uint8_t> out = mc::MakeGci(gci);
@@ -140,6 +142,7 @@ bool RemapCardSave(const SaveId& id, const xd::save::IdRemap& map, size_t& chang
     changed = 0;
     return false;
   }
+  KeepExtensionPaired(dataBefore, gci.data);
   return true;
 }
 
@@ -164,6 +167,15 @@ bool LooksOrSound(const std::string& path, int fsysType) {
   default:
     return false;
   }
+}
+
+bool KeepExtensionPaired(const std::vector<uint8_t>& oldFile, const std::vector<uint8_t>& newFile) {
+  const SaveId id = SaveIdOf(oldFile);
+  if (!id.found) return true;
+  const fs::path folder = SetupFolder();
+  std::error_code ec;
+  if (!fs::exists(engine::saveext::FileFor(folder, id.key), ec)) return true;
+  return engine::saveext::Repair(folder, id.key, oldFile, newFile);
 }
 
 }

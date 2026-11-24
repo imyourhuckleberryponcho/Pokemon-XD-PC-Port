@@ -197,6 +197,26 @@ Saves, settings, mods, logs and bug reports live in one data folder: {p['data']}
 """
 
 
+NEW_072 = """New in 0.7.2
+------------
+- Fixed: the game stopped when entering Kaminko's House (and could stop in other busy scenes). It hit every 0.7.1
+  player, with or without extra models.
+- Fixed: a missing name no longer crashes shops, item use, evolution or battle messages; it shows "????" instead.
+- Fixed: "can't load or save" after making the Battle Revolution models in a playthrough with Gen 5-7 Pokemon (the
+  save check no longer looks at picture numbers; nothing in the save had changed).
+- Fixed: bug reports no longer contain the Windows user name (also with a portable game folder, or a disc on
+  OneDrive, the Desktop or Downloads).
+- Fixed: "????" items with the randomizer on Pokemon XG. New randomizer codes only give real items on XD too; old
+  codes still give exactly the same game.
+- Fixed: making the Ultra Sun / Ultra Moon pack works again with an XD disc in .rvz, .gcz, .wia or .ciso format.
+- Fixed: making the Gen 5-7 pack no longer fails as a whole when some Pokedex pictures can't be drawn (they show
+  "?" and are counted; making the pack again fills them in).
+- Fixed (Linux): the language pack, Gen 5-7 pack and other helpers no longer fail with "exit code 127".
+- Fixed: updating from a very deep folder on Windows; a Colosseum save import or GBA trade no longer loses Strategy
+  Memo entries.
+"""
+
+
 NEW_071 = """New in 0.7.1
 ------------
 - Runs better on weaker PCs: threads that only wait now sleep, the sound held back after a stutter shrinks back
@@ -388,7 +408,7 @@ The full history is on the GitHub releases page: """ + RELEASES_URL + """
 
 
 def new_in():
-    return NEW_071 + chr(10) + NEW_070 + chr(10) + NEW_061 + chr(10) + NEW_060 + chr(10) + NEW_05X
+    return NEW_072 + chr(10) + NEW_071 + chr(10) + NEW_070 + chr(10) + NEW_061 + chr(10) + NEW_060 + chr(10) + NEW_05X
 
 
 def known_issues(system):

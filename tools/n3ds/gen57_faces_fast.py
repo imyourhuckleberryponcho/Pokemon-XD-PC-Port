@@ -297,8 +297,9 @@ def make_pictures(a, pack, gen4, out, progress, log, first_row):
         made = [nm for nm in names if os.path.exists(os.path.join(out, nm))]
         log('pictures: %d of %d' % (len(made), total))
 
-        if len(made) < total // 3:
-            raise RuntimeError('the Pokedex pictures were not drawn (%d of %d); see gen57.log' % (len(made), total))
+
+        if len(made) < total:
+            log('pictures MISSING: %d of %d; the pack is finished without them: make it again to draw them' % (total - len(made), total))
     finally:
         for link in links:
             if os.path.lexists(link):

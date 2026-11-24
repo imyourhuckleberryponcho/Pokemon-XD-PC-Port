@@ -249,8 +249,11 @@ void make_pictures(const FullArgs& a, const std::string& pack, const std::string
   int made = 0;
   for (auto& nm : names) if (fs::exists(fs::path(out) / nm)) made++;
   log("pictures: " + std::to_string(made) + " of " + std::to_string(total));
-  if (failed) throw Fail("the Pokedex pictures could not be drawn (" + fail_text + ")");
-  if (made < total / 3) throw Fail("the Pokedex pictures were not drawn (" + std::to_string(made) + " of " + std::to_string(total) + "); see gen57.log");
+  if (failed || made < total) {
+    const std::string why = failed ? " (" + fail_text + ")" : std::string();
+    log("pictures MISSING: " + std::to_string(total - made) + " of " + std::to_string(total) + why + "; the pack is finished without them: make it again to draw them");
+    say("progress 1 1 " + std::to_string(total - made) + " Pokedex pictures are missing: they show a question mark; make the pack again to draw them");
+  }
 }
 
 std::vector<std::string> check_pack(const std::string& pack, size_t nats_n, const std::string& skip, bool faces_run) {

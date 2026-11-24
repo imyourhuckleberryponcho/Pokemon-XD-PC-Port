@@ -1,4 +1,5 @@
 #if defined(__linux__) || defined(__APPLE__)
+#include "report_scrub.h"
 #include "xd_user_folder.h"
 
 #include <crash_report.h>
@@ -313,6 +314,7 @@ bool WriteBundle(Press& p) {
   }
   info.close();
 
+  xd::report::ScrubReportFolder(p.folder);
   const bool zipped = PortZip_StoreFolder(p.folder.wstring().c_str(), p.zip.wstring().c_str());
   std::fprintf(stderr, "[bug report] saved %s%s%s\n", p.folder.string().c_str(), zipped ? " and " : "",
                zipped ? p.zip.string().c_str() : " (the zip file could not be written)");

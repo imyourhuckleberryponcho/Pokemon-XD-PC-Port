@@ -594,6 +594,9 @@ namespace {
 std::string RowKind(const std::string& table) {
   return table == "pokemon_data" ? Tr("Pokemon") : table == "waza_data" ? Tr("move") : table == "item_data_prime" ? Tr("item") : table == "flag_data" ? Tr("story flag") : Tr("entry");
 }
+bool SaveHoldsNumbersOf(const std::string& table) {
+  return table == "pokemon_data" || table == "waza_data" || table == "item_data_prime" || table == "flag_data";
+}
 std::string DescribeUnmet(const AddedRowRef& want, const std::vector<AddedRowRef>& now) {
   const AddedRowRef* moved = nullptr;
   bool modThere = false;
@@ -625,6 +628,7 @@ std::vector<std::string> BoundProblems(const Setup& setup, const std::vector<Add
   std::vector<std::string> problems;
   std::set<std::string> said;
   for (const AddedRowRef& want : setup.addedRows) {
+    if (!SaveHoldsNumbersOf(want.table)) continue;
     if (std::find(now.begin(), now.end(), want) != now.end()) continue;
     const std::string text = DescribeUnmet(want, now);
     if (said.insert(text).second) problems.push_back(text);
@@ -634,8 +638,11 @@ std::vector<std::string> BoundProblems(const Setup& setup, const std::vector<Add
 
 BoundCheck CheckBound(const Setup& setup, const std::vector<AddedRowRef>& now) {
   std::vector<mods::LabelRow> saved, current;
-  for (const AddedRowRef& r : setup.addedRows) saved.push_back(ToLabelRow(r, now));
+  for (const AddedRowRef& r : setup.addedRows) {
+    if (SaveHoldsNumbersOf(r.table)) saved.push_back(ToLabelRow(r, now));
+  }
   for (const AddedRowRef& r : now) {
+    if (!SaveHoldsNumbersOf(r.table)) continue;
     mods::LabelRow row;
     row.label = r.label;
     row.number = r.id;

@@ -334,7 +334,7 @@ def main():
         for f in RUNTIME if crt else []:
             if os.path.isfile(os.path.join(crt, f)):
                 shutil.copy2(os.path.join(crt, f), os.path.join(game, 'usum_models'))
-        print('usum_models_cpp: the C++ converter, test switch XD_USUM_CPP=1 (game/usum_models)')
+        print('usum_models_cpp: the C++ converter, the default (XD_USUM_CPP=0 = the Python one; game/usum_models)')
 
 
     lang_dir = os.path.join(game, 'xd_languages')

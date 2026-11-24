@@ -6,6 +6,7 @@
 #include <xd_colosseum.h>
 #include <xd_legality.h>
 #include <xd_legality_disc.h>
+#include <xd_playthrough_files.h>
 #include <xd_save.h>
 #include <xd_save_write.h>
 
@@ -242,6 +243,7 @@ GameInfo::Saves::TradeResult Import(const fs::path& cardRoot, const fs::path& fi
     fs::remove(tmp, ec);
     return fail("the XD save could not be replaced.");
   }
+  xd::playthrough::KeepExtensionPaired(std::vector<uint8_t>(xd.card.data.begin(), xd.card.data.begin() + static_cast<std::ptrdiff_t>(xd::save::kFileSize)), newData);
   result.ok = true;
   result.message = "Copied " + std::to_string(records.size()) + " Pokemon from the Colosseum save into the PC boxes of this save (the " +
                    "first free places). The Colosseum save was only read. A backup of this save as it was: " + Utf8(backup) + ".";

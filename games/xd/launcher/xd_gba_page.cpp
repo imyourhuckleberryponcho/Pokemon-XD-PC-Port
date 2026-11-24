@@ -6,6 +6,7 @@
 #include <xd_gba_disc.h>
 #include <xd_legality.h>
 #include <xd_legality_disc.h>
+#include <xd_playthrough_files.h>
 #include <xd_save.h>
 
 #include <algorithm>
@@ -277,6 +278,7 @@ GameInfo::Saves::TradeResult Trade(const fs::path& cardRoot, const fs::path& gba
     fs::remove(tmp, ec);
     return fail("the XD save could not be replaced.");
   }
+  xd::playthrough::KeepExtensionPaired(std::vector<uint8_t>(xd.card.data.begin(), xd.card.data.begin() + static_cast<std::ptrdiff_t>(xd::save::kFileSize)), r.xdFile);
   const auto& n = rules->trade.Names();
   auto nameOf = [&](uint16_t s) { return n.Species(s).empty() ? "#" + std::to_string(s) : n.Species(s); };
   result.ok = true;

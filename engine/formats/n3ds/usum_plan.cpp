@@ -1,3 +1,7 @@
+#include <mutex>
+#if defined(XD_N3DS_PORT_DISC)
+#include "port_disc.h"
+#endif
 #include "n3ds_plan.h"
 
 #include <algorithm>
@@ -271,8 +275,55 @@ class IsoDisc : public pbr::DiscSource {
 };
 }
 
+#if defined(XD_N3DS_PORT_DISC)
+namespace {
+std::mutex g_disc_mutex;
+std::string g_disc_open;
+std::string g_disc_id;
+std::vector<std::pair<std::string, uint32_t>> g_disc_files;
+class PortXdDisc : public pbr::DiscSource, public DolProvider {
+ public:
+  explicit PortXdDisc(const std::string& path) {
+    std::lock_guard<std::mutex> lock(g_disc_mutex);
+    if (g_disc_open != path) {
+      char err[512];
+      if (!PortDisc_Open(path.c_str(), err, sizeof err)) {
+        std::string e = err;
+        while (!e.empty() && isspace((unsigned char)e.back())) e.pop_back();
+        throw pbr::Fail(path + " cannot be read as a disc image (" + e + ").", 2);
+      }
+      g_disc_open = path;
+      g_disc_id = PortDisc_GameId();
+      g_disc_files.clear();
+      PortDisc_ListFiles([](const char* p, uint32_t size, void*) { g_disc_files.emplace_back(p, size); }, nullptr);
+    }
+  }
+  std::string game_id() const override { return g_disc_id; }
+  std::vector<std::pair<std::string, uint32_t>> files() const override { return g_disc_files; }
+  std::vector<uint8_t> read(const std::string& path) const override {
+    std::lock_guard<std::mutex> lock(g_disc_mutex);
+    size_t n = 0;
+    uint8_t* d = PortDisc_ReadOriginalFile(path.c_str(), &n);
+    if (!d) throw std::runtime_error("the XD image has no file " + path);
+    std::vector<uint8_t> v(d, d + n);
+    PortDisc_Free(d);
+    return v;
+  }
+  std::vector<uint8_t> dol() const override {
+    std::lock_guard<std::mutex> lock(g_disc_mutex);
+    size_t n = 0;
+    const uint8_t* d = PortDisc_Dol(&n);
+    if (!d) throw std::runtime_error("the XD image has no main.dol");
+    return std::vector<uint8_t>(d, d + n);
+  }
+};
+}
+std::unique_ptr<pbr::DiscSource> open_iso(const std::string& path) { return std::unique_ptr<pbr::DiscSource>(new PortXdDisc(path)); }
+#else
 std::unique_ptr<pbr::DiscSource> open_iso(const std::string& path) { return std::unique_ptr<pbr::DiscSource>(new IsoDisc(path)); }
+#endif
 std::vector<uint8_t> disc_dol(const pbr::DiscSource& d) {
+  if (const DolProvider* p = dynamic_cast<const DolProvider*>(&d)) return p->dol();
   const IsoDisc* iso = dynamic_cast<const IsoDisc*>(&d);
   if (!iso) throw Fail("this disc source cannot give main.dol");
   return iso->dol();

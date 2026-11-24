@@ -36,7 +36,7 @@ constexpr uint32_t kLevelsByStrength = 5;
 er::Schema MakeSchema() {
   er::Schema s;
   s.prefix = "XDR";
-  s.version = 7;
+  s.version = 8;
   const std::vector<std::string> onOff = {"off", "on"};
   s.switches = {
       {"wild", "Randomize Poke Spot Pokemon", onOff},
@@ -68,6 +68,7 @@ er::Schema MakeSchema() {
       {"starter.similar", "Starter: similar strength to Eevee", {"on", "off"}, 6},
       {"starter.moves", "Starter: moves", {"natural (by level)", "kept"}, 6},
       {"gen57", "Include Gen 5-7 Pokemon", onOff, 7},
+      {"items.named", "Items on the ground (random): only items that have a name", onOff, 8},
   };
   return s;
 }
@@ -446,6 +447,16 @@ void TrainerLevels(const Tables& t, const Species& sp, const StoryTeams& st, con
   }
 }
 
+bool gItemNumbersByEntry = false;
+
+uint32_t ItemEntry(const Tables& t, uint32_t item) {
+  return item < t.Count("item_data_index") ? t.Get("item_data_index", item, "value") : 0;
+}
+bool NamedItem(const Tables& t, uint32_t item) {
+  const uint32_t e = ItemEntry(t, item);
+  return item != 0 && e != 0 && e < t.Count("item_data_prime") && t.Get("item_data_prime", e, "name") != 0;
+}
+
 std::vector<uint32_t> HeldItemPool(const Tables& t) {
   std::set<uint32_t> held;
   for (const char* deck : {"story_pokemon", "colosseum_pokemon", "hundred_pokemon", "imasugu_pokemon", "virtual_pokemon",
@@ -459,9 +470,9 @@ std::vector<uint32_t> HeldItemPool(const Tables& t) {
   std::vector<uint32_t> pool;
   const uint32_t itemCount = t.Count("item_data_prime");
   for (uint32_t item : held) {
-    if (item == 0 || item >= itemCount) continue;
-    if (t.Get("item_data_prime", item, "important") != 0 || t.Get("item_data_prime", item, "itemSoubiDataId") == 0) continue;
-    if (t.Get("item_data_prime", item, "name") == 0) continue;
+    if (item == 0 || item >= itemCount || !NamedItem(t, item)) continue;
+    const uint32_t e = ItemEntry(t, item);
+    if (t.Get("item_data_prime", e, "important") != 0 || t.Get("item_data_prime", e, "itemSoubiDataId") == 0) continue;
     pool.push_back(item);
   }
   return pool;
@@ -561,7 +572,11 @@ void GroundItems(const Tables& t, const er::Settings& s, Result& r) {
   const uint32_t mode = s.Get(GetSchema(), "items.ground");
   er::Rng rng = er::Rng::Stream(s.seed, "items.ground");
   const uint32_t itemCount = t.Count("item_data_prime");
-  auto movable = [&](uint32_t item) { return item != 0 && item < itemCount && t.Get("item_data_prime", item, "important") == 0; };
+  const bool identity = !gItemNumbersByEntry && s.Get(GetSchema(), "items.named") == 0;
+  auto movable = [&](uint32_t item) {
+    if (identity) return item != 0 && item < itemCount && t.Get("item_data_prime", item, "important") == 0;
+    return item != 0 && item < itemCount && NamedItem(t, item) && t.Get("item_data_prime", ItemEntry(t, item), "important") == 0;
+  };
   std::vector<uint32_t> boxes, items;
   for (uint32_t i = 0; i < t.Count("floor_tresure_list"); i++) {
     const uint32_t item = t.Get("floor_tresure_list", i, "item");
@@ -574,7 +589,7 @@ void GroundItems(const Tables& t, const er::Settings& s, Result& r) {
   } else {
     std::vector<uint32_t> any;
     for (uint32_t it = 1; it < itemCount; it++) {
-      if (movable(it) && t.Get("item_data_prime", it, "price") != 0) any.push_back(it);
+      if (movable(it) && t.Get("item_data_prime", identity ? it : ItemEntry(t, it), "price") != 0) any.push_back(it);
     }
     if (any.empty()) return;
     for (uint32_t& it : items) it = any[rng.Below(static_cast<uint32_t>(any.size()))];
@@ -865,10 +880,6 @@ struct Shops {
   std::vector<uint32_t> firsts;
   std::vector<uint32_t> pool;
 };
-
-uint32_t ItemEntry(const Tables& t, uint32_t item) {
-  return item < t.Count("item_data_index") ? t.Get("item_data_index", item, "value") : 0;
-}
 
 bool ShopGoods(const Tables& t, uint32_t item) {
   const uint32_t e = ItemEntry(t, item);
@@ -1219,7 +1230,7 @@ bool Verify(const Tables& t, const Species& sp, const StoryTeams& st, const er::
           return fail("a legendary trainer Pokemon with legendaries limited");
         }
         if (field.rfind("tokuseiDataId", 0) == 0 && (v == kAbilityWonderGuard || v == kAbilityForecast)) return fail("a banned ability");
-        if (table == "floor_tresure_list" && field == "item" && t.Get("item_data_prime", t.Get(table, entry, "item"), "important") != 0) {
+        if (table == "floor_tresure_list" && field == "item" && t.Get("item_data_prime", ItemEntry(t, t.Get(table, entry, "item")), "important") != 0) {
           return fail("a key item moved");
         }
       }
@@ -1282,6 +1293,7 @@ void ApplyStyle(er::Settings& s, Style style) {
   s.Set(sc, "shadow.similar", fair);
   s.Set(sc, "shadow.keep_lugia", 1);
   s.Set(sc, "items.ground", chaos ? 1 : 2);
+  s.Set(sc, "items.named", chaos ? 1 : 0);
   s.Set(sc, "legendaries", chaos ? 2 : 1);
   if (style == Style::Light) return;
   s.Set(sc, "trainers", 1);
@@ -1399,6 +1411,7 @@ bool Generate(const em::DataCatalog& catalog, const em::EntryReader& read, const
   const auto& sc = GetSchema();
   out = Result{};
   out.code = er::EncodeCode(sc, s);
+  gItemNumbersByEntry = starterBase != nullptr;
   Tables t(catalog, read);
   if (s.Get(sc, "gen4")) {
     if (sGen4.empty()) {
@@ -1421,7 +1434,8 @@ bool Generate(const em::DataCatalog& catalog, const em::EntryReader& read, const
   if (!t.Need("story_trainers", {"darkPokemonFlags", "pokemonDataID"}, error) ||
       !t.Need("story_pokemon", {"pokemonID", "level", "wazaID"}, error) ||
       !t.Need("darkpokemon_shadow", {"deckPokemonID"}, error) || !t.Need("darkPokemonList", {"pokemonID"}, error) || !t.Need("floor_tresure_list", {"item"}, error) ||
-      !t.Need("item_data_prime", {"important", "price"}, error) || !t.Need("esabapokemondata_E1", {"id"}, error)) {
+      !t.Need("item_data_prime", {"important", "price", "name"}, error) || !t.Need("item_data_index", {"value"}, error) ||
+      !t.Need("esabapokemondata_E1", {"id"}, error)) {
     return false;
   }
   const StoryTeams teams = ReadTeams(t);

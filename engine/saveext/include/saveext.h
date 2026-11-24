@@ -62,6 +62,9 @@ struct Loaded {
 };
 Loaded Load(const std::filesystem::path& folder, std::string_view key, uint64_t saveHashNow);
 
+bool Repair(const std::filesystem::path& folder, std::string_view key, const std::vector<uint8_t>& oldSave,
+            const std::vector<uint8_t>& newSave);
+
 bool PairsWith(const std::vector<uint8_t>& ext, const std::vector<uint8_t>& save);
 constexpr size_t kGciHeader = 0x40;
 bool PairsWithGci(const std::vector<uint8_t>& ext, const std::vector<uint8_t>& gci);

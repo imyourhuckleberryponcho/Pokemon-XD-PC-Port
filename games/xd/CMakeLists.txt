@@ -336,6 +336,9 @@ foreach (_src ${XD_GAME_SOURCES})
   endif ()
   if (_src MATCHES "/msgctrl/msgctrlcode\\.c$")
     list(APPEND _defs "msgctrlKeyWait=PortTick_msgctrlKeyWait")
+    list(APPEND _defs "msgctrlItem=PortXD_GuardItem" "msgctrlItem2=PortXD_GuardItem2" "msgctrlMsgID=PortXD_GuardMsgID" "msgctrlWaza=PortXD_GuardWaza"
+      "msgctrlPokemonID=PortXD_GuardPokemonID" "msgctrlMenuMsgID=PortXD_GuardMenuMsgID" "msgctrlMenuMsgID2=PortXD_GuardMenuMsgID2"
+      "msgctrlTribe=PortXD_GuardTribe" "msgctrlNpc=PortXD_GuardNpc")
   endif ()
   if (_src MATCHES "/GSmsg/GSmsg\\.cpp$")
     list(APPEND _defs "spriteSetEnv=PortXD_MsgSpriteSetEnv" "timeGetLastFrameTime=PortXD_MsgFrameTime")
@@ -826,6 +829,9 @@ add_executable(xd_settings_test tools/xd_settings_test.cpp)
 target_link_libraries(xd_settings_test PRIVATE xd_settings_list)
 add_executable(xd_cli_options_test tools/xd_cli_options_test.cpp)
 
+add_executable(report_scrub_test tools/report_scrub_test.cpp src/report_scrub.cpp)
+target_compile_features(report_scrub_test PRIVATE cxx_std_17)
+
 add_executable(xd_heap_model_test tools/xd_heap_model_test.cpp src/heap_model.cpp)
 
 add_library(xd_extra_sources STATIC launcher/xd_extra_sources.cpp launcher/xd_n3ds_dump.cpp src/pack_match.cpp)
@@ -941,8 +947,8 @@ set(XD_PROGRAM_LIBS xd_port engine_presence engine_net xd_legality xd_legality_d
   aurora::thp aurora::main)
 
 set(XD_PROGRAM_PORT_SOURCES src/boot.c src/cli_boot.cpp src/disc_tables.cpp src/disc_verify.c src/disc_choice.cpp src/game_new.cpp src/heap_check.cpp src/heap_model.cpp src/musyx_dsp_program.c
-  src/renderdoc_capture.c src/screenshot.cpp src/bug_report.cpp src/settings_boot.cpp src/mods_boot.cpp src/languages_boot.cpp src/gslog_port.cpp src/state_dump.cpp src/timing_log.cpp src/cpu_cost_hooks.cpp src/fsys_unpack_cost.cpp src/dvd_open_cost.cpp src/bound_walk_cost.cpp src/perf_marks.cpp src/cpu_counters.cpp src/warp.cpp src/render_icon.cpp src/shader_prep.cpp src/pc_load.cpp src/dsp_coef.cpp
-  src/data/rel_link.cpp src/data/main_program_map.cpp src/dev_menu.cpp src/task_stacks.cpp src/input_ticks.cpp src/cheats.cpp src/cheats_hooks.cpp
+  src/renderdoc_capture.c src/screenshot.cpp src/bug_report.cpp src/report_scrub.cpp src/settings_boot.cpp src/mods_boot.cpp src/languages_boot.cpp src/gslog_port.cpp src/state_dump.cpp src/timing_log.cpp src/cpu_cost_hooks.cpp src/fsys_unpack_cost.cpp src/dvd_open_cost.cpp src/bound_walk_cost.cpp src/perf_marks.cpp src/cpu_counters.cpp src/warp.cpp src/render_icon.cpp src/shader_prep.cpp src/pc_load.cpp src/dsp_coef.cpp
+  src/data/rel_link.cpp src/data/main_program_map.cpp src/dev_menu.cpp src/task_stacks.cpp src/input_ticks.cpp src/text_guard.cpp src/cheats.cpp src/cheats_hooks.cpp
   src/particle_check.cpp src/settings_menu.cpp src/ui_kit2.cpp src/speedups.cpp src/move_split.cpp src/gen4_moves.cpp src/xg_calc_harness.cpp src/xg_calc_questions.cpp src/gen4_abilities.cpp src/gen4_ability_effects.cpp src/mod_battle.cpp src/script_hooks.cpp src/script_global_ext.cpp src/script_gifts.cpp src/script_events.cpp src/script_teams.cpp src/script_ext.cpp src/common_script.cpp src/online_battle.cpp src/battle_replay.cpp src/trainer_card.cpp src/trainer_card_game.cpp src/trainer_card_page.cpp src/online_lobby.cpp src/online_mirror.cpp src/online_room.cpp src/online_team.cpp src/online_commit.cpp src/online_draft.cpp src/online_draft_game.cpp src/online_vs_row.cpp src/added_rows.cpp src/species_tables.cpp src/gen4_pack.cpp src/gen57_pack.cpp src/pack_match.cpp src/pack_tables.cpp src/gen4_machines.cpp src/gen4_xg.cpp src/replay_pacing.cpp src/audio_categories.cpp src/button_icons.cpp src/settings_switches.cpp src/hook_defaults.cpp src/tm_names.cpp src/shiny_odds.cpp src/hd_textures.cpp src/texture_observers.cpp src/type_icons.cpp src/modern_types.cpp src/speedrun.cpp src/mods_reload.cpp src/pokedex_data.cpp src/pokedex_decks.cpp src/pokedex_page.cpp src/memo_sprites.cpp
   src/widescreen.cpp src/save_picker.cpp src/playthrough.cpp src/challenges.cpp src/level_caps.cpp src/battles_won.cpp src/discord_presence.cpp src/walk_helper.cpp src/gen4_evolutions.cpp src/gen4_eevee.cpp src/pc_trade.cpp src/starter.cpp src/save_ext.cpp src/memo_overflow.cpp src/xd_rulesets.cpp src/gen_rules.cpp src/forms.cpp src/forms_battle.cpp src/forms_shop.cpp src/forms_summary.cpp src/hidden_ability.cpp)
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/story_flag_names_data.cpp"

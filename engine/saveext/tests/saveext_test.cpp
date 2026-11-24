@@ -96,6 +96,19 @@ int main() {
     gci2.back() ^= 1;
     Check(!se::PairsWithGci(ext, gci2) && !se::PairsWithGci(ext, std::vector<uint8_t>(10)), "PairsWithGci: changed data / too short");
   }
+  {
+    fs::remove_all(dir, ec);
+    Check(!se::Repair(dir, "pt_r", save1, save2), "Repair: no extension, nothing done");
+    Check(se::Stage(dir, "pt_r", Sample(h1)) && se::Commit(dir, "pt_r"), "Repair: an extension for save 1");
+    Check(se::Repair(dir, "pt_r", save1, save2), "Repair: save 1 became save 2");
+    se::Loaded r = se::Load(dir, "pt_r", h2);
+    Check(r.state == se::State::Paired && r.file.sections.size() == 2 && r.file.Find("shadow") && r.file.Find("shadow")->data.size() == 1000 &&
+          r.file.Find("shadow")->required, "Repair: paired with save 2, sections kept");
+    Check(se::Load(dir, "pt_r", h1).state == se::State::Stale, "Repair: no longer with save 1");
+    const std::vector<uint8_t> save3(5000, 3);
+    Check(!se::Repair(dir, "pt_r", save1, save3) && se::Load(dir, "pt_r", h2).state == se::State::Paired,
+          "Repair: an extension that did not belong to the old save is left alone");
+  }
   fs::remove_all(dir, ec);
   std::printf(sFails == 0 ? "ALL PASS\n" : "%d FAILED\n", sFails);
   return sFails == 0 ? 0 : 1;

@@ -38,6 +38,10 @@ std::string dump_fingerprint(const std::string& path);
 std::string sha1_hex(const uint8_t* d, size_t n);
 
 std::unique_ptr<pbr::DiscSource> open_iso(const std::string& path);
+struct DolProvider {
+  virtual ~DolProvider() = default;
+  virtual std::vector<uint8_t> dol() const = 0;
+};
 std::vector<uint8_t> disc_dol(const pbr::DiscSource& d);
 
 struct XdModel {

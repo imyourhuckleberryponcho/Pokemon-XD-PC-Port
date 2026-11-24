@@ -79,6 +79,16 @@ int main(int argc, char** argv) {
     check(missing.size() == 2 && missing[0].find("is not on") != std::string::npos, "added rows: the mod is not on: refused, one reason per row");
     const auto moved = ep::BoundProblems(bound, {{"zorb", "pokemon_data", "Zorblat \"Z\"", 416}, {"zorb", "waza_data", "Zap Test", 375}});
     check(moved.size() == 1 && moved[0].find("now gives") != std::string::npos, "added rows: another number (another load order): refused");
+    {
+      ep::Setup faces = modded;
+      faces.addedRows = {{"gen57", "poke_face", "face of Victini", 838, "face:gen57/victini"}, {"gen57", "pokemon_data", "Victini", 600, "species:gen57/victini"}};
+      const std::vector<ep::AddedRowRef> shiftedFaces = {{"gen57", "poke_face", "face of Victini", 1050, "face:gen57/victini"}, {"gen57", "pokemon_data", "Victini", 600, "species:gen57/victini"}};
+      check(ep::BoundProblems(faces, shiftedFaces).empty(), "added rows: a moved face row is no problem");
+      check(!ep::CheckBound(faces, shiftedFaces).plan.Refused() && !ep::CheckBound(faces, shiftedFaces).plan.Needed(), "labels: a moved face row: nothing to remap, nothing refused");
+      const std::vector<ep::AddedRowRef> movedSpecies = {{"gen57", "poke_face", "face of Victini", 1050, "face:gen57/victini"}, {"gen57", "pokemon_data", "Victini", 601, "species:gen57/victini"}};
+      check(ep::BoundProblems(faces, movedSpecies).size() == 1, "added rows: a moved species row is still a problem");
+      check(ep::CheckBound(faces, movedSpecies).plan.Needed(), "labels: a moved species row is still remapped");
+    }
     const auto gone = ep::BoundProblems(bound, {{"zorb", "waza_data", "Zap Test", 375}});
     check(gone.size() == 1 && gone[0].find("no longer adds") != std::string::npos, "added rows: the mod is on but the row is gone: refused");
     ep::Setup labelled = modded;

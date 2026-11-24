@@ -1,0 +1,165 @@
+diff --git a/lib/gfx/recording.cpp b/lib/gfx/recording.cpp
+index 4d3530d..b6eaac5 100644
+--- a/lib/gfx/recording.cpp
++++ b/lib/gfx/recording.cpp
+@@ -691,6 +691,21 @@ float frame_buffer_use() noexcept {
+                    part(frame.indices.size(), IndexBufferSize), part(frame.storage.size(), StorageBufferSize)});
+ }
+ 
++size_t storage_used() noexcept {
++  return g_recorder.active() ? g_recorder.frame().storage.size() : 0;
++}
++
++size_t storage_capacity() noexcept { return StorageBufferSize; }
++
++bool storage_has_room(size_t length) noexcept {
++  if (!g_recorder.active()) {
++    return true; // (push_storage itself says what is wrong then)
++  }
++  const size_t align = static_cast<size_t>(resources().limits.minStorageBufferOffsetAlignment);
++  const size_t begin = AURORA_ALIGN(g_recorder.frame().storage.size(), align != 0 ? align : 1);
++  return begin + length <= StorageBufferSize;
++}
++
+ namespace detail {
+ 
+ void prepare_recording() {
+diff --git a/lib/gfx/recording.hpp b/lib/gfx/recording.hpp
+index d8eae7b..5d1d7c7 100644
+--- a/lib/gfx/recording.hpp
++++ b/lib/gfx/recording.hpp
+@@ -47,6 +47,12 @@ struct Job;
+ namespace aurora::gfx {
+ // (in-between pictures, AuroraGetFrameBufferUse) How full the frame being recorded is, 0..1.
+ float frame_buffer_use() noexcept;
++// (patch 0062) Bytes of the frame's storage buffer (vertex arrays...) used so far, and whether `length` more bytes
++// (aligned as push_storage does) still fit in it. A frame's storage buffer has a fixed size: pushing past its end
++// used to abort the program.
++size_t storage_used() noexcept;
++size_t storage_capacity() noexcept;
++bool storage_has_room(size_t length) noexcept;
+ // Hands the picture shown by the last display copy to the window now, as its own present (in-between pictures:
+ // several pictures of one game picture leave in one frame). Without the overlay of the frame's own present.
+ bool present_extra_picture();
+diff --git a/lib/gfx/resources.hpp b/lib/gfx/resources.hpp
+index 3fdc0ee..a750690 100644
+--- a/lib/gfx/resources.hpp
++++ b/lib/gfx/resources.hpp
+@@ -7,7 +7,8 @@ inline constexpr bool UseTextureBuffer = true;
+ inline constexpr uint64_t UniformBufferSize = 25165824; // 24 MiB
+ inline constexpr uint64_t VertexBufferSize = 5242880;   // 5 MiB
+ inline constexpr uint64_t IndexBufferSize = 2097152;    // 2 MiB
+-inline constexpr uint64_t StorageBufferSize = 8388608;  // 8 MiB
++// (patch 0062) 16 MiB (was 8): a room with several Battle Revolution models needs more than 8 MiB of vertex arrays in one picture
++inline constexpr uint64_t StorageBufferSize = 16777216; // 16 MiB
+ inline constexpr uint64_t TextureUploadSize = 25165824; // 24 MiB
+ 
+ namespace detail {
+diff --git a/lib/gx/command_processor.cpp b/lib/gx/command_processor.cpp
+index c73da98..d724747 100644
+--- a/lib/gx/command_processor.cpp
++++ b/lib/gx/command_processor.cpp
+@@ -229,7 +229,7 @@ u64 array_hash(const void* data, u32 length) noexcept {
+ // that is not there was pure cost. While a batch is decoded the memory cannot change (see above), so an array
+ // named again in the same batch is the same bytes: found by address, length and batch, with no hash. A new
+ // batch asks again (the bytes may have changed); the data is copied once more instead of hashed. The copies
+-// of one picture are capped (a frame's storage buffer is 8 MiB): past the cap, and while in-between pictures
++// of one picture are capped (a frame's storage buffer is 16 MiB): past the cap, and while in-between pictures
+ // are made (they rely on the content-shared copies staying known), the by-content path below is used.
+ struct FastArrayKey {
+   const void* data;
+@@ -246,6 +246,14 @@ absl::flat_hash_map<FastArrayKey, gfx::Range, FastArrayKeyHash> sFastArrayUpload
+ u64 sFastArrayBytes = 0; // copied by the fast path in this picture
+ constexpr u64 FastArrayBytesCap = 3u << 20;
+ bool sArraysKept = false; // (clear_draw_cache(true): in-between pictures are being made)
++// (patch 0062) A frame's storage buffer is 16 MiB (8 before) and pushing past its end aborted the program (a room full of Ultra Sun
++// models in a tester's game: the by-address copies of the fast path above come on top of the by-content ones).
++// The fast path now leaves half of the buffer's last quarter alone (it is never the one that fills the frame), and
++// an array that does not fit at all is not copied: sArrayNoRoom makes draw_prim leave that one draw out (one
++// missing piece for one picture, logged) instead of stopping the game.
++size_t fast_array_storage_ceiling() noexcept { return (gfx::storage_capacity() / 8) * 5; }
++bool sArrayNoRoom = false;
++u64 sArrayNoRoomDraws = 0;
+ 
+ gfx::Range push_array(const void* data, u32 length) {
+   static const bool fast = perf::option("XD_GX_ARRAYFAST");
+@@ -253,7 +261,8 @@ gfx::Range push_array(const void* data, u32 length) {
+   if (stats) {
+     ++perf::g.arrCalls;
+   }
+-  if (fast && !sArraysKept && sProcessDepth > 0 && sFastArrayBytes + length <= FastArrayBytesCap && !interp_recording() &&
++  if (fast && !sArraysKept && sProcessDepth > 0 && sFastArrayBytes + length <= FastArrayBytesCap &&
++      gfx::storage_used() + length <= fast_array_storage_ceiling() && !interp_recording() &&
+       !interp_active()) {
+     const FastArrayKey key{data, length, sArrayHashEpoch};
+     if (const auto it = sFastArrayUploads.find(key); it != sFastArrayUploads.end()) {
+@@ -262,6 +271,10 @@ gfx::Range push_array(const void* data, u32 length) {
+       }
+       return it->second;
+     }
++    if (!gfx::storage_has_room(length)) {
++      sArrayNoRoom = true;
++      return {};
++    }
+     const auto range = gfx::push_storage(static_cast<const uint8_t*>(data), length);
+     sFastArrayUploads.emplace(key, range);
+     sFastArrayBytes += length;
+@@ -280,6 +293,10 @@ gfx::Range push_array(const void* data, u32 length) {
+   if (const auto it = sArrayUploads.find(key); it != sArrayUploads.end()) {
+     return it->second;
+   }
++  if (!gfx::storage_has_room(length)) {
++    sArrayNoRoom = true;
++    return {};
++  }
+   const auto range = gfx::push_storage(static_cast<const uint8_t*>(data), length);
+   sArrayUploads.emplace(key, range);
+   return range;
+@@ -869,6 +886,36 @@ static bool upload_unsized_arrays(GXVtxFmt fmt, const u8* vtx, u16 vtxCount, u32
+   return changed;
+ }
+ 
++// (patch 0062) Every array an indexed attribute reads has its copy before the draw's vertices are pushed. False when
++// one could not be copied (the storage buffer is full): the draw is then left out as a whole.
++static bool prepare_index_arrays() noexcept {
++  auto& state = g_gxState;
++  for (int i = GX_VA_POS; i <= GX_VA_TEX7; ++i) {
++    if (state.vtxDesc[i] != GX_INDEX8 && state.vtxDesc[i] != GX_INDEX16) {
++      continue;
++    }
++    auto& array = state.arrays[i];
++    if (array.cachedRange.size == 0) {
++      const u32 size = array.size == GX_ARRAY_SIZE_UNKNOWN ? std::max<u32>(array.stride, 4) : array.size;
++      array.cachedRange = push_array(array.data, size);
++      if (sArrayNoRoom) {
++        return false;
++      }
++    }
++  }
++  return true;
++}
++
++// The draw is dropped: noted once in a while (the first, then every 1000th).
++static void drop_draw_for_full_storage(u32 totalVtxBytes, ByteReader& reader) noexcept {
++  sArrayNoRoom = false;
++  reader.take(totalVtxBytes);
++  if (sArrayNoRoomDraws++ % 1000 == 0) {
++    Log.warn("A frame's storage buffer is full ({} bytes used): {} draw(s) left out so far", gfx::storage_used(),
++             sArrayNoRoomDraws);
++  }
++}
++
+ static void push_gx_draw(GXPrimitive prim, GXVtxFmt fmt, u16 vtxCount, gfx::Range vertRange, gfx::Range idxRange,
+                          u32 numIndices) noexcept {
+   auto& state = g_gxState;
+@@ -1072,6 +1119,10 @@ static void draw_prim(GXPrimitive prim, GXVtxFmt fmt, u16 vtxCount, ByteReader&
+     perf::g.scanNs += perf::now_ns() - scanT0;
+     perf::g.scanVerts += vtxCount;
+   }
++  if (sArrayNoRoom || !prepare_index_arrays()) {
++    drop_draw_for_full_storage(totalVtxBytes, reader);
++    return;
++  }
+ 
+   const bool cleanState = g_gxState.dirty == 0 && fmt == sDrawCache.lastDrawFmt && sDrawCache.lineMode == 0 &&
+                           prim != GX_LINES && prim != GX_LINESTRIP && prim != GX_POINTS;

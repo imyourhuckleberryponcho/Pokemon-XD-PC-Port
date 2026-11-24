@@ -27,6 +27,18 @@ using detail::RemoveFolder;
 using detail::HoldsPlayerData;
 using detail::SafeName;
 
+fs::path LongPath(const fs::path& p) {
+#if defined(_WIN32)
+  std::error_code ec;
+  std::wstring w = fs::absolute(p, ec).make_preferred().wstring();
+  if (!ec && w.size() >= 200 && w.rfind(LR"(\\?\)", 0) != 0) {
+    if (w.rfind(LR"(\\)", 0) == 0) return fs::path(LR"(\\?\UNC\)" + w.substr(2));
+    return fs::path(LR"(\\?\)" + w);
+  }
+#endif
+  return p;
+}
+
 struct File {
   std::FILE* f = nullptr;
 #if defined(_WIN32)
@@ -159,7 +171,10 @@ bool ExtractZip(const fs::path& zip, const fs::path& folder, std::string& error,
       error = "stopped";
       return false;
     }
-    const fs::path out = folder / PathOf(e.name);
+    fs::path out = folder / PathOf(e.name);
+#if defined(_WIN32)
+    out.make_preferred();
+#endif
     if (e.directory) {
       fs::create_directories(out, ec);
       continue;
@@ -458,8 +473,8 @@ bool Install(const InstallRequest& r, std::string& installed, std::string& error
     error = Tr("this version is the one running now");
     return false;
   }
-  const fs::path partial = l.root / PathOf(name + ".partial");
-  const fs::path target = l.root / PathOf(name);
+  const fs::path partial = LongPath(l.root / PathOf(name + ".partial"));
+  const fs::path target = LongPath(l.root / PathOf(name));
   const auto fail = [&](const std::string& why) {
     error = why;
     RemoveFolder(partial);
@@ -577,7 +592,7 @@ bool SetUpPlayerFolder(const InstallRequest& r, const fs::path& runningFolder, c
     error = Tr("the downloaded package is not the one the publisher signed (its SHA-256 differs)");
     return false;
   }
-  const fs::path partial = fs::path(newRoot).concat(".partial");
+  const fs::path partial = LongPath(fs::path(newRoot).concat(".partial"));
   const auto fail = [&](const std::string& why) {
     error = why;
     RemoveFolder(partial);

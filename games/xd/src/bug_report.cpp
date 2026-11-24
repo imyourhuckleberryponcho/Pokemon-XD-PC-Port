@@ -1,4 +1,5 @@
 #define WIN32_LEAN_AND_MEAN
+#include "report_scrub.h"
 #include <windows.h>
 
 #include "xd_user_folder.h"
@@ -260,6 +261,7 @@ bool WriteBundle(Press& p) {
   }
   info.close();
 
+  xd::report::ScrubReportFolder(p.folder);
   const bool zipped = PortZip_StoreFolder(p.folder.c_str(), p.zip.c_str());
   std::fprintf(stderr, "[bug report] saved %s%s%s\n", Utf8(p.folder).c_str(), zipped ? " and " : "",
                zipped ? Utf8(p.zip).c_str() : " (the zip file could not be written)");

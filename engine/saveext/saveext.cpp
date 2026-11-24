@@ -281,6 +281,13 @@ Loaded Load(const fs::path& folder, std::string_view key, uint64_t saveHashNow) 
   return out;
 }
 
+bool Repair(const fs::path& folder, std::string_view key, const std::vector<uint8_t>& oldSave, const std::vector<uint8_t>& newSave) {
+  Loaded now = Load(folder, key, Hash64(oldSave.data(), oldSave.size()));
+  if (now.state != State::Paired) return false;
+  now.file.saveHash = Hash64(newSave.data(), newSave.size());
+  return WriteAtomic(FileFor(folder, key), Encode(now.file));
+}
+
 bool PairsWith(const std::vector<uint8_t>& ext, const std::vector<uint8_t>& save) {
   File f;
   return Decode(ext.data(), ext.size(), f) == Decoded::Ok && f.saveHash == Hash64(save.data(), save.size());
