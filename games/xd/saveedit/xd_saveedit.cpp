@@ -296,8 +296,9 @@ std::string Editor::SetSpecies(const Spot& s, uint16_t species, const Tables& t)
   if (p.IsEgg()) return Tr("Eggs can't change species.");
   const std::string who = Name(s, &t);
   const uint16_t old = p.species;
-  const bool nickWasDefault = p.nickname == std::u16string(SpeciesText(&t, old).begin(), SpeciesText(&t, old).end()) ||
-                              Upper(xs::ToUtf8(p.nickname)) == Upper(SpeciesText(&t, old));
+  const std::string oldName = SpeciesText(&t, old);
+  const bool nickWasDefault = p.nickname == std::u16string(oldName.begin(), oldName.end()) ||
+                              Upper(xs::ToUtf8(p.nickname)) == Upper(oldName);
   uint8_t* r = Rec(s);
   const xs::ByteOrder o = work_.order;
   xs::Write16(r + kSpecies, species, o);
