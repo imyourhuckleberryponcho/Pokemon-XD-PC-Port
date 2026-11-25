@@ -664,7 +664,7 @@
 > entrée
 
 = the mod "%s" now gives the %s "%s" the number %d, the save has it as %d (another mod before it, or another order of the mods)
-> le mod "%s" donne maintenant le numéro %d au %s "%s", la sauvegarde l'a sous le numéro %d (un autre mod avant lui, ou un autre ordre des mods)
+> le mod "%s" donne maintenant à %s "%s" le numéro %d, la sauvegarde l'a sous le numéro %d (un autre mod avant lui, ou un autre ordre des mods)
 
 = the mod "%s" no longer adds the %s "%s" (it was changed)
 > le mod "%s" n'ajoute plus le %s "%s" (il a été modifié)
@@ -8079,8 +8079,17 @@
 = A GameCube adapter is plugged in, but this user may not open it. Add the udev rule from the Read me (one small file), then unplug the adapter and plug it in again.
 > Un adaptateur GameCube est branché, mais cet utilisateur n'a pas le droit de l'ouvrir. Ajoutez la règle udev du fichier Lisez-moi (un petit fichier), puis débranchez et rebranchez l'adaptateur.
 
-= A GameCube adapter is plugged in, but another program is using it (Dolphin, or another copy of the game). Close that program, then unplug the adapter and plug it in again.
-> Un adaptateur GameCube est branché, mais un autre programme l'utilise (Dolphin, ou une autre copie du jeu). Fermez ce programme, puis débranchez et rebranchez l'adaptateur.
+= A GameCube adapter is plugged in, but it is in use by another program (for example Dolphin, or another copy of the game). Close that program: the adapter is tried again by itself in a few seconds (if not, unplug it and plug it in again). If no other program runs, plug a controller into one of the adapter's four ports.
+> Un adaptateur GameCube est branché, mais il est utilisé par un autre programme (par exemple Dolphin, ou une autre copie du jeu). Fermez ce programme : l'adaptateur est réessayé tout seul dans quelques secondes (sinon, débranchez-le et rebranchez-le). Si aucun autre programme ne tourne, branchez une manette sur l'un des quatre ports de l'adaptateur.
+
+= A GameCube adapter is plugged in, but Windows has the driver "%s" on it, and this program can only use WinUSB (Dolphin may work with other drivers). Start the free program Zadig (zadig.akeo.ie), choose the adapter (WUP-028), pick WinUSB and click Replace Driver. Then unplug the adapter and plug it in again.
+> Un adaptateur GameCube est branché, mais Windows y a mis le pilote "%s", et ce programme ne sait utiliser que WinUSB (Dolphin peut fonctionner avec d'autres pilotes). Lancez le programme gratuit Zadig (zadig.akeo.ie), choisissez l'adaptateur (WUP-028), sélectionnez WinUSB et cliquez sur Replace Driver. Puis débranchez l'adaptateur et rebranchez-le.
+
+= Windows knows a GameCube adapter, but this program's USB library does not list it. Unplug the adapter and plug it in again. If this stays, send the launcher's log (see the Read me).
+> Windows connaît un adaptateur GameCube, mais la bibliothèque USB de ce programme ne le liste pas. Débranchez l'adaptateur et rebranchez-le. Si cela persiste, envoyez le journal du lanceur (voir le Lisez-moi).
+
+= A GameCube adapter is plugged in, but the USB file libusb-1.0.dll is missing next to the program. Unpack the whole download again (all of the game folder), then start again.
+> Un adaptateur GameCube est branché, mais le fichier USB libusb-1.0.dll manque à côté du programme. Décompressez à nouveau tout le téléchargement (tout le dossier du jeu), puis relancez.
 
 = A GameCube adapter is plugged in and working. Plug a controller into one of its four ports: it shows up here at once. (The switch on the adapter must be on "Wii U".)
 > Un adaptateur GameCube est branché et fonctionne. Branchez une manette sur l'un de ses quatre ports : elle apparaît ici aussitôt. (Le commutateur de l'adaptateur doit être sur "Wii U".)
@@ -8605,11 +8614,7 @@
 = Lets a controller keep working while the game's window isn't in front, for example when you watch the game through a streaming overlay in another program. Controllers only: the keyboard is never read in the background. It needs "Pause in the background" to be off, or the game waits for you instead.
 > Permet à une manette de continuer à fonctionner quand la fenêtre du jeu n'est pas au premier plan, par exemple si vous regardez le jeu à travers une surcouche de diffusion dans un autre programme. Manettes seulement: le clavier n'est jamais lu en arrière-plan. « Pause en arrière-plan » doit être désactivé, sinon le jeu vous attend.
 
-= It was made before the Gen 4 Pokemon had their own faces and cries (Leafeon looked like Umbreon). It still works; press Make to get the right faces and cries.
-> Il a été créé avant que les Pokémon de génération 4 aient leurs propres visages et cris (Phyllali ressemblait à Noctali). Il fonctionne toujours ; appuyez sur Créer pour obtenir les bons visages et cris.
 
-= It was made by an older recipe than the Gen 4 faces and cries. It still works; press Make to make it again together with them.
-> Il a été créé avec une recette plus ancienne que celle des visages et cris de génération 4. Il fonctionne toujours ; appuyez sur Créer pour le refaire avec eux.
 
 = The randomizer is giving the starter.
 > Le randomizer donne le Pokémon de départ.
@@ -9412,3 +9417,29 @@
 = Your save is now marked as cheats used.
 > Votre sauvegarde est maintenant marquée « cheats utilisés ».
 
+
+= Save: "%s"\nFolder: %s
+> Sauvegarde : "%s"\nDossier : %s
+
+= The other copy is process %lu (started %s). If you can't see its window, it may be stuck: "End the other copy" closes it at once (anything it has not saved is lost). If it is just closing, wait a moment and choose "Try again".
+> L'autre copie est le processus %lu (lancé %s). Si tu ne vois pas sa fenêtre, elle est peut-être bloquée : « Fermer l'autre copie » la ferme tout de suite (ce qu'elle n'a pas sauvegardé est perdu). Si elle est simplement en train de se fermer, attends un instant et choisis « Réessayer ».
+
+= The other copy can't be told apart from here. Look for xd.exe in the Task Manager (Details tab) and end it, or restart the PC. If it is just closing, wait a moment and choose "Try again".
+> L'autre copie n'est pas identifiable d'ici. Cherche xd.exe dans le Gestionnaire des tâches (onglet Détails) et termine-le, ou redémarre le PC. Si elle est simplement en train de se fermer, attends un instant et choisis « Réessayer ».
+
+= Try again
+> Réessayer
+
+= End the other copy
+> Fermer l'autre copie
+= %s (no change)
+> %s (aucun changement)
+
+= %s (+%s, -%s)
+> %s (+%s, -%s)
+
+= Nothing to copy the game's own record layout from: this save has no Pokemon in the party or the PC boxes that is not a Shadow Pokemon (purified ones are fine). Purify one first.
+> Rien à copier pour reprendre la structure d'enregistrement du jeu : cette sauvegarde n'a aucun Pokémon dans l'équipe ni dans les boîtes du PC qui ne soit pas un Pokémon Obscur (les Pokémon purifiés conviennent). Purifie-en un d'abord.
+
+= It was made by an older version of the converter: the Gen 4 and Gen 5-7 Pokemon lack their own box pictures, and the cries from the 3DS games are not matched to the game's volume yet (some crackle). It still works; press Make to make it again.
+> Il a été fait par une ancienne version du convertisseur : les Pokémon de Gen 4 et Gen 5-7 n'ont pas leurs propres images de boîte, et les cris des jeux 3DS ne sont pas encore réglés au volume du jeu (certains grésillent). Il fonctionne toujours ; appuie sur Make pour le refaire.

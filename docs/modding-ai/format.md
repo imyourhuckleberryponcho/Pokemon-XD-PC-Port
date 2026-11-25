@@ -152,6 +152,7 @@ One JSON object. Keys starting with `_` are comments.
   as wide = normal over shiny, any other shape = one face for both; path inside the mod with `/`, may sit under `games/<id>/`). The picture becomes a new
   texture entry of `poke_face.fsys` and two new rows of the `poke_face` table (PC-only longer copy, like the other grown tables); the species row's
   `cgData.spriteId[0..1]` point at them. A missing or bad file leaves the copy's face and says why at start. XD only.
+  **Own box / party icon** (`"icon": "textures/icons/x.png"`, species row, XD only; xd_faces.cpp `BuildBoxIcons`): the small wiggling picture of the PC box grid and the Party list (`cgData.pokebodyId[0..1]` = `poke_dance.fsys` id << 16 | 0x3200, ant.cpp). PNG 8-bit RGB/RGBA not interlaced; 54 x 108 = normal over shiny (the game's size), any 1:2 picture is read that way, any other shape = one for both; shrunk to fit 54 x 54 keeping the shape (never enlarged), standing on the bottom edge, put into the 3 frames of a copy of the ant `unknown_a` (64 x 192 C8, 256 colours) and added to `poke_dance.fsys` as two new entries per picture. Missing or bad file: the copy's icon stays, said at start.
   **Own model, cry, Pokédex marks, move animation** (XD only, `games/xd/src/data/xd_species.cpp`; all optional keys of the species row, a bad one is
   reported at start and leaves what the row copies):
   `"model": "models/x.pkx"` (a model file of the mod: the game's pkx format, header type 0xC, at most 614,400 bytes; or a species name / `"#n"` = that species' model) -> the port

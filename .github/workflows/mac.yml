@@ -41,9 +41,9 @@ on:
         required: true
         default: "imyourhuckleberryponcho/Pokemon-XD-Decomp"
       decomp_commit:
-        description: "Its commit to build (empty: the newest)"
+        description: "Its commit to build: it must match this release's snapshot (0.7.4: f2aad018d9, public copy 4e51a0b0); empty = the newest, which may not build the same game"
         required: false
-        default: ""
+        default: "4e51a0b004e9e9562325f1aa03a9c8d7ca4104dd"
       keep_going:
         description: "Go on after compile errors and list them all (1) or stop at the first (0)"
         required: false
@@ -279,69 +279,23 @@ jobs:
             { echo "### First start: problems listed"; echo '```'; grep "^PROBLEM" logs/first_run_report.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      # The Battle Revolution models helper (the launcher's Extra assets page runs it; tools/pbr_convert/
-      # package_pbr_models.py): pbr_models.py frozen with PyInstaller (a program that needs no Python), with Mac nod
-      # library (libnod.dylib, from the nod package Aurora downloaded for the build) beside it. UNRUN on a Mac.
-      # It must run on the same kind of machine as the build (PyInstaller cannot cross-build): the Intel machine
-      # gives an x86_64 program, as xd is. continue-on-error: a failure here must not stop the app and the zip;
-      # without the folder package_mac.sh simply leaves the helper out (and says so in its log).
-      # Since 0.4.1 the converter is the C++ program built with the game (build_mac.sh's pbr_models target):
-      # package_mac.sh takes it from the build. This step only freezes the old Python one when the C++ one is
-      # missing (a build of an older branch).
-      - name: Battle Revolution models helper (pbr_models), frozen
-        id: pbrfreeze
+      # The helper converters are the C++ programs built with the game (build_mac.sh's pbr_models and usum_models_cpp targets); package_mac.sh
+      # takes them from the build. Since 0.7.4 there are no frozen Python converters. This step only proves they start and checks the options.
+      - name: Converters (pbr_models, usum_models_cpp)
+        id: convcheck
         if: success() && inputs.stage == 'all'
         continue-on-error: true
         run: |
           set -eu
           set -o pipefail
-          if [ -x "$BIN/pbr_models" ]; then
-            echo "the C++ pbr_models is built: no Python freeze needed" | tee logs/pbr_models_package.log
-            "$BIN/pbr_models" --version 2>&1 | tee -a logs/pbr_models_package.log
-            otool -L "$BIN/pbr_models" 2>&1 | tee -a logs/pbr_models_package.log
-            exit 0
-          fi
-          NOD="$(find build/mac/mac-release -name libnod.dylib -not -path "*/dist/*" | head -n 1)"
-          echo "nod library: ${NOD:-NOT FOUND}"
-          find build/mac/mac-release -iname "*nod*" -not -path "*/CMakeFiles/*" -maxdepth 4 | head -n 20
-          [ -n "$NOD" ] || { echo "no libnod.dylib in the build (the nod package has only libnod.a?)"; exit 1; }
-          python3 tools/pbr_convert/package_pbr_models.py --nod "$PWD/$NOD" --dist "$PWD/build/pbr_models_dist_mac"             --venv "$RUNNER_TEMP/pbr_models_venv" 2>&1 | tee logs/pbr_models_package.log
-          # a start without discs must print the version (proves the frozen program and its libraries load)
-          build/pbr_models_dist_mac/pbr_models/pbr_models --version 2>&1 | tee -a logs/pbr_models_package.log
-          # and the disc library must load through ctypes (what every real run needs first)
-          NOD_DLL="$PWD/build/pbr_models_dist_mac/pbr_models/libnod.dylib" python3 -c "import ctypes,sys; ctypes.CDLL(sys.argv[1]); print('libnod.dylib loads')" "$PWD/build/pbr_models_dist_mac/pbr_models/libnod.dylib" 2>&1 | tee -a logs/pbr_models_package.log
-
-      # The Ultra Sun / Ultra Moon models helper (the launcher's Extra assets page runs it; tools/n3ds/package_usum_models.py): the
-      # Python converter frozen with PyInstaller, Mac nod library beside it, like the pbr_models freeze above. UNRUN on a Mac.
-      # continue-on-error: without the folder package_mac.sh leaves the helper out (and says so in its log).
-      - name: Ultra Sun / Ultra Moon models helper (usum_models), frozen
-        id: usumfreeze
-        if: success() && inputs.stage == 'all'
-        continue-on-error: true
-        run: |
-          set -eu
-          set -o pipefail
-          NOD="$(find build/mac/mac-release -name libnod.dylib -not -path "*/dist/*" | head -n 1)"
-          echo "nod library: ${NOD:-NOT FOUND}"
-          [ -n "$NOD" ] || { echo "no libnod.dylib in the build"; exit 1; }
-          python3 tools/n3ds/package_usum_models.py --nod "$PWD/$NOD" --dist "$PWD/build/usum_models_dist_mac" --venv "$RUNNER_TEMP/pbr_models_venv" 2>&1 | tee logs/usum_models_package.log
-          # a start without discs must print the version (proves the frozen program and its libraries load)
-          build/usum_models_dist_mac/usum_models/usum_models --version 2>&1 | tee -a logs/usum_models_package.log
-          # 0.7.0: the modules and data files the Gen 4 / Ultra Sun work added must be inside the freeze (a missing hidden import only shows
-          # when the converter really starts): the data files are there, and a start with made-up arguments reaches its own error message
-          # (a ModuleNotFoundError from the frozen Python would be the finding; its own "error ..." line plus a Traceback is normal).
-          for f in usum_dex_map.json usum_gen4_plan.json gen57_speed_numbers.json; do
-            find build/usum_models_dist_mac/usum_models -name "$f" | grep -q . || { echo "MISSING in the freeze: $f"; exit 1; }
-          done
-          # 0.7.0 (the launcher's Gen 5-7 build): every module and data file of it is inside the freeze
-          build/usum_models_dist_mac/usum_models/usum_models --selfcheck 2>&1 | tee -a logs/usum_models_package.log
-          grep -q '^selfcheck ok' logs/usum_models_package.log || { echo 'the frozen converter misses a Gen 5-7 module'; exit 1; }
+          [ -x "$BIN/pbr_models" ] || { echo "no C++ pbr_models in the build"; exit 1; }
+          [ -x "$BIN/usum_models_cpp" ] || { echo "no usum_models_cpp in the build"; exit 1; }
+          "$BIN/pbr_models" --version 2>&1 | tee logs/pbr_models_package.log
+          otool -L "$BIN/pbr_models" 2>&1 | tee -a logs/pbr_models_package.log
+          "$BIN/usum_models_cpp" --version 2>&1 | tee logs/usum_models_package.log || true
+          otool -L "$BIN/usum_models_cpp" 2>&1 | tee -a logs/usum_models_package.log
           set +e
-          perl -e 'alarm 120; exec @ARGV' build/usum_models_dist_mac/usum_models/usum_models --rom /nonexistent.cia --xd-disc /nonexistent.iso --out "$RUNNER_TEMP/um_out" --gen4-pack "$RUNNER_TEMP/um_pack" > logs/usum_models_badargs.log 2>&1
-          echo "bad-arguments start exit $?" | tee -a logs/usum_models_badargs.log
-          cat logs/usum_models_badargs.log | head -n 20
-          if grep -q -E "ModuleNotFoundError|ImportError|No module named" logs/usum_models_badargs.log; then echo "the frozen converter fails on its own imports"; exit 1; fi
-          # its pack builder partner (the C++ pbr_models, 0.7.0 --gen4-source) must know the option too
+          # the pack builder partner (pbr_models --gen4-source) must know the option
           "$BIN/pbr_models" --gen4-source /nonexistent --xd-disc /nonexistent.iso --gen4-pack "$RUNNER_TEMP/um_pack2" > logs/pbr_models_gen4source.log 2>&1
           echo "pbr_models --gen4-source exit $?" | tee -a logs/pbr_models_gen4source.log
           if grep -q -i -E "unknown (option|argument)|unrecognized" logs/pbr_models_gen4source.log; then echo "pbr_models does not know --gen4-source"; exit 1; fi
@@ -407,7 +361,7 @@ jobs:
             done < <(find "$APP/Contents/Resources" -type f)
             echo "Mach-O files in Resources: $COUNT, without a good signature: $BAD"
             echo "== helpers through the links in Contents/MacOS"
-            for h in pbr_models/pbr_models pbr_models/colo_models usum_models/usum_models usum_models/usum_models_cpp xd_languages/xd_languages; do
+            for h in pbr_models/pbr_models pbr_models/colo_models usum_models/usum_models_cpp xd_languages/xd_languages; do
               if [ -e "$APP/Contents/MacOS/$h" ]; then
                 echo "-- $h"; ls -laL "$APP/Contents/MacOS/$h"
                 perl -e 'alarm 60; exec @ARGV' "$APP/Contents/MacOS/$h" --version 2>&1 | head -n 3; echo "exit ${PIPESTATUS[0]}"
@@ -420,7 +374,7 @@ jobs:
             ditto "$APP" "$RUNNER_TEMP/quarantined/Pokemon XD.app"
             xattr -rw com.apple.quarantine "0083;5f5e1000;Safari;" "$RUNNER_TEMP/quarantined/Pokemon XD.app" 2>&1 | head -n 3
             xattr -p com.apple.quarantine "$RUNNER_TEMP/quarantined/Pokemon XD.app/Contents/MacOS/xd" 2>&1
-            for h in usum_models/usum_models pbr_models/pbr_models; do
+            for h in usum_models/usum_models_cpp pbr_models/pbr_models; do
               perl -e 'alarm 60; exec @ARGV' "$RUNNER_TEMP/quarantined/Pokemon XD.app/Contents/MacOS/$h" --version 2>&1 | head -n 3; echo "quarantined $h exit ${PIPESTATUS[0]}"
             done
             ( cd "$RUNNER_TEMP/quarantined/Pokemon XD.app/Contents/MacOS" && XD_NO_LAUNCHER=1 XD_TEST_RUN=1 XD_NO_MESSAGE_BOXES=1 XD_CRASH_REPORT=0 \
@@ -430,7 +384,6 @@ jobs:
           cat logs/package_helpers.txt
           grep -q "without a good signature: 0$" logs/package_helpers.txt || PROBLEMS_EXTRA="$PROBLEMS_EXTRA helper-signatures"
           grep -q "NOT IN THE APP" logs/package_helpers.txt && PROBLEMS_EXTRA="$PROBLEMS_EXTRA helper-missing"
-          grep -q "Traceback\|ModuleNotFoundError" logs/package_helpers.txt && PROBLEMS_EXTRA="$PROBLEMS_EXTRA frozen-python-error"
           grep -q -E "^quarantined (usum|pbr)_models/[a-z_]+ exit [1-9]|Killed: 9|^quarantined launcher -> game hand-over exit (0|1[0-9][0-9])$" logs/package_helpers.txt && PROBLEMS_EXTRA="$PROBLEMS_EXTRA quarantine-blocks-helper"
           PROBLEMS=""
           grep -q "does NOT verify\|SIGNING FAILED\|signing failed" logs/package.log && PROBLEMS="$PROBLEMS signing"
@@ -739,8 +692,7 @@ jobs:
           O_BUILD: ${{ steps.build.outcome }}
           O_TESTS: ${{ steps.tests.outcome }}
           O_PYTESTS: ${{ steps.pytests.outcome }}
-          O_PBR: ${{ steps.pbrfreeze.outcome }}
-          O_USUM: ${{ steps.usumfreeze.outcome }}
+          O_PBR: ${{ steps.convcheck.outcome }}
           O_PKG: ${{ steps.pkg.outcome }}
           O_PKGCHECK: ${{ steps.pkgcheck.outcome }}
           O_LAUNCHER: ${{ steps.launcher.outcome }}
@@ -770,8 +722,7 @@ jobs:
           row "no-disc game start (memory below 4 GB, layout)" "$O_START" "logs/first_run_report.txt, logs/xd_header.txt"
           row "every unit test that needs no disc" "$O_TESTS" "logs/tests_summary.txt, logs/test_<name>.log"
           row "Python tests of the converters" "$O_PYTESTS" "logs/pytests_summary.txt"
-          row "frozen pbr_models" "$O_PBR" "logs/pbr_models_package.log"
-          row "frozen usum_models (Ultra Sun / Ultra Moon converter)" "$O_USUM" "logs/usum_models_package.log"
+          row "converters (pbr_models, usum_models_cpp)" "$O_PBR" "logs/pbr_models_package.log"
           row "the .app and the zip (package_mac.sh, signing)" "$O_PKG" "logs/package.log"
           row "the packed app: signatures, helpers, quarantine, one start" "$O_PKGCHECK" "logs/package_check.txt, package_helpers.txt, package_start.txt"
           row "the launcher in the app" "$O_LAUNCHER" "logs/launcher_*.txt"

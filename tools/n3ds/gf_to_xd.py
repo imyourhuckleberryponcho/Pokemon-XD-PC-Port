@@ -43,6 +43,7 @@ from model import (Model, Joint, Mesh, Vertex, Material, Texture, Image, Animati
 import pbr_to_xd as P
 import decimate as DEC
 import usum_look as LOOK
+import usum_iris
 
 FPS = 30.0
 FACE_KINDS = ('sleep', 'wake', 'wink', None)
@@ -332,21 +333,73 @@ def colour_match_plan(gm, texs, xd_bytes, opts, log):
         return None
 
 
+def plate_is_tra(mt, nm, texs):
+    """Does the converter draw this plate as a see-through picture (its class 'xlu' / 'texedge' follow from the picture)."""
+    tra = ('Tra' in mt['shader']) or ('Alp' in mt['shader']) or ('Xlu' in mt['shader']) or ('Iris' in mt['shader']) or ('Iris' in mt['name']) or mt['name'].startswith('Line')
+    if not tra and nm in texs and mt['name'].startswith('Mouth') and (texs[nm][2][..., 3] < 8).mean() > 0.25:
+        tra = True
+    if not tra and nm in texs and mt['name'].startswith('Eye') and 'Iris' not in mt['name'] and (texs[nm][2][..., 3] < 8).mean() > 0.6:
+        tra = True
+    return tra
+
+
+def iris_plan(gm, texs, opts):
+    """{eye plate material: [iris plate materials]} that are baked into the eye picture (usum_iris); the iris plates are then not drawn."""
+    if opts is not None and not opts.get('iris_bake', True):
+        return {}
+    if '_iris_plan' not in gm:
+        out = {}
+        for en, irs in usum_iris.plan(gm, texs, colour_coord).items():
+            mt = next(m for m in gm['materials'] if m['name'] == en)
+            co = colour_coord(mt)
+            w, h = texs[co['name']][0], texs[co['name']][1]
+            if plate_is_tra(mt, co['name'], texs) or not usum_iris.bakeable(co, w, h):
+                continue
+            good = []
+            for i in irs:
+                im = next(m for m in gm['materials'] if m['name'] == i)
+                ic = colour_coord(im)
+                if ic is not None and ic['name'] in texs and plate_is_tra(im, ic['name'], texs):
+                    good.append(i)
+            if good:
+                out[en] = good
+        gm['_iris_plan'] = out
+    return gm['_iris_plan']
+
+
+def bake_eye_irises(gm, texs, mt, iris_names, rgba, opts):
+    irs = []
+    for i in iris_names:
+        im = next(m for m in gm['materials'] if m['name'] == i)
+        ic = colour_coord(im)
+        tile = texs[ic['name']][2]
+        if opts and opts.get('light'):
+            tile = light_tweak(tile, opts.get('light'))
+        mk = mco = None
+        for c in im['coords']:
+            if c['unit'] == 2 and 'Nor' in c['name'] and c['name'] in texs:
+                mk, mco = texs[c['name']][2], c
+        irs.append(dict(tile=tile, co=ic, mask=mk, mco=mco, bbox=usum_iris.mesh_bbox(gm, i)))
+    return usum_iris.bake(rgba, colour_coord(mt), irs)
+
+
 def make_images(gm, texs, log, max_side=256, opts=None):
     max_side = (opts or {}).get('max_side', max_side)
     """-> images list, per-material texture (image index) and class."""
     m_imgs, name_to_img, cls = [], {}, {}
     out = []
+    plan_ = iris_plan(gm, texs, opts)
+    baked_ = {i for v in plan_.values() for i in v}
     for mt in gm['materials']:
+        if mt['name'] in baked_:
+            out.append((None, 'opa'))
+            continue
         co = [colour_coord(mt)] if colour_coord(mt) else []
         nm = co[0]['name'] if co else None
         patch = 'patcheel' in mt['shader'] and co and co[0]['unit'] == 1
-        tra = ('Tra' in mt['shader']) or ('Alp' in mt['shader']) or ('Xlu' in mt['shader']) or ('Iris' in mt['shader']) or ('Iris' in mt['name']) or mt['name'].startswith('Line')
-        if not tra and nm in texs and mt['name'].startswith('Mouth') and (texs[nm][2][..., 3] < 8).mean() > 0.25:
-            tra = True
-        if not tra and nm in texs and mt['name'].startswith('Eye') and 'Iris' not in mt['name'] and (texs[nm][2][..., 3] < 8).mean() > 0.6:
-            tra = True
+        tra = plate_is_tra(mt, nm, texs)
 
+        eye_plate_ = 'Eye' in mt['name'] and 'Iris' not in mt['name'] and bool(opts is None or opts.get('eye_rgb5', True))
         eye_mat = bool(opts and opts.get('eye_blend') and 'Eye' in mt['name'] and 'Iris' not in mt['name'] and nm and 'Eye' in nm)
         inc = usum_fx.emission_map(mt, texs) if opts and opts.get('fx') else None
 
@@ -364,7 +417,7 @@ def make_images(gm, texs, log, max_side=256, opts=None):
         flat_ = usum_hand.flat_for(nat_, mt['name']) if hand_on else None
         plate_ = hand_on and usum_hand.plates_follow_match(nat_, mt['name'])
         do_match = bool((opts or {}).get('_match_plan') is not None and (match_piece_ok(mt, fixes_) or (plate_ and not fixes_)) and not ghost)
-        key = (nm, tra, inc, ghost, cell, patch, tuple(id(f_) for f_ in fixes_), do_match, plate_, tuple(id(r_[1]) for r_ in hand_rules), flat_)
+        key = (nm, tra, inc, ghost, cell, patch, tuple(id(f_) for f_ in fixes_), do_match, plate_, tuple(id(r_[1]) for r_ in hand_rules), flat_, tuple(plan_.get(mt['name'], ())))
         if nm is None or nm not in texs:
             out.append((None, 'opa'))
             continue
@@ -432,12 +485,16 @@ def make_images(gm, texs, log, max_side=256, opts=None):
             if os.environ.get('N3DS_WHITE'):
                 rgba = rgba.copy()
                 rgba[..., :3] = 255
+            if mt['name'] in plan_:
+                rgba = bake_eye_irises(gm, texs, mt, plan_[mt['name']], rgba, opts)
             nw, nh = min(w, max_side), min(h, max_side)
             if (nw, nh) != (w, h):
                 rgba = gx_tex.resize(rgba, nw, nh)
             im = Image()
             im.width, im.height = nw, nh
-            if c == 'xlu':
+            if c == 'xlu' or (c == 'opa' and eye_plate_):
+                if c == 'opa':
+                    rgba = usum_iris.round5(rgba)
                 im.format, im.data = 5, gx_tex.encode_rgb5a3(rgba)
             else:
                 im.format, im.data = 14, gx_tex.encode_cmpr(rgba)
@@ -771,6 +828,9 @@ def convert(gm, texs, mots, xd_bytes, mode='native', log=print, step=0.1, size_f
     elif opts.get('match'):
         opts = dict(opts, _match_plan=colour_match_plan(gm, texs, xd_copy, opts, log))
     images, mat_img, classes = make_images(gm, texs, log, opts=opts)
+    baked_iris = {i for v in iris_plan(gm, texs, opts).values() for i in v}
+    if baked_iris:
+        log('INFO: iris plates painted into the eye picture: %s' % sorted(baked_iris))
     m.images = images
     for mi, mt in enumerate(gm['materials']):
         ma = Material()
@@ -805,7 +865,7 @@ def convert(gm, texs, mots, xd_bytes, mode='native', log=print, step=0.1, size_f
             if co0:
                 sxy[mt['name']] = tuple(co0[0]['scale'])
         eyes = LOOK.EyePlan(gm, mots, sxy)
-        eyes.names = [n_ for n_ in eyes.names if n_ in sxy]
+        eyes.names = [n_ for n_ in eyes.names if n_ in sxy and n_ not in baked_iris]
         log('INFO: eyes: sliding materials %s, levels %s' % (eyes.names, {n_: eyes.levels[n_] for n_ in eyes.names}))
 
     mat_index = {mt['name']: i for i, mt in enumerate(gm['materials'])}
@@ -837,6 +897,8 @@ def convert(gm, texs, mots, xd_bytes, mode='native', log=print, step=0.1, size_f
             if os.environ.get('N3DS_DROP') and gm['materials'][mi]['name'] in os.environ['N3DS_DROP'].split(','):
                 continue
             if skip_fire and usum_fx.is_fire_material(gm['materials'][mi]):
+                continue
+            if gm['materials'][mi]['name'] in baked_iris:
                 continue
             if is_effect_layer(gm['materials'][mi]):
                 continue

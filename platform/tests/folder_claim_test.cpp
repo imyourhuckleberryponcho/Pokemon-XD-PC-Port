@@ -60,6 +60,17 @@ int main(int argc, char** argv) {
   CHECK(!PortFolderClaim_Take(a.c_str()));
   CHECK(PortFolderClaim_Take(nullptr) && PortFolderClaim_Take(""));
 
+
+  PortFolderHolder holder;
+  CHECK(PortFolderClaim_Holder(a.c_str(), &holder));
+  CHECK(holder.pid == GetCurrentProcessId() && holder.alive && holder.ours && holder.program[0] != '\0');
+  CHECK(!PortFolderClaim_Holder(b.c_str(), &holder));
+  CHECK(!PortFolderClaim_IsFree(a.c_str()) && PortFolderClaim_IsFree(b.c_str()));
+  CHECK(!PortFolderClaim_EndHolder(&holder));
+
+  CHECK(RunChild(a) == 1);
+  CHECK(RunChild(a) == 1);
+
   if (sFailures == 0) std::printf("folder_claim_test: all passed\n");
   return sFailures == 0 ? 0 : 1;
 }

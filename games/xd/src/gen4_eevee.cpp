@@ -1,6 +1,7 @@
 #include "xd_challenges.h"
 #include "xd_gen4.h"
 #include "xd_starter.h"
+#include "xd_xg.h"
 
 #include <port_user_folder.h>
 
@@ -55,8 +56,8 @@ uint32_t pokemonTokuseiDataBiosGetDoc(uint32_t* data);
 namespace {
 
 constexpr int32_t kEeveeMenu = 0xAF;
-constexpr uint32_t kExtBase = 30000, kExtCount = 6;
-constexpr int kRows = 7;
+constexpr uint32_t kExtBase = 30000, kExtMax = 3, kExtCount = 3 * kExtMax;
+constexpr int kRowsMax = 5 + kExtMax;
 
 struct Item {
   uint8_t flags;
@@ -82,9 +83,12 @@ constexpr int kStride = 26;
 
 Item sExt[kExtCount];
 bool sLaidOut = false;
+int sLaidRows = 0;
 
 bool sOn = false;
-uint32_t sSpecies[2], sItem[2];
+uint32_t sSpecies[kExtMax], sItem[kExtMax];
+int Extra() { return sSpecies[2] != 0 && sItem[2] != 0 ? 3 : 2; }
+int Rows() { return 5 + Extra(); }
 bool sStartDone = false;
 int sArmed = -1;
 bool sSubstitute = false;
@@ -95,9 +99,9 @@ constexpr uint32_t kStandInSpecies = 136;
 constexpr uint32_t kMsgPokemonValue = 0x4E, kMsgItemValue = 0x2D;
 constexpr int kStandInPosition = 2;
 
-uint16_t sFace[2] = {0, 0};
+uint16_t sFace[kExtMax] = {0, 0, 0};
 
-bool Active() { return sOn && xd::challenges::Active("gen4_pokemon") && !xd::starter::Randomized(); }
+bool Active() { return sOn && xd::challenges::Active("gen4_pokemon") && !xd::starter::Randomized() && (!sLaidOut || sLaidRows == Rows()); }
 
 Item* Real(int idx) { return static_cast<Item*>(PortXD_RealMenuItemPtr(kEeveeMenu, static_cast<uint32_t>(idx))); }
 
@@ -106,36 +110,38 @@ void LayOut() {
   Item* src[3] = {Real(kHighlight[4]), Real(kArrow[4]), Real(kButton[4])};
   const int16_t after[3] = {src[0]->next, src[1]->next, src[2]->next};
   const int baseY[3] = {Real(kHighlight[0])->y, Real(kArrow[0])->y, Real(kButton[0])->y};
+  const int extra = Extra();
   for (int i = 1237; i <= 1254; i++) {
     Item* e = Real(i);
-    if (e->y == 174) e->y = static_cast<int16_t>(e->y + 2 * kStride);
-    if (e->h == 122) e->h = static_cast<int16_t>(e->h + 2 * kStride);
+    if (e->y == 174) e->y = static_cast<int16_t>(e->y + extra * kStride);
+    if (e->h == 122) e->h = static_cast<int16_t>(e->h + extra * kStride);
   }
-  for (int i : {1256, 1257, 1258, 1262}) Real(i)->y = static_cast<int16_t>(Real(i)->y + 2 * kStride);
+  for (int i : {1256, 1257, 1258, 1262}) Real(i)->y = static_cast<int16_t>(Real(i)->y + extra * kStride);
   for (int r = 0; r < 5; r++) {
     Real(kHighlight[r])->y = static_cast<int16_t>(baseY[0] + r * kStride);
     Real(kArrow[r])->y = static_cast<int16_t>(baseY[1] + r * kStride);
     Real(kButton[r])->y = static_cast<int16_t>(baseY[2] + r * kStride);
   }
   for (int k = 0; k < 3; k++) {
-    for (int r = 5; r < kRows; r++) {
-      const uint32_t at = static_cast<uint32_t>(k * 2 + (r - 5));
+    for (int r = 5; r < Rows(); r++) {
+      const uint32_t at = static_cast<uint32_t>(k * kExtMax + (r - 5));
       Item& e = sExt[at];
       e = *src[k];
       e.y = static_cast<int16_t>(baseY[k] + r * kStride);
       e.flags &= static_cast<uint8_t>(~0x40);
-      e.next = r == 5 ? static_cast<int16_t>(kExtBase + at + 1) : after[k];
+      e.next = r < Rows() - 1 ? static_cast<int16_t>(kExtBase + at + 1) : after[k];
     }
-    src[k]->next = static_cast<int16_t>(kExtBase + k * 2);
+    src[k]->next = static_cast<int16_t>(kExtBase + k * kExtMax);
   }
   sLaidOut = true;
+  sLaidRows = Rows();
 }
 
 void DrawName(void* w, void* sprite, uint32_t item) {
   static char16_t upper[40];
   const char16_t* name = GSmsgGetGSchar(itemDataBiosGetName(itemDataBiosGetPtr(static_cast<uint16_t>(item))));
   size_t n = 0;
-  for (; name != nullptr && name[n] != 0 && n < 39; n++) upper[n] = (name[n] >= 'a' && name[n] <= 'z') ? static_cast<char16_t>(name[n] - 32) : name[n];
+  for (; name != nullptr && name[n] != 0 && n < 39; n++) upper[n] = (!xd::xg::On() && name[n] >= 'a' && name[n] <= 'z') ? static_cast<char16_t>(name[n] - 32) : name[n];
   upper[n] = 0;
   msgctrlSetValue(0x37, reinterpret_cast<uintptr_t>(upper));
   const uint8_t alpha = reinterpret_cast<const uint8_t*>(&static_cast<WinWorkLayout*>(w)->pad_90)[3];
@@ -143,13 +149,13 @@ void DrawName(void* w, void* sprite, uint32_t item) {
 }
 
 void LoadFaces() {
-  for (int k = 0; k < 2; k++) {
+  for (int k = 0; k < Extra(); k++) {
     sFace[k] = static_cast<uint16_t>(pokemonGetStatus(nullptr, static_cast<uint16_t>(sSpecies[k]), 0x5B, 0));
     if (sFace[k] != 0) menuFaceLoadFromID(sFace[k], nullptr, nullptr);
   }
   for (int tries = 0; tries < 900; tries++) {
     bool ready = true;
-    for (int k = 0; k < 2; k++) ready = ready && (sFace[k] == 0 || menuFaceSearchEnable(sFace[k]) == 1);
+    for (int k = 0; k < Extra(); k++) ready = ready && (sFace[k] == 0 || menuFaceSearchEnable(sFace[k]) == 1);
     if (ready) return;
     GSthreadSwitch();
   }
@@ -204,7 +210,7 @@ struct OfferPicture {
   bool tried = false;
   void* tex = nullptr;
 };
-OfferPicture sPicture[2];
+OfferPicture sPicture[kExtMax];
 
 std::string OfferFile(uint32_t species) {
   return std::string(PortUser_FolderUtf8("Pokemon XD")) + "/icons/offer/offer_" + std::to_string(species) + ".rgba";
@@ -271,16 +277,23 @@ struct Size2 { int16_t x, y; };
 
 namespace xd::gen4 {
 
-bool EeveeOfferSpecies(uint32_t& leaf, uint32_t& ice) {
+bool EeveeOfferSpecies(uint32_t& leaf, uint32_t& ice, uint32_t* sylveon) {
   if (!sOn || sSpecies[0] == 0 || sSpecies[1] == 0) return false;
   leaf = sSpecies[0], ice = sSpecies[1];
+  if (sylveon != nullptr) *sylveon = Extra() == 3 ? sSpecies[2] : 0;
   return true;
 }
 
 void SetEeveeChoices(bool on, uint32_t leafSpecies, uint32_t leafItem, uint32_t iceSpecies, uint32_t iceItem) {
   sOn = on;
-  sSpecies[0] = leafSpecies, sSpecies[1] = iceSpecies;
-  sItem[0] = leafItem, sItem[1] = iceItem;
+  sSpecies[0] = leafSpecies, sSpecies[1] = iceSpecies, sSpecies[2] = 0;
+  sItem[0] = leafItem, sItem[1] = iceItem, sItem[2] = 0;
+}
+
+void SetEeveeSylveon(uint32_t species, uint32_t item) {
+  if (!sOn) return;
+  sSpecies[2] = species, sItem[2] = item;
+  std::fprintf(stderr, "[gen4] Eevee offer 8 choices (Sylveon, item %u)\n", item);
 }
 
 }
@@ -309,7 +322,7 @@ extern "C" int32_t menuScriptEevee(void) {
   sStartDone = false;
   sArmed = -1;
   const int32_t pick = PortXD_RealEevee();
-  if (pick >= 5 && pick < kRows) {
+  if (pick >= 5 && pick < Rows()) {
     sArmed = pick - 5;
     return kStandInPosition;
   }
@@ -336,7 +349,7 @@ extern "C" void menuScriptEeveeHook(void* wv, void* sv) {
   if (w->menuID == kEeveeMenu && (sp->id == 0x4FE || sp->id == 0x4FF)) {
     const int row = w->cursor;
     const uint16_t species = row >= 0 && row < 5 ? kGameRowSpecies[row]
-                             : row >= 5 && row < kRows && Active() ? static_cast<uint16_t>(sSpecies[row - 5]) : 0;
+                             : row >= 5 && row < Rows() && Active() ? static_cast<uint16_t>(sSpecies[row - 5]) : 0;
     if (species != 0 && !AbilityTextThere(species, sp->id == 0x4FF)) {
       static bool said = false;
       if (!said) {
@@ -378,10 +391,11 @@ extern "C" void menuScriptEeveeHook(void* wv, void* sv) {
   }
   if (id >= kExtBase && id < kExtBase + kExtCount) {
     const uint32_t k = id - kExtBase;
-    if (k < 2) {
-      winSpriteSetDisp(sv, pos == 5 + static_cast<int>(k));
-    } else if (k >= 4) {
-      DrawName(wv, sv, sItem[k - 4]);
+    const uint32_t kind = k / kExtMax, j = k % kExtMax;
+    if (kind == 0) {
+      winSpriteSetDisp(sv, pos == 5 + static_cast<int>(j));
+    } else if (kind == 2) {
+      DrawName(wv, sv, sItem[j]);
     }
     return;
   }
@@ -426,6 +440,6 @@ extern "C" int32_t PortXD_EeveeGetItem(int32_t item, int32_t count) {
 }
 
 extern "C" void* PortXD_ResLookup(uint32_t id) {
-  if (id >= kOfferTexBase && id < kOfferTexBase + 2) return sPicture[id - kOfferTexBase].tex;
+  if (id >= kOfferTexBase && id < kOfferTexBase + kExtMax) return sPicture[id - kOfferTexBase].tex;
   return GSresGetResourceAllGroup(id);
 }

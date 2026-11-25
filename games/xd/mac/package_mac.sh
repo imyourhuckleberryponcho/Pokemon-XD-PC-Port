@@ -176,36 +176,17 @@ if [ -x "$APP/Contents/Resources/xd_languages/xd_languages" ]; then
   ln -s "../Resources/xd_languages" "$APP/Contents/MacOS/xd_languages"
   echo "  xd_languages: included (the language pack maker, from $BIN)"
 fi
-# The Battle Revolution models helper (tools/pbr_convert/package_pbr_models.py, built by the workflow's step before
-# this one; PBR_MODELS_DIR names its folder): the launcher's Extra assets page looks for
-# <program folder>/pbr_models/pbr_models, and the program folder is Contents/MacOS. Same rule as the fonts: the files
-# live in Resources, Contents/MacOS gets a link (a real folder there is refused by the signing).
-# UNTESTED on a Mac. It is left out, with a note in the log, when it was not built.
-PBR_MODELS_DIR="${PBR_MODELS_DIR:-$ROOT/build/pbr_models_dist_mac/pbr_models}"
+# The Battle Revolution models helper: the C++ program built with the game (Contents/Resources/pbr_models, copied above); the launcher's Extra
+# assets page looks for <program folder>/pbr_models/pbr_models, and the program folder is Contents/MacOS. Same rule as the fonts: the files
+# live in Resources, Contents/MacOS gets a link (a real folder there is refused by the signing). Since 0.7.4 there is no frozen Python one.
 if [ -x "$APP/Contents/Resources/pbr_models/pbr_models" ]; then
   ln -s "../Resources/pbr_models" "$APP/Contents/MacOS/pbr_models"
   echo "  pbr_models: included (the C++ converter, from $BIN)"
-elif [ -x "$PBR_MODELS_DIR/pbr_models" ]; then
-  cp -R "$PBR_MODELS_DIR" "$APP/Contents/Resources/pbr_models"
-  ln -s "../Resources/pbr_models" "$APP/Contents/MacOS/pbr_models"
-  echo "  pbr_models: included (from $PBR_MODELS_DIR)"
 else
-  echo "  pbr_models: NOT included ($PBR_MODELS_DIR/pbr_models is not there)"
+  echo "  pbr_models: NOT included ($BIN/pbr_models is not there)"
 fi
-# The Ultra Sun / Ultra Moon models helper (tools/n3ds/package_usum_models.py, frozen Python, built by the workflow's step
-# before this one; USUM_MODELS_DIR names its folder): same place rule as pbr_models (files in Resources, a link in
-# Contents/MacOS). UNTESTED on a Mac. Left out, with a note in the log, when it was not built.
-USUM_MODELS_DIR="${USUM_MODELS_DIR:-$ROOT/build/usum_models_dist_mac/usum_models}"
-if [ -x "$USUM_MODELS_DIR/usum_models" ]; then
-  cp -R "$USUM_MODELS_DIR" "$APP/Contents/Resources/usum_models"
-  ln -s "../Resources/usum_models" "$APP/Contents/MacOS/usum_models"
-  echo "  usum_models: included (from $USUM_MODELS_DIR)"
-else
-  echo "  usum_models: NOT included ($USUM_MODELS_DIR/usum_models is not there)"
-fi
-# The C++ converter of the same build (the default converter since 0.7.1; XD_USUM_CPP=0 = the frozen Python; docs/N3DS_CONVERTER_CPP.md; no Python at all) with the number lists it reads. It sits in
-# the same folder as the frozen Python (made here when there is none), runs from Contents/Resources/usum_models (the launcher resolves the link) and needs
-# only the system's libraries.
+# The Ultra Sun / Ultra Moon converter (docs/N3DS_CONVERTER_CPP.md; the only one since 0.7.4: no Python at all) with the number lists it reads.
+# It runs from Contents/Resources/usum_models (the launcher resolves the link) and needs only the system's libraries.
 if [ -x "$BIN/usum_models_cpp" ]; then
   mkdir -p "$APP/Contents/Resources/usum_models"
   [ -e "$APP/Contents/MacOS/usum_models" ] || ln -s "../Resources/usum_models" "$APP/Contents/MacOS/usum_models"
@@ -214,7 +195,7 @@ if [ -x "$BIN/usum_models_cpp" ]; then
   for f in usum_gen4_plan.json gen57_forms.json gen57_model_numbers.json gen57_cry_waves.json gen57_speed_numbers.json usum_dex_map.json gen57_tables.json gen4_tables.json; do
     cp "$ROOT/tools/n3ds/$f" "$APP/Contents/Resources/usum_models/$f"
   done
-  echo "  usum_models_cpp: included (the C++ converter, the default)"
+  echo "  usum_models_cpp: included (the C++ converter)"
 else
   echo "  usum_models_cpp: NOT included ($BIN/usum_models_cpp is not there)"
 fi

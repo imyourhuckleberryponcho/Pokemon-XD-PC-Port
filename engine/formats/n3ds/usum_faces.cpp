@@ -631,6 +631,51 @@ struct Faces {
       write_text(mf, s + "]", false);
     }
     cut(nats, why);
+    icons(nats);
+  }
+
+  void icons(const std::vector<int>& nats) {
+    std::vector<std::string> items, names;
+    std::vector<int> have;
+    for (int nat : nats) {
+      const auto ex = a.extra.find(nat);
+      const fs::path f = ex != a.extra.end() ? fs::path(ex->second.fsys) : fs::path(a.pack) / "files" / ("pkx_n3_" + std::to_string(nat) + ".fsys");
+      if (!fs::exists(f)) continue;
+      const int row = ex != a.extra.end() ? ex->second.row : nat + 31;
+      have.push_back(nat);
+      items.push_back("pokemon:" + std::to_string(row) + ":i" + std::to_string(nat));
+      names.push_back("i" + std::to_string(nat) + ".png");
+      items.push_back("pokemon:" + std::to_string(row) + ":shiny:s" + std::to_string(nat));
+      names.push_back("s" + std::to_string(nat) + ".png");
+    }
+    auto missing = render_all(items, names, "p", "box pictures");
+    if (!missing.empty()) { std::string s = "box pictures not drawn: ["; for (size_t i = 0; i < missing.size(); i++) s += (i ? ", " : "") + missing[i]; a.log(s + "]"); }
+    const fs::path out = fs::path(a.work) / "render";
+    int done[2] = {0, 0};
+    std::string failed;
+    for (int part = 0; part < 2; part++) {
+      if (part == 1 && (a.extra.empty() || a.extra_pack.empty())) break;
+      const fs::path dir = (part == 0 ? fs::path(a.pack) : fs::path(a.extra_pack)) / "textures" / "icons";
+      fs::create_directories(dir);
+      for (int nat : have) {
+        if ((a.extra.count(nat) != 0) != (part == 1)) continue;
+        try {
+          Image8 pic;
+          const fs::path pn = out / ("i" + std::to_string(nat) + ".png"), ps = out / ("s" + std::to_string(nat) + ".png");
+          if (!fs::exists(pn)) throw std::runtime_error("no render");
+          const Image8 n = png_decode(read_bytes(pn));
+          Image8 s;
+          const bool has_s = fs::exists(ps);
+          if (has_s) s = png_decode(read_bytes(ps));
+          if (!box_icon_pair(n, has_s ? &s : nullptr, &pic)) throw std::runtime_error("empty picture");
+          write_bytes(dir / (std::to_string(nat) + ".png"), png_encode(pic));
+          done[part]++;
+        } catch (const std::exception&) {
+          failed += (failed.empty() ? "" : ", ") + std::to_string(nat);
+        }
+      }
+    }
+    a.log("box pictures: " + std::to_string(done[0]) + " species (Gen 5-7), " + std::to_string(done[1]) + " (Gen 4)" + (failed.empty() ? "" : "; not made: " + failed));
   }
 
   void cut(const std::vector<int>& nats, const Why& why) {

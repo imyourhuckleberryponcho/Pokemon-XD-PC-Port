@@ -417,4 +417,204 @@ void BuildFaces(em::RowsJob& job) {
   for (em::AddedRow& f : newRows) rows.push_back(std::move(f));
 }
 
+namespace {
+
+constexpr uint32_t kAntTex = 0xA0, kCell = 64, kPicSide = 54;
+constexpr uint32_t kFrameTops[3] = {10, 8, 6};
+
+void FitIcon(const engine::memcard::thumbnail::Picture& pic, uint32_t srcY0, uint32_t srcH, std::vector<Rgba>& out, uint32_t& outW, uint32_t& outH) {
+  const double scale = std::min(1.0, std::min(static_cast<double>(kPicSide) / pic.width, static_cast<double>(kPicSide) / srcH));
+  outW = std::max<uint32_t>(1, static_cast<uint32_t>(pic.width * scale + 0.5));
+  outH = std::max<uint32_t>(1, static_cast<uint32_t>(srcH * scale + 0.5));
+  out.assign(static_cast<size_t>(outW) * outH, Rgba{0, 0, 0, 0});
+  for (uint32_t y = 0; y < outH; y++) {
+    for (uint32_t x = 0; x < outW; x++) {
+      const uint32_t x0 = x * pic.width / outW, x1 = std::max(x0 + 1, (x + 1) * pic.width / outW);
+      const uint32_t y0 = srcY0 + y * srcH / outH, y1 = std::max(y0 + 1, srcY0 + (y + 1) * srcH / outH);
+      uint64_t r = 0, g = 0, b = 0, a = 0, n = 0;
+      for (uint32_t sy = y0; sy < y1 && sy < pic.height; sy++) {
+        for (uint32_t sx = x0; sx < x1 && sx < pic.width; sx++) {
+          const uint8_t* p = &pic.rgba[(static_cast<size_t>(sy) * pic.width + sx) * 4];
+          r += p[0] * p[3], g += p[1] * p[3], b += p[2] * p[3], a += p[3], n++;
+        }
+      }
+      if (n != 0 && a != 0) out[static_cast<size_t>(y) * outW + x] = {static_cast<uint8_t>(r / a), static_cast<uint8_t>(g / a), static_cast<uint8_t>(b / a), static_cast<uint8_t>(a / n)};
+    }
+  }
+}
+
+std::vector<uint8_t> MakeAnt(const std::vector<uint8_t>& templateFile, const std::vector<Rgba>& pic, uint32_t w, uint32_t h) {
+  std::vector<Rgba> sheet(static_cast<size_t>(kCell) * 3 * kCell, Rgba{0, 0, 0, 0});
+  const uint32_t x0 = (kCell - w) / 2;
+  for (uint32_t f = 0; f < 3; f++) {
+    const uint32_t y0 = f * kCell + kFrameTops[f] + (kPicSide - h);
+    for (uint32_t y = 0; y < h; y++)
+      for (uint32_t x = 0; x < w; x++) sheet[static_cast<size_t>(y0 + y) * kCell + x0 + x] = pic[static_cast<size_t>(y) * w + x];
+  }
+  std::vector<uint16_t> palette;
+  std::vector<uint8_t> index;
+  Quantize(sheet, palette, index);
+  std::vector<uint8_t> out = templateFile;
+  const size_t dataAt = kAntTex + Be32(&out[kAntTex + 0x28]), palAt = kAntTex + Be32(&out[kAntTex + 0x48]);
+  size_t p = dataAt;
+  for (uint32_t ty = 0; ty < 3 * kCell; ty += 4)
+    for (uint32_t tx = 0; tx < kCell; tx += 8)
+      for (uint32_t y = 0; y < 4; y++)
+        for (uint32_t x = 0; x < 8; x++) out[p++] = index[static_cast<size_t>(ty + y) * kCell + tx + x];
+  for (size_t i = 0; i < 256; i++) PutBe16(&out[palAt + 2 * i], palette[i]);
+  return out;
+}
+
+}
+
+void BuildBoxIcons(em::RowsJob& job) {
+  if (job.rows == nullptr) return;
+  std::vector<em::AddedRow>& rows = *job.rows;
+  const auto say = [&](em::Message::Level level, const std::string& text) {
+    if (job.say) job.say(level, text);
+  };
+  std::vector<size_t> wanting;
+  for (size_t i = 0; i < rows.size(); i++) {
+    if (rows[i].table == "pokemon_data" && rows[i].assets.count("icon") != 0) wanting.push_back(i);
+  }
+  if (wanting.empty()) return;
+  const em::DataTable* species = job.catalog != nullptr ? job.catalog->FindTable("pokemon_data") : nullptr;
+  const em::DataField* body = nullptr;
+  if (species != nullptr) {
+    for (const em::DataField& f : species->fields) {
+      if (f.name == "cgData.pokebodyId") body = &f;
+    }
+  }
+  if (body == nullptr || body->count < 2 || body->size != 4) {
+    say(em::Message::Level::Problem, "Icons of added species: the game's box picture field could not be found on this disc; the species keep the icon of the one they copy.");
+    return;
+  }
+  const uint32_t bodyAt[2] = {body->offset, body->offset + body->Stride()};
+
+  std::string archiveName = "poke_dance.fsys";
+  for (const std::string& f : job.discFiles) {
+    if (LowerText(f) == "poke_dance.fsys") archiveName = f;
+  }
+  std::vector<uint8_t> archive;
+  FsysArchive fsys{};
+  std::vector<uint8_t> templateFile;
+  uint32_t templateIndex = 0, templateWord0 = 0, maxId = 0;
+  const auto openArchive = [&] {
+    if (archive.empty()) {
+      if (!job.readFile || !job.readFile(archiveName, archive) || !Fsys_Open(archive.data(), archive.size(), &fsys)) {
+        archive.clear();
+        return false;
+      }
+      const int named = Fsys_Find(&fsys, "unknown_a");
+      if (named < 0) return false;
+      templateIndex = static_cast<uint32_t>(named);
+      uint32_t size = 0;
+      uint8_t* p = Fsys_Extract(&fsys, templateIndex, &size);
+      if (p != nullptr) {
+        templateFile.assign(p, p + size);
+        std::free(p);
+      }
+      for (uint32_t i = 0; i < fsys.count; i++) {
+        FsysEntry e;
+        if (Fsys_Entry(&fsys, i, &e)) maxId = std::max<uint32_t>(maxId, e.id);
+      }
+      const uint32_t at = Be32(archive.data() + fsys.entryTable + 4 * templateIndex);
+      templateWord0 = at + 4 <= archive.size() ? Be32(archive.data() + at) : 0;
+    }
+    return !archive.empty() && templateFile.size() > kAntTex + 0x50 + 512 && Be32(&templateFile[kAntTex]) == (kCell << 16 | 3 * kCell);
+  };
+
+  struct Made {
+    uint32_t normal, shiny;
+  };
+  std::map<std::string, Made> madeByPicture;
+  std::vector<FsysAddition> additions;
+  std::vector<std::vector<uint8_t>> contents;
+  std::vector<std::string> names;
+  std::string modsText;
+  std::map<size_t, std::vector<uint8_t>> original;
+  for (size_t index : wanting) original[index] = rows[index].bytes;
+  for (size_t index : wanting) {
+    em::AddedRow& row = rows[index];
+    const std::string spec = row.assets.at("icon");
+    const std::string what = "The mod \"" + row.mod + "\", the icon of \"" + row.key + "\" (" + row.where + ")";
+    const auto folder = job.modFolders.find(row.mod);
+    fs::path file;
+    if (!EndsWith(spec, ".png") || folder == job.modFolders.end() || !em::ResolveLayoutFile(folder->second, job.gameId, spec, file)) {
+      say(em::Message::Level::Problem, what + ": there is no picture " + spec + " in the mod; the species keeps the icon of the one it copies.");
+      continue;
+    }
+    const std::string key = file.generic_string();
+    auto made = madeByPicture.find(key);
+    if (made == madeByPicture.end()) {
+      std::vector<uint8_t> raw;
+      {
+        std::ifstream in(file, std::ios::binary);
+        raw.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+      }
+      engine::memcard::thumbnail::Picture pic;
+      std::string error;
+      if (raw.empty() || !engine::memcard::thumbnail::DecodePng(raw, pic, error, true)) {
+        say(em::Message::Level::Problem, what + ": " + spec + " is not a PNG the port reads (" + (error.empty() ? std::string("empty file") : error) +
+                                             "); use an 8-bit RGB or RGBA PNG that is not interlaced. The species keeps the icon of the one it copies.");
+        continue;
+      }
+      if (pic.width < 8 || pic.height < 8 || pic.width > 4096 || pic.height > 4096) {
+        say(em::Message::Level::Problem, what + ": " + spec + " must be between 8 and 4096 pixels each way; the species keeps the icon of the one it copies.");
+        continue;
+      }
+      if (!openArchive()) {
+        say(em::Message::Level::Problem, what + ": the game's box picture archive (poke_dance.fsys) could not be read or has an unknown layout; the species keep the icon of the one they copy.");
+        return;
+      }
+      const bool two = pic.height * 10 >= pic.width * 18;
+      Made m{};
+      for (int shiny = 0; shiny < 2; shiny++) {
+        std::vector<Rgba> px;
+        uint32_t w = 0, h = 0;
+        const uint32_t half = two ? pic.height / 2 : pic.height;
+        FitIcon(pic, two ? static_cast<uint32_t>(shiny) * half : 0, half, px, w, h);
+        const uint32_t id = maxId + 1 + static_cast<uint32_t>(additions.size());
+        if (id > 0xFFFF) {
+          say(em::Message::Level::Problem, what + ": no resource number left in poke_dance.fsys.");
+          return;
+        }
+        contents.push_back(MakeAnt(templateFile, px, w, h));
+        names.push_back("modbody" + std::to_string(additions.size() / 2 + 1) + (shiny ? "_c" : ""));
+        additions.push_back({static_cast<uint16_t>(id), nullptr, nullptr, 0, templateIndex});
+        (shiny ? m.shiny : m.normal) = id << 16 | (templateWord0 & 0xFFFF);
+      }
+      modsText += (modsText.empty() ? "" : ", ") + row.mod;
+      made = madeByPicture.emplace(key, m).first;
+      std::fprintf(stderr, "[mods] icon: %s -> poke_dance entries %u and %u\n", spec.c_str(), made->second.normal >> 16, made->second.shiny >> 16);
+    }
+    if (row.bytes.size() >= bodyAt[1] + 4) {
+      PutBe32(row.bytes.data() + bodyAt[0], made->second.normal);
+      PutBe32(row.bytes.data() + bodyAt[1], made->second.shiny);
+    }
+  }
+  if (additions.empty()) return;
+  for (size_t i = 0; i < additions.size(); i++) {
+    additions[i].name = names[i].c_str();
+    additions[i].data = contents[i].data();
+    additions[i].size = static_cast<uint32_t>(contents[i].size());
+  }
+  size_t size = 0;
+  uint8_t* built = Fsys_RebuildAdded(archive.data(), archive.size(), additions.data(), additions.size(), &size);
+  if (built == nullptr) {
+    say(em::Message::Level::Problem, "Icons of added species: poke_dance.fsys could not be made longer (an unknown layout?); the species keep the icon of the one they copy.");
+    for (size_t index : wanting) {
+      for (int k = 0; k < 2; k++)
+        for (int b = 0; b < 4; b++) rows[index].bytes[bodyAt[k] + b] = original[index][bodyAt[k] + b];
+    }
+    return;
+  }
+  em::RowsJob::OutFile out;
+  out.discPath = archiveName;
+  out.data.assign(built, built + size);
+  out.mods = modsText;
+  std::free(built);
+  job.outFiles.push_back(std::move(out));
+}
+
 }

@@ -22,6 +22,11 @@ int main() {
   CHECK(std::strcmp(Tr("Lonely"), "Lonely") == 0);
   CHECK(std::strcmp(Tr("Unknown"), "Unknown") == 0);
   CHECK(Tr(std::string("Hello")) == "Bonjour");
+
+  CHECK(ParseForTest("= the %s is %d\n> le %d est %s\n= %s: %d\n> %s : %d\n= 100% checklist\n> liste 100%\n= %.1f of %d\n> %d de %.1f\n= %d\n> %lld\n") == 2);
+  CHECK(std::strcmp(Tr("the %s is %d"), "the %s is %d") == 0);
+  CHECK(std::strcmp(Tr("%s: %d"), "%s : %d") == 0);
+  CHECK(std::strcmp(Tr("100% checklist"), "liste 100%") == 0);
   SetLanguage("us");
   CHECK(std::strcmp(Tr("Hello"), "Hello") == 0);
   CHECK(std::strcmp(Language(), "en") == 0);

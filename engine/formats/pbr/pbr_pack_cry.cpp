@@ -227,6 +227,34 @@ void cry_build_xd(const CryStream& s, std::vector<uint8_t>& hdr, std::vector<uin
     in.chans.push_back(ch);
   }
   in.data = s.data;
+  {
+    constexpr int64_t kLoudRms = 9778;
+    const auto& d0 = in.data.at(0);
+    const auto& c = in.chans.at(0).coefs;
+    int64_t sumsq = 0, count = 0;
+    int h1 = 0, h2 = 0;
+    for (size_t f = 0; f + 7 < d0.size() && count < (int64_t)in.nsamp; f += 8) {
+      const int sc = 1 << (d0[f] & 15);
+      const int c1 = (int16_t)c[(size_t)(d0[f] >> 4) * 2], c2 = (int16_t)c[(size_t)(d0[f] >> 4) * 2 + 1];
+      for (int k = 0; k < 14 && count < (int64_t)in.nsamp; k++) {
+        const uint8_t b = d0[f + 1 + (size_t)k / 2];
+        int nib = (k % 2 == 0) ? (b >> 4) : (b & 15);
+        if (nib >= 8) nib -= 16;
+        int64_t v = (((int64_t)nib * sc * 2048) + 1024 + (int64_t)c1 * h1 + (int64_t)c2 * h2) >> 11;
+        v = std::max<int64_t>(-32768, std::min<int64_t>(32767, v));
+        sumsq += v * v;
+        count++;
+        h2 = h1;
+        h1 = (int)v;
+      }
+    }
+    if (count > 0 && sumsq > count * kLoudRms * kLoudRms) {
+      for (auto& d : in.data)
+        for (size_t f = 0; f + 7 < d.size(); f += 8)
+          if (d[f] & 15) d[f]--;
+      notes.push_back("level -6 dB (louder than XD cries)");
+    }
+  }
   const size_t cap = (size_t)kMaxBlocks * kBlock;
   if (in.data.at(0).size() > cap) {
     const uint32_t ns = (uint32_t)(cap / 8 * 14);

@@ -1012,12 +1012,13 @@ bool AddItem(const std::string& item) {
            AddItem("title_scene") && AddItem("lugia_sky") && AddItem("duel_sky");
   }
   if (item == "offer") {
-    uint32_t species[2] = {0, 0};
-    if (!xd::gen4::EeveeOfferSpecies(species[0], species[1])) {
+    uint32_t species[3] = {0, 0, 0};
+    if (!xd::gen4::EeveeOfferSpecies(species[0], species[1], &species[2])) {
       std::fprintf(stderr, "[render icon] offer: the Gen 4 pack is not loaded in this run (XD_CHALLENGES=gen4_rules and the pack)\n");
       return false;
     }
     for (uint32_t s : species) {
+      if (s == 0) continue;
       add(Kind::Pokemon, static_cast<int>(s), false, "offer_" + std::to_string(s));
       sJobs.back().offer = true;
     }

@@ -555,7 +555,8 @@ void Shadows(const Tables& t, const Species& sp, const StoryTeams& st, const er:
     used[now] = true;
     r.mod.Set("story_pokemon", deck, "pokemonID", now);
     changed[deck] = {old, now};
-    const uint32_t level = t.Get("story_pokemon", deck, "level");
+    uint32_t level = t.Get("story_pokemon", deck, "level");
+    if (level <= 1) level = std::max(level, t.Get("darkpokemon_shadow", id, "playerLevel"));
     SetMoves(t, r, deck, now, level);
     r.mod.spoiler.push_back("Shadow #" + std::to_string(id) + ": " + t.Name("species", old) + " -> " + t.Name("species", now) +
                             " (level " + std::to_string(level) + ")");
@@ -1282,6 +1283,7 @@ void ApplyStyle(er::Settings& s, Style style) {
   const auto& sc = GetSchema();
   if (style == Style::Custom) {
     s.values.resize(sc.switches.size(), 0);
+    s.Set(sc, "trainers.moves", 1);
     return;
   }
   s.values.assign(sc.switches.size(), 0);
@@ -1433,7 +1435,7 @@ bool Generate(const em::DataCatalog& catalog, const em::EntryReader& read, const
   if (!ReadSpecies(t, sp, error)) return false;
   if (!t.Need("story_trainers", {"darkPokemonFlags", "pokemonDataID"}, error) ||
       !t.Need("story_pokemon", {"pokemonID", "level", "wazaID"}, error) ||
-      !t.Need("darkpokemon_shadow", {"deckPokemonID"}, error) || !t.Need("darkPokemonList", {"pokemonID"}, error) || !t.Need("floor_tresure_list", {"item"}, error) ||
+      !t.Need("darkpokemon_shadow", {"deckPokemonID", "playerLevel"}, error) || !t.Need("darkPokemonList", {"pokemonID"}, error) || !t.Need("floor_tresure_list", {"item"}, error) ||
       !t.Need("item_data_prime", {"important", "price", "name"}, error) || !t.Need("item_data_index", {"value"}, error) ||
       !t.Need("esabapokemondata_E1", {"id"}, error)) {
     return false;

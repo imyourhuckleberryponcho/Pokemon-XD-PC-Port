@@ -280,8 +280,6 @@ struct GameInfo {
     std::string converterFolder;
     std::string versionArgument;
     std::string converterOverrideEnv;
-    std::string converterTestStem;
-    std::string converterTestEnv;
     std::vector<std::string> converterArguments;
     std::string secondFolder;
     std::string secondManifestFile;

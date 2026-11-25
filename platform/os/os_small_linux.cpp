@@ -8,6 +8,7 @@
 
 #include <signal.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/un.h>
 #include <unistd.h>
 
@@ -20,6 +21,17 @@
 #include <filesystem>
 #include <string>
 #include <system_error>
+
+namespace {
+void ListenOn(int fd) { listen(fd, 1); }
+
+std::string ExeOf(long pid) {
+  char link[64], target[1024];
+  std::snprintf(link, sizeof link, "/proc/%ld/exe", pid);
+  const ssize_t n = readlink(link, target, sizeof target - 1);
+  return n > 0 ? std::string(target, static_cast<size_t>(n)) : std::string();
+}
+}
 
 extern "C" bool PortFolderClaim_Take(const char* folder) {
   if (folder == nullptr || folder[0] == '\0') return true;
@@ -39,7 +51,10 @@ extern "C" bool PortFolderClaim_Take(const char* folder) {
   const int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
   if (fd < 0) return true;
   const auto size = static_cast<socklen_t>(offsetof(sockaddr_un, sun_path) + 1 + length);
-  if (bind(fd, reinterpret_cast<const sockaddr*>(&address), size) == 0) return true;
+  if (bind(fd, reinterpret_cast<const sockaddr*>(&address), size) == 0) {
+    ListenOn(fd);
+    return true;
+  }
   if (errno != EADDRINUSE) {
     close(fd);
     return true;
@@ -50,14 +65,33 @@ extern "C" bool PortFolderClaim_Take(const char* folder) {
     close(fd);
     return false;
   }
-  for (int waited = 0; waited < 2000; ++waited) {
-    if (bind(fd, reinterpret_cast<const sockaddr*>(&address), size) == 0) return true;
+  for (int waited = 0; waited < 6000; ++waited) {
+    if (bind(fd, reinterpret_cast<const sockaddr*>(&address), size) == 0) {
+      ListenOn(fd);
+      return true;
+    }
     if (errno != EADDRINUSE) break;
     if (kill(static_cast<pid_t>(pid), 0) != 0 && errno == ESRCH) {
-      if (bind(fd, reinterpret_cast<const sockaddr*>(&address), size) == 0) return true;
+      if (bind(fd, reinterpret_cast<const sockaddr*>(&address), size) == 0) {
+        ListenOn(fd);
+        return true;
+      }
       break;
     }
     usleep(10000);
+  }
+  PortFolderHolder holder;
+  if (kill(static_cast<pid_t>(pid), 0) == 0 && PortFolderClaim_Holder(folder, &holder) && holder.pid == static_cast<unsigned long>(pid) &&
+      ExeOf(pid) == ExeOf(getpid())) {
+    std::fprintf(stderr, "[card] the copy that started this one (process %ld) is still closing after 60 s: ending it\n", pid);
+    kill(static_cast<pid_t>(pid), SIGKILL);
+    for (int waited = 0; waited < 1000; ++waited) {
+      if (bind(fd, reinterpret_cast<const sockaddr*>(&address), size) == 0) {
+        ListenOn(fd);
+        return true;
+      }
+      usleep(10000);
+    }
   }
   close(fd);
   return false;
@@ -85,6 +119,67 @@ extern "C" bool PortFolderClaim_IsFree(const char* folder) {
   const bool busy = !bound && errno == EADDRINUSE;
   close(fd);
   return !busy;
+}
+
+extern "C" bool PortFolderClaim_Holder(const char* folder, PortFolderHolder* out) {
+  if (out == nullptr) return false;
+  *out = PortFolderHolder{};
+  if (folder == nullptr || folder[0] == '\0' || PortFolderClaim_IsFree(folder)) return false;
+  std::error_code ec;
+  std::filesystem::path full = std::filesystem::weakly_canonical(std::filesystem::path(folder), ec);
+  if (ec || full.empty()) return true;
+  std::string path = full.string();
+  while (path.size() > 1 && path.back() == '/') path.pop_back();
+  uint64_t hash = 0xCBF29CE484222325ull;
+  for (const unsigned char c : path) {
+    hash = (hash ^ c) * 0x100000001B3ull;
+  }
+  sockaddr_un address{};
+  address.sun_family = AF_UNIX;
+  const int length = std::snprintf(address.sun_path + 1, sizeof address.sun_path - 1, "PortFolderClaim-%016llx",
+                                   static_cast<unsigned long long>(hash));
+  const int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+  if (fd < 0) return true;
+  const auto size = static_cast<socklen_t>(offsetof(sockaddr_un, sun_path) + 1 + length);
+  if (connect(fd, reinterpret_cast<const sockaddr*>(&address), size) == 0) {
+    ucred credentials{};
+    socklen_t credentialsSize = sizeof credentials;
+    if (getsockopt(fd, SOL_SOCKET, SO_PEERCRED, &credentials, &credentialsSize) == 0 && credentials.pid > 0) {
+      out->pid = static_cast<unsigned long>(credentials.pid);
+      const std::string program = ExeOf(credentials.pid);
+      std::snprintf(out->program, sizeof out->program, "%s", program.c_str());
+      char proc[64];
+      std::snprintf(proc, sizeof proc, "/proc/%ld", static_cast<long>(credentials.pid));
+      struct stat st{};
+      out->alive = stat(proc, &st) == 0;
+      out->started = out->alive ? static_cast<long long>(st.st_mtime) : 0;
+      out->ours = out->alive && !program.empty() && program == ExeOf(getpid());
+    }
+  }
+  close(fd);
+  return true;
+}
+
+extern "C" bool PortFolderClaim_EndHolder(const PortFolderHolder* holder) {
+  if (holder == nullptr || holder->pid == 0 || !holder->alive || !holder->ours) return false;
+  const pid_t pid = static_cast<pid_t>(holder->pid);
+  if (ExeOf(pid) != std::string(holder->program)) return false;
+  kill(pid, SIGKILL);
+  for (int waited = 0; waited < 1000; ++waited) {
+    if (kill(pid, 0) != 0 && errno == ESRCH) return true;
+    char link[64];
+    std::snprintf(link, sizeof link, "/proc/%ld/stat", static_cast<long>(pid));
+    FILE* f = std::fopen(link, "r");
+    if (f != nullptr) {
+      char line[256] = {};
+      const bool read = std::fgets(line, sizeof line, f) != nullptr;
+      std::fclose(f);
+      const char* paren = read ? std::strrchr(line, ')') : nullptr;
+      if (paren != nullptr && paren[1] == 0x20 && paren[2] == 0x5A) return true;
+    }
+    usleep(10000);
+  }
+  return false;
 }
 
 extern "C" bool PortWindowIcon_Apply(SDL_Window* window, const char* pathUtf8) {

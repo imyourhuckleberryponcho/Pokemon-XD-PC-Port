@@ -490,4 +490,50 @@ bool box_icon_face(const Image8& icon, Image8* out) {
   return true;
 }
 
+bool box_icon_pair(const Image8& normal, const Image8* shiny, Image8* out) {
+  const Image8* src[2] = {&normal, shiny ? shiny : &normal};
+  int x0 = normal.w, y0 = normal.h, x1 = 0, y1 = 0;
+  for (const Image8* im : src) {
+    if (im->w != normal.w || im->h != normal.h) return false;
+    for (int y = 0; y < im->h; y++)
+      for (int x = 0; x < im->w; x++)
+        if (im->px[((size_t)y * im->w + x) * 4 + 3] >= 24) { x0 = std::min(x0, x); y0 = std::min(y0, y); x1 = std::max(x1, x + 1); y1 = std::max(y1, y + 1); }
+  }
+  if (x1 <= x0 || y1 <= y0) return false;
+  const int cw = x1 - x0, chh = y1 - y0, longer = std::max(cw, chh);
+  const int tw = std::max(1, (cw * 52 + longer / 2) / longer), th = std::max(1, (chh * 52 + longer / 2) / longer);
+  out->w = 54; out->h = 108; out->ch = 4;
+  out->px.assign((size_t)54 * 108 * 4, 0);
+  for (int k = 0; k < 2; k++) {
+    Image8 crop;
+    crop.w = cw; crop.h = chh; crop.ch = 4;
+    crop.px.resize((size_t)cw * chh * 4);
+    for (int y = 0; y < chh; y++) memcpy(&crop.px[(size_t)y * cw * 4], &src[k]->px[((size_t)(y + y0) * src[k]->w + x0) * 4], (size_t)cw * 4);
+    const Image8 small = pil_resize_lanczos(crop, tw, th);
+    std::vector<uint8_t> pl((size_t)54 * 54 * 4, 0);
+    const int ox = (54 - tw) / 2, oy = 54 - 1 - th;
+    for (int y = 0; y < th; y++)
+      for (int x = 0; x < tw; x++) memcpy(&pl[((size_t)(y + oy) * 54 + x + ox) * 4], &small.px[((size_t)y * tw + x) * 4], 4);
+    for (int y = 0; y < 54; y++)
+      for (int x = 0; x < 54; x++) {
+        const uint8_t* p = &pl[((size_t)y * 54 + x) * 4];
+        int near_a = 0;
+        for (int dy = -1; dy <= 1; dy++)
+          for (int dx = -1; dx <= 1; dx++) {
+            const int xx = x + dx, yy = y + dy;
+            if (xx < 0 || yy < 0 || xx >= 54 || yy >= 54) continue;
+            near_a = std::max<int>(near_a, pl[((size_t)yy * 54 + xx) * 4 + 3]);
+          }
+        const int a = p[3], oa = near_a;
+        const int ra = a + oa * (255 - a) / 255;
+        uint8_t* o = &out->px[((size_t)(k * 54 + y) * 54 + x) * 4];
+        if (ra <= 0) continue;
+        const int dark[3] = {16, 16, 24};
+        for (int c = 0; c < 3; c++) o[c] = (uint8_t)std::min(255, (p[c] * a * 255 + dark[c] * oa * (255 - a)) / (ra * 255));
+        o[3] = (uint8_t)std::min(255, ra);
+      }
+  }
+  return true;
+}
+
 }

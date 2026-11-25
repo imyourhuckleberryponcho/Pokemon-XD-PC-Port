@@ -204,9 +204,9 @@ mod list.
   are named but not taken: untested / not supported). Make runs `usum_models --rom <dump> --xd-disc <your XD disc> --out extra_assets\usum`
   (progress per model, `done` line, exit 2 + `error` line for a wrong dump; `--version` feeds "Out of date: make again"). The result's
   mod.json carries `count` so the page says "Ready: 385 models". No switch: the model source is chosen per playthrough in the New Game setup
-  (rule "Models: Ultra Sun / Ultra Moon"). The converter is the Python one FROZEN with PyInstaller (`tools/n3ds/package_usum_models.py`, the
-  same recipe as the old pbr_models; there is no C++ port), shipped as `game\usum_models\usum_models(.exe)` by package_release.py,
-  package_linux.py and package_mac.sh (+ a workflow step in mac.yml). Setting `system.extra_disc.usum` remembers the path.
+  (rule "Models: Ultra Sun / Ultra Moon"). The converter is the C++ program `usum_models_cpp` (docs/N3DS_CONVERTER_CPP.md; since 0.7.4 the only one: the frozen
+  Python one is gone, and XD_USUM_CPP no longer exists), shipped as `game\usum_models\usum_models_cpp(.exe)` + its number lists by package_release.py,
+  package_linux.py and package_mac.sh. Setting `system.extra_disc.usum` remembers the path.
   Script: `extradisc:usum=<dump>`, `extramake:usum`.
 - **The Gen 5-7 pack from the same Make** (0.7.0; the `usum` row's third output `thirdFolder` = extra_assets\usum_gen57, docs/GEN57.md section 15): before it starts the page asks
   "This takes a while" (`thirdWarning`, Start making / Not now); the bar then names the stage ("Converting models 120/314", "Rendering faces"; the converter's `stage <id> <from %> <to %>`
@@ -238,8 +238,7 @@ mod list.
   only ever looks inside the mods folder, never in `extra_assets`.
 - **Where the program is, per system** (always `<program folder>/pbr_models/pbr_models[.exe]`, `<program folder>` =
   the folder of the launcher's own file): Windows `game\pbr_models\pbr_models.exe` (tools/package_release.py); Linux
-  `game/pbr_models/pbr_models` + `libnod.so` (tools/package_linux.py, built in WSL with
-  `python3 tools/pbr_convert/package_pbr_models.py`); Mac: the launcher's folder is `Pokemon XD.app/Contents/MacOS`, where
+  `game/pbr_models/pbr_models` + `libnod.so` (tools/package_linux.py, the C++ program from the Linux build); Mac: the launcher's folder is `Pokemon XD.app/Contents/MacOS`, where
   `pbr_models` is a link to `Contents/Resources/pbr_models` (games/xd/mac/package_mac.sh; built by the Mac workflow;
   the Mac launcher is built and packaged by the workflow since 2026-11-12, docs/MAC.md "Launcher on the Mac"; none of it has run on a Mac). The Linux run of the real program on the real discs
   (docs/LINUX.md "pbr_models on Linux") also needs the POSIX half of `launcher_sys` for Cancel: the converter leads a

@@ -8153,8 +8153,17 @@
 = A GameCube adapter is plugged in, but this user may not open it. Add the udev rule from the Read me (one small file), then unplug the adapter and plug it in again.
 > GameCubeアダプターが接続されていますが、このユーザーには開く権限がありません。Readmeにあるudevルール（小さなファイル1つ）を追加し、アダプターを抜いて挿し直してください。
 
-= A GameCube adapter is plugged in, but another program is using it (Dolphin, or another copy of the game). Close that program, then unplug the adapter and plug it in again.
-> GameCubeアダプターが接続されていますが、別のプログラム（Dolphinやゲームの別のコピー）が使用中です。そのプログラムを閉じてから、アダプターを抜いて挿し直してください。
+= A GameCube adapter is plugged in, but it is in use by another program (for example Dolphin, or another copy of the game). Close that program: the adapter is tried again by itself in a few seconds (if not, unplug it and plug it in again). If no other program runs, plug a controller into one of the adapter's four ports.
+> GameCubeアダプターは接続されていますが、別のプログラム(たとえばDolphinやゲームの別のコピー)が使用中です。そのプログラムを閉じてください。数秒でアダプターは自動的に再確認されます(それでもだめなら、抜いてもう一度差し込んでください)。他のプログラムが動いていない場合は、アダプターの4つのポートのどれかにコントローラーを接続してください。
+
+= A GameCube adapter is plugged in, but Windows has the driver "%s" on it, and this program can only use WinUSB (Dolphin may work with other drivers). Start the free program Zadig (zadig.akeo.ie), choose the adapter (WUP-028), pick WinUSB and click Replace Driver. Then unplug the adapter and plug it in again.
+> GameCubeアダプターは接続されていますが、Windowsではドライバー「%s」が使われており、このプログラムが使えるのはWinUSBだけです(Dolphinは他のドライバーでも動くことがあります)。無料のプログラムZadig(zadig.akeo.ie)を起動し、アダプター(WUP-028)を選び、WinUSBを選んでReplace Driverをクリックしてください。そのあと、アダプターを抜いてもう一度差し込んでください。
+
+= Windows knows a GameCube adapter, but this program's USB library does not list it. Unplug the adapter and plug it in again. If this stays, send the launcher's log (see the Read me).
+> WindowsはGameCubeアダプターを認識していますが、このプログラムのUSBライブラリには表示されません。アダプターを抜いてもう一度差し込んでください。それでも変わらない場合は、ランチャーのログを送ってください(お読みくださいを参照)。
+
+= A GameCube adapter is plugged in, but the USB file libusb-1.0.dll is missing next to the program. Unpack the whole download again (all of the game folder), then start again.
+> GameCubeアダプターは接続されていますが、プログラムと同じ場所にUSBファイルlibusb-1.0.dllがありません。ダウンロードしたもの全体(ゲームのフォルダー全体)をもう一度展開してから、起動し直してください。
 
 = A GameCube adapter is plugged in and working. Plug a controller into one of its four ports: it shows up here at once. (The switch on the adapter must be on "Wii U".)
 > GameCubeアダプターが接続され、動作しています。4つのポートのどれかにコントローラーを挿してください。ここにすぐ表示されます。（アダプターのスイッチは「Wii U」にしてください。）
@@ -8681,11 +8690,7 @@
 = Lets a controller keep working while the game's window isn't in front, for example when you watch the game through a streaming overlay in another program. Controllers only: the keyboard is never read in the background. It needs "Pause in the background" to be off, or the game waits for you instead.
 > Lets a controller keep working while the game's window isn't in front, for example when you watch the game through a streaming overlay in another program. Controllers only: the keyboard is never read in the background. It needs "Pause in the background" to be off, or the game waits for you instead.
 
-= It was made before the Gen 4 Pokemon had their own faces and cries (Leafeon looked like Umbreon). It still works; press Make to get the right faces and cries.
-> 第4世代のポケモンが専用の顔と鳴き声を持つ前に作られています（リーフィアがブラッキーに見えます）。まだ使えますが、「作成」を押すと正しい顔と鳴き声になります。
 
-= It was made by an older recipe than the Gen 4 faces and cries. It still works; press Make to make it again together with them.
-> 第4世代の顔と鳴き声より古い方法で作られています。まだ使えますが、「作成」を押すと、それらと一緒に作り直されます。
 
 = The randomizer is giving the starter.
 > ランダマイザーが最初のポケモンを決めています。
@@ -9485,3 +9490,29 @@
 = Your save is now marked as cheats used.
 > Your save is now marked as cheats used.
 
+
+= Save: "%s"\nFolder: %s
+> セーブ: "%s"\nフォルダー: %s
+
+= The other copy is process %lu (started %s). If you can't see its window, it may be stuck: "End the other copy" closes it at once (anything it has not saved is lost). If it is just closing, wait a moment and choose "Try again".
+> もう一方のコピーはプロセス %lu（%s に開始）です。ウィンドウが見えない場合は固まっているかもしれません。「もう一方のコピーを終了」で今すぐ閉じます（保存していない内容は失われます）。閉じている途中なら、少し待って「再試行」を選んでください。
+
+= The other copy can't be told apart from here. Look for xd.exe in the Task Manager (Details tab) and end it, or restart the PC. If it is just closing, wait a moment and choose "Try again".
+> ここからはもう一方のコピーを特定できません。タスクマネージャー（詳細タブ）で xd.exe を探して終了するか、PCを再起動してください。閉じている途中なら、少し待って「再試行」を選んでください。
+
+= Try again
+> 再試行
+
+= End the other copy
+> もう一方のコピーを終了
+= %s (no change)
+> %s (変化なし)
+
+= %s (+%s, -%s)
+> %s (+%s, -%s)
+
+= Nothing to copy the game's own record layout from: this save has no Pokemon in the party or the PC boxes that is not a Shadow Pokemon (purified ones are fine). Purify one first.
+> ゲーム本来のデータ構造をコピーできるポケモンがいません。このセーブには、手持ちにもPCボックスにも、ダークポケモンでないポケモン（リライブ済みはOK）がいません。先に1匹リライブしてください。
+
+= It was made by an older version of the converter: the Gen 4 and Gen 5-7 Pokemon lack their own box pictures, and the cries from the 3DS games are not matched to the game's volume yet (some crackle). It still works; press Make to make it again.
+> 変換プログラムの古い版で作られています。第4世代と第5〜7世代のポケモンに専用のボックス画像がなく、3DSゲームの鳴き声もまだゲームの音量に合わせられていません（音割れするものがあります）。そのまま使えますが、Make を押して作り直してください。

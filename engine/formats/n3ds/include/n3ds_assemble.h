@@ -39,6 +39,7 @@ struct Opts {
   bool fx_skip_fire = false;
   double anim_tol = 1.0, chan_tol = 1.0;
   int quant = 0, max_side = 256;
+  bool iris_bake = true, eye_rgb5 = true;
   bool fx = false, bake_scale = false, match = false, eye_blend = false, lure = false;
   double steel = 0, cheeks = 0, sat_boost = 0, ghost_alpha = 0, scale = 0;
 };

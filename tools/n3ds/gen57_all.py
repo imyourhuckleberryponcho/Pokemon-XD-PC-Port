@@ -252,7 +252,7 @@ def make_cries(u, d, tmp, a, nats, standins, cw, rows_out, species_edit):
         w = cw.get(str(nat))
         if w is None:
             continue
-        hdr, body, nt = gen4_cry.build_xd(C.parse_cwav(waves[w]))
+        hdr, body, nt = gen4_cry.build_xd_3ds(C.parse_cwav(waves[w]))
         n = CRY_RESERVED + j
         hid, bid = 0x100 + 2 * j, 0x101 + 2 * j
         hdrs.append(((hid << 16) | (20 << 9), 20, '(null)', hdr))

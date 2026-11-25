@@ -406,7 +406,10 @@ foreach (_src ${XD_GAME_SOURCES})
     list(APPEND _defs "C_MTXLookAt=PortXD_MirCobjLookAt")
   endif ()
   if (_src MATCHES "/msgctrl/msgctrl[.]cpp$")
-    list(APPEND _defs "fightTargetIsHostSide=PortXD_MirMsgSide")
+    list(APPEND _defs "fightTargetIsHostSide=PortXD_MirMsgSide" "msgctrlSetValue=PortXD_RealMsgctrlSetValue" "msgctrlFont=PortXD_RealMsgctrlFont" "fightOutPokemonGetNicknamePtr=PortXD_FopNickname")
+  endif ()
+  if (_src MATCHES "/game/menuInterrupt[.]cpp$")
+    list(APPEND _defs "menuIntHook=PortXD_RealMenuIntHook")
   endif ()
   if (_src MATCHES "/(battleGrid/(battleCamera|wazaSequenceCamera|wazaSequenceCameraData)|fade/fade_effect|people/(people|peoplePartAnimation)|wazaSequence/(leaffx|modelSequence|wazaSequenceSys)|GSparticle/pe[A-Za-z]+|particle/(generator|psinterpret))[.]cpp$")
     list(APPEND _defs "HSD_Rand=PortXD_CosRand" "HSD_Randf=PortXD_CosRandf" "HSD_Randi=PortXD_CosRandi")
@@ -728,6 +731,8 @@ endif ()
 add_library(xd_randomizer STATIC randomizer/xd_randomizer.cpp)
 target_include_directories(xd_randomizer PUBLIC randomizer)
 target_link_libraries(xd_randomizer PUBLIC engine_randomizer engine_mods)
+add_executable(xd_randomizer_styles_test randomizer/tests/xd_randomizer_styles_test.cpp)
+target_link_libraries(xd_randomizer_styles_test PRIVATE xd_randomizer)
 
 add_executable(xd_randomize tools/xd_randomize.cpp)
 target_link_libraries(xd_randomize PRIVATE xd_randomizer xd_datamods)
@@ -967,7 +972,7 @@ set(XD_PROGRAM_PORT_SOURCES src/boot.c src/cli_boot.cpp src/disc_tables.cpp src/
   src/renderdoc_capture.c src/screenshot.cpp src/bug_report.cpp src/report_scrub.cpp src/settings_boot.cpp src/mods_boot.cpp src/languages_boot.cpp src/gslog_port.cpp src/state_dump.cpp src/timing_log.cpp src/cpu_cost_hooks.cpp src/fsys_unpack_cost.cpp src/dvd_open_cost.cpp src/bound_walk_cost.cpp src/perf_marks.cpp src/cpu_counters.cpp src/warp.cpp src/render_icon.cpp src/shader_prep.cpp src/pc_load.cpp src/dsp_coef.cpp
   src/data/rel_link.cpp src/data/main_program_map.cpp src/dev_menu.cpp src/task_stacks.cpp src/input_ticks.cpp src/text_guard.cpp src/cheats.cpp src/cheats_hooks.cpp
   src/particle_check.cpp src/settings_menu.cpp src/ui_kit2.cpp src/speedups.cpp src/move_split.cpp src/gen4_moves.cpp src/xg_calc_harness.cpp src/xg_calc_questions.cpp src/gen4_abilities.cpp src/gen4_ability_effects.cpp src/mod_battle.cpp src/script_hooks.cpp src/script_global_ext.cpp src/script_gifts.cpp src/script_events.cpp src/script_teams.cpp src/script_ext.cpp src/common_script.cpp src/online_battle.cpp src/tables_file.cpp src/battle_replay.cpp src/trainer_card.cpp src/trainer_card_game.cpp src/trainer_card_page.cpp src/online_lobby.cpp src/online_mirror.cpp src/online_room.cpp src/online_team.cpp src/online_commit.cpp src/online_draft.cpp src/online_draft_game.cpp src/online_vs_row.cpp src/added_rows.cpp src/species_tables.cpp src/gen4_pack.cpp src/gen57_pack.cpp src/pack_match.cpp src/pack_tables.cpp src/gen4_machines.cpp src/gen4_xg.cpp src/replay_pacing.cpp src/audio_categories.cpp src/button_icons.cpp src/settings_switches.cpp src/hook_defaults.cpp src/tm_names.cpp src/shiny_odds.cpp src/hd_textures.cpp src/texture_observers.cpp src/type_icons.cpp src/modern_types.cpp src/speedrun.cpp src/mods_reload.cpp src/pokedex_data.cpp src/pokedex_decks.cpp src/pokedex_page.cpp src/memo_sprites.cpp
-  src/widescreen.cpp src/save_picker.cpp src/playthrough.cpp src/challenges.cpp src/level_caps.cpp src/battles_won.cpp src/discord_presence.cpp src/walk_helper.cpp src/gen4_evolutions.cpp src/gen4_eevee.cpp src/pc_trade.cpp src/starter.cpp src/save_ext.cpp src/memo_overflow.cpp src/xd_rulesets.cpp src/gen_rules.cpp src/forms.cpp src/forms_battle.cpp src/forms_shop.cpp src/forms_summary.cpp src/hidden_ability.cpp)
+  src/widescreen.cpp src/long_names.cpp src/menu_int_hook.cpp src/save_picker.cpp src/playthrough.cpp src/challenges.cpp src/level_caps.cpp src/battles_won.cpp src/discord_presence.cpp src/walk_helper.cpp src/gen4_evolutions.cpp src/gen4_eevee.cpp src/pc_trade.cpp src/starter.cpp src/save_ext.cpp src/memo_overflow.cpp src/xd_rulesets.cpp src/gen_rules.cpp src/forms.cpp src/forms_battle.cpp src/forms_shop.cpp src/forms_summary.cpp src/hidden_ability.cpp)
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/story_flag_names_data.cpp"
   COMMAND ${CMAKE_COMMAND} -DTEXT_FILE=${CMAKE_CURRENT_SOURCE_DIR}/data/story_flag_names.txt
           -DOUT=${CMAKE_CURRENT_BINARY_DIR}/story_flag_names_data.cpp -DSYMBOL=kStoryFlagNamesText -P ${CMAKE_CURRENT_SOURCE_DIR}/embed_text.cmake
@@ -1016,7 +1021,7 @@ if (_xd_metro_never)
   set_property(SOURCE src/added_rows.cpp APPEND PROPERTY COMPILE_DEFINITIONS XD_HAVE_METRONOME_NEVER_PICK=1)
 endif ()
 set_property(SOURCE src/ui_kit2.cpp src/warp.cpp src/render_icon.cpp src/settings_menu.cpp src/playthrough.cpp src/audio_categories.cpp src/button_icons.cpp src/settings_switches.cpp src/hd_textures.cpp src/texture_observers.cpp src/type_icons.cpp
-  src/replay_pacing.cpp src/widescreen.cpp src/online_mirror.cpp src/fsys_unpack_cost.cpp src/challenges.cpp src/walk_helper.cpp src/gen4_eevee.cpp src/online_draft_game.cpp src/pokedex_data.cpp src/pokedex_decks.cpp src/pokedex_page.cpp src/memo_sprites.cpp src/online_vs_row.cpp src/pc_trade.cpp src/starter.cpp src/forms_battle.cpp APPEND PROPERTY INCLUDE_DIRECTORIES ${PROJECT_SOURCE_DIR}/platform/compat/include
+  src/replay_pacing.cpp src/widescreen.cpp src/online_mirror.cpp src/fsys_unpack_cost.cpp src/challenges.cpp src/walk_helper.cpp src/gen4_eevee.cpp src/online_draft_game.cpp src/pokedex_data.cpp src/pokedex_decks.cpp src/pokedex_page.cpp src/memo_sprites.cpp src/online_vs_row.cpp src/pc_trade.cpp src/starter.cpp src/forms_battle.cpp src/menu_int_hook.cpp APPEND PROPERTY INCLUDE_DIRECTORIES ${PROJECT_SOURCE_DIR}/platform/compat/include
   ${XD_AURORA_DIR}/include ${XD_SNAPSHOT_DIR}/include)
 if (MSVC)
   set(XD_PROGRAM_LINK_OPTIONS /BASE:0x40000000 /DYNAMICBASE:NO /INCREMENTAL:NO)

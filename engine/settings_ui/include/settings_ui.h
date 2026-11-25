@@ -58,9 +58,10 @@ class ControlsPanel {
   };
   void SetPads(std::vector<Pad> pads) { pads_ = std::move(pads); }
   const std::vector<Pad>& Pads() const { return pads_; }
-  void SetAdapterState(controls::AdapterState state, int libusbError) {
+  void SetAdapterState(controls::AdapterState state, int libusbError, const std::string& driver = {}) {
     adapterState_ = state;
     adapterError_ = libusbError;
+    adapterDriver_ = driver;
   }
   int AssignedPad(const settings::Registry& registry, int port) const;
   bool AdapterPadShown() const;
@@ -118,6 +119,7 @@ class ControlsPanel {
   std::vector<Pad> pads_;
   controls::AdapterState adapterState_ = controls::AdapterState::NoLibrary;
   int adapterError_ = 0;
+  std::string adapterDriver_;
   controls::RawInputs raw_;
   int port_ = 0;
   int shownTab_ = 0;

@@ -44,6 +44,11 @@ void SetExtraEvolutions(const std::vector<ExtraEvolution>& list, int32_t linking
 
 const std::vector<ExtraEvolution>& ExtraEvolutions() { return sList; }
 
+void AddExtraEvolution(const ExtraEvolution& e) {
+  for (const ExtraEvolution& x : sList) if (x.species == e.species && x.kind == e.kind && x.param == e.param && x.target == e.target) return;
+  sList.push_back(e);
+}
+
 }
 
 static uint16_t Gen4EvolutionCheck(void* pokemon, int32_t mode, uint16_t item, uint16_t* extra, void* infoPtr) {

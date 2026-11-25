@@ -21,7 +21,7 @@ target_include_directories(platform_audio PRIVATE audio/musyx_sdk PUBLIC audio/i
 target_link_libraries(platform_audio PRIVATE platform_dsp engine_settings ${AURORA_SDL3_TARGET}) # (engine_settings: gc_ai.cpp reads video.frame_rate for the sound reserve)
 
 add_library(platform_input STATIC input/keyboard_defaults.cpp input/input_script.cpp input/input_record.cpp
-  input/input_record_format.cpp input/input_anchors.cpp input/controls_apply.cpp input/speedups.cpp)
+  input/input_record_format.cpp input/input_anchors.cpp input/controls_apply.cpp input/speedups.cpp input/gc_adapter_log.cpp)
 target_include_directories(platform_input PUBLIC input/include)
 target_link_libraries(platform_input PUBLIC engine_controls PRIVATE aurora::pad aurora::si platform_os)
 target_link_libraries(platform_input PRIVATE aurora::core platform_video platform_audio)

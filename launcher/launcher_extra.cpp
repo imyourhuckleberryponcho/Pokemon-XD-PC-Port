@@ -138,19 +138,9 @@ fs::path ConverterPath(const Source& source, const fs::path& programFolder) {
     const fs::path over = sys::EnvPath(source.converterOverrideEnv.c_str());
     if (!over.empty()) return over;
   }
-  std::string stem = source.converterStem;
-  bool preferTest = false;
-  if (!source.converterTestEnv.empty() && !source.converterTestStem.empty()) {
-    const std::string v = sys::EnvPath(source.converterTestEnv.c_str()).string();
-    preferTest = v != "0";
-    if (preferTest) stem = source.converterTestStem;
-  }
+  const std::string stem = source.converterStem;
   fs::path folder = programFolder;
   if (!source.converterFolder.empty()) folder /= source.converterFolder;
-  if (preferTest) {
-    std::error_code ec;
-    if (!fs::exists(folder / sys::ProgramName(stem), ec) && fs::exists(folder / sys::ProgramName(source.converterStem), ec)) stem = source.converterStem;
-  }
 #if defined(__APPLE__)
   {
     std::error_code ec;

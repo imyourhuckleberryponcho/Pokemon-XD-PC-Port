@@ -1,5 +1,7 @@
 #include "xd_starter.h"
 
+#include "xd_gen4.h"
+
 #include "xd_playthrough.h"
 #include "xd_pokedex.h"
 #include "xd_test_run.h"
@@ -231,6 +233,7 @@ const std::vector<Candidate>& Candidates() {
     if (s.national == 0 && !s.mod) continue;
     if (s.national != 0 && !seen.insert(s.national).second) continue;
     if (IsLegendary(s.national) && !kLegendaryAllowed) continue;
+    if (s.index == 414 && xd::gen4::MunchlaxNoFace()) continue;
     Candidate c;
     c.index = s.index, c.national = s.national, c.gen = GenOfNational(s.national, s.gen), c.legendary = IsLegendary(s.national), c.name = s.name;
     for (int k = 0; k < 6; k++) c.base[k] = s.base[k];

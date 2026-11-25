@@ -80,7 +80,7 @@ int main() {
           "tabs: models (Ultra Sun / Moon, Battle Revolution, Colosseum) and languages (European, Japanese)");
   }
   const auto& usum = sources[4];
-  check(usum.id == "usum" && usum.dump && usum.manifestId == "ultra-sun-moon-models" && usum.converterStem == "usum_models" &&
+  check(usum.id == "usum" && usum.dump && usum.manifestId == "ultra-sun-moon-models" && usum.converterStem == "usum_models_cpp" &&
             usum.discSetting == "system.extra_disc.usum" && usum.needsGameDisc,
         "Ultra Sun / Ultra Moon: id usum, a dump, description id ultra-sun-moon-models, converter usum_models, needs the XD disc");
   {

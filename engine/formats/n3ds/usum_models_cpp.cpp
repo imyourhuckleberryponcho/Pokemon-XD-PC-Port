@@ -311,7 +311,7 @@ int main(int argc, char** argv) {
     else if (a == "--jobs") jobs = atoi(next().c_str());
     else if (a == "--stage") stage = next();
     else if (a == "--percent") { lo = atoi(next().c_str()); hi = atoi(next().c_str()); }
-    else if (a == "--version") { printf("version 0.2.0\n"); return 0; }
+    else if (a == "--version") { printf("version %s\n", kConverterVersion); return 0; }
   }
   try {
     if (rom.empty() || out.empty() || (plan.empty() && xd_disc.empty()))
@@ -467,13 +467,13 @@ int main(int argc, char** argv) {
       long long nusum = 0;
       for (auto& it : items) if ((it.pack == "usum" || it.pack == "gen4") && fs::exists(model_path(c, it))) nusum++;
       std::ostringstream mj;
-      mj << "{\"id\": \"ultra-sun-moon-models\", \"name\": \"Ultra Sun / Ultra Moon models\", \"version\": \"0.2.0\", \"author\": \"made on your PC from your own 3DS dump\", "
+      mj << "{\"id\": \"ultra-sun-moon-models\", \"name\": \"Ultra Sun / Ultra Moon models\", \"version\": \"0.2.2\", \"author\": \"made on your PC from your own 3DS dump\", "
          << "\"description\": \"Pokemon Ultra Sun / Ultra Moon's Pokemon models in Pokemon XD, converted from your own dump.\", \"dump\": \"" << c.dump_fp
          << "\", \"game\": \"GXXE01\", \"generated_from\": \"" << jesc(r.product) << "\", \"applies\": \"restart\", \"format\": 1, \"count\": " << nusum
          << ", \"unit\": \"model\", \"units\": \"models\"}";
       if (fs::exists(fs::path(out) / "usum")) { std::string s = mj.str(); spit(fs::path(out) / "usum" / "mod.json", s.data(), s.size()); }
       std::ostringstream rj;
-      rj << "{\"converter\": \"usum_models_cpp 0.2.0\", \"failed\": [";
+      rj << "{\"converter\": \"usum_models_cpp 0.2.2\", \"failed\": [";
       for (size_t i = 0; i < failures.size(); i++) rj << (i ? ", " : "") << "\"" << jesc(failures[i]) << "\"";
       rj << "], \"made\": " << (long long)made << ", \"bytes\": " << (long long)bytes << "}";
       std::string s = rj.str();

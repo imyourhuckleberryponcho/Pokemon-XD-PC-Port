@@ -510,6 +510,7 @@ bool Translator::RunPack(bool gen57, std::vector<engine::mods::DataModFile>& fil
     }
     if (gen57) {
       Erase(s, "face");
+      Erase(s, "icon");
       Erase(s, "nakigoeId");
       Erase(s, "voice");
     }

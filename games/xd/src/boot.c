@@ -51,6 +51,7 @@
 #endif
 #include <stdbool.h>
 #include <stdio.h>
+#include <time.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -91,6 +92,9 @@ void PortDVD_SetFileLocator(bool (*locator)(const char* path, uint32_t* offset))
 void PortDVD_SetFirstCommandTime(int64_t microseconds);
 void PortInput_InstallKeyboardDefaults(void);
 void PortInput_UpdateControls(void);
+void PortInput_GcAdapterHints(void);
+void PortInput_GcAdapterLog(void);
+void PortInput_GcAdapterTick(void);
 void PortInput_ControlsHandleEvent(const SDL_Event* event);
 void PortXD_InstallTexturePackSource(void);
 void PortXD_HdTexturesUpdate(void);
@@ -215,6 +219,7 @@ static void handle_events(void) {
   PortXD_BugReportPoll();
   PortXD_TestCrashPoll();
   PortInput_UpdateControls();
+  PortInput_GcAdapterTick();
   PortXD_ButtonIconsUpdate();
   PortXD_HdTexturesUpdate();
   PortXD_SettingsSwitchesUpdate();
@@ -727,21 +732,76 @@ int aurora_main(int argc, char** argv) {
   fprintf(stderr, "[card] save: %s (%s)\n", PortXD_CardSaveName(), cardRoot);
   if (!renderIcon && !prepareShaders) {
     const char* claimOff = getenv("XD_CARD_CLAIM");
-    if ((claimOff == NULL || strcmp(claimOff, "0") != 0) && !PortFolderClaim_Take(cardRoot)) {
-      fprintf(stderr, "[card] another running copy of the game uses this memory card folder: %s\n", cardRoot);
+    while ((claimOff == NULL || strcmp(claimOff, "0") != 0) && !PortFolderClaim_Take(cardRoot)) {
+      PortFolderHolder holder;
+      const bool known = PortFolderClaim_Holder(cardRoot, &holder);
+      fprintf(stderr, "[card] another running copy of the game uses this memory card folder: %s (save: %s)\n", cardRoot,
+              PortXD_CardSaveName());
+      if (known && holder.pid != 0) {
+        fprintf(stderr, "[card] held by process %lu (%s), %s\n", holder.pid, holder.program[0] != '\0' ? holder.program : "program unknown",
+                holder.alive ? (holder.ours ? "running, a copy of this game" : "running, another program") : "not running any more");
+      } else {
+        fprintf(stderr, "[card] the holder does not say who it is\n");
+      }
       if (testRun || !interactive) {
         fprintf(stderr, "[card] test run: stopping (exit code 5; each run needs its own XD_CARD_DIR)\n");
         return 5;
       }
-      if (PortMessage_Ask(PORT_MESSAGE_WARNING, "Pok\xC3\xA9mon XD",
-                          Tr("Another copy of the game is already running with the same memory card.\n\n"
-                             "Two copies would overwrite each other's saves. You can quit, or play this copy "
-                             "without the memory card (it can't load or save)."),
-                          Tr("Quit"), Tr("Play without the card"), true)) {
+      char message[2600], where[1100], who[900], when[48] = "";
+      const char* saveName = PortXD_CardSaveName();
+      if (saveName != NULL && saveName[0] != '\0') {
+        snprintf(where, sizeof where, Tr("Save: \"%s\"\nFolder: %s"), saveName, cardRoot);
+      } else {
+        snprintf(where, sizeof where, Tr("Folder: %s"), cardRoot);
+      }
+      const bool canEnd = known && holder.pid != 0 && holder.alive && holder.ours;
+      if (known && holder.pid != 0 && holder.started > 0) {
+        const time_t started = (time_t)holder.started;
+        const struct tm* local = localtime(&started);
+        if (local != NULL) strftime(when, sizeof when, "%Y-%m-%d %H:%M", local);
+      }
+      if (canEnd) {
+        snprintf(who, sizeof who, Tr("The other copy is process %lu (started %s). If you can't see its window, it may be stuck: "
+                                     "\"End the other copy\" closes it at once (anything it has not saved is lost). "
+                                     "If it is just closing, wait a moment and choose \"Try again\"."),
+                 holder.pid, when[0] != '\0' ? when : "?");
+      } else {
+        snprintf(who, sizeof who, "%s",
+                 Tr("The other copy can't be told apart from here. Look for xd.exe in the Task Manager (Details tab) and end it, "
+                    "or restart the PC. If it is just closing, wait a moment and choose \"Try again\"."));
+      }
+      snprintf(message, sizeof message, "%s\n\n%s\n\n%s", Tr("Another copy of the game is already running with the same memory card.\n\n"
+                                                              "Two copies would overwrite each other's saves. You can quit, or play this copy "
+                                                              "without the memory card (it can't load or save)."),
+               where, who);
+      const char* labels[4];
+      int ids[4];
+      int count = 0;
+      labels[count] = Tr("Try again");
+      ids[count++] = 0;
+      if (canEnd) {
+        labels[count] = Tr("End the other copy");
+        ids[count++] = 1;
+      }
+      labels[count] = Tr("Play without the card");
+      ids[count++] = 2;
+      labels[count] = Tr("Quit");
+      ids[count++] = 3;
+      const int picked = PortMessage_Choose(PORT_MESSAGE_WARNING, "Pok\xC3\xA9mon XD", message, labels, count, 0, count - 1, count - 1);
+      const int what = ids[picked];
+      if (what == 3) {
         return 5;
+      }
+      if (what == 1) {
+        fprintf(stderr, "[card] ending the other copy (process %lu): %s\n", holder.pid, PortFolderClaim_EndHolder(&holder) ? "done" : "could not");
+        continue;
+      }
+      if (what == 0) {
+        continue;
       }
       PortCARD_SetUnplugged(true);
       fprintf(stderr, "[card] this copy plays without the memory card\n");
+      break;
     }
   }
   {
@@ -858,7 +918,9 @@ int aurora_main(int argc, char** argv) {
     }
   }
   {
+    PortInput_GcAdapterHints();
     const AuroraInfo started = aurora_initialize(argc, argv, &config);
+    PortInput_GcAdapterLog();
     const char* nullOk = getenv("XD_GPU_NULL_OK");
     if (started.backend == BACKEND_NULL && (nullOk == NULL || nullOk[0] != '1')) {
       return fail(Tr("No usable graphics device was found, so the game could not draw anything. "

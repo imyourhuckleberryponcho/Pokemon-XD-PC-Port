@@ -41,6 +41,9 @@ add_library(engine_controls STATIC controls/controls.cpp controls/controls_names
   controls/gc_adapter.cpp)
 target_include_directories(engine_controls PUBLIC controls/include)
 target_link_libraries(engine_controls PRIVATE ${CMAKE_DL_LIBS})
+if (WIN32)
+  target_link_libraries(engine_controls PRIVATE setupapi cfgmgr32)
+endif ()
 target_link_libraries(engine_controls PUBLIC engine_settings)
 
 add_executable(controls_test controls/tests/controls_test.cpp)

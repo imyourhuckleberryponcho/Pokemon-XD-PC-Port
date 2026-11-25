@@ -710,8 +710,28 @@ bool ControlsPanel::DrawController(es::Registry& registry, const Options& option
       break;
     case ec::AdapterState::InUse:
       Wrapped(options.colors.accent,
-              Tr("A GameCube adapter is plugged in, but another program is using it (Dolphin, or another copy of "
-                 "the game). Close that program, then unplug the adapter and plug it in again."));
+              Tr("A GameCube adapter is plugged in, but it is in use by another program (for example Dolphin, or "
+                 "another copy of the game). Close that program: the adapter is tried again by itself in a few "
+                 "seconds (if not, unplug it and plug it in again). If no other program runs, plug a controller "
+                 "into one of the adapter's four ports."));
+      break;
+    case ec::AdapterState::WrongDriver:
+      Wrapped(options.colors.accent,
+              Fmt(Tr("A GameCube adapter is plugged in, but Windows has the driver \"%s\" on it, and this program "
+                     "can only use WinUSB (Dolphin may work with other drivers). Start the free program Zadig "
+                     "(zadig.akeo.ie), choose the adapter (WUP-028), pick WinUSB and click Replace Driver. Then "
+                     "unplug the adapter and plug it in again."),
+                  adapterDriver_.c_str()));
+      break;
+    case ec::AdapterState::NotListed:
+      Wrapped(options.colors.accent,
+              Tr("Windows knows a GameCube adapter, but this program's USB library does not list it. Unplug the "
+                 "adapter and plug it in again. If this stays, send the launcher's log (see the Read me)."));
+      break;
+    case ec::AdapterState::LibraryMissing:
+      Wrapped(options.colors.accent,
+              Tr("A GameCube adapter is plugged in, but the USB file libusb-1.0.dll is missing next to the "
+                 "program. Unpack the whole download again (all of the game folder), then start again."));
       break;
     case ec::AdapterState::Reachable:
       Wrapped(options.colors.dim,

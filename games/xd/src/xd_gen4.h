@@ -24,10 +24,12 @@ bool TranslateForXG(const engine::mods::DataCatalog& catalog, const engine::mods
 void AfterLoad(const engine::mods::LoadResult& result);
 
 bool Loaded();
+bool MunchlaxNoFace();
 uint32_t ExtraRowCount(const char* table);
 uint32_t ModelRowsTaken();
 uint32_t WaveRowsTaken();
 bool SpotsLoaded();
+const std::vector<uint16_t>& DeskItems();
 
 void SetMoreRows(const std::vector<xd::pack::RowSpec>& rows);
 
@@ -43,7 +45,9 @@ void SetExtraEvolutions(const std::vector<ExtraEvolution>& list, int32_t linking
 const std::vector<ExtraEvolution>& ExtraEvolutions();
 
 void SetEeveeChoices(bool on, uint32_t leafSpecies, uint32_t leafItem, uint32_t iceSpecies, uint32_t iceItem);
-bool EeveeOfferSpecies(uint32_t& leaf, uint32_t& ice);
+bool EeveeOfferSpecies(uint32_t& leaf, uint32_t& ice, uint32_t* sylveon = nullptr);
+void SetEeveeSylveon(uint32_t species, uint32_t item);
+void AddExtraEvolution(const ExtraEvolution& e);
 
 }
 

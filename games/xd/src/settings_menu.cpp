@@ -2404,6 +2404,13 @@ void SetRandomizerStyle(int style) {
     s.rCode = xd::randomizer::CodeFor(st[style - 1], s.rCode.empty() ? NewSeed() : CodeSettings(s.rCode).seed);
   } else if (style == 4 && s.rCode.empty()) {
     s.rCode = xd::randomizer::CodeFor(xd::randomizer::Style::Classic, NewSeed());
+  } else if (style == 4) {
+    const auto& schema = xd::randomizer::GetSchema();
+    engine::randomizer::Settings rs = CodeSettings(s.rCode);
+    if (rs.Get(schema, "trainers") == 0 && rs.Get(schema, "trainers.moves") == 0) {
+      rs.Set(schema, "trainers.moves", 1);
+      s.rCode = engine::randomizer::EncodeCode(schema, rs);
+    }
   }
 }
 
@@ -3018,10 +3025,10 @@ bool ViewRows(int view, std::vector<kit::NRow>& rows, std::string& desc, std::st
       kit::NRow n;
       n.label = std::string(tx::PokemonName(g));
       n.mark = TopGen() == g;
-      const bool avail = g <= 4 && (g != 4 || Gen4Ready());
+      const bool avail = g == 3 || (g == 4 ? Gen4Ready() : Gen57Ready());
       n.grey = !avail;
-      if (g > 4) n.value = Tr("later");
-      else if (g == 4 && !Gen4Ready()) n.value = Tr("needs the Gen 4 pack");
+      if (g >= 5 && Gen4Ready() && !Gen57Ready()) n.value = Tr("needs the Gen 5-7 pack");
+      else if (g >= 4 && !Gen4Ready()) n.value = Tr("needs the Gen 4 pack");
       rows.push_back(n);
     }
     kit::NRow spots;
@@ -3031,7 +3038,8 @@ bool ViewRows(int view, std::vector<kit::NRow>& rows, std::string& desc, std::st
     spots.grey = !s.choice.HasGen(4);
     rows.push_back(spots);
     desc = std::string(tx::PokemonInfo(vCur < 5 ? gens[vCur] : TopGen()));
-    if (vCur == 1 && !Gen4Ready()) desc += " " + Gen4Why();
+    if (vCur >= 1 && vCur < 5 && !Gen4Ready()) desc += " " + Gen4Why();
+    else if (vCur >= 2 && vCur < 5 && !Gen57Ready()) desc += " " + Gen57Why();
   } else if (view == kLooks) {
     title = Tr("LOOKS");
     const std::string cur0 = StyleOf(s.choice.looks);

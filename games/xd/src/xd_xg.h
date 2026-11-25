@@ -17,7 +17,7 @@ inline const char* Off(Feature f) {
   case Feature::Gen4: return "XG has its own modern rules.";
   case Feature::Gen4Pokemon: return nullptr;
   case Feature::Gen57Pokemon: return nullptr;
-  case Feature::PrizeDesk: return "The Alola Charm and Mega Stones are not sold at XG's prize desks (not tried there).";
+  case Feature::PrizeDesk: return nullptr;
   case Feature::ModernTypes: return "XG has its own modern rules.";
   case Feature::LanguagePacks: return "Would replace XG's own text.";
   case Feature::DataAddRows: return "Only new Pokemon, moves and items can be added on XG (tried there: add, save, CONTINUE, refused without the mod); story flags, rooms, battles, trainer decks and a Pokemon's own model, cry and face were not tried on XG.";

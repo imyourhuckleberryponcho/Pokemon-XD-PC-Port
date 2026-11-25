@@ -629,21 +629,21 @@ std::string Editor::Add(uint16_t species, int level, bool intoParty, const Table
     if (!found) return Tr("All the PC boxes are full.");
   }
   const xs::Pokemon* tmpl = nullptr;
-  for (const xs::Pokemon& p : work_.party) {
-    if (!p.IsEmpty() && p.shadowId == 0 && p.otId == work_.trainerOtId && p.otName == work_.trainerName) {
-      tmpl = &p;
-      break;
-    }
-  }
-  if (tmpl == nullptr) {
+  const auto search = [&](const auto& pred) {
     for (const xs::Pokemon& p : work_.party) {
-      if (!p.IsEmpty() && p.shadowId == 0) {
-        tmpl = &p;
-        break;
+      if (!p.IsEmpty() && pred(p)) return &p;
+    }
+    for (const auto& box : work_.boxes) {
+      for (const xs::Pokemon& p : box.slots) {
+        if (!p.IsEmpty() && pred(p)) return &p;
       }
     }
-  }
-  if (tmpl == nullptr) return Tr("Nothing to copy the game's own record layout from: the save needs one Pokemon of its own that was not a Shadow Pokemon.");
+    return static_cast<const xs::Pokemon*>(nullptr);
+  };
+  tmpl = search([&](const xs::Pokemon& p) { return p.shadowId == 0 && p.otId == work_.trainerOtId && p.otName == work_.trainerName; });
+  if (tmpl == nullptr) tmpl = search([&](const xs::Pokemon& p) { return p.shadowId == 0; });
+  if (tmpl == nullptr) tmpl = search([&](const xs::Pokemon& p) { return !UnpurifiedShadow(p); });
+  if (tmpl == nullptr) return Tr("Nothing to copy the game's own record layout from: this save has no Pokemon in the party or the PC boxes that is not a Shadow Pokemon (purified ones are fine). Purify one first.");
   const xs::ByteOrder o = work_.order;
   const std::string who = Upper(SpeciesText(&t, species)) + " (" + SpotText(to) + ")";
   uint8_t* r = Rec(to);
@@ -661,6 +661,7 @@ std::string Editor::Add(uint16_t species, int level, bool intoParty, const Table
   r[kFlags] = static_cast<uint8_t>(r[kFlags] & 0x00);
   xs::Write32(r + 0x7C, 0, o);
   xs::Write16(r + kShadowId, 0, o);
+  if (tmpl->shadowId != 0) std::memset(r + 0xB8, 0, xs::kPokemonSize - 0xB8);
   xs::Write32(r + kOtId, work_.trainerOtId, o);
   PutName(r + kOtName, kNameChars, work_.trainerName, o);
   const std::string nick = SpeciesText(&t, species);

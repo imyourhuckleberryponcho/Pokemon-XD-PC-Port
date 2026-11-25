@@ -18,6 +18,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <thread>
 
 extern char** environ;
 
@@ -90,6 +91,34 @@ int main(int argc, char** argv) {
   CHECK(RunChild(b) == 0);
   CHECK(!PortFolderClaim_Take(a.c_str()));
   CHECK(PortFolderClaim_Take(nullptr) && PortFolderClaim_Take(""));
+
+
+  {
+    PortFolderHolder who;
+    CHECK(PortFolderClaim_Holder(a.c_str(), &who));
+    CHECK(who.pid == static_cast<unsigned long>(getpid()) && who.alive && who.ours && who.program[0] != 0);
+    CHECK(!PortFolderClaim_Holder(b.c_str(), &who));
+    CHECK(!PortFolderClaim_IsFree(a.c_str()) && PortFolderClaim_IsFree(b.c_str()));
+
+    const pid_t stuck = Start("hold", b, "30000");
+    usleep(400000);
+    CHECK(PortFolderClaim_Holder(b.c_str(), &who));
+    CHECK(who.pid == static_cast<unsigned long>(stuck) && who.alive && who.ours);
+    int status = 0;
+
+    std::thread reaper([&] { waitpid(stuck, &status, 0); });
+    CHECK(PortFolderClaim_EndHolder(&who));
+    reaper.join();
+    CHECK(PortFolderClaim_IsFree(b.c_str()));
+    CHECK(RunChild(b) == 0);
+
+    const pid_t first = Start("hold", b, "30000");
+    usleep(300000);
+    CHECK(RunChild(b) == 1);
+    kill(first, SIGKILL);
+    waitpid(first, &status, 0);
+    CHECK(RunChild(b) == 0);
+  }
 
 
   {

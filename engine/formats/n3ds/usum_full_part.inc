@@ -14,8 +14,8 @@ struct FullArgs {
   bool eol_crlf = false;
 };
 
-const int GEN57_MAKE_VERSION = 6;
-const char* kConverterVersion = "0.2.0";
+const int GEN57_MAKE_VERSION = 7;
+const char* kConverterVersion = "0.2.2";
 
 int run_process(const std::string& exe, const std::vector<std::string>& args, const std::map<std::string, std::string>* env, const std::string& logfile,
                 const std::function<void(const std::string&)>& on_line = nullptr) {
@@ -473,7 +473,7 @@ int run_full(FullArgs& a) {
       {
         const fs::path gj = fs::path(a.gen4_pack) / "gen4.json";
         Json g4j = Json::parse(read_all(gj));
-        g4j.set("recipe", Json(1));
+        g4j.set("recipe", Json(2));
         write_all(gj, eolfix(g4j.dump(1, true), a.eol_crlf));
       }
       if (!std::getenv("USUM_KEEP_SOURCE")) wipe(src);
@@ -643,6 +643,7 @@ int run_full(FullArgs& a) {
                 const fs::path png = fs::path(a.gen4_pack) / "textures" / "faces" / (std::to_string(np->i) + ".png");
                 if (!fs::exists(png)) continue;
                 kv.second.set("face", Json("textures/faces/" + std::to_string(np->i) + ".png"));
+                if (fs::exists(fs::path(a.gen4_pack) / "textures" / "icons" / (std::to_string(np->i) + ".png"))) kv.second.set("icon", Json("textures/icons/" + std::to_string(np->i) + ".png"));
                 n++;
               }
               write_all(gen4json, eolfix(gen4species.dump(1, true), a.eol_crlf));

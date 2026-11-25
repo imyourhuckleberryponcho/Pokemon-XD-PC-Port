@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <set>
 
 #include "detmath.h"
 
@@ -324,21 +325,193 @@ static double frac_alpha_below(const pbr::Rgba& p, int thr) {
   return (double)c / (double)n;
 }
 
+bool plate_is_tra(const GfMaterial& mt, const std::string& nm, bool have_nm, const std::map<std::string, pbr::Rgba>& texs) {
+  bool tra = contains(mt.shader, "Tra") || contains(mt.shader, "Alp") || contains(mt.shader, "Xlu") || contains(mt.shader, "Iris") ||
+             contains(mt.name, "Iris") || starts(mt.name, "Line");
+  auto it = texs.find(nm);
+  bool in_texs = have_nm && it != texs.end();
+  if (!tra && in_texs && starts(mt.name, "Mouth") && frac_alpha_below(it->second, 8) > 0.25) tra = true;
+  if (!tra && in_texs && starts(mt.name, "Eye") && !contains(mt.name, "Iris") && frac_alpha_below(it->second, 8) > 0.6) tra = true;
+  return tra;
+}
+
+static bool mesh_bbox(const GfModel& gm, const std::string& mat, double* bb) {
+  bool any = false;
+  double lo[2] = {0, 0}, hi[2] = {0, 0};
+  for (auto& me : gm.meshes)
+    for (auto& sm : me.subs) {
+      if (sm.name != mat || !sm.verts.has("uv0")) continue;
+      auto tri = triangles(sm);
+      if (tri.empty()) continue;
+      const Arr& a = sm.verts.get("uv0");
+      for (auto& t : tri)
+        for (int k = 0; k < 3; k++) {
+          double u = a.at((int)t[k], 0), v = a.at((int)t[k], 1);
+          if (!any) { lo[0] = hi[0] = u; lo[1] = hi[1] = v; any = true; }
+          else { lo[0] = std::min(lo[0], u); hi[0] = std::max(hi[0], u); lo[1] = std::min(lo[1], v); hi[1] = std::max(hi[1], v); }
+        }
+    }
+  if (!any) return false;
+  bb[0] = lo[0]; bb[1] = hi[0]; bb[2] = lo[1]; bb[3] = hi[1];
+  return true;
+}
+
+static bool bakeable(const GfCoord& co, int w, int h) { return co.scale[1] == 1.0 && (co.scale[0] == 1.0 || co.scale[0] == 2.0) && h >= 64 && w >= 8; }
+static inline double wrap_coord(double t, uint32_t mode) {
+  if (mode == 2) return t - std::floor(t);
+  if (mode == 3) {
+    double m = t - 2.0 * std::floor(t / 2.0);
+    return m > 1.0 ? 2.0 - m : m;
+  }
+  return std::min(std::max(t, 0.0), 1.0);
+}
+
+std::vector<std::pair<std::string, std::vector<std::string>>> iris_plan(const GfModel& gm, const std::map<std::string, pbr::Rgba>& texs, const Opts& opts) {
+  std::vector<std::pair<std::string, std::vector<std::string>>> out;
+  if (!opts.iris_bake) return out;
+  struct B { std::string n; double bb[4]; };
+  std::vector<B> irises, eyes;
+  for (auto& mt : gm.materials) {
+    const GfCoord* co = colour_coord(mt);
+    if (!co || !texs.count(co->name)) continue;
+    B b;
+    b.n = mt.name;
+    if (contains(mt.name, "Iris")) {
+      if (mesh_bbox(gm, mt.name, b.bb)) irises.push_back(b);
+    } else if (contains(mt.name, "Eye")) {
+      if (mesh_bbox(gm, mt.name, b.bb)) eyes.push_back(b);
+    }
+  }
+  std::vector<std::pair<std::string, std::vector<std::string>>> by_eye;
+  for (auto& ib : irises) {
+    const B* best = nullptr;
+    double area = 0.0;
+    for (auto& eb : eyes) {
+      double du = std::min(ib.bb[1], eb.bb[1]) - std::max(ib.bb[0], eb.bb[0]);
+      double dv = std::min(ib.bb[3], eb.bb[3]) - std::max(ib.bb[2], eb.bb[2]);
+      if (du > 0 && dv > 0 && du * dv > area) { best = &eb; area = du * dv; }
+    }
+    if (!best) continue;
+    bool done = false;
+    for (auto& e : by_eye) if (e.first == best->n) { e.second.push_back(ib.n); done = true; }
+    if (!done) by_eye.push_back(std::make_pair(best->n, std::vector<std::string>(1, ib.n)));
+  }
+  for (auto& e : by_eye) {
+    const GfMaterial* mt = nullptr;
+    for (auto& m : gm.materials) if (m.name == e.first) { mt = &m; break; }
+    const GfCoord* co = colour_coord(*mt);
+    const pbr::Rgba& t = texs.at(co->name);
+    if (plate_is_tra(*mt, co->name, true, texs) || !bakeable(*co, t.w, t.h)) continue;
+    std::vector<std::string> good;
+    for (auto& i : e.second) {
+      const GfMaterial* im = nullptr;
+      for (auto& m : gm.materials) if (m.name == i) { im = &m; break; }
+      const GfCoord* ic = colour_coord(*im);
+      if (ic && texs.count(ic->name) && plate_is_tra(*im, ic->name, true, texs)) good.push_back(i);
+    }
+    if (!good.empty()) out.push_back(std::make_pair(e.first, good));
+  }
+  return out;
+}
+
+static inline int texel_of(double f, int n) { return std::min((int)std::floor(f * n), n - 1); }
+
+pbr::Rgba bake_eye_irises(const GfModel& gm, const std::map<std::string, pbr::Rgba>& texs, const GfMaterial& eye_mt, const std::vector<std::string>& iris_names,
+                          const pbr::Rgba& eye, const Opts& opts) {
+  const GfCoord& ec = *colour_coord(eye_mt);
+  int w = eye.w, h = eye.h;
+  double sx = ec.scale[0], sy = ec.scale[1], etx = ec.trans[0], ety = ec.trans[1];
+  int nh = (int)std::lround(sx);
+  int rows = std::max(1, h / 64);
+  std::vector<int64_t> acc((size_t)w * h * 3, 0), sum_a((size_t)w * h, 0), cnt((size_t)w * h, 0);
+  for (auto& iname : iris_names) {
+    const GfMaterial* im = nullptr;
+    for (auto& m : gm.materials) if (m.name == iname) { im = &m; break; }
+    const GfCoord* ico = colour_coord(*im);
+    pbr::Rgba tile = texs.at(ico->name);
+    if (opts.light > 0) tile = light_tweak(tile, opts.light);
+    const pbr::Rgba* mask = nullptr;
+    const GfCoord* mco = nullptr;
+    for (auto& c : im->coords) if (c.unit == 2 && contains(c.name, "Nor") && texs.count(c.name)) { mask = &texs.at(c.name); mco = &c; }
+    double bb[4];
+    mesh_bbox(gm, iname, bb);
+    double u0 = bb[0], u1 = bb[1], v0 = bb[2], v1 = bb[3];
+    int nu = std::max(2, (int)std::ceil((u1 - u0) * sx * w * 2.0));
+    int nv = std::max(2, (int)std::ceil((v1 - v0) * sy * h * 2.0));
+    double su = (u1 - u0) / nu, sv = (v1 - v0) / nv;
+    for (int hh = 0; hh < nh; hh++) {
+      double txs = sx != 0.0 ? -(double)hh / sx : 0.0;
+      for (int kk = 0; kk < rows; kk++) {
+        double tys = (double)kk / ((double)rows * sy);
+        for (int j = 0; j < nv; j++) {
+          double V = v0 + ((double)j + 0.5) * sv;
+          for (int i = 0; i < nu; i++) {
+            double U = u0 + ((double)i + 0.5) * su;
+            int ti = texel_of(wrap_coord(ico->scale[0] * (U - ico->trans[0]), ico->wrap[0]), tile.w);
+            int tj = texel_of(wrap_coord(ico->scale[1] * (V - ico->trans[1]), ico->wrap[1]), tile.h);
+            const uint8_t* tp = &tile.px[((size_t)tj * tile.w + ti) * 4];
+            int64_t a = tp[3];
+            if (mask) {
+              int mi = texel_of(wrap_coord(mco->scale[0] * (U - (mco->trans[0] + txs)), mco->wrap[0]), mask->w);
+              int mj = texel_of(wrap_coord(mco->scale[1] * (V - (mco->trans[1] + tys)), mco->wrap[1]), mask->h);
+              a *= mask->px[((size_t)mj * mask->w + mi) * 4 + 3];
+            } else {
+              a *= 255;
+            }
+            int ex = texel_of(wrap_coord(sx * (U - (etx + txs)), ec.wrap[0]), w);
+            int ey = texel_of(wrap_coord(sy * (V - (ety + tys)), ec.wrap[1]), h);
+            size_t idx = (size_t)ey * w + ex;
+            cnt[idx] += 1;
+            sum_a[idx] += a;
+            for (int k = 0; k < 3; k++) acc[idx * 3 + k] += a * tp[k];
+          }
+        }
+      }
+    }
+  }
+  pbr::Rgba out = eye;
+  for (size_t idx = 0; idx < (size_t)w * h; idx++) {
+    if (cnt[idx] <= 0 || sum_a[idx] <= 0) continue;
+    int64_t den = cnt[idx] * 65025;
+    for (int k = 0; k < 3; k++) {
+      int64_t base = out.px[idx * 4 + k];
+      out.px[idx * 4 + k] = (uint8_t)((base * (den - sum_a[idx]) + acc[idx * 3 + k] + den / 2) / den);
+    }
+  }
+  return out;
+}
+
+pbr::Rgba round5(const pbr::Rgba& in) {
+  pbr::Rgba o = in;
+  for (size_t i = 0; i < o.px.size(); i += 4) {
+    for (int k = 0; k < 3; k++) {
+      int v5 = (o.px[i + k] * 31 + 127) / 255;
+      o.px[i + k] = (uint8_t)(v5 * 8 + v5 / 4);
+    }
+    o.px[i + 3] = 255;
+  }
+  return o;
+}
+
 MadeImages make_images(const GfModel& gm, const std::map<std::string, pbr::Rgba>& texs, const Opts& opts, int nat, const MatchPlan* mplan) {
   MadeImages out;
   std::map<std::string, int> name_to_img;
   std::map<int, std::string> cls;
+  auto plan_ = iris_plan(gm, texs, opts);
+  std::set<std::string> baked_;
+  for (auto& e : plan_) for (auto& n : e.second) baked_.insert(n);
   for (auto& mt : gm.materials) {
+    if (baked_.count(mt.name)) {
+      out.mat_img.push_back({-1, "opa"});
+      continue;
+    }
     const GfCoord* co = colour_coord(mt);
     std::string nm = co ? co->name : "";
     bool have_nm = co != nullptr;
     bool patch = contains(mt.shader, "patcheel") && co && co->unit == 1;
-    bool tra = contains(mt.shader, "Tra") || contains(mt.shader, "Alp") || contains(mt.shader, "Xlu") || contains(mt.shader, "Iris") ||
-               contains(mt.name, "Iris") || starts(mt.name, "Line");
     auto it = texs.find(nm);
     bool in_texs = have_nm && it != texs.end();
-    if (!tra && in_texs && starts(mt.name, "Mouth") && frac_alpha_below(it->second, 8) > 0.25) tra = true;
-    if (!tra && in_texs && starts(mt.name, "Eye") && !contains(mt.name, "Iris") && frac_alpha_below(it->second, 8) > 0.6) tra = true;
+    bool tra = plate_is_tra(mt, nm, have_nm, texs);
     bool eye_mat = opts.eye_blend && contains(mt.name, "Eye") && !contains(mt.name, "Iris") && have_nm && contains(nm, "Eye");
     const char* inc_c = opts.fx ? emission_map(mt, texs) : nullptr;
     std::string inc = inc_c ? inc_c : "";
@@ -359,8 +532,10 @@ MadeImages make_images(const GfModel& gm, const std::map<std::string, pbr::Rgba>
     std::string fx, hr;
     for (int f : fixes) fx += std::to_string(f) + ",";
     for (int f : hrules) hr += std::to_string(f) + ",";
-    snprintf(kb, sizeof kb, "%s|%d|%d|%d|%d|%s|%s|%d|%s|%d|%d", nm.c_str(), (int)tra, (int)ghost, (int)cell, (int)patch, fx.c_str(), hr.c_str(),
-             flat ? (((*flat)[0] << 16) | ((*flat)[1] << 8) | (*flat)[2]) : -1, inc.c_str(), (int)do_match, (int)plate);
+    std::string pl;
+    for (auto& e : plan_) if (e.first == mt.name) for (auto& n : e.second) pl += n + ",";
+    snprintf(kb, sizeof kb, "%s|%d|%d|%d|%d|%s|%s|%d|%s|%d|%d|%s", nm.c_str(), (int)tra, (int)ghost, (int)cell, (int)patch, fx.c_str(), hr.c_str(),
+             flat ? (((*flat)[0] << 16) | ((*flat)[1] << 8) | (*flat)[2]) : -1, inc.c_str(), (int)do_match, (int)plate, pl.c_str());
     std::string key = kb;
     if (!name_to_img.count(key)) {
       pbr::Rgba rgba = it->second;
@@ -436,12 +611,15 @@ MadeImages make_images(const GfModel& gm, const std::map<std::string, pbr::Rgba>
         if (opts.cheeks != 0 && contains(mt.shader, "Neon")) rgba = cheek_boost(rgba, opts.cheeks);
         if (!inc.empty()) rgba = bake_emission(rgba, texs.at(inc), hand_glow_strength(nat), &it->second);
       }
+      for (auto& e : plan_) if (e.first == mt.name) rgba = bake_eye_irises(gm, texs, mt, e.second, rgba, opts);
       int nw = std::min(w, opts.max_side), nh = std::min(h, opts.max_side);
       if (nw != w || nh != h) rgba = pbr::gx_resize(rgba, nw, nh);
       pbr::Image im;
       im.width = nw;
       im.height = nh;
-      if (c == "xlu") {
+      bool eye_plate = contains(mt.name, "Eye") && !contains(mt.name, "Iris") && opts.eye_rgb5;
+      if (c == "xlu" || (c == "opa" && eye_plate)) {
+        if (c == "opa") rgba = round5(rgba);
         im.format = 5;
         im.data = pbr::gx_encode_rgb5a3(rgba);
       } else {

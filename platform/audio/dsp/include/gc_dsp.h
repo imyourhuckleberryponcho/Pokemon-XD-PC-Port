@@ -60,6 +60,12 @@ GcDsp* GcDsp_Create(const GcDspHost* host);
 void GcDsp_Destroy(GcDsp* dsp);
 GcDsp* GcDsp_Clone(const GcDsp* dsp);
 void GcDsp_SetHost(GcDsp* dsp, const GcDspHost* host);
+void GcDsp_SetNative(GcDsp* dsp, bool on);
+bool GcDsp_NativeOn(const GcDsp* dsp);
+int GcDsp_KernelCount(void);
+const char* GcDsp_KernelName(int index, uint64_t* hash, int* instructions);
+uint64_t GcDsp_LoopHash(const uint16_t* words, int count);
+uint64_t GcDsp_KernelUses(int index);
 
 void GcDsp_LoadIrom(GcDsp* dsp, const uint16_t* words);
 void GcDsp_LoadCoef(GcDsp* dsp, const uint16_t* words);

@@ -1,0 +1,588 @@
+diff --git a/include/dolphin/os/OSCache.h b/include/dolphin/os/OSCache.h
+--- a/include/dolphin/os/OSCache.h
++++ b/include/dolphin/os/OSCache.h
+@@ -2,6 +2,7 @@
+ #define _DOLPHIN_OSCACHE_H_
+ 
+ #include <dolphin/types.h>
++#include <stddef.h>
+ 
+ #ifdef __cplusplus
+ extern "C" {
+@@ -16,6 +17,10 @@ void DCZeroRange(void* addr, u32 nBytes);
+ void DCTouchRange(void* addr, u32 nBytes);
+ void ICInvalidateRange(void* addr, u32 nBytes);
+ 
++/* (patch 0064) the port's own writers of game memory tell the texture cache what they changed (lib/gx/mem_dirty.hpp) */
++void AuroraMemDirty(const void* addr, size_t nBytes);
++void AuroraMemDirtyAll(void);
++
+ #ifdef TARGET_PC
+ extern void* LCGetBase(void);
+ #else
+diff --git a/lib/dolphin/AR.cpp b/lib/dolphin/AR.cpp
+--- a/lib/dolphin/AR.cpp
++++ b/lib/dolphin/AR.cpp
+@@ -1,5 +1,6 @@
+ #include <dolphin/arq.h>
+ #include "../internal.hpp"
++#include "../gx/mem_dirty.hpp"
+ #include "dolphin/os.h"
+ 
+ static aurora::Module Log("aurora::ar");
+@@ -99,6 +100,7 @@ void ARQPostRequest(ARQRequest* request, u32 owner, u32 type, u32 priority, uint
+     u8* hostDst = (u8*)(uintptr_t)dest;
+     if (aramSrc && hostDst) {
+       memcpy(hostDst, aramSrc, length);
++      aurora::memdirty::mark(hostDst, length, aurora::memdirty::TagAram); // (patch 0064)
+     }
+   }
+ 
+diff --git a/lib/dolphin/dvd/dvd.cpp b/lib/dolphin/dvd/dvd.cpp
+--- a/lib/dolphin/dvd/dvd.cpp
++++ b/lib/dolphin/dvd/dvd.cpp
+@@ -24,6 +24,7 @@
+ #include "dvd.hpp"
+ 
+ #include "../../internal.hpp"
++#include "../../gx/mem_dirty.hpp"
+ 
+ using namespace aurora::dvd::impl;
+ 
+@@ -248,6 +249,8 @@ s32 readFromHandle(CommandDataBase* handle, void* out, s32 length, s32 offset, u
+     totalRead += static_cast<s32>(read);
+     remaining -= static_cast<s32>(read);
+   }
++  // (patch 0064) the disc wrote game memory
++  aurora::memdirty::mark(out, static_cast<size_t>(totalRead), aurora::memdirty::TagDisc);
+ 
+   if (transferredOut != nullptr) {
+     *transferredOut = static_cast<u32>(totalRead);
+diff --git a/lib/dolphin/gx/GXTexture.cpp b/lib/dolphin/gx/GXTexture.cpp
+--- a/lib/dolphin/gx/GXTexture.cpp
++++ b/lib/dolphin/gx/GXTexture.cpp
+@@ -2,9 +2,11 @@
+ #include "__gx.h"
+ 
+ #include "../../gfx/texture.hpp"
++#include "../../gx/mem_dirty.hpp"
+ #include "dolphin/gx/GXAurora.h"
+ 
+ #include <algorithm>
++#include <cstdlib>
+ #include <cstring>
+ #include <new>
+ 
+@@ -381,7 +383,12 @@ void GXInitTexCacheRegion(GXTexRegion* region, GXBool is_32b_mipmap, u32 tmem_ev
+ // TODO GXInvalidateTexRegion
+ 
+ void GXInvalidateTexAll() {
+-  // no-op?
++  // (patch 0064) The data that changed was flushed by the game before this (DCStoreRange: marked); this call only empties the
++  // chip's own texture cache, which the port does not have. XD_TEX_DIRTY_TEXALL=1 (tests) also reads every remembered hash again.
++  static const bool markAll = std::getenv("XD_TEX_DIRTY_TEXALL") != nullptr;
++  if (markAll) {
++    aurora::memdirty::mark_all();
++  }
+ }
+ 
+ // TODO GXPreLoadEntireTexture
+diff --git a/lib/dolphin/os/OSCache.cpp b/lib/dolphin/os/OSCache.cpp
+--- a/lib/dolphin/os/OSCache.cpp
++++ b/lib/dolphin/os/OSCache.cpp
+@@ -1,8 +1,114 @@
+ #include <dolphin/os/OSCache.h>
+ 
++#include "../../gx/mem_dirty.hpp"
++
+ #include <cstddef>
++#include <cstdint>
+ #include <cstring>
+ 
++// Where the game's main memory is (dolphin/os); a weak reference, see lib/gx/regs.cpp.
++#if defined(_MSC_VER)
++extern void* MEM1Start;
++#else
++extern void* MEM1Start __attribute__((weak));
++#endif
++
++// (patch 0064) see lib/gx/mem_dirty.hpp
++namespace aurora::memdirty {
++std::atomic<uint64_t> g_seq{1};
++std::atomic<uint64_t> g_floor{0};
++std::atomic<uint64_t> g_slots[kSlots];
++uint8_t g_tags[kSlots];
++
++size_t offset_of(const void* p) noexcept {
++  if (&MEM1Start == nullptr || MEM1Start == nullptr) {
++    return SIZE_MAX;
++  }
++  const uintptr_t base = reinterpret_cast<uintptr_t>(MEM1Start);
++  const uintptr_t a = reinterpret_cast<uintptr_t>(p);
++  if (a - base < kMemBytes) {
++    return a - base;
++  }
++  // the same memory through the uncached view (0xC0000000 when main memory is at 0x80000000)
++  if (base == 0x80000000u && a - 0xC0000000u < kMemBytes) {
++    return a - 0xC0000000u;
++  }
++  return SIZE_MAX;
++}
++
++void mark(const void* p, size_t n, Tag tag) noexcept {
++  if (n == 0) {
++    return;
++  }
++  const size_t off = offset_of(p);
++  if (off == SIZE_MAX) {
++    return;
++  }
++  const size_t end = off + n > kMemBytes ? kMemBytes : off + n;
++  const uint64_t s = g_seq.fetch_add(1, std::memory_order_seq_cst) + 1;
++  for (size_t b = off >> kShift; b <= (end - 1) >> kShift; ++b) {
++    uint64_t cur = g_slots[b].load(std::memory_order_relaxed);
++    while (cur < s && !g_slots[b].compare_exchange_weak(cur, s, std::memory_order_relaxed)) {
++    }
++    g_tags[b] = tag;
++  }
++}
++
++void mark_all() noexcept {
++  const uint64_t s = g_seq.fetch_add(1, std::memory_order_seq_cst) + 1;
++  uint64_t cur = g_floor.load(std::memory_order_relaxed);
++  while (cur < s && !g_floor.compare_exchange_weak(cur, s, std::memory_order_relaxed)) {
++  }
++}
++
++bool tracked(const void* p, size_t n) noexcept {
++  const size_t off = offset_of(p);
++  return off != SIZE_MAX && n != 0 && off + n <= kMemBytes;
++}
++
++bool clean_since(const void* p, size_t n, uint64_t since) noexcept {
++  if (!tracked(p, n)) {
++    return false;
++  }
++  if (g_floor.load(std::memory_order_seq_cst) > since) {
++    return false;
++  }
++  const size_t off = offset_of(p);
++  for (size_t b = off >> kShift; b <= (off + n - 1) >> kShift; ++b) {
++    if (g_slots[b].load(std::memory_order_relaxed) > since) {
++      return false;
++    }
++  }
++  return true;
++}
++
++uint64_t newest_mark(const void* p, size_t n, uint8_t* tagOut) noexcept {
++  uint64_t best = g_floor.load(std::memory_order_relaxed);
++  uint8_t tag = best != 0 ? static_cast<uint8_t>(TagTexAll) : 0;
++  if (tracked(p, n)) {
++    const size_t off = offset_of(p);
++    for (size_t b = off >> kShift; b <= (off + n - 1) >> kShift; ++b) {
++      const uint64_t v = g_slots[b].load(std::memory_order_relaxed);
++      if (v > best) {
++        best = v;
++        tag = g_tags[b];
++      }
++    }
++  }
++  if (tagOut != nullptr) {
++    *tagOut = tag;
++  }
++  return best;
++}
++} // namespace aurora::memdirty
++
++extern "C" {
++void AuroraMemDirty(const void* addr, size_t nBytes) {
++  aurora::memdirty::mark(addr, nBytes, aurora::memdirty::TagPort);
++}
++void AuroraMemDirtyAll(void) { aurora::memdirty::mark_all(); }
++}
++
+ namespace {
+ alignas(32) u8 s_lcData[16 * 1024];
+ 
+@@ -10,20 +116,23 @@ u32 copy_data(void* dest, const void* src, u32 nBytes) {
+   const size_t numBlocks = (static_cast<size_t>(nBytes) + 31) / 32;
+   if (numBlocks != 0) {
+     std::memcpy(dest, src, numBlocks * 32);
++    aurora::memdirty::mark(dest, numBlocks * 32, aurora::memdirty::TagLockedCache);
+   }
+   return static_cast<u32>((numBlocks + 127) / 128);
+ }
+ } // namespace
+ 
+ extern "C" {
+-void DCInvalidateRange(void*, u32) {}
+-void DCFlushRange(void*, u32) {}
+-void DCStoreRange(void*, u32) {}
+-void DCFlushRangeNoSync(void*, u32) {}
+-void DCStoreRangeNoSync(void*, u32) {}
++// (patch 0064) every call that says "memory changed here" marks the range (lib/gx/mem_dirty.hpp)
++void DCInvalidateRange(void* addr, u32 nBytes) { aurora::memdirty::mark(addr, nBytes, aurora::memdirty::TagInvalidate); }
++void DCFlushRange(void* addr, u32 nBytes) { aurora::memdirty::mark(addr, nBytes, aurora::memdirty::TagCacheFlush); }
++void DCStoreRange(void* addr, u32 nBytes) { aurora::memdirty::mark(addr, nBytes, aurora::memdirty::TagCacheFlush); }
++void DCFlushRangeNoSync(void* addr, u32 nBytes) { aurora::memdirty::mark(addr, nBytes, aurora::memdirty::TagCacheNoSync); }
++void DCStoreRangeNoSync(void* addr, u32 nBytes) { aurora::memdirty::mark(addr, nBytes, aurora::memdirty::TagCacheNoSync); }
+ void DCZeroRange(void* addr, u32 nBytes) {
+   if (nBytes != 0) {
+     std::memset(addr, 0, nBytes);
++    aurora::memdirty::mark(addr, nBytes, aurora::memdirty::TagZero);
+   }
+ }
+ void DCTouchRange(void*, u32) {}
+@@ -35,9 +144,11 @@ void LCDisable() {}
+ 
+ void LCLoadBlocks(void* destTag, void* srcAddr, u32 numBlocks) {
+   std::memcpy(destTag, srcAddr, (numBlocks != 0 ? static_cast<size_t>(numBlocks) : 128) * 32);
++  aurora::memdirty::mark(destTag, (numBlocks != 0 ? static_cast<size_t>(numBlocks) : 128) * 32, aurora::memdirty::TagLockedCache);
+ }
+ void LCStoreBlocks(void* destAddr, void* srcTag, u32 numBlocks) {
+   std::memcpy(destAddr, srcTag, (numBlocks != 0 ? static_cast<size_t>(numBlocks) : 128) * 32);
++  aurora::memdirty::mark(destAddr, (numBlocks != 0 ? static_cast<size_t>(numBlocks) : 128) * 32, aurora::memdirty::TagLockedCache);
+ }
+ u32 LCLoadData(void* destAddr, void* srcAddr, u32 nBytes) { return copy_data(destAddr, srcAddr, nBytes); }
+ u32 LCStoreData(void* destAddr, void* srcAddr, u32 nBytes) { return copy_data(destAddr, srcAddr, nBytes); }
+diff --git a/lib/dolphin/thp/THPDec.cpp b/lib/dolphin/thp/THPDec.cpp
+--- a/lib/dolphin/thp/THPDec.cpp
++++ b/lib/dolphin/thp/THPDec.cpp
+@@ -1,6 +1,7 @@
+ #include "dolphin/thp.h"
+ 
+ #include "../../internal.hpp"
++#include "../../gx/mem_dirty.hpp"
+ 
+ #include <algorithm>
+ #include <array>
+@@ -604,6 +605,15 @@ s32 THPVideoDecode(const void* file, void* tileY, void* tileU, void* tileV, void
+   const u16 mcuColumns = static_cast<u16>((context.width + 15) / 16);
+   const u16 mcuRows = static_cast<u16>((context.height + 15) / 16);
+   u32 restartCount = 0;
++  // (patch 0064) the decoder writes the three planes: told to the texture cache when it ends (also when it stops half way)
++  struct MarkPlanes {
++    void* y; void* u; void* v; size_t lumaBytes; size_t chromaBytes;
++    ~MarkPlanes() {
++      aurora::memdirty::mark(y, lumaBytes, aurora::memdirty::TagMovie);
++      aurora::memdirty::mark(u, chromaBytes, aurora::memdirty::TagMovie);
++      aurora::memdirty::mark(v, chromaBytes, aurora::memdirty::TagMovie);
++    }
++  } markPlanes{tileY, tileU, tileV, static_cast<size_t>(mcuColumns) * 16 * mcuRows * 16, static_cast<size_t>(mcuColumns) * 8 * mcuRows * 8};
+   for (u16 mcuY = 0; mcuY < mcuRows; ++mcuY) {
+     for (u16 mcuX = 0; mcuX < mcuColumns; ++mcuX) {
+       const u16 lumaX = static_cast<u16>(mcuX * 16);
+diff --git a/lib/gx/gx_perf.hpp b/lib/gx/gx_perf.hpp
+--- a/lib/gx/gx_perf.hpp
++++ b/lib/gx/gx_perf.hpp
+@@ -31,6 +31,7 @@ struct Stats {
+   uint64_t texSameAsBefore = 0, texChanged = 0, texNew = 0, texSameBytes = 0;
+   uint64_t arrCalls = 0, arrHashed = 0, arrHashBytes = 0, arrNs = 0, arrFast = 0, arrFastCopied = 0;
+   uint64_t scanNs = 0, scanVerts = 0;
++  uint64_t texDirtySkipped = 0, texDirtySkippedBytes = 0, texDirtyRehash = 0, texDirtyRehashSame = 0; // (patch 0064)
+   uint64_t drainNs = 0, drainCalls = 0; // (patch 0063) the game's thread waiting in fifo::drain()
+ };
+ inline Stats g;
+diff --git a/lib/gx/mem_dirty.hpp b/lib/gx/mem_dirty.hpp
+new file mode 100644
+--- /dev/null
++++ b/lib/gx/mem_dirty.hpp
+@@ -0,0 +1,61 @@
++#pragma once
++
++// (patch 0064) Which parts of the game's main memory may have changed since a moment: "hash on write".
++//
++// The GameCube's graphics chip only sees what the processor wrote after the game flushed it (DCFlushRange / DCStoreRange /
++// DCStoreRangeNoSync), a texture changed at an address already used needs GXInvalidateTexAll, and the other writers of
++// memory (disc reads, ARAM -> main copies, the movie decoder) are the port's own code. Each of them calls mark() after
++// it wrote. The texture cache (texture.cpp) then keeps a texture's contents hash and reads the bytes again only when a
++// mark touched them since the hash was made (or when the texture is new to it, or lies outside tracked memory).
++//
++// Exactness: a stamp is taken BEFORE the bytes are hashed; a mark made while hashing, or later, has a larger stamp, so the
++// entry counts as dirty. Marks are made AFTER the write. Blocks of 256 bytes; every mark only ever raises a block's stamp,
++// so a rough mark can only cause an extra re-hash, never a missed one. Memory outside main memory is "not tracked": the
++// caller hashes it every time, as before.
++//   XD_TEX_DIRTY=0 off (every texture read for its hash, as before) | 1 on | verify (hashes anyway, reports any change
++//   no mark announced: "[texdirty] MISS ...")
++
++#include <atomic>
++#include <cstddef>
++#include <cstdint>
++
++namespace aurora::memdirty {
++
++constexpr unsigned kShift = 8;                       // 256-byte blocks
++constexpr size_t kMemBytes = 0x1800000;              // MEM1: 24 MB
++constexpr size_t kSlots = kMemBytes >> kShift;
++
++enum Tag : uint8_t {
++  TagNone = 0,
++  TagCacheFlush = 1,   // DCFlushRange / DCStoreRange
++  TagCacheNoSync = 2,  // ... NoSync
++  TagInvalidate = 3,   // DCInvalidateRange (the game says: something else wrote here)
++  TagZero = 4,         // DCZeroRange
++  TagLockedCache = 5,  // LCStoreData / LCStoreBlocks
++  TagDisc = 6,         // DVD read finished
++  TagAram = 7,         // ARAM -> main memory
++  TagMovie = 8,        // THP decoder output
++  TagTexAll = 9,       // GXInvalidateTexAll
++  TagPort = 10,        // other port code (AuroraMemDirty)
++};
++
++extern std::atomic<uint64_t> g_seq;    // last stamp handed out
++extern std::atomic<uint64_t> g_floor;  // stamp of the last "everything changed"
++extern std::atomic<uint64_t> g_slots[kSlots];
++extern uint8_t g_tags[kSlots];         // who marked a block last (for the verify report)
++
++// Where is `p` in main memory (cached or uncached view)? Offset into it, or SIZE_MAX.
++size_t offset_of(const void* p) noexcept;
++
++void mark(const void* p, size_t n, Tag tag) noexcept;
++void mark_all() noexcept;
++
++inline uint64_t now() noexcept { return g_seq.load(std::memory_order_seq_cst); }
++
++// True when [p, p+n) is in tracked memory and no mark touched it with a stamp above `since`.
++bool clean_since(const void* p, size_t n, uint64_t since) noexcept;
++bool tracked(const void* p, size_t n) noexcept;
++// The newest mark in the range: its stamp and writer (verify report); 0 if none.
++uint64_t newest_mark(const void* p, size_t n, uint8_t* tagOut) noexcept;
++
++} // namespace aurora::memdirty
+diff --git a/lib/gx/texture.cpp b/lib/gx/texture.cpp
+--- a/lib/gx/texture.cpp
++++ b/lib/gx/texture.cpp
+@@ -9,6 +9,7 @@
+ #include "../gfx/texture_replacement.hpp"
+ #include "command_processor.hpp"
+ #include "gx_perf.hpp"
++#include "mem_dirty.hpp"
+ #include "shader_info.hpp"
+ 
+ #include <absl/container/flat_hash_map.h>
+@@ -20,12 +21,14 @@
+ #include <array>
+ #include <atomic>
+ #include <cstddef>
++#include <cstdarg>
+ #include <cstdio>
+ #include <cstdint>
+ #include <cstring>
+ #include <map>
+ #include <optional>
+ #include <utility>
++#include <vector>
+ 
+ namespace aurora::gx {
+ namespace {
+@@ -286,22 +289,79 @@ struct SourceHashMemo {
+ };
+ std::array<SourceHashMemo, 256> s_sourceHashMemos;
+ 
+-XXH128_hash_t hash_source_bytes(const void* data, size_t bytes) {
+-  static const bool memoOn = perf::option("XD_GX_TEXMEMO");
+-  const bool stats = perf::stats_on();
+-  const uint64_t epoch = memoOn ? fifo::batch_epoch() : 0;
+-  SourceHashMemo* memo = nullptr;
+-  if (epoch != 0) {
+-    const auto slot = static_cast<size_t>((reinterpret_cast<uintptr_t>(data) >> 5) ^ bytes ^ (bytes >> 9)) & 255;
+-    memo = &s_sourceHashMemos[slot];
+-    if (memo->epoch == epoch && memo->data == data && memo->bytes == bytes) {
+-      if (stats) {
+-        ++perf::g.texMemoHits;
+-        perf::g.texMemoBytes += bytes;
+-      }
+-      return memo->hash;
++// (patch 0064) Hash on write (lib/gx/mem_dirty.hpp): the contents hash of a texture / palette is kept for the next pictures
++// as long as no write to its memory was announced (cache flushes, disc reads, ARAM copies, the movie decoder,
++// GXInvalidateTexAll). XD_TEX_DIRTY=0 reads every texture's bytes for the hash again (the old way), =verify does that
++// anyway and reports each texture whose bytes changed with no announcement ("[texdirty] MISS ...").
++enum class DirtyMode { Off, On, Verify };
++DirtyMode dirty_mode() {
++  static const DirtyMode mode = [] {
++    const char* v = std::getenv("XD_TEX_DIRTY");
++    if (v == nullptr) {
++      return DirtyMode::On; // (default on: PERFORMANCE.md section 17; XD_TEX_DIRTY=0 = the old way)
++    }
++    if (std::strcmp(v, "verify") == 0) {
++      return DirtyMode::Verify;
+     }
++    return v[0] == '0' ? DirtyMode::Off : DirtyMode::On;
++  }();
++  return mode;
++}
++
++struct SourceRangeKey {
++  const void* data;
++  size_t bytes;
++  bool operator==(const SourceRangeKey& o) const noexcept { return data == o.data && bytes == o.bytes; }
++  template <typename H>
++  friend H AbslHashValue(H h, const SourceRangeKey& k) {
++    return H::combine(std::move(h), k.data, k.bytes);
++  }
++};
++struct SourceRangeEntry {
++  XXH128_hash_t hash{};
++  uint64_t stamp = 0;        // memdirty::now() taken before the bytes were hashed
++  std::vector<uint8_t> copy; // (verify mode only) the bytes that were hashed
++};
++absl::flat_hash_map<SourceRangeKey, SourceRangeEntry> s_sourceRanges;
++uint64_t s_verifyMisses = 0, s_verifyChecked = 0, s_verifyFalseDirty = 0;
++uint64_t s_dirtyByTag[16] = {};
++
++// (verify mode) a line to stderr and, with XD_TEX_DIRTY_LOG=<file>, appended to that file (a check set runs many programs)
++void texdirty_log(const char* fmt, ...) {
++  char buf[1400];
++  va_list ap;
++  va_start(ap, fmt);
++  std::vsnprintf(buf, sizeof buf, fmt, ap);
++  va_end(ap);
++  std::fputs(buf, stderr);
++  if (const char* path = std::getenv("XD_TEX_DIRTY_LOG"); path != nullptr && path[0] != 0) {
++    if (std::FILE* f = std::fopen(path, "a")) {
++      const char* label = std::getenv("XD_RUN_LABEL");
++      std::fprintf(f, "%s%s", label != nullptr ? label : "", label != nullptr ? " " : "");
++      std::fputs(buf, f);
++      std::fclose(f);
++    }
++  }
++}
++
++const char* writer_name(uint8_t tag) {
++  switch (tag) {
++  case 1: return "cache flush";
++  case 2: return "cache flush (no sync)";
++  case 3: return "cache invalidate";
++  case 4: return "DCZeroRange";
++  case 5: return "locked cache";
++  case 6: return "disc read";
++  case 7: return "ARAM copy";
++  case 8: return "movie decoder";
++  case 9: return "GXInvalidateTexAll";
++  case 10: return "port code";
++  default: return "none";
+   }
++}
++
++XXH128_hash_t hash_source_bytes_raw(const void* data, size_t bytes) {
++  const bool stats = perf::stats_on();
+   const uint64_t t0 = stats ? perf::now_ns() : 0;
+   const XXH128_hash_t hash = aurora::xxh3_128(data, bytes);
+   if (stats) {
+@@ -321,6 +381,97 @@ XXH128_hash_t hash_source_bytes(const void* data, size_t bytes) {
+       it->second = hash;
+     }
+   }
++  return hash;
++}
++
++// The hash of the bytes at `data`, from the dirty tracking when it can be trusted, else read from memory.
++XXH128_hash_t hash_source_bytes_tracked(const void* data, size_t bytes) {
++  const DirtyMode mode = dirty_mode();
++  if (mode == DirtyMode::Off || !memdirty::tracked(data, bytes)) {
++    return hash_source_bytes_raw(data, bytes);
++  }
++  const bool stats = perf::stats_on();
++  auto it = s_sourceRanges.find(SourceRangeKey{data, bytes});
++  if (it != s_sourceRanges.end()) {
++    auto& e = it->second;
++    const bool clean = memdirty::clean_since(data, bytes, e.stamp);
++    if (clean && mode == DirtyMode::On) {
++      if (stats) {
++        ++perf::g.texDirtySkipped;
++        perf::g.texDirtySkippedBytes += bytes;
++      }
++      return e.hash;
++    }
++    const uint64_t stamp = memdirty::now();
++    const XXH128_hash_t hash = hash_source_bytes_raw(data, bytes);
++    const bool same = hash.low64 == e.hash.low64 && hash.high64 == e.hash.high64;
++    if (mode == DirtyMode::Verify) {
++      ++s_verifyChecked;
++      if (clean && !same) {
++        ++s_verifyMisses;
++        size_t at = 0;
++        const auto* now = static_cast<const uint8_t*>(data);
++        while (at < e.copy.size() && at < bytes && now[at] == e.copy[at]) {
++          ++at;
++        }
++        uint8_t tag = 0;
++        const uint64_t newest = memdirty::newest_mark(data, bytes, &tag);
++        if (s_verifyMisses <= 200) {
++          texdirty_log(
++                       "[texdirty] MISS #%llu frame %llu addr %p (offset 0x%zx) bytes %zu: changed with no mark; first different byte at +0x%zx "
++                       "(was %02x now %02x); last mark on the range: stamp %llu by %s (entry stamp %llu, now %llu)\n",
++                       static_cast<unsigned long long>(s_verifyMisses), static_cast<unsigned long long>(s_frameCount), data,
++                       memdirty::offset_of(data), bytes, at, at < e.copy.size() ? e.copy[at] : 0, at < bytes ? now[at] : 0,
++                       static_cast<unsigned long long>(newest), writer_name(tag), static_cast<unsigned long long>(e.stamp),
++                       static_cast<unsigned long long>(stamp));
++        }
++      } else if (!clean && same) {
++        ++s_verifyFalseDirty;
++        uint8_t tag = 0;
++        memdirty::newest_mark(data, bytes, &tag);
++        ++s_dirtyByTag[tag & 15];
++      }
++      e.copy.assign(static_cast<const uint8_t*>(data), static_cast<const uint8_t*>(data) + bytes);
++    } else if (stats) {
++      ++perf::g.texDirtyRehash;
++      if (same) {
++        ++perf::g.texDirtyRehashSame;
++      }
++    }
++    e.hash = hash;
++    e.stamp = stamp;
++    return hash;
++  }
++  if (s_sourceRanges.size() >= 16384) {
++    s_sourceRanges.clear();
++  }
++  const uint64_t stamp = memdirty::now();
++  const XXH128_hash_t hash = hash_source_bytes_raw(data, bytes);
++  auto& e = s_sourceRanges[SourceRangeKey{data, bytes}];
++  e.hash = hash;
++  e.stamp = stamp;
++  if (mode == DirtyMode::Verify) {
++    e.copy.assign(static_cast<const uint8_t*>(data), static_cast<const uint8_t*>(data) + bytes);
++  }
++  return hash;
++}
++
++XXH128_hash_t hash_source_bytes(const void* data, size_t bytes) {
++  static const bool memoOn = perf::option("XD_GX_TEXMEMO");
++  const uint64_t epoch = memoOn ? fifo::batch_epoch() : 0;
++  SourceHashMemo* memo = nullptr;
++  if (epoch != 0) {
++    const auto slot = static_cast<size_t>((reinterpret_cast<uintptr_t>(data) >> 5) ^ bytes ^ (bytes >> 9)) & 255;
++    memo = &s_sourceHashMemos[slot];
++    if (memo->epoch == epoch && memo->data == data && memo->bytes == bytes) {
++      if (perf::stats_on()) {
++        ++perf::g.texMemoHits;
++        perf::g.texMemoBytes += bytes;
++      }
++      return memo->hash;
++    }
++  }
++  const XXH128_hash_t hash = hash_source_bytes_tracked(data, bytes);
+   if (memo != nullptr) {
+     *memo = {data, bytes, epoch, hash};
+   }
+@@ -824,6 +975,17 @@ void end_frame() noexcept {
+   s_copyCache.end_frame();
+   s_contentCache.end_frame();
+   update_cache_stats();
++  if (dirty_mode() == DirtyMode::Verify && (s_frameCount % 600) == 0) {
++    texdirty_log("[texdirty] verify frame %llu: %llu re-checks, %llu misses, %llu marked but unchanged\n",
++                 static_cast<unsigned long long>(s_frameCount), static_cast<unsigned long long>(s_verifyChecked),
++                 static_cast<unsigned long long>(s_verifyMisses), static_cast<unsigned long long>(s_verifyFalseDirty));
++    for (int t = 0; t < 16; ++t) {
++      if (s_dirtyByTag[t] != 0) {
++        texdirty_log("[texdirty]   marked but unchanged, last mark by %s: %llu\n", writer_name(static_cast<uint8_t>(t)),
++                     static_cast<unsigned long long>(s_dirtyByTag[t]));
++      }
++    }
++  }
+ }
+ 
+ void shutdown() noexcept {

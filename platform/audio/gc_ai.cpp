@@ -312,6 +312,29 @@ void SDLCALL on_device_wants(void*, SDL_AudioStream*, int additional, int) {
   }
 }
 
+std::atomic<int> sLimiterOn{0};
+int limiter_env() {
+  static const int v = [] { const char* e = std::getenv("XD_AUDIO_LIMIT"); return e == nullptr ? -1 : e[0] == '0' ? 0 : e[0] == '1' ? 1 : -1; }();
+  return v;
+}
+
+void SDLCALL limit_postmix(void*, const SDL_AudioSpec* spec, float* buffer, int bytes) {
+  if (spec == nullptr || spec->format != SDL_AUDIO_F32) return;
+  const int forced = limiter_env();
+  if (!(forced == 1 || (forced < 0 && sLimiterOn.load(std::memory_order_relaxed) != 0))) return;
+  const int n = bytes / static_cast<int>(sizeof(float));
+  for (int i = 0; i < n; i++) {
+    const float x = buffer[i];
+    const float a = x < 0.f ? -x : x;
+    if (a > 0.9f) {
+      const float y = 0.9f + 0.1f * std::tanh((a - 0.9f) * 10.f);
+      buffer[i] = x < 0.f ? -y : y;
+    } else if (a != a) {
+      buffer[i] = 0.f;
+    }
+  }
+}
+
 void open_output() {
   if (sStream != nullptr) return;
   if (!SDL_WasInit(SDL_INIT_AUDIO) && !SDL_InitSubSystem(SDL_INIT_AUDIO)) {
@@ -326,6 +349,9 @@ void open_output() {
   }
   SDL_SetAudioStreamGetCallback(sStream, on_device_wants, nullptr);
   SDL_SetAudioStreamGain(sStream, sGain);
+  if (!SDL_SetAudioPostmixCallback(SDL_GetAudioStreamDevice(sStream), limit_postmix, nullptr)) {
+    std::fprintf(stderr, "[platform/audio] peak limiter not installed (%s)\n", SDL_GetError());
+  }
   if (!sPaused) SDL_ResumeAudioStreamDevice(sStream);
 }
 
@@ -551,6 +577,20 @@ void take_block(void*, void*) {
         sDropped++;
       }
       steer_rate(queued);
+#ifndef _WIN32
+      static uint64_t lastReportNs = 0;
+      static uint32_t lastStarved = 0, lastStarvedBytes = 0;
+      const uint64_t nowNs = SDL_GetTicksNS();
+      if (lastReportNs == 0) lastReportNs = nowNs;
+      if (nowNs - lastReportNs > 60'000'000'000ull) {
+        const uint32_t s = sStarved.load(), sb = sStarvedBytes.load();
+        std::fprintf(stderr, "[platform/audio] last minute: sound card short of data %u times (%.0f ms), sound reserve %u ms, %u blocks dropped in all\n",
+                     s - lastStarved, (sb - lastStarvedBytes) / 4.0 * 1000.0 / kSampleRate, sReserve.targetNow.load(), sDropped);
+        lastStarved = s;
+        lastStarvedBytes = sb;
+        lastReportNs = nowNs;
+      }
+#endif
     }
   }
   if (sCallback != nullptr) {
@@ -582,6 +622,16 @@ void PortAudio_SetVolume(float gain) {
   sGain = gain < 0.f ? 0.f : gain > 1.f ? 1.f : gain;
   if (sStream != nullptr) {
     SDL_SetAudioStreamGain(sStream, sGain);
+  }
+}
+
+void PortAudio_SetPeakLimiter(int on) {
+  static std::atomic<int> told{0};
+  const int v = on != 0 ? 1 : 0;
+  const int before = sLimiterOn.exchange(v, std::memory_order_relaxed);
+  if (told.exchange(1) == 0 || before != v) {
+    const int forced = limiter_env();
+    std::fprintf(stderr, "[platform/audio] peak limiter: %s%s\n", v != 0 ? "on" : "off", forced < 0 ? "" : forced == 1 ? " (XD_AUDIO_LIMIT=1 forces it on)" : " (XD_AUDIO_LIMIT=0 forces it off)");
   }
 }
 
@@ -634,6 +684,12 @@ void PortAudio_GetStats(PortAudioStats* out) {
   out->reserveMs = sReserve.targetNow.load();
   out->reserveGrown = sReserve.grown.load();
   out->longestWaitMs = sReserve.longestWait.load();
+}
+
+int PortAudio_QueuedMs(void) {
+  SDL_AudioStream* const stream = sStream;
+  if (stream == nullptr || sPaused || sFrozen.load(std::memory_order_relaxed)) return -1;
+  return static_cast<int>(static_cast<double>(SDL_GetAudioStreamQueued(stream)) * 1000.0 / (kSampleRate * 4.0));
 }
 
 void PortAudio_SetSlowMotion(float speed) {

@@ -18,6 +18,8 @@ struct MadeImages {
   std::vector<std::string> classes;
 };
 const GfCoord* colour_coord(const GfMaterial& mt);
+bool plate_is_tra(const GfMaterial& mt, const std::string& nm, bool have_nm, const std::map<std::string, pbr::Rgba>& texs);
+std::vector<std::pair<std::string, std::vector<std::string>>> iris_plan(const GfModel& gm, const std::map<std::string, pbr::Rgba>& texs, const Opts& opts);
 bool is_effect_layer(const GfMaterial& mt);
 
 struct MatchPlan {

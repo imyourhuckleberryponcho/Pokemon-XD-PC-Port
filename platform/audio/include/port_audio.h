@@ -31,10 +31,14 @@ typedef struct {
 
 void PortAudio_GetStats(PortAudioStats* out);
 
+int PortAudio_QueuedMs(void);
+
 void PortAudio_SetFastForward(int factor);
 void PortAudio_SetSlowMotion(float speed);
 
 void PortAudio_SetVolume(float gain);
+
+void PortAudio_SetPeakLimiter(int on);
 
 void PortAudio_SetPaused(bool paused);
 

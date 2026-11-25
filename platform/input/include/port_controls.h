@@ -23,6 +23,10 @@ void PortInput_UpdateControls(void);
 union SDL_Event;
 void PortInput_ControlsHandleEvent(const union SDL_Event* event);
 
+void PortInput_GcAdapterHints(void);
+void PortInput_GcAdapterLog(void);
+void PortInput_GcAdapterTick(void);
+
 #ifdef __cplusplus
 }
 #endif

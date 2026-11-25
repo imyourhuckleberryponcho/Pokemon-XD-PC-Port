@@ -8,6 +8,7 @@
 #include "xd_gen4_abilities.h"
 #include "xd_xg.h"
 #include "xd_gen57.h"
+#include "xd_forms.h"
 #include "pack_match.h"
 
 #include "pack_tables.h"
@@ -62,6 +63,19 @@ constexpr uint32_t kWaveOld = 389, kWaveSpare = XD_PC_SPARE_SPECIES;
 
 bool sLoaded = false;
 bool sSpots = false;
+bool sMunchlaxNoFace = false;
+
+void GuardMunchlaxFace(std::string& text) {
+  const size_t row = text.find("\"#414\": {");
+  if (row == std::string::npos) return;
+  const size_t open = text.find('{', row), end = text.find('}', open);
+  if (end == std::string::npos) return;
+  const std::string body = text.substr(open, end - open);
+  if (body.find("\"basisStatus\"") == std::string::npos || body.find("\"cgData.spriteId\"") != std::string::npos || body.find("\"face\"") != std::string::npos) return;
+  text.insert(open + 1, "\"cgData.spriteId\": [143, 529], ");
+  sMunchlaxNoFace = true;
+  std::fprintf(stderr, "[gen4] the pack has no face for Munchlax: Snorlax's is shown, and Munchlax is not offered\n");
+}
 bool sGen57Wanted = false;
 
 using xd::pack::PkxRow;
@@ -83,6 +97,7 @@ std::string Norm(std::string k) {
   return k;
 }
 
+std::vector<uint16_t> sDeskItems;
 std::vector<RowSpec> sMoreRows;
 
 void Register() {
@@ -162,8 +177,10 @@ void ResolveEvolutions(const engine::mods::LoadResult& result, const std::map<st
       if (!eeveeOk) std::fprintf(stderr, "[gen4] the Eevee offer keeps its five choices (\"%s\": a name has no row in this run)\n", line.c_str());
     }
   }
+  for (const auto& e : list) {
+    if (e.species == 133) std::fprintf(stderr, "[gen4] Eevee evolution by item %u -> species %u (kind %u)\n", static_cast<unsigned>(e.param), static_cast<unsigned>(e.target), static_cast<unsigned>(e.kind));
+  }
   xd::gen4::SetExtraEvolutions(list, cord);
-  if (xd::xg::On()) eeveeOk = false;
   xd::gen4::SetEeveeChoices(eeveeOk, eevee[0], eevee[1], eevee[2], eevee[3]);
   std::fprintf(stderr, "[gen4] evolutions: %zu in the PC-only list (%d left out), Linking Cord %s, Eevee offer %s\n", list.size(), refused,
                cord >= 0 ? ("item " + std::to_string(cord)).c_str() : "not in this run", eeveeOk ? "7 choices" : "5 choices");
@@ -195,6 +212,7 @@ bool PackPresent(std::string* why) {
 }
 
 bool Loaded() { return sLoaded; }
+bool MunchlaxNoFace() { return sLoaded && sMunchlaxNoFace; }
 uint32_t ExtraRowCount(const char* table) {
   uint32_t n = 0;
   if (sLoaded) {
@@ -203,6 +221,7 @@ uint32_t ExtraRowCount(const char* table) {
   return n;
 }
 bool SpotsLoaded() { return sLoaded && sSpots; }
+const std::vector<uint16_t>& DeskItems() { return sDeskItems; }
 void SetMoreRows(const std::vector<xd::pack::RowSpec>& rows) {
   sMoreRows = rows;
   Register();
@@ -219,6 +238,7 @@ uint32_t WaveRowsTaken() { return sLoaded ? static_cast<uint32_t>(sWaves.size())
 void Prepare(bool wanted, bool spots, engine::mods::LoadOptions& options, std::vector<engine::mods::DataModFile>& dataFiles) {
   sLoaded = false;
   sSpots = false;
+  sMunchlaxNoFace = false;
   sPkx.clear();
   sWaves.clear();
   sRows.clear();
@@ -264,6 +284,7 @@ void Prepare(bool wanted, bool spots, engine::mods::LoadOptions& options, std::v
       std::fprintf(stderr, "[gen4] could not read %s: the game starts without the Gen 4 Pokemon\n", f.string().c_str());
       return;
     }
+    GuardMunchlaxFace(d.text);
     dataFiles.push_back(std::move(d));
   }
   if (xd::xg::On()) spots = false;
@@ -285,7 +306,6 @@ void Prepare(bool wanted, bool spots, engine::mods::LoadOptions& options, std::v
     }
   }
   if (!xd::xg::On()) machines::Load(pack);
-  if (xd::xg::On()) sGoods.clear();
   ReadText(pack / L"evolutions.txt", sEvoText);
   options.extraLayers.push_back({"pbr_gen4", "Gen 4 Pokemon", pack});
   options.builtInFolders["gen4"] = pack;
@@ -372,6 +392,15 @@ void AfterLoad(const engine::mods::LoadResult& result) {
     if (r.table == "item_data_prime") itemIds[Norm(r.key)] = r.id;
   }
   size_t goodsMissing = 0;
+  sDeskItems.clear();
+  if (xd::xg::On()) {
+    for (const GoodsRow& g : sGoods) {
+      if (g.copyOf >= 0 || g.item.empty() || std::isdigit(static_cast<unsigned char>(g.item[0])) || g.item.compare(0, 2, "TM") == 0) continue;
+      if (auto it = itemIds.find(g.item); it != itemIds.end()) sDeskItems.push_back(static_cast<uint16_t>(it->second));
+    }
+    for (uint32_t i = 0; i < xd::forms::ShopSpareRows(); i++) sRows.push_back({"shopGoods", 0xFFFFFFFFu, 1, -1, {0, 2, 0}});
+    sGoods.clear();
+  }
   for (const GoodsRow& g : sGoods) {
     if (g.copyOf >= 0) {
       sRows.push_back({"shopGoods", 0xFFFFFFFFu, 1, g.copyOf, {}});

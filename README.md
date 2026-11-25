@@ -13,7 +13,7 @@ This repository contains **no game assets, ROMs, ISOs or executables**, and none
 You need your own legally obtained copy of the game (USA, `GXXE01`); the port reads everything from your disc
 image while it runs.
 
-## Status: public beta — version 0.7.3
+## Status: public beta — version 0.7.4
 
 **Playable from New Game into the story, with known bugs.** It is not finished: expect crashes, stalls and
 graphics differences, and keep backups of saves you care about. Downloads are on the [Releases](../../releases)
@@ -159,6 +159,29 @@ Saves, settings, mods, logs and bug reports live in one data folder (`%APPDATA%\
 - Launcher, Save page, "Where your data is kept": "Open data folder"; "Move my data..." (user folder <-> portable: it
   copies everything, checks the copy, switches, and puts the old folder in the recycle bin / trash so nothing is lost; the
   launcher then starts again); "Remove all game data..." (asks first, names the folder, offers to export your saves first).
+
+### New in 0.7.4
+
+- Two copies on one save: starting a second game on a save that is already open now says which save, folder and program holds it, and offers "Try again", "End the other copy", "Play without the card" or "Quit". A copy that is refused no longer blocks the first one, and a restart that hangs is ended by itself after a minute.
+- Long Pokemon names: Gen 5-7 names of 11-12 letters (Fletchinder...) show whole in battle, the party list and the summary, not cut at 10 letters.
+- The little pop-up at the left edge (new mail, info, a Pokemon ready to purify) no longer shows the Purify Poke Ball on top of the mail picture.
+- The loudest Gen 4 and Gen 5-7 cries from your Ultra Sun / Ultra Moon dump (Dialga, Giratina...) are brought down to about the game's own volume. In Enhanced the sound output also has a soft limiter for the loudest peaks (off in Original and Faithful). Packs made before this say "out of date, make again": press Make once on the Ultra Sun / Ultra Moon card.
+- PC box and party pictures of the Gen 4 and Gen 5-7 Pokemon made from your Ultra Sun / Ultra Moon dump are drawn from their own models, so Dialga no longer shows Raikou's picture (same "make again" for older packs).
+- Ultra Sun / Ultra Moon eyes: the eyes of Zoroark, Zorua, Shuppet and others are drawn properly (same "make again").
+- Playing online with Ultra Sun / Ultra Moon packs: both players press Make again, a re-made pack doesn't match an older one.
+- GameCube controller adapter: when it is not found, the launcher and the game's log now say why (in use by another program, a wrong driver, not listed by Windows, the library missing), the launcher tries again while the Controls page is open and lets go of the adapter while the game runs.
+- Save editor: every nature shows its name and what it raises and lowers ("Adamant (+Attack, -Sp. Atk)"), also in playthroughs with mods, the randomizer or Gen 4 / Gen 5-7 rules. "Add" finds its template Pokemon in your party and PC boxes and accepts a purified former Shadow Pokemon.
+- The Custom randomizer starts with "Trainers: moves = natural (by level)".
+- Pokemon XG: the Gen 4 pack's unused shop rows are no longer added to XG's shops, and the randomizer gives XG's first Shadow Pokemon the moves of their real level. Randomizer codes for Pokemon XD make the same game as before.
+- With the Gen 4 / Gen 5-7 Pokemon on: Pokemon XG's prize desk now also sells the Gen 4 evolution items (with the Gen 4 Pokemon) and, with the Gen 5-7 Pokemon and the Mega Evolution rule on, the Alola Charm and the Mega Stones of Pokemon you have caught. The opening's Eevee offer on XG gets Leafeon (Leaf Stone) and Glaceon (Ice Stone) as on XD, and with the Gen 5-7 Pokemon, on XD and XG, Sylveon (Eevee + Shiny Stone).
+- Frame rate above 60: the in-between pictures stop when their time is used up and follow what the sound card has queued, so a slow PC should crackle less.
+- The sound chip's busiest loops run as hand-written code (about 1.4 times faster, sound unchanged to the last bit).
+- The graphics-command reading skips re-checking texture memory that nothing wrote to.
+- The Linux download is less than a third of its old size (debug information and the old converter are taken out; crash reports still name the functions).
+- The Ultra Sun / Ultra Moon converter in the download is now only the fast one; the old slow Python one is no longer included.
+- Developer menu: "give <species> <level> shiny" and "giveshadow" for testing.
+- Thanks to everyone who tested and reported bugs.
+
 
 ### New in 0.7.3
 

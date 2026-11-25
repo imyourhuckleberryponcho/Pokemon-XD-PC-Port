@@ -490,10 +490,21 @@ void test_gamecube_adapter() {
         "Windows: not supported / not found = no WinUSB driver");
   check(ClassifyOpenError(-12, false, false) == AdapterState::Unknown, "elsewhere those are unknown");
   check(ClassifyOpenError(-3, false, false) == AdapterState::NoPermission, "Linux: access denied = udev rule");
+  check(ClassifyOpenError(-3, true, false) == AdapterState::InUse,
+        "Windows: access denied = another program (Dolphin) has the adapter, never the udev hint");
+  check(ClassifyWindowsDriver("") == DriverKind::None && ClassifyWindowsDriver("WinUSB") == DriverKind::WinUsb &&
+            ClassifyWindowsDriver("libusbK") == DriverKind::LibusbK && ClassifyWindowsDriver("libusb0") == DriverKind::Libusb0 &&
+            ClassifyWindowsDriver("HidUsb") == DriverKind::Hid && ClassifyWindowsDriver("xyz") == DriverKind::Other,
+        "Windows driver names");
   check(ClassifyOpenError(-3, false, true) == AdapterState::InUse && ClassifyOpenError(-6, true, false) == AdapterState::InUse,
         "busy / macOS access = another program has it");
   const AdapterProbe probe = ProbeGameCubeAdapter();
   std::printf("  (adapter look here: state %d, libusb error %d)\n", static_cast<int>(probe.state), probe.libusbError);
+  const std::string report = DescribeGameCubeAdapter("[gc adapter] (sdl lines)");
+  check(report.find("[gc adapter] libusb:") != std::string::npos && report.find("verdict:") != std::string::npos &&
+            report.find("(sdl lines)") != std::string::npos,
+        "the adapter report names libusb, a verdict and carries SDL's lines");
+  std::printf("%s\n", report.c_str());
 }
 
 int main(int argc, char** argv) {

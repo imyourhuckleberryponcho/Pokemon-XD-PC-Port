@@ -1,4 +1,7 @@
 #include <dsp_reference.h>
+#ifdef DSP_BENCH_CYCLES
+#include <windows.h>
+#endif
 #include <gc_dsp.h>
 #include <port_disc.h>
 
@@ -779,6 +782,10 @@ int bench(const std::vector<uint8_t>& program, const std::vector<uint16_t>* irom
     }
     const uint64_t bootRan = ran;
     const auto t0 = std::chrono::steady_clock::now();
+#ifdef DSP_BENCH_CYCLES
+    ULONG64 cyc0 = 0;
+    QueryThreadCycleTime(GetCurrentThread(), &cyc0);
+#endif
     for (int n = 0; n < lists && fine; n++) {
       if (n % 16 == 0) setup_voices(m);
       std::memset(m.at(kDest), 0xAA, kDestSize);
@@ -795,7 +802,13 @@ int bench(const std::vector<uint8_t>& program, const std::vector<uint16_t>* irom
       fnv(sum, &took, sizeof(took));
       fnv(sum, m.at(kDest), kDestSize);
     }
+#ifdef DSP_BENCH_CYCLES
+    ULONG64 cyc1 = 0;
+    QueryThreadCycleTime(GetCurrentThread(), &cyc1);
+    const double seconds = static_cast<double>(cyc1 - cyc0) / 3.0e9;
+#else
     const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+#endif
     if (!fine) {
       std::printf("FAIL bench: a list didn't finish (pc %04X)\n", GcDsp_Pc(m.dsp));
       return 1;
@@ -834,6 +847,15 @@ int bench(const std::vector<uint8_t>& program, const std::vector<uint16_t>* irom
   }
   std::printf("bench result: %s ROM, best %.1f million instructions a second, checksum %08X\n",
               irom != nullptr ? "the folder's" : "the port's", best, firstSum);
+#ifndef DSP_ORIG_TREE
+  std::printf("native tier (XD_DSP_NATIVE=0 turns it off):");
+  for (int k = 0; k < GcDsp_KernelCount(); k++) {
+    uint64_t kh;
+    int kn;
+    const char* name = GcDsp_KernelName(k, &kh, &kn);
+    std::printf(" \"%s\" ran %llu loops%s", name, static_cast<unsigned long long>(GcDsp_KernelUses(k)), k + 1 < GcDsp_KernelCount() ? "," : "\n");
+  }
+#endif
   return 0;
 }
 struct Lockstep {
@@ -965,6 +987,153 @@ int lockstep(const std::vector<uint8_t>& program, const std::vector<uint16_t>* i
   }
   return ok ? 0 : 1;
 }
+struct FuzzRng {
+  uint64_t s;
+  uint32_t next() {
+    s ^= s << 13;
+    s ^= s >> 7;
+    s ^= s << 17;
+    return static_cast<uint32_t>(s >> 16);
+  }
+  uint32_t below(uint32_t n) { return next() % n; }
+  bool one_in(uint32_t n) { return below(n) == 0; }
+};
+
+#ifndef DSP_ORIG_TREE
+int kernel_fuzz(const std::vector<uint8_t>& program, int cases) {
+  std::vector<uint16_t> words(program.size() / 2);
+  for (size_t i = 0; i < words.size(); i++) words[i] = static_cast<uint16_t>(program[2 * i] << 8 | program[2 * i + 1]);
+  struct Site { uint16_t start, end; int kernel, instructions; };
+  std::vector<Site> sites;
+  for (size_t i = 0; i + 2 < words.size(); i++) {
+    const uint16_t w = words[i];
+    if ((w & 0xFF00) != 0x1100 && (w & 0xFFE0) != 0x0060) continue;
+    const uint16_t start = static_cast<uint16_t>(i + 2), end = words[i + 1];
+    if (end < start || end >= words.size() || end - start >= 40) continue;
+    const uint64_t h = GcDsp_LoopHash(&words[start], end - start + 1);
+    for (int k = 0; k < GcDsp_KernelCount(); k++) {
+      uint64_t kh;
+      int kn;
+      GcDsp_KernelName(k, &kh, &kn);
+      if (kh == h) {
+        bool seen = false;
+        for (const Site& s : sites) seen |= s.start == start && s.end == end;
+        if (!seen) sites.push_back({start, end, k, kn});
+      }
+    }
+  }
+  std::printf("     %zu loops of the program have a kernel\n", sites.size());
+  for (int k = 0; k < GcDsp_KernelCount(); k++) {
+    uint64_t kh;
+    int kn;
+    const char* name = GcDsp_KernelName(k, &kh, &kn);
+    int n = 0;
+    for (const Site& s : sites) n += s.kernel == k;
+    check(n > 0, std::string("kernel \"") + name + "\" has a loop in this program (" + std::to_string(n) + ")");
+  }
+  struct Out { int interrupts = 0; };
+  auto host_irq = [](void* user) { static_cast<Out*>(user)->interrupts++; };
+  std::vector<uint8_t> sa(0x8000), sb(0x8000);
+  FuzzRng r{0x9E3779B97F4A7C15ull};
+  std::vector<uint64_t> usesBefore;
+  for (int k = 0; k < GcDsp_KernelCount(); k++) usesBefore.push_back(GcDsp_KernelUses(k));
+  long long failures = 0, applied = 0, total = 0;
+  for (const Site& site : sites) {
+    for (int c = 0; c < cases; c++, total++) {
+      Out oa, ob;
+      GcDspHost host{};
+      host.interruptCpu = host_irq;
+      host.user = &oa;
+      GcDsp* a = GcDsp_Create(&host);
+      host.user = &ob;
+      RefDsp* b = RefDsp_Create(&host);
+      GcDsp_InstallPortRom(a);
+      RefDsp_InstallPortRom(b);
+      GcDsp_WriteControl(a, 0);
+      RefDsp_WriteControl(b, 0);
+      std::memcpy(GcDsp_Iram(a), words.data(), words.size() * 2);
+      std::memcpy(RefDsp_Iram(b), words.data(), words.size() * 2);
+      const uint32_t dataMode = r.below(4);
+      for (int i = 0; i < 0x1000; i++) {
+        const uint16_t v = dataMode == 1   ? static_cast<uint16_t>(r.below(4) * 0x4000 + r.below(3))
+                           : dataMode == 2 ? static_cast<uint16_t>(1 + r.below(0xFFD))
+                           : dataMode == 3 ? static_cast<uint16_t>(r.one_in(3) ? 0x1000 + r.below(0x802) : 1 + r.below(0xFFD))
+                                           : static_cast<uint16_t>(r.next());
+        GcDsp_Dram(a)[i] = v;
+        RefDsp_Dram(b)[i] = v;
+      }
+      const int rounds = 2 + static_cast<int>(r.below(r.one_in(4) ? 60 : 12));
+      auto wr = [&](int reg, uint16_t v) {
+        GcDsp_WriteReg(a, reg, v);
+        RefDsp_WriteReg(b, reg, v);
+      };
+      const bool friendly = !r.one_in(4);
+      for (int reg = 0; reg < 4; reg++) {
+        uint16_t ar;
+        switch (friendly ? 9 : r.below(10)) {
+        case 0: ar = static_cast<uint16_t>(0x1000 - r.below(4 * rounds + 8)); break;
+        case 1: ar = static_cast<uint16_t>(r.next()); break;
+        case 2: ar = static_cast<uint16_t>(0xFF00 + r.below(0x100)); break;
+        case 3: ar = static_cast<uint16_t>(0x1000 + r.below(0x800)); break;
+        case 4: ar = static_cast<uint16_t>(r.below(8)); break;
+        default: ar = static_cast<uint16_t>(r.below(0x1000 - 4 * rounds)); break;
+        }
+        wr(reg, ar);
+        wr(4 + reg, r.one_in(2) ? static_cast<uint16_t>(static_cast<int16_t>(r.below(9)) - 4) : static_cast<uint16_t>(r.next()));
+        wr(8 + reg, !friendly && r.one_in(3) ? (r.one_in(2) ? 0 : static_cast<uint16_t>((1u << r.below(12)) - 1)) : 0xFFFF);
+      }
+      wr(18, r.one_in(2) ? 0xFF : static_cast<uint16_t>(r.next()));
+      uint16_t sr = static_cast<uint16_t>(r.next());
+      if (r.one_in(2)) sr = static_cast<uint16_t>(sr | 0x4000);
+      if (r.one_in(3)) sr = static_cast<uint16_t>(sr & ~0x4000);
+      wr(19, sr);
+      for (int reg = 20; reg < 28; reg++) wr(reg, r.one_in(6) ? static_cast<uint16_t>(r.below(3) * 0x8000) : static_cast<uint16_t>(r.next()));
+      for (int n = 0; n < 2; n++) {
+        int64_t acc = static_cast<int64_t>(r.next()) << 32 | r.next();
+        if (r.one_in(2)) acc = static_cast<int32_t>(r.next());
+        if (r.one_in(8)) acc = r.one_in(2) ? 0 : (r.one_in(2) ? 0x7FFFFFFFFFll : -0x8000000000ll);
+        if (r.one_in(8)) acc = r.one_in(2) ? 0x80000000ll : -0x80000001ll;
+        GcDsp_SetAcc(a, n, acc);
+        RefDsp_SetAcc(b, n, acc);
+      }
+      wr(12, site.start);
+      wr(14, site.end);
+      wr(15, static_cast<uint16_t>(rounds));
+      GcDsp_SetPc(a, site.start);
+      RefDsp_SetPc(b, site.start);
+      const int budget = !friendly && r.one_in(2) ? 1 + static_cast<int>(r.below(static_cast<uint32_t>(site.instructions * rounds + 8)))
+                                     : site.instructions * rounds + static_cast<int>(r.below(20));
+      const int ra = GcDsp_RunUntilIdle(a, budget), rb = RefDsp_RunUntilIdle(b, budget);
+      const size_t na = GcDsp_SaveState(a, sa.data(), sa.size(), true), nb = RefDsp_SaveState(b, sb.data(), sb.size(), true);
+      const bool same = ra == rb && na == nb && std::memcmp(sa.data(), sb.data(), na) == 0 && oa.interrupts == ob.interrupts;
+      if (!same) {
+        if (failures++ < 10) {
+          size_t at = 0;
+          while (at < na && at < nb && sa[at] == sb[at]) at++;
+          uint64_t kh;
+          int kn;
+          std::printf("FAIL kernel \"%s\" (loop %04X-%04X, case %d): ran %d / %d instructions, first different byte of the saved state %zu\n",
+                      GcDsp_KernelName(site.kernel, &kh, &kn), site.start, site.end, c, ra, rb, at);
+        }
+      }
+      GcDsp_Destroy(a);
+      RefDsp_Destroy(b);
+    }
+  }
+  for (int k = 0; k < GcDsp_KernelCount(); k++) applied += static_cast<long long>(GcDsp_KernelUses(k) - usesBefore[k]);
+  std::printf("     %lld made-up states, the kernels ran %lld times (the rest: not applicable there)\n", total, applied);
+  check(failures == 0 && total > 0, "every kernel leaves the chip as the reference chip does (" + std::to_string(total) + " states)");
+  for (int k = 0; k < GcDsp_KernelCount(); k++) {
+    uint64_t kh;
+    int kn;
+    const char* name = GcDsp_KernelName(k, &kh, &kn);
+    const uint64_t uses = GcDsp_KernelUses(k) - usesBefore[k];
+    std::printf("     kernel \"%s\" ran %llu times\n", name, static_cast<unsigned long long>(uses));
+    check(uses > 100, std::string("kernel \"") + name + "\" was really used in the test");
+  }
+  return ok ? 0 : 1;
+}
+#endif
 }
 
 int main(int argc, char** argv) {
@@ -975,18 +1144,30 @@ int main(int argc, char** argv) {
                  argv[0], argv[0]);
     return 2;
   }
-  char error[512];
-  if (!PortDisc_Open(argv[1], error, sizeof(error))) {
-    std::fprintf(stderr, "FAILED: %s\n", error);
-    return 1;
-  }
-  size_t dolSize = 0;
-  const uint8_t* dol = PortDisc_Dol(&dolSize);
   std::vector<uint8_t> program(kDspSlaveSize);
-  if (!PortDol_Read(dol, dolSize, kDspSlave, program.data(), kDspSlaveSize)) {
-    std::fprintf(stderr, "FAILED: MusyX's DSP program isn't in main.dol\n");
-    return 1;
+  if (const char* programFile = std::getenv("XD_DSP_PROGRAM_FILE")) {
+    std::FILE* f = std::fopen(programFile, "rb");
+    if (f == nullptr || std::fread(program.data(), 1, program.size(), f) != program.size()) {
+      std::fprintf(stderr, "FAILED: can't read %u bytes from %s\n", static_cast<unsigned>(program.size()), programFile);
+      return 1;
+    }
+    std::fclose(f);
+  } else {
+    char error[512];
+    if (!PortDisc_Open(argv[1], error, sizeof(error))) {
+      std::fprintf(stderr, "FAILED: %s\n", error);
+      return 1;
+    }
+    size_t dolSize = 0;
+    const uint8_t* dol = PortDisc_Dol(&dolSize);
+    if (!PortDol_Read(dol, dolSize, kDspSlave, program.data(), kDspSlaveSize)) {
+      std::fprintf(stderr, "FAILED: MusyX's DSP program isn't in main.dol\n");
+      return 1;
+    }
   }
+#ifndef DSP_ORIG_TREE
+  if (argc >= 4 && std::strcmp(argv[2], "--kernels") == 0) return kernel_fuzz(program, std::atoi(argv[3]));
+#endif
   if (argc >= 4 && (std::strcmp(argv[2], "--bench") == 0 || std::strcmp(argv[2], "--lockstep") == 0)) {
     const int lists = std::atoi(argv[3]);
     const bool isBench = std::strcmp(argv[2], "--bench") == 0;

@@ -18,6 +18,9 @@ void PortMessage_Show(PortMessageKind kind, const char* title, const char* text)
 bool PortMessage_Ask(PortMessageKind kind, const char* title, const char* text, const char* yes, const char* no,
                      bool unattended);
 
+int PortMessage_Choose(PortMessageKind kind, const char* title, const char* text, const char* const* labels, int count,
+                       int defaultIndex, int escapeIndex, int unattended);
+
 void PortMessage_SetWindows(bool on);
 
 #ifdef __cplusplus

@@ -20,5 +20,6 @@ Image8 pil_resize_lanczos(const Image8& in, int nw, int nh);
 Image8 round_face(const Image8& rendered, int size = 84);
 bool face_ok(const Image8& im, double lo = 0.35, double hi = 0.995);
 bool box_icon_face(const Image8& icon, Image8* out);
+bool box_icon_pair(const Image8& normal, const Image8* shiny, Image8* out);
 
 }

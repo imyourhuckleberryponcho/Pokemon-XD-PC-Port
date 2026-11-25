@@ -62,6 +62,7 @@ void fadeSet(s32 type, f32 time);
 s8 fadeCheck(s32 wait);
 void menuOffScreenSetDisp(s32 on);
 extern "C" s32 PortXD_FieldEvolve(void* pokemon, s32 kind, s32 item);
+extern "C" s32 PortXD_GiftShadow(s32 shadowId, s32 level);
 s32 pokemonEvolutionAll(void* pokemon, u16 species, u16 extra, void* info, void* hero, s32 writeMemo, s32 mode, s32 fade);
 void pokemonDB_SetMitaFlag(u16 id, bool value);
 void pokemonDB_SetTukamaetaFlag(u16 id, bool value);
@@ -96,6 +97,7 @@ void* itemParamGetPtr(void* effect);
 u8 itemParamGetLevelUpFlag(u8* p);
 void pcboxDebugPokemonSetupFull(void);
 void pokemonCreate(void* pokemon, u16 species, u8 level, void* attest);
+u32 pokemonCheckRare(void* pokemon);
 uintptr_t savedataGetStatus(u32 save, u32 kind);
 uintptr_t gamedataGetStatus(void* gamedata, u32 kind);
 s32 heroCatchPokemon(void* hero, void* pokemon, u32 arg3, u32 arg4, u8 allowPCBox);
@@ -167,6 +169,10 @@ s32 dbgMenuSetHeroStyleNormal(void);
 s32 dbgMenuSetHeroStyleVisor(void);
 s32 dbgMenuSetHeroStyleSnatch(void);
 s32 dbgMenuPTout(void);
+u8 floorMoviePlay(u32 movie, s32 arg1, int loop, u32 targetResID, u16 width, u16 height);
+s32 windowGetActiveID(void);
+int32_t menuOpenCustom(int32_t id, int32_t a, void* cursor, int32_t b, int32_t c, int32_t d, void* work);
+int32_t menuCloseCustom(int32_t id, int32_t a, int32_t b);
 void menuShopOpen(s32 shop);
 
 extern void* floordata;
@@ -411,9 +417,20 @@ void Perform(const std::string& action) {
     std::memset(pokemon, 0, sizeof pokemon);
     const uintptr_t hero = savedataGetStatus(0, 2);
     pokemonCreate(pokemon, static_cast<u16>(species), static_cast<u8>(level), reinterpret_cast<void*>(gamedataGetStatus(nullptr, 1)));
+    if (w.size() > 3 && (w[3] == "shiny" || w[3] == "normal")) {
+      const bool wantShiny = w[3] == "shiny";
+      for (int tries = 0; tries < 20000 && (pokemonCheckRare(pokemon) != 0) != wantShiny; tries++) {
+        std::memset(pokemon, 0, sizeof pokemon);
+        pokemonCreate(pokemon, static_cast<u16>(species), static_cast<u8>(level), reinterpret_cast<void*>(gamedataGetStatus(nullptr, 1)));
+      }
+    }
     heroCatchPokemon(reinterpret_cast<void*>(hero), pokemon, 0, 4, 1);
     memoDataSet(0, pokemon);
     sStatus = "give: species " + std::to_string(species) + " level " + std::to_string(level);
+  } else if (k == "giveshadow") {
+    const long r = PortXD_GiftShadow(static_cast<s32>(Num(w, 1, 1)), static_cast<s32>(Num(w, 2, 0)));
+    sStatus = "giveshadow: " + std::string(r >= 0 ? "party slot " + std::to_string(r + 1) : r == -2 ? "party full" : r == -4 ? "already have it" : "no such Shadow row");
+    std::fprintf(stderr, "[devmenu] giveshadow %ld: result %ld\n", Num(w, 1, 1), r);
   } else if (k == "memofill") {
     const long n = Num(w, 1, 0);
     const bool onlyValid = w.size() > 2 && w[2] == "valid";
@@ -563,7 +580,7 @@ void Perform(const std::string& action) {
     uint16_t extra = 0;
     const uint16_t species = pokemonEvolutionCheck(p, mode, item, &extra, &info);
     std::fprintf(stderr, "[dev menu] evolvecheck: slot %d mode %d item %u -> species row %u\n", slot, static_cast<int>(mode), static_cast<unsigned>(item), static_cast<unsigned>(species));
-    if (species != 0) {
+    if (species != 0 && !(w.size() > 4 && w[4] == "ask")) {
       fadeSet(3, 0.5f);
       fadeCheck(1);
       menuOffScreenSetDisp(0);
@@ -615,6 +632,13 @@ void Perform(const std::string& action) {
       return;
     }
     menuShopOpen(shop);
+  } else if (k == "movie") {
+    floorMoviePlay(static_cast<u32>(Num(w, 1)), 0, 1, 0x19bf1005u, 192, 144);
+  } else if (k == "mailpopup") {
+    static s32 sWork;
+    sWork = static_cast<s32>(Num(w, 1));
+    menuOpenCustom(0x97, windowGetActiveID(), nullptr, 0, 1, 1, &sWork);
+    menuCloseCustom(0x97, 0, 1);
   } else if (k == "screen") {
     const std::string name = w.size() > 1 ? w[1] : "";
     for (const Screen& s : kScreens) {

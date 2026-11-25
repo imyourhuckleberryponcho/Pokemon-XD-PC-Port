@@ -127,6 +127,7 @@ Each of these can be made its own, one by one, with the keys below. A key you le
 | Key in the species row | What it gives | Section |
 |---|---|---|
 | `"face"` | its own face picture (party list, summary, PC) | Its own face |
+| `"icon"` | its own small picture in the PC box grid and the party list | Its own small picture |
 | `"model"` | its own 3D model in battle, in the Memo's Size picture and in scenes | Its own model |
 | `"cry"` | its own cry | Its own cry |
 | `"dex": "own"` | its own Pokédex "seen" and "caught" flag numbers (what they do today is explained in the section) | Its own Pokédex marks |
@@ -176,6 +177,27 @@ its own with `"face"` in the species row:
 
 The face is shown in the party list, the summary page, the PC boxes and everywhere else the game draws a Pokémon's face.
 The big picture used by some menus (the Pokémon "body" picture) is still the copy's.
+
+## Its own small picture (PC box and party list)
+
+The PC box grid and the Party Pokémon list draw each Pokémon as a small picture that wiggles a little. A species that copies another
+one shows that one's small picture (a copy of Umbreon shows Umbreon there, even with its own face). Give it its own with `"icon"`:
+
+```json
+"Quillfox": {
+  "copy": "Eevee",
+  "icon": "textures/icons/quillfox.png"
+}
+```
+
+- A PNG file inside your mod (8-bit, with or without transparency, not interlaced; path with `/`, may sit under `games/<game>/`).
+- **54 x 108 pixels** is the game's own size: the normal picture on top (54 x 54) and the shiny one below. Any picture twice as high as wide is read that way; any other shape
+  is one picture used for both. A bigger picture is shrunk to fit 54 x 54 (the shape is kept), a smaller one is not stretched. It stands on the bottom edge. The picture is put into the game's
+  three wiggle frames, so draw it standing, three-quarter view, with a thin dark outline like the game's own ones.
+- 256 colours at most (the game's format); the port reduces them for you.
+- Nothing from the game is in your mod. If the file is missing or not a PNG the species keeps the small picture it copies, and the game says why when it starts.
+
+The packs the launcher makes from an Ultra Sun / Ultra Moon dump set this key for every Gen 4 and Gen 5-7 species (pictures drawn from the models).
 
 ## Its own model
 ```json

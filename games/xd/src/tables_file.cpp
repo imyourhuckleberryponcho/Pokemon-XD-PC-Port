@@ -26,6 +26,8 @@ extern uint32_t* table_res_number;
 extern uint8_t* waza_data;
 extern uint32_t* waza_data_number;
 extern void* wazaoshie_data;
+extern uint8_t* pokemon_seikaku_data;
+extern uint32_t* pokemon_seikaku_data_number;
 extern int32_t* wazaoshie_data_number;
 }
 
@@ -51,6 +53,8 @@ bool MakeRules(xd::legality::DiscRules& rules, std::string& error) {
   add("waza_data_number", waza_data_number);
   add("wazaoshie_data", wazaoshie_data);
   add("wazaoshie_data_number", wazaoshie_data_number);
+  add("pokemon_seikaku_data", pokemon_seikaku_data);
+  add("pokemon_seikaku_data_number", pokemon_seikaku_data_number);
   t.pokemon_data = static_cast<struct PokemonData*>(pokemon_data);
   t.pokemon_data_number = pokemon_data_number ? *pokemon_data_number : 0;
   static uint8_t grow[8 * 101 * 4], mach[58 * 8];

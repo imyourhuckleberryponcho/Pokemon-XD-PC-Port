@@ -242,6 +242,23 @@ EditRow Pick(const std::string& id, const std::string& label, const std::string&
   r.changed = changed;
   return r;
 }
+std::string NatureName(const Session& s, uint8_t id) {
+  static const char* const kStandard[25] = {"Hardy",   "Lonely", "Brave",  "Adamant", "Naughty", "Bold",    "Docile",  "Relaxed", "Impish",
+                                            "Lax",     "Timid",  "Hasty",  "Serious", "Jolly",   "Naive",   "Modest",  "Mild",    "Quiet",
+                                            "Bashful", "Rash",   "Calm",   "Gentle",  "Sassy",   "Careful", "Quirky"};
+  const std::string n = s.rules ? s.rules->Nature(id) : std::string();
+  return !n.empty() ? n : std::string(id < 25 ? kStandard[id] : "?");
+}
+
+std::string NatureLabel(const Session& s, uint8_t id) {
+  if (id >= 25) return NatureName(s, id);
+  const int up = id / 5, down = id % 5;
+  const std::string name = NatureName(s, id);
+  if (up == down) return Fmt(Tr("%s (no change)"), name.c_str());
+  const char* words[5] = {Tr("Attack"), Tr("Defense"), Tr("Speed"), Tr("Sp. Atk"), Tr("Sp. Def")};
+  return Fmt(Tr("%s (+%s, -%s)"), name.c_str(), words[up], words[down]);
+}
+
 EditRow Cho(const std::string& id, const std::string& label, const std::string& shown, const Choices& choices, bool changed = false) {
   EditRow r;
   r.kind = Kind::Choice;
@@ -336,8 +353,7 @@ void BuildPokemon(Session& s, EditTab& tab) {
   }
   one.rows.push_back(Num("sel.friend", Tr("Friendship"), p->friendship, 0, 255, o && o->friendship != p->friendship));
   {
-    const std::string nat = s.rules->Nature(p->Nature());
-    one.rows.push_back(lockShadow(Cho("sel.nature", Tr("Nature"), nat.empty() ? std::to_string(p->Nature()) : nat, s.natureList, o && o->Nature() != p->Nature())));
+    one.rows.push_back(lockShadow(Cho("sel.nature", Tr("Nature"), NatureLabel(s, p->Nature()), s.natureList, o && o->Nature() != p->Nature())));
     const int ratio = p->species < s.rules->rules.species.size() ? s.rules->rules.species[p->species].sexRatio : 255;
     if (ratio >= 1 && ratio <= 253) {
       const bool female = ratio > static_cast<int>(p->pid & 0xFF);
@@ -658,6 +674,7 @@ bool OpenImpl(const fs::path& cardRoot, const std::string& disc, EditView& out, 
   error.clear();
   for (size_t i = 1; i < s->rules->rules.species.size(); i++) {
     if (!s->rules->rules.species[i].exists) continue;
+    if (i == 414) continue;
     const std::string n = s->rules->Species(static_cast<uint16_t>(i));
     if (!n.empty()) s->speciesList.push_back({std::to_string(i), n});
   }
@@ -667,7 +684,7 @@ bool OpenImpl(const fs::path& cardRoot, const std::string& disc, EditView& out, 
     const std::string n = s->rules->Item(static_cast<uint16_t>(i));
     if (!n.empty()) s->itemList.push_back({std::to_string(i), n});
   }
-  for (int i = 0; i < 25; i++) s->natureList.push_back({std::to_string(i), s->rules->Nature(static_cast<uint8_t>(i))});
+  for (int i = 0; i < 25; i++) s->natureList.push_back({std::to_string(i), NatureLabel(*s, static_cast<uint8_t>(i))});
   s->ed.Seed(static_cast<uint64_t>(std::time(nullptr)) * 2654435761u);
   {
     const auto tf = s->rules;

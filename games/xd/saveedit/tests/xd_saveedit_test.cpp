@@ -70,6 +70,8 @@ void MakePokemon(uint8_t* p, ByteOrder o, uint16_t species, uint8_t level, uint3
   xs::Write16(p + 0xBA, shadowId, o);
 }
 
+int gScenario = 0;
+
 std::vector<uint8_t> MakeSlot(ByteOrder o, int32_t count, const char* name) {
   std::vector<uint8_t> slot(xs::kSlotSize, 0);
   slot[0] = slot[1] = slot[2] = 1;
@@ -104,9 +106,15 @@ std::vector<uint8_t> MakeSlot(ByteOrder o, int32_t count, const char* name) {
     if (l.id == 2) {
       Str(s, name, o);
       xs::Write32(s + 0x2C, kTrainerOt, o);
-      MakePokemon(s + 0x30, o, 1, 5, 0x12345678, "BULBY", 0);
+      MakePokemon(s + 0x30, o, 1, 5, 0x12345678, "BULBY", gScenario ? 7 : 0);
       MakePokemon(s + 0x30 + xs::kPokemonSize, o, 25, 50, 0xBEEF3039u ^ 0x00010002u, "SPARKY", 7);
-      MakePokemon(s + 0x30 + 2 * xs::kPokemonSize, o, 133, 20, 0x2468ACE0, "EEVEE", 0);
+      MakePokemon(s + 0x30 + 2 * xs::kPokemonSize, o, 133, 20, 0x2468ACE0, "EEVEE", gScenario ? 7 : 0);
+      if (gScenario) {
+        for (int i = 0; i < 3; i++) {
+          s[0x30 + i * xs::kPokemonSize + 0x0F] = 3;
+          s[0x30 + i * xs::kPokemonSize + 0xC0] = 0xAA;
+        }
+      }
       xs::Write16(s + 0x4C8, 13, o);
       xs::Write16(s + 0x4CA, 4, o);
       xs::Write16(s + 0x4CC, 14, o);
@@ -118,9 +126,14 @@ std::vector<uint8_t> MakeSlot(ByteOrder o, int32_t count, const char* name) {
       xs::Write32(s + 0x8EC, 4321, o);
     } else if (l.id == 3) {
       Str(s + 2 * 0x170C, "BOX3", o);
-      MakePokemon(s + 2 * 0x170C + 0x14 + 4 * xs::kPokemonSize, o, 150, 70, 0xCAFEBABE, "MEW2", 0, 0x00010002);
+      if (gScenario == 0) {
+        MakePokemon(s + 2 * 0x170C + 0x14 + 4 * xs::kPokemonSize, o, 150, 70, 0xCAFEBABE, "MEW2", 0, 0x00010002);
+      } else if (gScenario <= 2) {
+        MakePokemon(s + 2 * 0x170C + 0x14 + 4 * xs::kPokemonSize, o, 150, 70, 0xCAFEBABE, "MEW2", 0);
+        s[2 * 0x170C + 0x14 + 4 * xs::kPokemonSize + 0x0F] = 9;
+      }
     } else if (l.id == 15) {
-      s[7 * xs::kShadowEntrySize] = static_cast<uint8_t>(3 << 5);
+      s[7 * xs::kShadowEntrySize] = static_cast<uint8_t>((gScenario == 1 || gScenario == 3 ? 4 : 3) << 5);
       xs::Write16(s + 7 * xs::kShadowEntrySize + 0x1A, 25, o);
       xs::Write32(s + 7 * xs::kShadowEntrySize + 0x1C, 0xBEEF3039u ^ 0x00010002u, o);
       xs::Write32(s + 7 * xs::kShadowEntrySize + 0x24, 1500, o);
@@ -187,6 +200,37 @@ se::Tables MakeTables(const xd::legality::Rules& r) {
 
 std::string Dump(const xs::Save& s) {
   return xs::ToUtf8(s.trainerName) + "/" + std::to_string(s.money) + "/" + std::to_string(s.party[0].level);
+}
+
+void TestAddTemplate(ByteOrder order) {
+  const std::string tag = std::string(" [") + xs::ByteOrderName(order) + "]";
+  const xd::legality::Rules rules = MakeRules();
+  const se::Tables t = MakeTables(rules);
+  for (int sc = 1; sc <= 4; sc++) {
+    gScenario = sc;
+    const std::vector<uint8_t> file = MakeFile(order, "WES");
+    se::Editor ed;
+    std::string error;
+    check(ed.Open(file, {}, error), "add template: opens scenario " + std::to_string(sc) + tag);
+    ed.Seed(99);
+    se::Spot added;
+    const std::string why = ed.Add(133, 20, sc == 1, t, added);
+    const std::string w = " (scenario " + std::to_string(sc) + ")" + tag;
+    if (sc == 4) {
+      check(!why.empty() && !ed.Dirty(), "only Shadow Pokemon still held: refused, nothing changed" + w);
+      continue;
+    }
+    check(why.empty(), "Add works" + w + (why.empty() ? "" : ": " + why));
+    if (!why.empty()) continue;
+    const xs::Pokemon& p = *ed.At(added);
+    check(p.shadowId == 0 && !ed.IsShadow(added) && p.otId == kTrainerOt && p.ribbons == 0 && p.level == 20 && p.species == 133, "the new Pokemon is a plain one of the trainer's" + w);
+    if (sc == 3) {
+      check(p.raw[0x0F] == 3 && p.raw[0xC0] == 0, "purified template: its layout is used, its Shadow tail is cleared" + w);
+    } else {
+      check(p.raw[0x0F] == 9, "the trainer's own Pokemon in the PC is the template, not a purified one in the party" + w);
+    }
+  }
+  gScenario = 0;
 }
 
 void TestOps(ByteOrder order) {
@@ -603,6 +647,8 @@ void TestRealSave() {
 int main() {
   TestOps(ByteOrder::GameCube);
   TestOps(ByteOrder::PC);
+  TestAddTemplate(ByteOrder::GameCube);
+  TestAddTemplate(ByteOrder::PC);
   TestMarks();
   TestTrainerRename();
   TestCommit();

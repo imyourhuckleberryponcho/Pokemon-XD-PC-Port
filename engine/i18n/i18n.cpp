@@ -45,6 +45,30 @@ std::string Unescape(std::string_view s) {
   return out;
 }
 
+std::string Conversions(std::string_view s) {
+  std::string out;
+  for (size_t i = 0; i < s.size(); i++) {
+    if (s[i] != '%') continue;
+    size_t j = i + 1;
+    if (j < s.size() && s[j] == '%') {
+      i = j;
+      continue;
+    }
+    while (j < s.size() && std::strchr("-+#0", s[j]) != nullptr && s[j] != '\0') j++;
+    while (j < s.size() && s[j] >= '0' && s[j] <= '9') j++;
+    if (j < s.size() && s[j] == '.') {
+      j++;
+      while (j < s.size() && s[j] >= '0' && s[j] <= '9') j++;
+    }
+    const size_t len = j;
+    while (j < s.size() && s[j] != '\0' && std::strchr("hlzjt", s[j]) != nullptr) j++;
+    if (j >= s.size() || s[j] == '\0' || std::strchr("diuxXofFeEgGcsp", s[j]) == nullptr) continue;
+    out.append(s.substr(len, j - len + 1)).push_back(';');
+    i = j;
+  }
+  return out;
+}
+
 size_t Parse(std::string_view text) {
   size_t entries = 0;
   std::string key;
@@ -62,8 +86,13 @@ size_t Parse(std::string_view text) {
     } else if (line.size() >= 1 && line[0] == '>' && haveKey) {
       std::string_view v = line.substr(line.size() >= 2 && line[1] == ' ' ? 2 : 1);
       if (!v.empty()) {
-        sTable[key] = Unescape(v);
-        entries++;
+        std::string text = Unescape(v);
+        if (Conversions(key) == Conversions(text)) {
+          sTable[key] = std::move(text);
+          entries++;
+        } else {
+          std::fprintf(stderr, "[locale] %s: placeholders differ, the English is used: %s\n", sLanguage, key.c_str());
+        }
       }
       haveKey = false;
     }

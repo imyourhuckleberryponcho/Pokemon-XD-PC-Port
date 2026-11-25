@@ -683,6 +683,9 @@ Built build(const Species& sp, const std::vector<uint8_t>& xd_bytes, const Opts&
   if (opts.match && opts.hand && !gfi::hand_match_enabled(nat)) log("INFO: colour match: off for this species (hand table usum_hand)");
   else if (opts.match) mplan = gfi::colour_match_plan(gm, texs, xd_bytes, opts, nat, log);
   gfi::MadeImages mi = gfi::make_images(gm, texs, opts, nat, mplan.get());
+  std::set<std::string> baked_iris;
+  for (auto& e : gfi::iris_plan(gm, texs, opts)) for (auto& n : e.second) baked_iris.insert(n);
+  if (!baked_iris.empty()) log("INFO: iris plates painted into the eye picture");
   m.images = mi.images;
   for (size_t k = 0; k < gm.materials.size(); k++) {
     const GfMaterial& mt = gm.materials[k];
@@ -721,7 +724,7 @@ Built build(const Species& sp, const std::vector<uint8_t>& xd_bytes, const Opts&
       for (auto& c : mt.coords) if (c.unit == 0) { sxy[mt.name] = c.scale; break; }
     eyes.reset(new EyePlan(sp, sxy));
     std::vector<std::string> keep;
-    for (auto& n : eyes->names) if (sxy.count(n)) keep.push_back(n);
+    for (auto& n : eyes->names) if (sxy.count(n) && !baked_iris.count(n)) keep.push_back(n);
     eyes->names = keep;
     B.eyes_ties = eyes->ties > 0;
     std::string lv;
@@ -748,6 +751,7 @@ Built build(const Species& sp, const std::vector<uint8_t>& xd_bytes, const Opts&
       int mi_ = mit->second;
       const GfMaterial& mt = gm.materials[mi_];
       if (skip_fire && gfi::is_fire_material(mt)) continue;
+      if (baked_iris.count(mt.name)) continue;
       if (gfi::is_effect_layer(mt)) continue;
       const GfVerts& V = sm.verts;
       const GfCoord* co = gfi::colour_coord(mt);

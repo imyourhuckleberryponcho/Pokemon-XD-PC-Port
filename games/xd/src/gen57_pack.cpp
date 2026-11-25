@@ -375,8 +375,22 @@ void AfterLoad(const engine::mods::LoadResult& result) {
   for (const auto& r : result.addedRows) {
     if (r.mod == "gen57" && r.table == "pokemon_data" && !xd::forms::IsForm(r.id)) all.push_back(r.id);
   }
+  {
+    uint32_t sylveon = 0, shiny = 0;
+    for (const auto& r : result.addedRows) {
+      if (r.mod == "gen57" && r.table == "pokemon_data" && r.key == "Sylveon") sylveon = r.id;
+      if (r.table == "item_data_prime" && (r.key == "Shiny Stone" || r.key == "Shiny_Stone")) shiny = r.id;
+    }
+    if (sylveon != 0 && shiny != 0) {
+      xd::gen4::AddExtraEvolution({133, 7, static_cast<uint16_t>(shiny), static_cast<uint16_t>(sylveon)});
+      xd::gen4::SetEeveeSylveon(sylveon, shiny);
+      std::fprintf(stderr, "[gen57] Eevee + Shiny Stone -> Sylveon (species %u, item %u)\n", sylveon, shiny);
+    } else {
+      std::fprintf(stderr, "[gen57] Eevee does not evolve into Sylveon here (species %u, Shiny Stone %u: a row is missing)\n", sylveon, shiny);
+    }
+  }
   for (uint32_t id : all) sRowsAll.push_back({"pdapokemonsortdata", 0xFFFFFFFFu, 1, -1, {0, 2, id}});
-  if (xd::forms::Loaded()) {
+  if (xd::forms::Loaded() && !xd::xg::On()) {
     for (uint32_t i = 0; i < xd::forms::ShopSpareRows(); i++) sRowsAll.push_back({"shopGoods", 0xFFFFFFFFu, 1, -1, {0, 2, 0}});
   }
   xd::gen4::SetMoreRows(sRowsAll);

@@ -1,10 +1,13 @@
 #include "gc_dsp.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #if defined(_MSC_VER)
 #define DSP_INLINE __forceinline
@@ -66,6 +69,14 @@ struct GcDsp {
   uint32_t portRomState[16]{};
   bool waitingForCpu = false;
   bool loggedCoef = false;
+  bool native = true;
+  struct KCache {
+    uint16_t start = 0xFFFF, end = 0;
+    int16_t kernel = -1;
+    uint8_t len = 0;
+    uint16_t words[40]{};
+  };
+  KCache kcache[64];
 };
 
 namespace {
@@ -191,18 +202,21 @@ uint8_t sCondTable[16][128];
 DSP_INLINE bool condition(const GcDsp* d, int cc) { return sCondTable[cc & 15][d->rf.sr & 0x7F] != 0; }
 
 DSP_INLINE uint16_t addr_inc(uint16_t ar, uint16_t wr) {
+  if (wr == 0xFFFF) return static_cast<uint16_t>(ar + 1);
   const uint32_t m = 2u * (wr | 1u);
   uint32_t n = static_cast<uint32_t>(ar) + 1;
   if ((n ^ ar) > m) n -= static_cast<uint32_t>(wr) + 1;
   return static_cast<uint16_t>(n);
 }
 DSP_INLINE uint16_t addr_dec(uint16_t ar, uint16_t wr) {
+  if (wr == 0xFFFF) return static_cast<uint16_t>(ar - 1);
   const uint32_t m = 2u * (wr | 1u);
   uint32_t n = static_cast<uint32_t>(ar) + wr;
   if (((n ^ ar) & m) > wr) n -= static_cast<uint32_t>(wr) + 1;
   return static_cast<uint16_t>(n);
 }
 DSP_INLINE uint16_t addr_add(uint16_t ar, uint16_t wr, uint16_t ixv) {
+  if (wr == 0xFFFF) return static_cast<uint16_t>(ar + ixv);
   const uint32_t m = 2u * (wr | 1u);
   const uint32_t ix = static_cast<uint32_t>(static_cast<int32_t>(static_cast<int16_t>(ixv)));
   uint32_t n = static_cast<uint32_t>(ar) + ix;
@@ -215,6 +229,7 @@ DSP_INLINE uint16_t addr_add(uint16_t ar, uint16_t wr, uint16_t ixv) {
   return static_cast<uint16_t>(n);
 }
 DSP_INLINE uint16_t addr_sub(uint16_t ar, uint16_t wr, uint16_t ixv) {
+  if (wr == 0xFFFF) return static_cast<uint16_t>(ar - ixv);
   const uint32_t m = 2u * (wr | 1u);
   const uint32_t ix = static_cast<uint32_t>(static_cast<int32_t>(static_cast<int16_t>(ixv)));
   uint32_t n = static_cast<uint32_t>(ar) - ix;
@@ -1080,6 +1095,8 @@ DSP_INLINE void step(GcDsp* d) {
   }
 }
 
+#include "dsp_kernels.inl"
+
 DSP_NOINLINE int run_body(GcDsp* d, int budget, bool idle) {
   struct Entry {
     Handler fn;
@@ -1165,7 +1182,8 @@ template <bool kIdle> DSP_INLINE int run_steps(GcDsp* d, int steps) {
   int n = 0;
   while (n < steps && !(d->control & CTRL_HALT) && (!kIdle || !d->waitingForCpu)) {
     if (d->rf.st[3] >= 2 && d->pc == d->rf.st[0] && d->rf.st[2] != 0 && d->pending == 0 && !(d->control & CTRL_INT)) {
-      const int used = run_body(d, steps - n, kIdle);
+      int used = d->native ? try_kernel(d, steps - n) : 0;
+      if (used == 0) used = run_body(d, steps - n, kIdle);
       if (used != 0) {
         n += used;
         continue;
@@ -1175,6 +1193,14 @@ template <bool kIdle> DSP_INLINE int run_steps(GcDsp* d, int steps) {
     n++;
   }
   return n;
+}
+
+bool native_default() {
+  static const bool on = [] {
+    const char* v = std::getenv("XD_DSP_NATIVE");
+    return v == nullptr || std::strcmp(v, "0") != 0;
+  }();
+  return on;
 }
 
 void power_on(GcDsp* d) {
@@ -1210,12 +1236,24 @@ GcDsp* GcDsp_Create(const GcDspHost* host) {
   register_handlers();
   auto* d = new GcDsp();
   if (host != nullptr) d->host = *host;
+  d->native = native_default();
   power_on(d);
   return d;
 }
 void GcDsp_Destroy(GcDsp* dsp) { delete dsp; }
 GcDsp* GcDsp_Clone(const GcDsp* dsp) { return new GcDsp(*dsp); }
 void GcDsp_SetHost(GcDsp* dsp, const GcDspHost* host) { dsp->host = *host; }
+void GcDsp_SetNative(GcDsp* dsp, bool on) { dsp->native = on; }
+bool GcDsp_NativeOn(const GcDsp* dsp) { return dsp->native; }
+int GcDsp_KernelCount(void) { return static_cast<int>(sizeof(kKernels) / sizeof(kKernels[0])); }
+const char* GcDsp_KernelName(int index, uint64_t* hash, int* instructions) {
+  if (index < 0 || index >= GcDsp_KernelCount()) return nullptr;
+  *hash = kKernels[index].hash;
+  *instructions = kKernels[index].instructions;
+  return kKernels[index].name;
+}
+uint64_t GcDsp_LoopHash(const uint16_t* words, int count) { return loop_hash(words, count); }
+uint64_t GcDsp_KernelUses(int index) { return index >= 0 && index < 8 ? gKernelUses[index].load() : 0; }
 void GcDsp_LoadIrom(GcDsp* dsp, const uint16_t* words) {
   std::memcpy(dsp->irom, words, sizeof(dsp->irom));
   dsp->haveIrom = true;

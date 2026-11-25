@@ -15,6 +15,7 @@
 #include <port_user_folder.h>
 #include <port_window_icon.h>
 #include <settings_ui.h>
+#include <gc_adapter_sdl.h>
 #include <update.h>
 
 #include <SDL3/SDL.h>
@@ -1007,6 +1008,8 @@ class App {
   void UpdatePads();
   void LookAtAdapter();
   uint64_t adapterLookedAt_ = 0;
+  uint64_t controlsDrawnAt_ = 0;
+  void LogGameCubeAdapter(const char* when);
   engine::controls::AdapterState lastAdapterState_ = engine::controls::AdapterState::Unknown;
   void FeedLiveInputs();
   void DrawModsPage();
@@ -1836,6 +1839,7 @@ bool App::StartGame(std::string& error) {
     return false;
   }
   gameRunning_ = true;
+  engine::controls::HoldGameCubeAdapter(false);
   Log("started " + Utf8(game_.program) + " (process " + std::to_string(sys::IdOf(gameProcess_)) + ")");
   return true;
 }
@@ -1933,6 +1937,7 @@ void App::PollGame() {
   sys::Close(gameProcess_);
   gameProcess_ = nullptr;
   gameRunning_ = false;
+  engine::controls::HoldGameCubeAdapter(true);
   Log("the game ended (exit code " + std::to_string(code) + ")");
   ReloadMods();
   LookAtSlots(true);
@@ -5205,8 +5210,20 @@ void App::UpdatePads() {
   controls_.SetPads(std::move(list));
 }
 
+void App::LogGameCubeAdapter(const char* when) {
+  const std::string block = engine::controls::DescribeGameCubeAdapter(engine::controls::DescribeGameCubeAdapterSdl());
+  std::fprintf(stderr, "[gc adapter] --- %s ---\n%s\n", when, block.c_str());
+  std::fflush(stderr);
+}
+
 void App::LookAtAdapter() {
   const uint64_t tick = SDL_GetTicks();
+  if (controlsDrawnAt_ == 0 || tick - controlsDrawnAt_ > 1500) {
+    if (std::getenv("XD_GC_ADAPTER_FAKE") == nullptr) {
+      LogGameCubeAdapter("Controls page opened");
+    }
+  }
+  controlsDrawnAt_ = tick == 0 ? 1 : tick;
   if (adapterLookedAt_ != 0 && tick - adapterLookedAt_ < 3000) {
     return;
   }
@@ -5217,8 +5234,10 @@ void App::LookAtAdapter() {
     ec::AdapterState s = ec::AdapterState::NotPlugged;
     s = f == "nodriver" ? ec::AdapterState::NoDriver : f == "nopermission" ? ec::AdapterState::NoPermission
         : f == "inuse" ? ec::AdapterState::InUse : f == "reachable" ? ec::AdapterState::Reachable
-        : f == "unknown" ? ec::AdapterState::Unknown : s;
-    controls_.SetAdapterState(s, -99);
+        : f == "unknown" ? ec::AdapterState::Unknown : f == "wrongdriver" || f == "libusb0" ? ec::AdapterState::WrongDriver
+        : f == "libusbk" ? ec::AdapterState::WrongDriver : f == "notlisted" ? ec::AdapterState::NotListed
+        : f == "nolibrary" ? ec::AdapterState::LibraryMissing : s;
+    controls_.SetAdapterState(s, -99, f == "libusbk" ? "libusbK" : f == "libusb0" ? "libusb0" : f == "wrongdriver" ? "HidUsb" : "");
     return;
   }
   if (controls_.AdapterPadShown()) {
@@ -5229,9 +5248,13 @@ void App::LookAtAdapter() {
   if (probe.state != lastAdapterState_) {
     lastAdapterState_ = probe.state;
     Log("adapter: GameCube adapter state " + std::to_string(static_cast<int>(probe.state)) + " (libusb error " +
-        std::to_string(probe.libusbError) + ")");
+        std::to_string(probe.libusbError) + (probe.driver.empty() ? std::string() : ", driver " + probe.driver) + ")");
   }
-  controls_.SetAdapterState(probe.state, probe.libusbError);
+  controls_.SetAdapterState(probe.state, probe.libusbError, probe.driver);
+  if (!gameRunning_ && (probe.state == ec::AdapterState::Reachable || probe.state == ec::AdapterState::InUse ||
+      probe.state == ec::AdapterState::Unknown)) {
+    ec::NudgeGameCubeAdapter();
+  }
 }
 
 void App::FeedLiveInputs() {
@@ -8426,10 +8449,12 @@ int App::Run() {
   }
 
   SDL_SetHint(SDL_HINT_APP_NAME, game_.title.c_str());
+  engine::controls::SetGameCubeAdapterHints();
   if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
     Log("SDL_Init failed: " + std::string(SDL_GetError()));
     return 1;
   }
+  LogGameCubeAdapter("launcher start");
   scale_ = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
   if (scale_ <= 0.0f) {
     scale_ = 1.0f;

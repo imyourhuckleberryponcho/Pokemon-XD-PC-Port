@@ -29,10 +29,6 @@ import readme_text
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FOLDER_NAME = 'Pokemon XD PC'
-PBR_MODELS = os.path.join(ROOT, 'build', 'pbr_models_dist', 'pbr_models')
-
-
-USUM_MODELS = os.path.join(ROOT, 'build', 'usum_models_dist', 'usum_models')
 USUM_CPP_DATA = ('usum_gen4_plan.json', 'gen57_forms.json', 'gen57_model_numbers.json', 'gen57_cry_waves.json', 'gen57_speed_numbers.json', 'usum_dex_map.json', 'gen57_tables.json', 'gen4_tables.json')
 
 
@@ -316,25 +312,23 @@ def main():
         if os.path.isfile(os.path.join(build, 'xd_data_mods.exe')):
             shutil.copy2(os.path.join(build, 'xd_data_mods.exe'), pbr_dir)
             print('xd_data_mods: reads XD tables for the Gen 5-7 build (game/pbr_models)')
-    elif os.path.isfile(os.path.join(PBR_MODELS, 'pbr_models.exe')):
-        shutil.copytree(PBR_MODELS, pbr_dir)
-        print('pbr_models: the frozen Python converter (game/pbr_models)')
-    if os.path.isfile(os.path.join(USUM_MODELS, 'usum_models.exe')):
-        shutil.copytree(USUM_MODELS, os.path.join(game, 'usum_models'))
-        print('usum_models: the frozen Python converter (game/usum_models)')
+
 
 
     cpp_usum = os.path.join(build, 'usum_models_cpp.exe')
     if os.path.isfile(cpp_usum):
         os.makedirs(os.path.join(game, 'usum_models'), exist_ok=True)
         shutil.copy2(cpp_usum, os.path.join(game, 'usum_models'))
+
+
+        shutil.copy2(os.path.join(build, 'nod.dll'), os.path.join(game, 'usum_models'))
         for f in USUM_CPP_DATA:
             shutil.copy2(os.path.join(ROOT, 'tools', 'n3ds', f), os.path.join(game, 'usum_models'))
 
         for f in RUNTIME if crt else []:
             if os.path.isfile(os.path.join(crt, f)):
                 shutil.copy2(os.path.join(crt, f), os.path.join(game, 'usum_models'))
-        print('usum_models_cpp: the C++ converter, the default (XD_USUM_CPP=0 = the Python one; game/usum_models)')
+        print('usum_models_cpp: the C++ converter (game/usum_models)')
 
 
     lang_dir = os.path.join(game, 'xd_languages')

@@ -11,7 +11,7 @@ mods that CHANGE existing rows, Luau battle scripts, story scripts using existin
 The Gen 4 POKEMON (not the Gen 4 rules) also work on XG since 0.6.1: the pack is translated by name to XG's moves and abilities (docs/GEN4.md 0c).
 Mods can add rows on XG too (0.7.0, DRAFT, tried on the real XG disc: add, save, CONTINUE, a battle with the new species and move, refused without the mod):
 `add` blocks for `pokemon`, `moves` and `items` (xd_xg.h `DataAddRows`; mods_boot.cpp leaves only those three tables addable on XG).
-OFF in XG: `add` rows for story flags (`flags`), rooms, battles and trainer decks, the species asset keys (`face`, `model`, `cry`, `dex`, a move's `animation`),
+OFF in XG: `add` rows for story flags (`flags`), rooms, battles and trainer decks, the species asset keys (`face`, `icon`, `model`, `cry`, `dex`, a move's `animation`),
 the Gen 4 rules, Fairy / modern types, language packs. A data mod with those add rows still loads; they are dropped and the log line is
 `[mods] data mods: in this edition only new Pokemon, moves and items can be added`. Never assume XD's species/move/item numbers are XG's: say in the mod's
 description which disc it is for.

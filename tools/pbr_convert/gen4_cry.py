@@ -128,6 +128,41 @@ def build_xd(info, max_blocks=MAX_BLOCKS):
 
 
 
+
+
+
+
+
+
+LOUD_RMS = 9778
+
+
+def cry_is_loud(chan, data, nsamp):
+    pcm = decode_dsp_ints(chan, data, nsamp)
+    if not pcm:
+        return False
+    return sum(v * v for v in pcm) > len(pcm) * LOUD_RMS * LOUD_RMS
+
+
+def halve_frames(data):
+    out = bytearray(data)
+    for f in range(0, len(out) - 7, 8):
+        if out[f] & 15:
+            out[f] -= 1
+    return bytes(out)
+
+
+def build_xd_3ds(info):
+    """build_xd for a cry of the 3DS games: the same, with the level matched to XD's cries (see above). -> (header, body, notes)"""
+    notes = []
+    if cry_is_loud(info['chans'][0], info['data'][0], info['nsamp']):
+        info = dict(info, data=[halve_frames(d) for d in info['data']])
+        notes.append('level -6 dB (louder than XD cries)')
+    h, b, n2 = build_xd(info)
+    return h, b, notes + n2
+
+
+
 def decode_dsp_ints(chan, data, nsamp):
     """DSP-ADPCM -> a list of s16 values (integers only, so the C++ port (pbr_pack_cry.cpp wave_of) gives the same list)"""
     out = []

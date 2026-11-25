@@ -109,7 +109,7 @@ def main(argv):
         mapping, out = load_mapping(argv[3]), argv[4]
         os.makedirs(out, exist_ok=True)
         for key, idx in mapping.items():
-            h, b, notes = gen4_cry.build_xd(parse_cwav(waves[idx]))
+            h, b, notes = gen4_cry.build_xd_3ds(parse_cwav(waves[idx]))
             open(os.path.join(out, key + '.hdr'), 'wb').write(h)
             open(os.path.join(out, key + '.body'), 'wb').write(b)
             print(key, idx, '; '.join(notes))

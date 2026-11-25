@@ -449,6 +449,7 @@ void make_gen57_data(const DataOptions& o, const Plan& plan, const ModelResults&
       Json row = r.row;
       row.set("text", text_for(u, nat, dl));
       if (has_icon.count(nat)) row.set("face", Json("textures/faces/" + std::to_string(nat) + ".png"));
+      row.set("icon", Json("textures/icons/" + std::to_string(nat) + ".png"));
       if (auto ce = cry_edit.find(nat); ce != cry_edit.end()) {
         row.set("nakigoeId", Json(ce->second.first));
         row.set("voice", Json(ce->second.second));

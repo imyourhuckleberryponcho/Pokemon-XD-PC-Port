@@ -1,0 +1,50 @@
+diff --git a/lib/gx/gx_perf.hpp b/lib/gx/gx_perf.hpp
+--- a/lib/gx/gx_perf.hpp
++++ b/lib/gx/gx_perf.hpp
+@@ -31,6 +31,7 @@
+   uint64_t texSameAsBefore = 0, texChanged = 0, texNew = 0, texSameBytes = 0;
+   uint64_t arrCalls = 0, arrHashed = 0, arrHashBytes = 0, arrNs = 0, arrFast = 0, arrFastCopied = 0;
+   uint64_t scanNs = 0, scanVerts = 0;
++  uint64_t drainNs = 0, drainCalls = 0; // (patch 0063) the game's thread waiting in fifo::drain()
+ };
+ inline Stats g;
+ 
+diff --git a/lib/gx/fifo.cpp b/lib/gx/fifo.cpp
+--- a/lib/gx/fifo.cpp
++++ b/lib/gx/fifo.cpp
+@@ -261,6 +261,7 @@
+     process_to(target, std::memory_order_relaxed);
+     break;
+   case ProcessingMode::Thread: {
++    const uint64_t drainT0 = perf::stats_on() ? perf::now_ns() : 0;
+     sPublished.store(target, std::memory_order_release);
+     wake_worker();
+ 
+@@ -270,6 +271,10 @@
+         sProcessed.wait(processed, std::memory_order_acquire);
+         processed = sProcessed.load(std::memory_order_acquire);
+       } while (processed < target);
++    }
++    if (drainT0 != 0) {
++      perf::g.drainNs += perf::now_ns() - drainT0;
++      ++perf::g.drainCalls;
+     }
+     break;
+   }
+diff --git a/lib/gx/texture.cpp b/lib/gx/texture.cpp
+--- a/lib/gx/texture.cpp
++++ b/lib/gx/texture.cpp
+@@ -799,11 +799,11 @@
+       std::fprintf(stderr,
+                    "[gxperf] per frame: process %.3f ms (%.1f batches) | tex hash %.3f ms (%.1f calls, %.0f KB; memo hits %.1f = %.0f KB; "
+                    "same-as-before %.1f = %.0f KB, changed %.1f, new %.1f) | arrays hashed %.1f (%.0f KB, %.3f ms) fast %.1f copied %.1f | "
+-                   "scan %.3f ms (%.0f verts)\n",
++                   "scan %.3f ms (%.0f verts) | drain wait %.3f ms (%.1f calls)\n",
+                    g.processNs / f / 1e6, g.batches / f, g.texNs / f / 1e6, g.texCalls / f, g.texBytes / f / 1024,
+                    g.texMemoHits / f, g.texMemoBytes / f / 1024, g.texSameAsBefore / f, g.texSameBytes / f / 1024,
+                    g.texChanged / f, g.texNew / f, g.arrHashed / f, g.arrHashBytes / f / 1024, g.arrNs / f / 1e6,
+-                   g.arrFast / f, g.arrFastCopied / f, g.scanNs / f / 1e6, g.scanVerts / f);
++                   g.arrFast / f, g.arrFastCopied / f, g.scanNs / f / 1e6, g.scanVerts / f, g.drainNs / f / 1e6, g.drainCalls / f);
+       const uint64_t frames = g.frames;
+       g = {};
+       g.frames = frames;

@@ -88,6 +88,8 @@ namespace {
 
 namespace ep = engine::playthrough;
 namespace em = engine::mods;
+#include <port_audio.h>
+
 namespace es = engine::settings;
 namespace xp = xd::playthrough;
 namespace fs = std::filesystem;
@@ -1427,6 +1429,12 @@ void PortXD_PlaythroughFrame(void) {
     }
   }
   xd::speedrun::SetEngine(sChosen != Chosen::None && !sCurrentUnknown && !sCurrent.PureFaithful());
+  {
+    const char* req = std::getenv("XD_REQUIRE_ORIGINAL");
+    const bool plain = es::Global().CurrentPreset() == es::Preset::Original || (req != nullptr && std::strcmp(req, "1") == 0) ||
+                       (sChosen != Chosen::None && !sCurrentUnknown && sCurrent.PureFaithful());
+    PortAudio_SetPeakLimiter(plain ? 0 : 1);
+  }
   xd::speedrun::Frame();
   xd::challenges::Frame();
   if (sRestartNow) {
