@@ -197,6 +197,48 @@ Saves, settings, mods, logs and bug reports live in one data folder: {p['data']}
 """
 
 
+NEW_075 = """New in 0.7.5
+------------
+- Online battles: when your Pokemon fainted in a room, the game sent the fainted Pokemon out again instead of
+  opening the party menu, until the battle broke. The party menu now opens, is drawn, and refuses a fainted
+  Pokemon or one already in battle. (0.5.0 to 0.7.4)
+- Online battles: your whole team fights in single rooms (up to six); before, only the first two took part.
+  The bag also opens in rooms, and a drawn battle says it was a draw instead of "the connection was lost".
+- Online battles: 0.7.5 only meets 0.7.5 (the battles changed). Older versions are turned away with a clear
+  message on both sides. A room also says which pack differs (Gen 4 or Gen 5-7) when two players' packs don't
+  match.
+- Fairy type: with "Modern types" on, the Gen 5-7 Fairy Pokemon and forms (Sylveon, Flabebe, Xerneas, Mega
+  Gardevoir...) are Fairy now; before they kept their old type. Without the rule they keep the old types, as
+  before.
+- Poke Spots: Gen 5, Gen 6 and Gen 7 each add five Pokemon a spot (three common, one rare, one starter), and
+  with Gen 7 the Alolan Geodude, Diglett, Sandshrew (Rock), Vulpix, Meowth (Oasis), Rattata and Grimer (Cave).
+  Only the generations your playthrough has; a Pokemon already waiting at a spot stays.
+- Poke Spots: with Gen 4 and Gen 5-7 Pokemon on, a warning window at every start ("esabapokemondata ... no
+  #3") is gone, and the chances add up again (the last Gen 5-7 Pokemon of each spot could never appear). No
+  need to make your pack again.
+- Alolan Rattata made from your Ultra Sun / Ultra Moon dump was invisible in battle and in the summary; it
+  shows now, with the packs you already have.
+- Ultra Sun / Ultra Moon packs (press Make again once; the launcher says "out of date", older packs still
+  work): the Gen 5-7 Pokemon that evolve by a stone, a trade, a held item or a condition (Sachet, Whipped
+  Dream, knowing a move...) evolve the way they should, and the prize desk sells the items they need.
+  Spiritomb's face shows through its shell; Magcargo, Dusknoir, Finneon, Umbreon, Dialga and six more have
+  their right colours; Munchlax gets its own pictures and can be picked as a starter again.
+- Playing online with Ultra Sun / Ultra Moon packs: both players make the pack again, a re-made pack doesn't
+  match an older one.
+- Double battles with Gen 4-7 moves: moves aim at the right targets (Dark Void puts both foes to sleep, Aura
+  Sphere hits one).
+- Pokemon XG: the Gen 4 and Gen 5-7 Pokemon show their own faces and PC box pictures (Gothita had Mew's face).
+- The opening's Eevee offer: a picture that came out wrong on your PC (a white box) is drawn again, or the
+  Pokemon's face is shown.
+- Controllers: the launcher shows every controller the PC sees, and "Set it up..." makes a button list for one
+  the program doesn't know yet (you press each button once).
+- Making the pack no longer says "64 Pokedex pictures are missing" every time (those were empty rows, not
+  Pokemon).
+- Bug reports (F10) also list the textures in use, to find missing or white pictures.
+- Thanks to everyone who tested and reported bugs.
+"""
+
+
 NEW_074 = """New in 0.7.4
 ------------
 - Two copies on one save: starting a second game on a save that is already open now says which save, folder and
@@ -480,7 +522,7 @@ The full history is on the GitHub releases page: """ + RELEASES_URL + """
 
 
 def new_in():
-    return NEW_074 + chr(10) + NEW_073 + chr(10) + NEW_072 + chr(10) + NEW_071 + chr(10) + NEW_070 + chr(10) + NEW_061 + chr(10) + NEW_060 + chr(10) + NEW_05X
+    return NEW_075 + chr(10) + NEW_074 + chr(10) + NEW_073 + chr(10) + NEW_072 + chr(10) + NEW_071 + chr(10) + NEW_070 + chr(10) + NEW_061 + chr(10) + NEW_060 + chr(10) + NEW_05X
 
 
 def known_issues(system):
