@@ -57,7 +57,7 @@ void* Hook(uint32_t index) { return index < sCount ? xd_extra_shadow_records[ind
 
 std::vector<uint8_t> SaveSection() {
   std::vector<uint8_t> out;
-  if (sCount == 0 && xd::pt::LoadedMoreShadows().rfind("pct:", 0) != 0) return out;
+  if (sCount == 0 && xd::pt::LoadedMoreShadows().rfind("pct:", 0) != 0 && xd::pt::LoadedMoreShadows().rfind("own:", 0) != 0) return out;
   for (int i = 0; i < 4; i++) out.push_back(static_cast<uint8_t>(sCount >> (8 * i)));
   for (uint32_t i = 0; i < sCount; i++) {
     uint8_t r[xd::shadowrows::kRecordSize];

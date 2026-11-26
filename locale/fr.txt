@@ -7686,14 +7686,11 @@
 = More Shadow Pokemon: %s
 > Plus de Pokémon Obscurs : %s
 
-= %d%%: %d extra Shadow Pokemon among %d story trainers. Not Mt. Battle or the Colosseums.
-> %d%% : %d Pokémon Obscurs en plus sur %d Dresseurs. Ni Mont Battle ni Colosseums.
+= %d%%: %d Pokemon of story trainers become Shadow Pokemon (no species twice).
+> %d%% : %d Pokémon de Dresseurs de l'histoire deviennent Obscurs (espèces uniques).
 
-= %d%%: %d extra Shadow Pokemon (all free species or rows are used).
-> %d%% : %d Pokémon Obscurs en plus (espèces ou places toutes utilisées).
-
-= Off: the plain game. Pick a percentage to add extra Shadow Pokemon to story trainers' teams.
-> Désactivé : le jeu normal. Choisissez un pourcentage pour ajouter des Pokémon Obscurs aux équipes.
+= Off: the plain game. Pick a percentage of story trainers' Pokemon to become Shadow Pokemon.
+> Désactivé : le jeu normal. Choisissez un pourcentage de Pokémon de Dresseurs qui deviennent Obscurs.
 
 # Pokedex forms
 

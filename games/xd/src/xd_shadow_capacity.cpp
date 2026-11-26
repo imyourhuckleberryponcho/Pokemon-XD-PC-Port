@@ -25,6 +25,8 @@ namespace {
 
 xr::MoreShadowsCapacity sCap[3];
 bool sHave[3] = {false, false, false};
+em::DataCatalog sCatalog;
+bool sCatalogOk = false;
 
 bool ReadDisc(const std::string& archive, const std::string& entry, std::vector<uint8_t>& out) {
   static std::map<std::pair<std::string, std::string>, std::pair<bool, std::vector<uint8_t>>> cache;
@@ -78,29 +80,68 @@ bool Get(int pool, xr::MoreShadowsCapacity& out) {
 
 int RealCount(int pool, int percent) {
   if (pool < 0 || pool > 2 || !sHave[pool]) return -1;
-  const xr::MoreShadowsCapacity& c = sCap[pool];
-  uint32_t target = static_cast<uint32_t>((static_cast<uint64_t>(percent) * c.slots + 50) / 100);
-  if (target == 0 && c.slots != 0) target = 1;
+  return RealCountOf(sCap[pool], percent);
+}
+
+int RealCountOf(const xr::MoreShadowsCapacity& c, int percent) {
+  uint32_t target = static_cast<uint32_t>((static_cast<uint64_t>(percent) * c.species + 50) / 100);
+  if (target == 0 && c.species != 0) target = 1;
   return static_cast<int>(std::min<uint32_t>({target, c.species, c.rows, c.slots}));
+}
+
+bool ForCode(const std::string& code, int pool, xr::MoreShadowsCapacity& out) {
+  static std::map<std::pair<std::string, int>, std::pair<bool, xr::MoreShadowsCapacity>> cache;
+  const auto it = cache.find({code, pool});
+  if (it != cache.end()) {
+    out = it->second.second;
+    return it->second.first;
+  }
+  bool ok = false;
+  xr::MoreShadowsCapacity cap;
+  do {
+    if (!sCatalogOk) break;
+    std::string error;
+    engine::randomizer::Settings s;
+    xr::ApplyStyle(s, xr::Style::Classic);
+    bool seedOnly = false;
+    if (!engine::randomizer::DecodeCode(xr::GetSchema(), code, s, seedOnly, error)) break;
+    const bool incl4 = xr::CodeIncludesGen4(code), incl57 = xr::CodeIncludesGen57(code);
+    const bool gen4 = incl4 || incl57 || pool >= 1, gen57 = incl57 || pool == 2;
+    if (gen4 && (!xd::gen4::PackPresent() || !xr::LoadGen4Species(xd::gen4::PackFolder() / L"randomizer.txt", error))) break;
+    if (gen57 && (!xd::gen57::PackPresent() || !xr::LoadGen57Species(xd::gen57::PackFolder() / L"randomizer.txt", error))) break;
+    xr::Result r;
+    if (!xr::Generate(sCatalog, ReadDisc, s, r, error, nullptr)) break;
+    xr::MoreShadowsPlan plan;
+    plan.amount = 6, plan.percent = 100, plan.seed = 1, plan.capacityOnly = true;
+    engine::randomizer::ModOutput mod;
+    ok = xr::GenerateMoreShadows(sCatalog, ReadDisc, plan, &r, gen4, mod, error, gen57, &cap);
+    if (!ok) std::fprintf(stderr, "[shadow capacity] randomizer %s: %s\n", code.c_str(), error.c_str());
+    else std::fprintf(stderr, "[shadow capacity] randomizer %s: %u eligible Pokemon, %u possible Shadow Pokemon (free species), %u free rows\n", code.c_str(), cap.slots, cap.species, cap.rows);
+  } while (false);
+  cache[{code, pool}] = {ok, cap};
+  out = cap;
+  return ok;
 }
 
 }
 
 extern "C" void PortXD_ReadShadowCapacity(void) {
   if (!xd::pt::ScreenEnabled()) return;
-  em::DataCatalog catalog;
+  em::DataCatalog& catalog = sCatalog;
   std::string error;
+  sCatalogOk = false;
   if (!xd::data::BuildDataCatalog(ReadDisc, catalog, error)) {
     std::fprintf(stderr, "[shadow capacity] the disc's tables could not be read (%s): the New Game screen shows no number\n", error.c_str());
     return;
   }
+  sCatalogOk = true;
   for (int pool = 0; pool < 3; pool++) {
     const bool gen4 = pool >= 1, gen57 = pool == 2;
     if (gen4 && !xd::gen4::PackPresent()) break;
     if (gen4 && !xr::LoadGen4Species(xd::gen4::PackFolder() / L"randomizer.txt", error)) break;
     if (gen57 && (!xd::gen57::PackPresent() || !xr::LoadGen57Species(xd::gen57::PackFolder() / L"randomizer.txt", error))) break;
     xr::MoreShadowsPlan plan;
-    plan.amount = 5, plan.percent = 100, plan.seed = 1, plan.capacityOnly = true;
+    plan.amount = 6, plan.percent = 100, plan.seed = 1, plan.capacityOnly = true;
     engine::randomizer::ModOutput out;
     xr::MoreShadowsCapacity cap;
     if (!xr::GenerateMoreShadows(catalog, ReadDisc, plan, nullptr, gen4, out, error, gen57, &cap)) {

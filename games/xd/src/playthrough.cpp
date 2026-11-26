@@ -711,7 +711,7 @@ std::string BootMoreShadows() {
     if (xd::randomizer::ParseMoreShadows(env, plan)) {
       text = env;
     } else {
-      std::fprintf(stderr, "[more shadows] XD_MORE_SHADOWS=%s: expected few|many|all|pct:<percent>:<seed number>; off\n", env);
+      std::fprintf(stderr, "[more shadows] XD_MORE_SHADOWS=%s: expected few|many|all|pct:<percent>:<seed number>|own:<percent>:<seed number>; off\n", env);
     }
   }
   return text;

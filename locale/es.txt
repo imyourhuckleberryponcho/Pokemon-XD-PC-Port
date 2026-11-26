@@ -7686,14 +7686,11 @@
 = More Shadow Pokemon: %s
 > Más Pokémon Oscuros: %s
 
-= %d%%: %d extra Shadow Pokemon among %d story trainers. Not Mt. Battle or the Colosseums.
-> %d%%: %d Pokémon Oscuros más en %d entrenadores. No Monte Batalla ni Colosseum.
+= %d%%: %d Pokemon of story trainers become Shadow Pokemon (no species twice).
+> %d%%: %d Pokémon de entrenadores de historia serán Oscuros (especies únicas).
 
-= %d%%: %d extra Shadow Pokemon (all free species or rows are used).
-> %d%%: %d Pokémon Oscuros más (todas las especies o puestos usados).
-
-= Off: the plain game. Pick a percentage to add extra Shadow Pokemon to story trainers' teams.
-> No: el juego normal. Elige un porcentaje para añadir Pokémon Oscuros a los equipos.
+= Off: the plain game. Pick a percentage of story trainers' Pokemon to become Shadow Pokemon.
+> No: el juego normal. Elige el porcentaje de Pokémon de entrenadores que serán Oscuros.
 
 # Pokedex forms
 

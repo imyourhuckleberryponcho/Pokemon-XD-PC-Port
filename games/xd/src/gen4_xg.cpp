@@ -509,10 +509,6 @@ bool Translator::RunPack(bool gen57, std::vector<engine::mods::DataModFile>& fil
         }
       }
     }
-    if (true) {
-      Erase(s, "nakigoeId");
-      Erase(s, "voice");
-    }
     const auto lv = numbers(Get(s, "waza.level")), mv = numbers(Get(s, "waza.dataId"));
     std::vector<std::pair<uint32_t, uint32_t>> in;
     std::set<std::string> ownXd;

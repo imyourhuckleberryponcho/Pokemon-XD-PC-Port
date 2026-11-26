@@ -7702,14 +7702,11 @@
 
 # CHECK
 
-= %d%%: %d extra Shadow Pokemon among %d story trainers. Not Mt. Battle or the Colosseums.
-> %d%%: 追加のダークポケモン%d匹(%d人のトレーナー)。バトルマウンテン等は対象外。
+= %d%%: %d Pokemon of story trainers become Shadow Pokemon (no species twice).
+> %d%%: ストーリーのトレーナーのポケモン%d匹がダークポケモンに(同じ種族は重複なし)。
 
-= %d%%: %d extra Shadow Pokemon (all free species or rows are used).
-> %d%%: 追加のダークポケモン%d匹(空き種族か枠を使い切り)。
-
-= Off: the plain game. Pick a percentage to add extra Shadow Pokemon to story trainers' teams.
-> オフ: ふつうのゲーム。割合を選ぶと、トレーナーのチームにダークポケモンが加わります。
+= Off: the plain game. Pick a percentage of story trainers' Pokemon to become Shadow Pokemon.
+> オフ: ふつうのゲーム。割合を選ぶと、トレーナーのポケモンの一部がダークポケモンになります。
 
 # CHECK
 

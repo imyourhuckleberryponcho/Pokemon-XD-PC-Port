@@ -7686,14 +7686,11 @@
 = More Shadow Pokemon: %s
 > Mehr Crypto-Pokémon: %s
 
-= %d%%: %d extra Shadow Pokemon among %d story trainers. Not Mt. Battle or the Colosseums.
-> %d%%: %d zusätzliche Crypto-Pokémon bei %d Trainern. Nicht Mt. Battle, Colosseums.
+= %d%%: %d Pokemon of story trainers become Shadow Pokemon (no species twice).
+> %d%%: %d Pokémon von Story-Trainern werden Crypto-Pokémon (keine Art doppelt).
 
-= %d%%: %d extra Shadow Pokemon (all free species or rows are used).
-> %d%%: %d zusätzliche Crypto-Pokémon (alle Arten oder Plätze belegt).
-
-= Off: the plain game. Pick a percentage to add extra Shadow Pokemon to story trainers' teams.
-> Aus: das normale Spiel. Wähle einen Prozentsatz für zusätzliche Crypto-Pokémon in Trainerteams.
+= Off: the plain game. Pick a percentage of story trainers' Pokemon to become Shadow Pokemon.
+> Aus: das normale Spiel. Wähle einen Prozentsatz der Trainer-Pokémon, die Crypto werden.
 
 # Pokedex forms
 

@@ -1255,7 +1255,7 @@ int main(int argc, char** argv) {
   if (!moreShadows.empty()) {
     xr::MoreShadowsPlan plan;
     if (!xr::ParseMoreShadows(moreShadows, plan)) {
-      std::fprintf(stderr, "FAILED: --more-shadows wants few|many|all|pct:<percent>:<seed number>\n");
+      std::fprintf(stderr, "FAILED: --more-shadows wants few|many|all|pct:<percent>:<seed number>|own:<percent>:<seed number>\n");
       return 2;
     }
     if (!sGen4Pack.empty()) {
@@ -1274,7 +1274,7 @@ int main(int argc, char** argv) {
     std::ofstream sp(std::filesystem::path(out) / "more_shadows_spoiler.txt", std::ios::binary);
     for (const std::string& line : extra.spoiler) sp << line << "\n";
     std::printf("more shadows %s: %zu numbers changed (more_shadows_spoiler.txt)\n%s\n", moreShadows.c_str(), extra.Count(), extra.spoiler.empty() ? "" : extra.spoiler.front().c_str());
-    if (plan.amount == 5) std::printf("capacity: %u eligible trainers, %u eligible Pokemon, %u species free, %u Shadow rows free: %u extra Shadow Pokemon at %d%%\n", cap.trainers, cap.slots, cap.species, cap.rows, cap.count, plan.percent);
+    if (plan.amount >= 5) std::printf("capacity: %u eligible trainers, %u eligible Pokemon, %u species free, %u Shadow rows free: %u extra Shadow Pokemon at %d%%\n", cap.trainers, cap.slots, cap.species, cap.rows, cap.count, plan.percent);
     if (pastRows > 0) std::printf("%zu Shadow row(s) past 127 (the game's spare rows; not in the mod folder)\n", pastRows);
   }
   return ok ? 0 : 1;

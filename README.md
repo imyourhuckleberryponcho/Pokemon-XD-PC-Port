@@ -162,10 +162,12 @@ Saves, settings, mods, logs and bug reports live in one data folder (`%APPDATA%\
 
 ### New in 0.7.6
 
-- More Shadow Pokemon is now a percentage: Off, 10%, 25%, 50%, 75% or 100% (it replaces A few / Many / All). It is the share of the story trainers' Pokemon that become extra Shadow Pokemon, of species that are no Shadow yet. On the USA disc with the original Pokemon: 10% makes 20, 25% makes 51, 50% makes 102, 75% makes 152 and 100% makes 203; the New Game screen shows the real number for your choice. Each trainer's lead comes first, then the second and third, spread through the story, so a trainer can have several Shadow Pokemon and you can snag more than one in a battle (the Snag Machine needs a turn to recharge). Mt. Battle and the Colosseums never get extra Shadow Pokemon.
+- More Shadow Pokemon is now a percentage: Off, 10%, 25%, 50%, 75% or 100% (it replaces A few / Many / All). It is the share of the Shadow Pokemon that are possible: a story trainer's own Pokemon turns into a Shadow Pokemon (a trainer's Dustox becomes a Shadow Dustox, with the same level, moves and item, and you snag and purify it as usual; no other species is swapped in). No species is a Shadow twice in the whole game: a Pokemon whose species is a Shadow already (the game's own ones included) is skipped and the trainer's next one is used, so 100% is every species the story trainers have that is no Shadow yet. On the USA disc with the original Pokemon: 10% makes 12, 25% makes 29, 50% makes 59, 75% makes 88 and 100% makes 117; with the randomizer the numbers are those of your code's randomized teams. The New Game screen shows the real number for your choice. Each trainer's lead comes first, then the second and third, spread through the story, so a trainer can have several Shadow Pokemon and you can snag more than one in a battle (the Snag Machine needs a turn to recharge). Mt. Battle and the Colosseums never get Shadow Pokemon.
 - A game you started with A few, Many or All in 0.7.5 stays exactly as it was (a game started with "All" keeps its 44).
-- A save made with a percentage in 0.7.6 can't be opened by 0.7.5 or older: they say so and change nothing on the card. The Shadow Pokemon past the game's own list (more than 44 extra ones: 25% and up) are kept in a small extra file next to the save; it goes with the save when you back it up or move it.
+- A save made with a percentage in 0.7.6 can't be opened by 0.7.5 or older: they say so and change nothing on the card. The Shadow Pokemon past the game's own list (more than 44 extra ones: 50% and up) are kept in a small extra file next to the save; it goes with the save when you back it up or move it.
 - Not yet for those Shadow Pokemon past the game's own list: trading them (PC trade, GBA trade) and online battles. The game says why and refuses them.
+- Pokemon XG: the Gen 4-7 Pokemon now have their own cries (they used the cry of the Pokemon they stand in for).
+- The save info no longer lists "Gen 4 rules" next to a Gen 5/6/7 rule set.
 - Online battles are unchanged: 0.7.6 plays with 0.7.5.
 - Thanks to everyone who asked for this one.
 
@@ -261,7 +263,7 @@ The big one. Parts marked "needs" use a disc or dump you made yourself; nothing 
 - **Native-looking menus**: SETTINGS in the field menu and the title, the EXTRAS box, the New Game window and the MODS page are drawn in the game's own style.
 - **Battle replays**: keep your battles, play them back with pause, speed control, a replay bar and a free camera. Online battles save a file on both PCs.
 - **Online formats**: Sleep clause, team preview, a battle clock and plain refusal screens. 0.6.1 players can still join a classic room.
-- **More Shadow Pokémon** (New Game option, Enhanced): Off / 10% / 25% / 50% / 75% / 100% of the story trainers' Pokemon.
+- **More Shadow Pokémon** (New Game option, Enhanced): Off / 10% / 25% / 50% / 75% / 100% of the possible Shadow Pokemon: the story trainers' own Pokemon become Shadow Pokemon.
 - **Modding** is much bigger (battle effects, sounds, textures, scripts in Luau, stories, bigger lists, a check-and-pack page, "Reload mods" without restarting). The [Modding Guide](docs/modding/README.md) and a [guide for AI helpers](docs/modding-ai/README.md) are in this repository.
 - **Speed and looks**: cheaper graphics work, lighter fast-forward (music can stay at normal speed), frame rates above 60, optional FXAA / MSAA / texture filtering (off by default).
 - Start options and a clear choice of where your data is kept; Japanese text for the port's own screens (machine-made).

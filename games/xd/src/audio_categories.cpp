@@ -70,6 +70,18 @@ void BuildTables() {
   sTables.crySound.swap(crySound);
   sTables.cryFx.swap(cryFx);
   sTables.builtFor = pokemon_data;
+  if (std::getenv("XD_CRY_LOG") != nullptr && snd_file != nullptr && snd_file_number != nullptr) {
+    for (uint32_t i = 0; i < *pokemon_data_number; i++) {
+      const uint32_t v = pokemon_data[i].voice;
+      const SndData* d = SoundEntry(v);
+      if (d == nullptr || d->file >= *snd_file_number) {
+        std::fprintf(stderr, "[cry] species %u voice %u: none\n", i, v);
+        continue;
+      }
+      const SndFile* f = static_cast<const SndFile*>(snd_file) + d->file;
+      std::fprintf(stderr, "[cry] species %u voice %u file %u archive %u head %u body %u\n", i, v, d->file, f->a, f->b >> 16, f->c >> 16);
+    }
+  }
   const char* log = std::getenv("XD_AUDIO_CATEGORY_LOG");
   if (log != nullptr && log[0] == '1') {
     uint32_t cries = 0, cryStreams = 0, streams = 0, seStreams = 0, effects = 0, songs = 0, env = 0;

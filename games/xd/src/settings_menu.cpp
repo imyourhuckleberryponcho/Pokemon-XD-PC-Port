@@ -2606,21 +2606,19 @@ std::string RowLabel(const SRow& r) {
 }
 
 std::string MoreShadowsInfo() {
-  if (s.moreShadows == 5 && s.moreShadowsPct > 0) {
-    const auto& challenges = Chosen().challenges;
-    const auto has = [&](const char* id) { return std::find(challenges.begin(), challenges.end(), std::string(id)) != challenges.end(); };
-    const int pool = has("gen57_pokemon") ? 2 : (has("gen4_pokemon") || has("gen4_rules")) ? 1 : 0;
+  if (s.moreShadows >= 5 && s.moreShadowsPct > 0) {
     xd::randomizer::MoreShadowsCapacity cap;
-    if (xd::shadowcap::Get(pool, cap)) {
-      const int n = xd::shadowcap::RealCount(pool, s.moreShadowsPct);
-      const uint32_t target = static_cast<uint32_t>((static_cast<uint64_t>(s.moreShadowsPct) * cap.slots + 50) / 100);
-      if (target != 0 && static_cast<uint32_t>(n) < target) {
-        return Fmt(Tr("%d%%: %d extra Shadow Pokemon (all free species or rows are used)."), s.moreShadowsPct, n);
-      }
-      return Fmt(Tr("%d%%: %d extra Shadow Pokemon among %d story trainers. Not Mt. Battle or the Colosseums."), s.moreShadowsPct, n, static_cast<int>(cap.trainers));
+    bool have = false;
+    if (s.rStyle != 0 && !s.rCode.empty()) {
+      const auto& challenges = Chosen().challenges;
+      const auto has = [&](const char* id) { return std::find(challenges.begin(), challenges.end(), std::string(id)) != challenges.end(); };
+      have = xd::shadowcap::ForCode(s.rCode, has("gen57_pokemon") ? 2 : (has("gen4_pokemon") || has("gen4_rules")) ? 1 : 0, cap);
+    } else {
+      have = xd::shadowcap::Get(0, cap);
     }
+    if (have) return Fmt(Tr("%d%%: %d Pokemon of story trainers become Shadow Pokemon (no species twice)."), s.moreShadowsPct, xd::shadowcap::RealCountOf(cap, s.moreShadowsPct));
   }
-  return Tr("Off: the plain game. Pick a percentage to add extra Shadow Pokemon to story trainers' teams.");
+  return Tr("Off: the plain game. Pick a percentage of story trainers' Pokemon to become Shadow Pokemon.");
 }
 
 std::string RowInfo(const SRow& r) {
@@ -2878,7 +2876,7 @@ void RowValues(const SRow& r, std::string& left, std::string& right, std::string
   } else if (r.kind == Kind::RandomizerPaste) {
     value = Tr("Paste (A)");
   } else if (r.kind == Kind::MoreShadows) {
-    value = s.moreShadows == 5 ? Fmt("%d%%", s.moreShadowsPct) : s.moreShadows == 1 ? Tr("A few") : s.moreShadows == 2 ? Tr("Many") : s.moreShadows >= 3 ? Tr("All") : Tr("Off");
+    value = s.moreShadows >= 5 ? Fmt("%d%%", s.moreShadowsPct) : s.moreShadows == 1 ? Tr("A few") : s.moreShadows == 2 ? Tr("Many") : s.moreShadows >= 3 ? Tr("All") : Tr("Off");
   }
 }
 
@@ -3189,8 +3187,7 @@ void Audit(const AuditRun& run, ImDrawList* dl, const Screen& sc) {
       const std::string d = RowInfo(r);
       const int pages = std::max(1, (kit::LinesOf(d, 530.f, 1.f, 0) + 1) / 2);
       if (r.kind == Kind::MoreShadows) {
-        for (const std::string& f : {Fmt(Tr("%d%%: %d extra Shadow Pokemon among %d story trainers. Not Mt. Battle or the Colosseums."), 100, 203, 52),
-                                     Fmt(Tr("%d%%: %d extra Shadow Pokemon (all free species or rows are used)."), 100, 203)}) {
+        for (const std::string& f : {Fmt(Tr("%d%%: %d Pokemon of story trainers become Shadow Pokemon (no species twice)."), 100, 203)}) {
           const int p1 = std::max(1, (kit::LinesOf(f, 530.f, 1.f, 0) + 1) / 2);
           if (p1 > 1) std::fprintf(stderr, "[textfit] MORE SHADOWS TEXT SPILLS ONTO %d PAGES: %s\n", p1, f.c_str());
         }
@@ -3315,13 +3312,13 @@ bool Frame(void*, const PortMenuInput* in) {
     if (left || right || a) {
       const int top = static_cast<int>(sizeof kShadowPcts / sizeof kShadowPcts[0]);
       int at = 0;
-      if (s.moreShadows == 5) {
+      if (s.moreShadows >= 5) {
         for (int k = 0; k < top; k++) if (kShadowPcts[k] == s.moreShadowsPct) at = k + 1;
       }
       const int to = a ? (at == 0 ? 1 : 0) : (at + (left ? top : 1)) % (top + 1);
       s.moreShadowsNote.clear();
       if (to != 0 && s.moreShadowsSeed == 0) s.moreShadowsSeed = NewSeed() % 1000000000000ull + 1;
-      s.moreShadows = to == 0 ? 0 : 5;
+      s.moreShadows = to == 0 ? 0 : 6;
       s.moreShadowsPct = to == 0 ? 0 : kShadowPcts[to - 1];
       event = kSoundMove;
     }

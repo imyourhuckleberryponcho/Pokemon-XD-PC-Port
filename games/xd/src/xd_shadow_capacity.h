@@ -6,7 +6,9 @@
 namespace xd::shadowcap {
 
 bool Get(int pool, xd::randomizer::MoreShadowsCapacity& out);
+int RealCountOf(const xd::randomizer::MoreShadowsCapacity& cap, int percent);
 int RealCount(int pool, int percent);
+bool ForCode(const std::string& code, int pool, xd::randomizer::MoreShadowsCapacity& out);
 
 }
 

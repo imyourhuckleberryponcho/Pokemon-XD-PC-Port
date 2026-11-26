@@ -25,6 +25,17 @@ using mods::json::Value;
 namespace {
 
 using engine::i18n::Tr;
+std::string ShadowAmountName(const std::string& text) {
+  const size_t c = text.find(':');
+  const std::string name = text.substr(0, c);
+  if ((name == "own" || name == "pct") && c != std::string::npos) {
+    const size_t c2 = text.find(':', c + 1);
+    const std::string pct = text.substr(c + 1, c2 == std::string::npos ? std::string::npos : c2 - c - 1);
+    if (!pct.empty() && pct.find_first_not_of("0123456789") == std::string::npos) return pct + "%";
+  }
+  return name;
+}
+
 std::string Fmt(const char* format, ...) {
   char buf[1024];
   va_list args;
@@ -110,6 +121,17 @@ std::vector<const ModUse*> Setup::WorldMods() const {
   return out;
 }
 
+static std::vector<std::string> ShownChallenges(const Setup& setup) {
+  bool later = false;
+  for (const std::string& c : setup.challenges) later = later || c == "gen5_rules" || c == "gen6_rules" || c == "gen7_rules";
+  std::vector<std::string> out;
+  for (const std::string& c : setup.challenges) {
+    if (later && c == "gen4_rules") continue;
+    out.push_back(c);
+  }
+  return out;
+}
+
 std::string Label(const Setup& setup) {
   std::string label = EngineName(setup.engine);
   const std::vector<const ModUse*> world = setup.WorldMods();
@@ -118,12 +140,13 @@ std::string Label(const Setup& setup) {
              (!setup.seed.empty() ? setup.seed
                                   : setup.randomizer + (setup.randomizerVersion.empty() ? "" : " " + setup.randomizerVersion));
   }
-  for (size_t i = 0; i < setup.challenges.size(); i++) {
-    std::string name = setup.challenges[i];
+  const std::vector<std::string> shown = ShownChallenges(setup);
+  for (size_t i = 0; i < shown.size(); i++) {
+    std::string name = shown[i];
     std::replace(name.begin(), name.end(), '_', ' ');
     label += (i == 0 ? kDot + std::string("Challenge: ") : std::string(", ")) + name;
   }
-  if (!setup.moreShadows.empty()) label += kDot + std::string("More Shadow Pokemon: ") + setup.moreShadows.substr(0, setup.moreShadows.find(':'));
+  if (!setup.moreShadows.empty()) label += kDot + std::string("More Shadow Pokemon: ") + ShadowAmountName(setup.moreShadows);
   std::vector<std::string> starters;
   std::vector<std::string> others;
   for (const std::string& o : setup.options) {
@@ -179,10 +202,11 @@ std::string DisplayLabel(const Setup& setup) {
                                              : setup.randomizer + (setup.randomizerVersion.empty() ? "" : " " + setup.randomizerVersion))
                             .c_str());
   }
-  if (!setup.challenges.empty()) {
+  const std::vector<std::string> shown = ShownChallenges(setup);
+  if (!shown.empty()) {
     std::string names;
-    for (size_t i = 0; i < setup.challenges.size(); i++) {
-      std::string name = setup.challenges[i];
+    for (size_t i = 0; i < shown.size(); i++) {
+      std::string name = shown[i];
       std::replace(name.begin(), name.end(), '_', ' ');
       names += (i == 0 ? "" : ", ") + name;
     }
@@ -195,7 +219,7 @@ std::string DisplayLabel(const Setup& setup) {
     }
     label += kDot + Fmt(Tr("Mods: %s"), names.c_str());
   }
-  if (!setup.moreShadows.empty()) label += kDot + Fmt(Tr("More Shadow Pokemon: %s"), setup.moreShadows.substr(0, setup.moreShadows.find(':')).c_str());
+  if (!setup.moreShadows.empty()) label += kDot + Fmt(Tr("More Shadow Pokemon: %s"), ShadowAmountName(setup.moreShadows).c_str());
   if (!setup.ruleSetChanged.empty() && !setup.ruleSetStarted.empty()) label += kDot + std::string("rules were ") + setup.ruleSetStarted;
   if (setup.Vanilla()) label += kDot + std::string(Tr("Vanilla"));
   if (!setup.engineChanged.empty()) {

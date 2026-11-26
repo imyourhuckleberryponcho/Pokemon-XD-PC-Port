@@ -167,6 +167,14 @@ int main(int argc, char** argv) {
           "speedrun timer: finished round trip");
     check(timed.PureFaithful() && timed.Vanilla() && ep::Label(timed) == ep::Label(ep::Setup{}),
           "the timer does not change Faithful / Vanilla or the label");
+    ep::Setup rules;
+    rules.challenges = {"gen4_rules", "gen7_rules"};
+    check(ep::Label(rules).find("gen7 rules") != std::string::npos && ep::Label(rules).find("gen4") == std::string::npos,
+          "label: a Gen 7 rule set does not also say gen4 rules");
+    check(ep::DisplayLabel(rules).find("gen4") == std::string::npos && ep::ToJson(rules).find("gen4_rules") != std::string::npos,
+          "display label too; the setup data keeps both ids");
+    rules.challenges = {"gen4_rules"};
+    check(ep::Label(rules).find("gen4 rules") != std::string::npos, "label: Gen 4 rules alone are named");
     ep::Setup plain, more, moreBack;
     check(ep::ToJson(plain).find("more_shadows") == std::string::npos && plain.moreShadows.empty(), "no More Shadow Pokemon: nothing written");
     more.moreShadows = "few:123456789";
@@ -174,6 +182,10 @@ int main(int argc, char** argv) {
     check(ep::FromJson(ep::ToJson(more), moreBack, error) && moreBack.moreShadows == "few:123456789", "More Shadow Pokemon: round trip");
     check(!more.Vanilla() && ep::Label(more).find("More Shadow Pokemon: few") != std::string::npos && ep::Label(more).find("Vanilla") == std::string::npos,
           "More Shadow Pokemon: not Vanilla, the label names the amount (not the seed)");
+    more.moreShadows = "own:50:123456789";
+    check(ep::Label(more).find("More Shadow Pokemon: 50%") != std::string::npos && ep::Label(more).find("123456789") == std::string::npos, "More Shadow Pokemon: a percentage text is labelled \"50%\"");
+    more.moreShadows = "pct:75:42";
+    check(ep::Label(more).find("More Shadow Pokemon: 75%") != std::string::npos, "More Shadow Pokemon: the older percentage text is labelled \"75%\" too");
   }
   {
     ep::Setup old;

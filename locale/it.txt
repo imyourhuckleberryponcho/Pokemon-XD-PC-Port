@@ -7686,14 +7686,11 @@
 = More Shadow Pokemon: %s
 > Più Pokémon Ombra: %s
 
-= %d%%: %d extra Shadow Pokemon among %d story trainers. Not Mt. Battle or the Colosseums.
-> %d%%: %d Pokémon Ombra in più su %d allenatori. Non Monte Lotta o Colosseum.
+= %d%%: %d Pokemon of story trainers become Shadow Pokemon (no species twice).
+> %d%%: %d Pokémon di allenatori della storia diventano Ombra (specie uniche).
 
-= %d%%: %d extra Shadow Pokemon (all free species or rows are used).
-> %d%%: %d Pokémon Ombra in più (specie o posti tutti usati).
-
-= Off: the plain game. Pick a percentage to add extra Shadow Pokemon to story trainers' teams.
-> No: il gioco normale. Scegli una percentuale per aggiungere Pokémon Ombra alle squadre.
+= Off: the plain game. Pick a percentage of story trainers' Pokemon to become Shadow Pokemon.
+> No: il gioco normale. Scegli la percentuale di Pokémon di allenatori che diventano Ombra.
 
 # Pokedex forms
 
