@@ -7702,8 +7702,14 @@
 
 # CHECK
 
-= Trainers without a Shadow Pokemon get one (a species that is no Shadow yet), met after you have the Snag Machine. A few: about 15. Many: 44. All: greyed, this game holds 127 Shadow Pokemon.
-> ダークポケモンを持たないトレーナーが、まだダークではない種族のダークポケモンを持つようになります(スナッチマシンを手に入れたあとに出会います)。少し: 約15匹。多く: 44匹。すべて: 選べません(このゲームのダークポケモンは127匹)。
+= %d%%: %d extra Shadow Pokemon among %d story trainers. Not Mt. Battle or the Colosseums.
+> %d%%: 追加のダークポケモン%d匹(%d人のトレーナー)。バトルマウンテン等は対象外。
+
+= %d%%: %d extra Shadow Pokemon (all free species or rows are used).
+> %d%%: 追加のダークポケモン%d匹(空き種族か枠を使い切り)。
+
+= Off: the plain game. Pick a percentage to add extra Shadow Pokemon to story trainers' teams.
+> オフ: ふつうのゲーム。割合を選ぶと、トレーナーのチームにダークポケモンが加わります。
 
 # CHECK
 
@@ -7716,9 +7722,6 @@
 > 多く
 
 # CHECK
-
-= All is not possible yet: this game holds 127 Shadow Pokemon.
-> すべては、まだできません。このゲームのダークポケモンは127匹です。
 
 # CHECK
 

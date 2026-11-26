@@ -123,6 +123,7 @@ Card Trader::DescribeWire(const Bytes& wire) const {
 Verdict Trader::Judge(const xd::legality::Rules& rules, const xd::save::Pokemon& p, ShadowState sh) {
   if (p.IsEmpty()) return {false, "There is no Pokemon there."};
   if (sh == ShadowState::Unpurified) return {false, "A Shadow Pokemon can't be traded until it is purified."};
+  if (p.shadowId >= xd::save::kShadowEntries) return {false, "An extra Shadow Pokemon of More Shadow Pokemon (a Shadow row past the disc's 127, kept only in its own save's extension) can't be traded yet."};
   if (p.IsEgg()) return {false, "Eggs can't be traded."};
   const xd::legality::Result r = xd::legality::Check(p, rules, xd::legality::Level::Legal);
   if (!r.Ok()) return {false, r.Text()};

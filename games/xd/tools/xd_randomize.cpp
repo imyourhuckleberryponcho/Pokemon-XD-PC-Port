@@ -1255,7 +1255,7 @@ int main(int argc, char** argv) {
   if (!moreShadows.empty()) {
     xr::MoreShadowsPlan plan;
     if (!xr::ParseMoreShadows(moreShadows, plan)) {
-      std::fprintf(stderr, "FAILED: --more-shadows wants few|many|all:<seed number>\n");
+      std::fprintf(stderr, "FAILED: --more-shadows wants few|many|all|pct:<percent>:<seed number>\n");
       return 2;
     }
     if (!sGen4Pack.empty()) {
@@ -1263,15 +1263,19 @@ int main(int argc, char** argv) {
       if (!xr::LoadGen4Species(sGen4Pack / "randomizer.txt", e2)) std::printf("note: %s\n", e2.c_str());
     }
     er::ModOutput extra;
-    if (!xr::GenerateMoreShadows(cat, read_disc_entry, plan, &r, !sGen4Pack.empty(), extra, error, !sGen57Pack.empty())) {
+    xr::MoreShadowsCapacity cap;
+    if (!xr::GenerateMoreShadows(cat, read_disc_entry, plan, &r, !sGen4Pack.empty(), extra, error, !sGen57Pack.empty(), &cap)) {
       std::fprintf(stderr, "FAILED more shadows: %s\n", error.c_str());
       return 1;
     }
+    const size_t pastRows = xr::TakeExtraShadowRows(extra).size();
     std::filesystem::create_directories(std::filesystem::path(out) / "data");
     std::ofstream(std::filesystem::path(out) / "data" / "more_shadows.json", std::ios::binary) << extra.ToJson("more shadows " + moreShadows);
     std::ofstream sp(std::filesystem::path(out) / "more_shadows_spoiler.txt", std::ios::binary);
     for (const std::string& line : extra.spoiler) sp << line << "\n";
     std::printf("more shadows %s: %zu numbers changed (more_shadows_spoiler.txt)\n%s\n", moreShadows.c_str(), extra.Count(), extra.spoiler.empty() ? "" : extra.spoiler.front().c_str());
+    if (plan.amount == 5) std::printf("capacity: %u eligible trainers, %u eligible Pokemon, %u species free, %u Shadow rows free: %u extra Shadow Pokemon at %d%%\n", cap.trainers, cap.slots, cap.species, cap.rows, cap.count, plan.percent);
+    if (pastRows > 0) std::printf("%zu Shadow row(s) past 127 (the game's spare rows; not in the mod folder)\n", pastRows);
   }
   return ok ? 0 : 1;
 }

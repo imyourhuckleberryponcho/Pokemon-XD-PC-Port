@@ -7686,11 +7686,14 @@
 = More Shadow Pokemon: %s
 > Più Pokémon Ombra: %s
 
-= Trainers without a Shadow Pokemon get one (a species that is no Shadow yet), met after you have the Snag Machine. A few: about 15. Many: 44. All: greyed, this game holds 127 Shadow Pokemon.
-> Gli allenatori senza Pokémon Ombra ne ricevono uno (di una specie non ancora Ombra), che incontri quando hai la Snag Machine. Pochi: circa 15. Molti: 44. Tutti: in grigio, questo gioco contiene 127 Pokémon Ombra.
+= %d%%: %d extra Shadow Pokemon among %d story trainers. Not Mt. Battle or the Colosseums.
+> %d%%: %d Pokémon Ombra in più su %d allenatori. Non Monte Lotta o Colosseum.
 
-= All is not possible yet: this game holds 127 Shadow Pokemon.
-> Tutti non è ancora possibile: questo gioco contiene 127 Pokémon Ombra.
+= %d%%: %d extra Shadow Pokemon (all free species or rows are used).
+> %d%%: %d Pokémon Ombra in più (specie o posti tutti usati).
+
+= Off: the plain game. Pick a percentage to add extra Shadow Pokemon to story trainers' teams.
+> No: il gioco normale. Scegli una percentuale per aggiungere Pokémon Ombra alle squadre.
 
 # Pokedex forms
 

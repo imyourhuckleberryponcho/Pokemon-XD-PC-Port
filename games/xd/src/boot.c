@@ -107,6 +107,7 @@ bool PortXD_LoadMods(void);
 void PortXD_Gen4MainTables(void);
 void PortXD_ModSpeciesMainTables(void);
 void PortXD_ReadTrainerLevels(void);
+void PortXD_ReadShadowCapacity(void);
 void PortXD_PlaythroughBoot(void);
 void PortXD_PlaythroughFrame(void);
 const char* PortXD_PlaythroughHeader(void);
@@ -706,6 +707,7 @@ int aurora_main(int argc, char** argv) {
   PortXD_PlaythroughBoot();
   PortXD_LoadMods();
   PortXD_ReadTrainerLevels();
+  PortXD_ReadShadowCapacity();
   if (!PortXD_LoadDspProgram()) {
     return fail(Tr("MusyX's DSP program isn't in main.dol"));
   }
@@ -713,6 +715,10 @@ int aurora_main(int argc, char** argv) {
     PortXD_DiscUnusable(error);
     PortXD_DiscFailed(discPath);
     return 1;
+  }
+  {
+    extern void PortXD_ExtraShadowsApply(void);
+    PortXD_ExtraShadowsApply();
   }
   PortXD_Gen4MainTables();
   PortXD_ModSpeciesMainTables();

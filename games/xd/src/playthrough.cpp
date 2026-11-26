@@ -21,6 +21,7 @@
 #include "xd_save_picker.h"
 #include "xd_save_ext.h"
 #include "xd_memo_overflow.h"
+#include "xd_extra_shadows.h"
 #include "xd_user_folder.h"
 #include "xd_xg.h"
 #include "tables_file.h"
@@ -330,6 +331,7 @@ extern "C" void PortXD_SetSaveExtHooks(int (*before)(const uint8_t*, size_t), vo
 extern "C" void PortXD_PlaythroughBoot(void) {
   PortXD_SetSaveWrittenHook(PortXD_PlaythroughSaveWritten);
   xd::memo::RegisterSaveExt();
+  xd::shadowrows::RegisterSaveExt();
   PortXD_SetSaveExtHooks(PortXD_SaveExtBeforeWrite, PortXD_SaveExtAfterWrite, PortXD_SaveExtOnRead);
   sCardId = xp::SaveIdOnCard();
   if (sCardId.found) sBootKey = sCardId.key;
@@ -709,7 +711,7 @@ std::string BootMoreShadows() {
     if (xd::randomizer::ParseMoreShadows(env, plan)) {
       text = env;
     } else {
-      std::fprintf(stderr, "[more shadows] XD_MORE_SHADOWS=%s: expected few|many|all:<seed number>; off\n", env);
+      std::fprintf(stderr, "[more shadows] XD_MORE_SHADOWS=%s: expected few|many|all|pct:<percent>:<seed number>; off\n", env);
     }
   }
   return text;

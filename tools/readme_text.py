@@ -197,6 +197,27 @@ Saves, settings, mods, logs and bug reports live in one data folder: {p['data']}
 """
 
 
+NEW_076 = """New in 0.7.6
+------------
+- More Shadow Pokemon is now a percentage: Off, 10%, 25%, 50%, 75% or 100% (it replaces A few / Many / All).
+  It is the share of the story trainers' Pokemon that become extra Shadow Pokemon, of species that are no
+  Shadow yet. On the USA disc with the original Pokemon: 10% makes 20, 25% makes 51, 50% makes 102, 75% makes
+  152 and 100% makes 203; the New Game screen shows the real number for your choice. Each trainer's lead comes
+  first, then the second and third, spread through the story, so a trainer can have several Shadow Pokemon and
+  you can snag more than one in a battle (the Snag Machine needs a turn to recharge). Mt. Battle and the
+  Colosseums never get extra Shadow Pokemon.
+- A game you started with A few, Many or All in 0.7.5 stays exactly as it was (a game started with "All" keeps
+  its 44).
+- A save made with a percentage in 0.7.6 can't be opened by 0.7.5 or older: they say so and change nothing on
+  the card. The Shadow Pokemon past the game's own list (more than 44 extra ones: 25% and up) are kept in a
+  small extra file next to the save; it goes with the save when you back it up or move it.
+- Not yet for those Shadow Pokemon past the game's own list: trading them (PC trade, GBA trade) and online
+  battles. The game says why and refuses them.
+- Online battles are unchanged: 0.7.6 plays with 0.7.5.
+- Thanks to everyone who asked for this one.
+"""
+
+
 NEW_075 = """New in 0.7.5
 ------------
 - Online battles: when your Pokemon fainted in a room, the game sent the fainted Pokemon out again instead of
@@ -522,7 +543,7 @@ The full history is on the GitHub releases page: """ + RELEASES_URL + """
 
 
 def new_in():
-    return NEW_075 + chr(10) + NEW_074 + chr(10) + NEW_073 + chr(10) + NEW_072 + chr(10) + NEW_071 + chr(10) + NEW_070 + chr(10) + NEW_061 + chr(10) + NEW_060 + chr(10) + NEW_05X
+    return NEW_076 + chr(10) + NEW_075 + chr(10) + NEW_074 + chr(10) + NEW_073 + chr(10) + NEW_072 + chr(10) + NEW_071 + chr(10) + NEW_070 + chr(10) + NEW_061 + chr(10) + NEW_060 + chr(10) + NEW_05X
 
 
 def known_issues(system):

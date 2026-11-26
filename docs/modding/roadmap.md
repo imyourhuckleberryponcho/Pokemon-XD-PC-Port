@@ -18,7 +18,7 @@
 - Changing the inside of a move animation (particles, camera path, sounds). Mixing the three pieces of existing animations works today.
 - The Pokémon's big body picture in menus for a new species. It uses the copy's picture today.
 - More than 4096 new Pokémon, moves or items (raised from 1024 in 0.7.1). The limit comes from the spare rows in the game's tables, and the port follows when that number is raised.
-- More Shadow Pokémon past row 127, more TMs than the pocket holds, more tutors, more bag slots, and abilities past 255. Each needs small changes in
+- More TMs than the pocket holds, more tutors, more bag slots, and abilities past 255. (Shadow Pokémon past row 127 are built for More Shadow Pokémon "All" since 0.7.6; data mods cannot set them yet.) Each needs small changes in
   the game's own code. See "Bigger lists" in [add-pokemon-moves-items.md](add-pokemon-moves-items.md).
 - Choosing a stand-in species in the launcher when taking a Pokémon out of a mod. The command line has `--species-map`.
 

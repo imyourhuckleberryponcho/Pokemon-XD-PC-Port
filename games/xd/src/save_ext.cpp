@@ -5,6 +5,7 @@
 
 #include <playthrough.h>
 #include <saveext.h>
+#include <xd_save.h>
 
 #include <algorithm>
 #include <cstdarg>
@@ -36,6 +37,20 @@ std::string TrFmt(const char* format, ...) {
   if (n > 0) std::vsnprintf(out.data(), out.size() + 1, format, again);
   va_end(again);
   return out;
+}
+
+bool UsesSpareShadowRows(const std::vector<uint8_t>& image) {
+  namespace xs = xd::save;
+  xs::Save save;
+  xs::ReadReport report;
+  std::string error;
+  if (!xs::ReadSave(image, save, report, error)) return true;
+  const auto spare = [](const xs::Pokemon& p) { return !p.IsEmpty() && p.shadowId >= xs::kShadowEntries; };
+  for (const xs::Pokemon& p : save.party) if (spare(p)) return true;
+  for (const xs::Box& b : save.boxes) for (const xs::Pokemon& p : b.slots) if (spare(p)) return true;
+  if (spare(save.dayCare)) return true;
+  for (const auto& stage : save.chambers) for (const xs::Pokemon& p : stage) if (spare(p)) return true;
+  return false;
 }
 
 std::vector<xd::saveext::Handler>& Handlers() {
@@ -193,6 +208,9 @@ int PortXD_SaveExtOnRead(const uint8_t* image, size_t size, size_t length, char*
   case se::State::Missing:
   case se::State::Stale:
   case se::State::Damaged:
+    if (!needs.empty() && std::find(needs.begin(), needs.end(), "shadow") != needs.end() && !UsesSpareShadowRows(bytes)) {
+      needs.erase(std::remove(needs.begin(), needs.end(), std::string("shadow")), needs.end());
+    }
     if (!needs.empty()) {
       refuse = TrFmt(Tr("The extra data this save needs (%s) is %s."), Join(needs).c_str(),
                      loaded.state == se::State::Missing ? Tr("missing") : loaded.state == se::State::Stale ? Tr("from another version of the save")

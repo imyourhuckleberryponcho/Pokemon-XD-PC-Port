@@ -65,7 +65,8 @@ std::vector<std::string> CheckTeam(const std::vector<xd::save::Pokemon>& team, c
     context.shadowStaysInItsSave = true;
     const xd::legality::Result r = xd::legality::Check(p, rules, xd::legality::Level::Safe, context);
     if (!r.Ok()) out.push_back("Pokemon " + std::to_string(slot) + ": " + r.Text());
-    if (p.shadowId != 0 && !room.shadowAllowed) out.push_back("Pokemon " + std::to_string(slot) + " is a Shadow Pokemon; this room does not allow them.");
+    if (p.shadowId >= xd::save::kShadowEntries) out.push_back("Pokemon " + std::to_string(slot) + " is an extra Shadow Pokemon of More Shadow Pokemon (its Shadow row is only on its owner's PC): those can't battle online yet.");
+    else if (p.shadowId != 0 && !room.shadowAllowed) out.push_back("Pokemon " + std::to_string(slot) + " is a Shadow Pokemon; this room does not allow them.");
   }
   if (!room.format.empty()) {
     for (const std::string& line : CheckTeamFormat(team, rules, room)) out.push_back(line);

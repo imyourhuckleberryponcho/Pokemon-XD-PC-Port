@@ -1616,19 +1616,32 @@ bool ParseMoreShadows(const std::string& text, MoreShadowsPlan& plan) {
   const size_t colon = text.find(':');
   if (colon == std::string::npos) return false;
   const std::string name = text.substr(0, colon), seed = text.substr(colon + 1);
-  if (name == "few") plan.amount = 1;
+  std::string digits = seed;
+  if (name == "pct") {
+    const size_t c2 = seed.find(':');
+    if (c2 == std::string::npos || c2 == 0 || c2 > 3 || seed.substr(0, c2).find_first_not_of("0123456789") != std::string::npos) return false;
+    plan.percent = std::stoi(seed.substr(0, c2));
+    if (plan.percent < 1 || plan.percent > 100) return false;
+    plan.amount = 5;
+    digits = seed.substr(c2 + 1);
+  } else if (name == "few") plan.amount = 1;
   else if (name == "many") plan.amount = 2;
-  else if (name == "all") plan.amount = 3;
+  else if (name == "all") plan.amount = 4;
   else return false;
-  if (seed.empty() || seed.size() > 19 || seed.find_first_not_of("0123456789") != std::string::npos) return false;
-  plan.seed = std::stoull(seed);
+  if (plan.amount == 4 && seed.size() > 2 && seed.compare(seed.size() - 2, 2, ":2") == 0) {
+    plan.amount = 3;
+    digits = seed.substr(0, seed.size() - 2);
+  }
+  if (digits.empty() || digits.size() > 19 || digits.find_first_not_of("0123456789") != std::string::npos) return false;
+  plan.seed = std::stoull(digits);
   return true;
 }
 
-std::string MoreShadowsText(int amount, uint64_t seed) {
-  static const char* const kNames[] = {"", "few", "many", "all"};
-  if (amount < 1 || amount > 3) return {};
-  return std::string(kNames[amount]) + ":" + std::to_string(seed);
+std::string MoreShadowsText(int amount, uint64_t seed, int percent) {
+  static const char* const kNames[] = {"", "few", "many", "all", "all", "pct"};
+  if (amount < 1 || amount > 5) return {};
+  if (amount == 5) return "pct:" + std::to_string(percent) + ":" + std::to_string(seed);
+  return std::string(kNames[amount]) + ":" + std::to_string(seed) + (amount == 3 ? ":2" : "");
 }
 
 namespace {
@@ -1642,13 +1655,9 @@ std::string PersonOf(const std::string& name) {
 }
 
 bool GenerateMoreShadows(const em::DataCatalog& catalog, const em::EntryReader& read, const MoreShadowsPlan& plan, const Result* rando,
-                         bool gen4, er::ModOutput& out, std::string& error, bool gen57) {
+                         bool gen4, er::ModOutput& out, std::string& error, bool gen57, MoreShadowsCapacity* capacity) {
   out = er::ModOutput{};
   if (plan.amount < 1) return true;
-  if (plan.amount == 3 && MoreShadowsRows() <= 127) {
-    error = "\"All\" needs more than 127 Shadow Pokemon, which this version of the game cannot hold yet";
-    return false;
-  }
   Tables t(catalog, read);
   if (gen4) {
     if (sGen4.empty()) {
@@ -1703,6 +1712,9 @@ bool GenerateMoreShadows(const em::DataCatalog& catalog, const em::EntryReader& 
       freeRows.push_back(i);
     }
   }
+  if (plan.amount == 3 || plan.amount == 5) {
+    for (uint32_t r = kFirstExtraShadowRow; r <= MoreShadowsRows(); r++) freeRows.push_back(r);
+  }
   struct Template { uint32_t row, level; };
   std::vector<Template> templates;
   std::map<std::string, uint32_t> areaMinShadow;
@@ -1747,7 +1759,7 @@ bool GenerateMoreShadows(const em::DataCatalog& catalog, const em::EntryReader& 
       }
     }
   }
-  struct Candidate { uint32_t trainer, slot, entry, level, teamSize; };
+  struct Candidate { uint32_t trainer, slot, entry, level, teamSize; std::vector<uint32_t> slots; };
   std::vector<Candidate> eligible;
   for (uint32_t tr = 1; tr < trainerCount; tr++) {
     const std::string& nm = names[tr];
@@ -1757,35 +1769,86 @@ bool GenerateMoreShadows(const em::DataCatalog& catalog, const em::EntryReader& 
     if (area == areaMinShadow.end()) continue;
     int bestSlot = -1;
     uint32_t bestLevel = 0, entry = 0, teamSize = 0;
+    std::vector<uint32_t> okSlots;
     for (uint32_t k = 0; k < 6; k++) {
       const uint32_t id = t.Get("story_trainers", tr, "pokemonDataID", k);
       if (id != 0) teamSize++;
       if (id == 0 || id >= entryCount || entryUses[id] != 1) continue;
+      okSlots.push_back(k);
       const uint32_t lv = t.Get("story_pokemon", id, "level");
       if (lv >= bestLevel) bestLevel = lv, bestSlot = static_cast<int>(k), entry = id;
     }
     if (bestSlot < 0 || bestLevel < area->second) continue;
     if (bestLevel >= 50) continue;
-    eligible.push_back({tr, static_cast<uint32_t>(bestSlot), entry, bestLevel, teamSize});
+    eligible.push_back({tr, static_cast<uint32_t>(bestSlot), entry, bestLevel, teamSize, okSlots});
   }
   std::stable_sort(eligible.begin(), eligible.end(), [](const Candidate& a, const Candidate& b) { return a.level < b.level; });
   const uint32_t room = static_cast<uint32_t>(freeRows.size());
-  uint32_t want = plan.amount == 1 ? 15 : plan.amount == 2 ? 44 : static_cast<uint32_t>(eligible.size());
-  want = std::min<uint32_t>({want, room, static_cast<uint32_t>(eligible.size())});
+  const auto pool = PoolFor(sp, false);
   er::Rng rng = er::Rng::Stream(plan.seed, "more_shadows");
   std::vector<Candidate> chosen;
-  if (want >= eligible.size()) {
-    chosen = eligible;
+  if (plan.amount == 5) {
+    std::vector<std::vector<Candidate>> rounds;
+    uint32_t slotCount = 0;
+    for (const Candidate& c : eligible) {
+      for (size_t i = 0; i < c.slots.size(); i++) {
+        const uint32_t k = c.slots[i], id = t.Get("story_trainers", c.trainer, "pokemonDataID", k);
+        if (rounds.size() <= i) rounds.resize(i + 1);
+        rounds[i].push_back({c.trainer, k, id, t.Get("story_pokemon", id, "level"), c.teamSize, {}});
+        slotCount++;
+      }
+    }
+    uint32_t freeSpecies = 0;
+    for (uint32_t x : pool) {
+      if (x < sp.bst.size() && sp.bst[x] != 0 && !isShadow[x]) freeSpecies++;
+    }
+    uint32_t target = static_cast<uint32_t>((static_cast<uint64_t>(plan.percent) * slotCount + 50) / 100);
+    if (target == 0 && slotCount != 0) target = 1;
+    const uint32_t real = std::min<uint32_t>({target, freeSpecies, room, slotCount});
+    if (capacity != nullptr) {
+      capacity->trainers = static_cast<uint32_t>(eligible.size());
+      capacity->slots = slotCount;
+      capacity->species = freeSpecies;
+      capacity->rows = room;
+      capacity->count = real;
+      if (plan.capacityOnly) return true;
+    }
+    uint32_t remaining = real;
+    for (auto& round : rounds) {
+      if (remaining == 0) break;
+      std::stable_sort(round.begin(), round.end(), [](const Candidate& a, const Candidate& b) { return a.level < b.level; });
+      const uint32_t n = static_cast<uint32_t>(round.size());
+      if (remaining >= n) {
+        chosen.insert(chosen.end(), round.begin(), round.end());
+        remaining -= n;
+      } else {
+        for (uint32_t i = 0; i < remaining; i++) {
+          const uint32_t lo = static_cast<uint32_t>(static_cast<uint64_t>(n) * i / remaining);
+          const uint32_t hi = static_cast<uint32_t>(static_cast<uint64_t>(n) * (i + 1) / remaining);
+          chosen.push_back(round[lo + rng.Below(std::max<uint32_t>(1, hi - lo))]);
+        }
+        remaining = 0;
+      }
+    }
+    std::stable_sort(chosen.begin(), chosen.end(), [](const Candidate& a, const Candidate& b) {
+      return a.level != b.level ? a.level < b.level : a.trainer != b.trainer ? a.trainer < b.trainer : a.slot < b.slot;
+    });
   } else {
-    for (uint32_t i = 0; i < want; i++) {
-      const uint32_t lo = static_cast<uint32_t>(static_cast<uint64_t>(eligible.size()) * i / want);
-      const uint32_t hi = static_cast<uint32_t>(static_cast<uint64_t>(eligible.size()) * (i + 1) / want);
-      chosen.push_back(eligible[lo + rng.Below(std::max<uint32_t>(1, hi - lo))]);
+    uint32_t want = plan.amount == 1 ? 15 : plan.amount == 2 ? 44 : static_cast<uint32_t>(eligible.size());
+    want = std::min<uint32_t>({want, room, static_cast<uint32_t>(eligible.size())});
+    if (want >= eligible.size()) {
+      chosen = eligible;
+    } else {
+      for (uint32_t i = 0; i < want; i++) {
+        const uint32_t lo = static_cast<uint32_t>(static_cast<uint64_t>(eligible.size()) * i / want);
+        const uint32_t hi = static_cast<uint32_t>(static_cast<uint64_t>(eligible.size()) * (i + 1) / want);
+        chosen.push_back(eligible[lo + rng.Below(std::max<uint32_t>(1, hi - lo))]);
+      }
     }
   }
-  const auto pool = PoolFor(sp, false);
   const std::vector<bool> wasShadow = isShadow;
   std::set<uint32_t> newSpecies, newEntries;
+  std::map<uint32_t, uint32_t> flagsOf;
   size_t rowAt = 0;
   for (const Candidate& c : chosen) {
     const uint32_t row = freeRows[rowAt];
@@ -1828,7 +1891,8 @@ bool GenerateMoreShadows(const em::DataCatalog& catalog, const em::EntryReader& 
     out.Set("story_pokemon", c.entry, "holdItem", 0);
     const auto moves = NaturalMoves(t, species, c.level);
     for (uint32_t k = 0; k < 4; k++) out.Set("story_pokemon", c.entry, Field("wazaID", k), moves[k]);
-    out.Set("story_trainers", c.trainer, "darkPokemonFlags", 1u << c.slot);
+    flagsOf[c.trainer] |= 1u << c.slot;
+    out.Set("story_trainers", c.trainer, "darkPokemonFlags", flagsOf[c.trainer]);
     out.Set("story_trainers", c.trainer, Field("pokemonDataID", c.slot), row);
     out.spoiler.push_back("Shadow #" + std::to_string(row) + " " + t.Name("species", species) + " (level " + std::to_string(c.level) + ") replaces " +
                           t.Name("species", oldSpecies) + " of trainer " + names[c.trainer] + " (#" + std::to_string(c.trainer) + ", slot " + std::to_string(c.slot + 1) + " of " + std::to_string(c.teamSize) + ")");
@@ -1837,9 +1901,54 @@ bool GenerateMoreShadows(const em::DataCatalog& catalog, const em::EntryReader& 
   for (const Candidate& c : eligible) {
     out.spoiler.push_back("eligible: #" + std::to_string(c.trainer) + " " + names[c.trainer] + " level " + std::to_string(c.level) + " slot " + std::to_string(c.slot + 1) + " of " + std::to_string(c.teamSize));
   }
-  out.spoiler.insert(out.spoiler.begin(), "More Shadow Pokemon " + MoreShadowsText(plan.amount, plan.seed) + ": " + std::to_string(rowAt) + " of " +
-                                              std::to_string(eligible.size()) + " eligible trainers got one");
+  if (plan.amount == 5) {
+    out.spoiler.insert(out.spoiler.begin(), "More Shadow Pokemon " + MoreShadowsText(plan.amount, plan.seed, plan.percent) + ": " + std::to_string(rowAt) + " extra Shadow Pokemon of " +
+                                                std::to_string(flagsOf.size()) + " trainers (" + std::to_string(eligible.size()) + " trainers eligible)");
+  } else {
+    out.spoiler.insert(out.spoiler.begin(), "More Shadow Pokemon " + MoreShadowsText(plan.amount, plan.seed) + ": " + std::to_string(rowAt) + " of " +
+                                                std::to_string(eligible.size()) + " eligible trainers got one");
+  }
   return true;
+}
+
+std::vector<ExtraShadowRow> TakeExtraShadowRows(er::ModOutput& mod) {
+  std::vector<ExtraShadowRow> rows;
+  std::map<uint32_t, ExtraShadowRow> byRow;
+  auto& deck = mod.tables["darkpokemon_shadow"];
+  for (auto it = deck.lower_bound(kFirstExtraShadowRow); it != deck.end();) {
+    ExtraShadowRow& r = byRow[it->first];
+    r.row = it->first;
+    const auto& f = it->second;
+    const auto get = [&](const std::string& name) { const auto i = f.find(name); return i == f.end() ? 0u : i->second; };
+    uint8_t* d = r.deck;
+    d[0] = static_cast<uint8_t>(get("worth"));
+    d[1] = static_cast<uint8_t>(get("snatchRatio"));
+    d[2] = static_cast<uint8_t>(get("playerLevel"));
+    d[3] = static_cast<uint8_t>((get("scenarioPokemon") & 1) << 7);
+    const uint32_t dp = get("deckPokemonID");
+    for (int k = 0; k < 4; k++) d[4 + k] = static_cast<uint8_t>(dp >> (24 - 8 * k));
+    d[8] = static_cast<uint8_t>(get("initDarkPoint") >> 8), d[9] = static_cast<uint8_t>(get("initDarkPoint"));
+    d[10] = static_cast<uint8_t>(get("bonusExp") >> 8), d[11] = static_cast<uint8_t>(get("bonusExp"));
+    for (uint32_t k = 0; k < 4; k++) {
+      const uint32_t m = get(Field("darkWaza", k));
+      d[12 + 2 * k] = static_cast<uint8_t>(m >> 8), d[13 + 2 * k] = static_cast<uint8_t>(m);
+    }
+    d[0x14] = static_cast<uint8_t>(get("revers"));
+    d[0x15] = static_cast<uint8_t>(get("underTakerFlag"));
+    it = deck.erase(it);
+  }
+  auto& list = mod.tables["darkPokemonList"];
+  for (auto it = list.lower_bound(kFirstExtraShadowRow); it != list.end();) {
+    ExtraShadowRow& r = byRow[it->first];
+    r.row = it->first;
+    const auto s = it->second.find("pokemonID");
+    r.species = static_cast<uint16_t>(s == it->second.end() ? 0 : s->second);
+    it = list.erase(it);
+  }
+  for (auto& e : byRow) rows.push_back(e.second);
+  if (deck.empty()) mod.tables.erase("darkpokemon_shadow");
+  if (mod.tables.count("darkPokemonList") != 0 && mod.tables["darkPokemonList"].empty()) mod.tables.erase("darkPokemonList");
+  return rows;
 }
 
 }

@@ -87,12 +87,26 @@ bool NormalizeCode(const std::string& text, std::string& code, std::string& erro
 struct MoreShadowsPlan {
   int amount = 0;
   uint64_t seed = 0;
+  int percent = 0;
+  bool capacityOnly = false;
+};
+struct MoreShadowsCapacity {
+  uint32_t trainers = 0, slots = 0, species = 0, rows = 0, count = 0;
 };
 bool ParseMoreShadows(const std::string& text, MoreShadowsPlan& plan);
-std::string MoreShadowsText(int amount, uint64_t seed);
+std::string MoreShadowsText(int amount, uint64_t seed, int percent = 0);
 uint32_t MoreShadowsRows();
 bool GenerateMoreShadows(const engine::mods::DataCatalog& catalog, const engine::mods::EntryReader& read, const MoreShadowsPlan& plan,
-                         const Result* rando, bool gen4, engine::randomizer::ModOutput& out, std::string& error, bool gen57 = false);
+                         const Result* rando, bool gen4, engine::randomizer::ModOutput& out, std::string& error, bool gen57 = false,
+                         MoreShadowsCapacity* capacity = nullptr);
+
+constexpr uint32_t kFirstExtraShadowRow = 128;
+struct ExtraShadowRow {
+  uint32_t row = 0;
+  uint16_t species = 0;
+  uint8_t deck[0x18] = {};
+};
+std::vector<ExtraShadowRow> TakeExtraShadowRows(engine::randomizer::ModOutput& mod);
 
 }
 

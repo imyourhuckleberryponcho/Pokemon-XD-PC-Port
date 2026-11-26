@@ -7686,11 +7686,14 @@
 = More Shadow Pokemon: %s
 > Mehr Crypto-Pokémon: %s
 
-= Trainers without a Shadow Pokemon get one (a species that is no Shadow yet), met after you have the Snag Machine. A few: about 15. Many: 44. All: greyed, this game holds 127 Shadow Pokemon.
-> Trainer ohne Crypto-Pokémon bekommen eines (einer Art, die noch kein Crypto-Pokémon ist), dem du begegnest, wenn du die Snag-Maschine hast. Ein paar: etwa 15. Viele: 44. Alle: ausgegraut, dieses Spiel fasst 127 Crypto-Pokémon.
+= %d%%: %d extra Shadow Pokemon among %d story trainers. Not Mt. Battle or the Colosseums.
+> %d%%: %d zusätzliche Crypto-Pokémon bei %d Trainern. Nicht Mt. Battle, Colosseums.
 
-= All is not possible yet: this game holds 127 Shadow Pokemon.
-> Alle geht noch nicht: dieses Spiel fasst 127 Crypto-Pokémon.
+= %d%%: %d extra Shadow Pokemon (all free species or rows are used).
+> %d%%: %d zusätzliche Crypto-Pokémon (alle Arten oder Plätze belegt).
+
+= Off: the plain game. Pick a percentage to add extra Shadow Pokemon to story trainers' teams.
+> Aus: das normale Spiel. Wähle einen Prozentsatz für zusätzliche Crypto-Pokémon in Trainerteams.
 
 # Pokedex forms
 

@@ -9,6 +9,7 @@
 #include "xd_xg.h"
 #include "xd_playthrough_files.h"
 #include "xd_randomizer.h"
+#include "xd_extra_shadows.h"
 #include "xd_starter.h"
 #include "xd_added_rows.h"
 #include "xd_gen4.h"
@@ -93,6 +94,7 @@ void AfterModsLoaded(const engine::mods::LoadResult& result, const std::filesyst
 namespace {
 bool MakeMoreShadows(const engine::mods::DataCatalog& catalog, const engine::mods::EntryReader& read, const std::string& text, const xd::randomizer::Result* rando,
                      std::vector<engine::mods::DataModFile>& out, std::string& error) {
+  xd::shadowrows::Clear();
   if (text.empty()) return true;
   namespace xr = xd::randomizer;
   xr::MoreShadowsPlan plan;
@@ -120,6 +122,7 @@ bool MakeMoreShadows(const engine::mods::DataCatalog& catalog, const engine::mod
   }
   engine::randomizer::ModOutput mod;
   if (!xr::GenerateMoreShadows(catalog, read, plan, rando, gen4, mod, error, gen57)) return false;
+  xd::shadowrows::Add(xr::TakeExtraShadowRows(mod));
   out.push_back({"more_shadows", "More Shadow Pokemon", "data/more_shadows.json", mod.ToJson("more shadows " + text), true});
   const std::filesystem::path folder = xd::CardRoot() / L"playthroughs" / L"more_shadows" / std::filesystem::path(text);
   std::error_code ec;
