@@ -188,15 +188,74 @@ def emission_map(mt, texs):
     return None
 
 
-def bake_emission(rgba, inc, strength=1.0, raw=None):
+def emission_mask(mt, texs):
+    """Name of the glow MASK of a material: its texture-unit-2 "Nor" picture when that picture's alpha is not all opaque, else None.
+    The Gen 7 shaders keep the glow's mask in the alpha of the normal map: the glow picture ("Inc") is a plain colour over the whole
+    texture (Finneon: pink everywhere) and only where the mask is set does it glow (Finneon's spots, Dusknoir's bands). Added without
+    the mask the whole body was washed over with the glow colour (Finneon purple-pink, Dusknoir tan)."""
+    for c in mt['coords']:
+        if c['unit'] == 2 and 'Nor' in c['name'] and c['name'] in texs:
+            a = texs[c['name']][2]
+            if int(a[..., 3].min()) < 250:
+                return c['name']
+    return None
+
+
+def _wrap_coord(q, mode):
+    """3DS texture wrap: 0 / 1 clamp, 2 repeat, 3 mirrored repeat"""
+    if mode == 2:
+        return q - np.floor(q)
+    if mode == 3:
+        m = q - 2.0 * np.floor(q / 2.0)
+        return np.where(m > 1.0, 2.0 - m, m)
+    return np.clip(q, 0.0, 1.0)
+
+
+def register_to_colour(src, ck, c0, w, h):
+    """A picture (h, w, 4) of another texture unit laid into the colour picture's coordinates: every unit has its own scale / offset / wrap
+    (Dusknoir: the colour picture and its glow picture are tiled twice, mirrored; the normal map once). The colour picture's texel p is model
+    coordinate p / scale0 + trans0, which the unit reads at scale_k * (that - trans_k). Same coordinates: the picture itself."""
+    if tuple(ck['scale']) == tuple(c0['scale']) and tuple(ck['trans']) == tuple(c0['trans']):
+        return src
+    py = (np.arange(h, dtype=float) + 0.5) / float(h)
+    px = (np.arange(w, dtype=float) + 0.5) / float(w)
+    uy = py / c0['scale'][1] + c0['trans'][1]
+    ux = px / c0['scale'][0] + c0['trans'][0]
+    qy = _wrap_coord(ck['scale'][1] * (uy - ck['trans'][1]), ck['wrap'][1])
+    qx = _wrap_coord(ck['scale'][0] * (ux - ck['trans'][0]), ck['wrap'][0])
+    iy = np.minimum((qy * src.shape[0]).astype(int), src.shape[0] - 1)
+    ix = np.minimum((qx * src.shape[1]).astype(int), src.shape[1] - 1)
+    return src[iy[:, None], ix[None, :]]
+
+
+def coord_of(mt, name):
+    for c in mt['coords']:
+        if c['name'] == name and c['unit'] != 0:
+            return c
+    return None
+
+
+def bake_emission(rgba, inc, strength=1.0, raw=None, mask=None):
     w, h, irgba = inc
     if irgba.shape[0] != rgba.shape[0] or irgba.shape[1] != rgba.shape[1]:
         import gx_tex
         irgba = gx_tex.resize(irgba, rgba.shape[1], rgba.shape[0])
+    mk = None
+    if mask is not None:
+        mk = mask[2]
+        if mk.shape[0] != irgba.shape[0] or mk.shape[1] != irgba.shape[1]:
+            import gx_tex
+            mk = gx_tex.resize(mk, irgba.shape[1], irgba.shape[0])
+        mk = mk[..., 3].astype(float) / 255.0
     if strength == 1.0:
-        strength = 1.0 if float(irgba[..., :3].mean()) / 255.0 < 0.12 else 0.3
+        if mk is None:
+            strength = 1.0 if float(irgba[..., :3].mean()) / 255.0 < 0.12 else 0.3
+        else:
+            strength = 1.0 if float((irgba[..., :3].astype(float) * mk[..., None]).mean()) / 255.0 < 0.12 else 0.3
     base = rgba[..., :3].astype(float)
     glow = irgba[..., :3].astype(float) * (irgba[..., 3:4].astype(float) / 255.0 if irgba[..., 3].min() < 250 else 1.0)
+    if mk is not None:
+        glow = glow * mk[..., None]
     if raw is not None:
 
 

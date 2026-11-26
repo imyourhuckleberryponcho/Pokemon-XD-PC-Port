@@ -3516,6 +3516,9 @@
 = Crash dump: a snapshot of the game program's memory at that moment. It helps a developer find the cause of a crash, but may contain bits of whatever was in memory.
 > Vidage de plantage: un instantané de la mémoire du programme du jeu à ce moment-là. Il aide un développeur à trouver la cause d'un plantage, mais peut contenir des morceaux de tout ce qui était en mémoire.
 
+= Which textures (picture parts) the last picture was drawn from: numbers and codes only, no pictures.
+> Avec quelles textures (morceaux d'image) la dernière image a été dessinée : uniquement des nombres et des codes, aucune image.
+
 = Another file the report holds.
 > Un autre fichier contenu dans le rapport.
 
@@ -4143,8 +4146,8 @@
 = Gen 4 Pokemon at the Poke Spots
 > Pokémon de 4e génération aux Poké Spots
 
-= With the Gen 4 Pokemon: the three Poke Spots (Rock, Oasis, Cave) offer nine of them instead of their usual Pokemon: Hippopotas, Skorupi and Gible; Shellos, Cherubi and Buizel; Bronzor, Stunky and Riolu. Levels and chances stay the same.
-> Avec les Pokémon de 4e génération: les trois Poké Spots (Roche, Oasis, Grotte) en proposent neuf à la place de leurs Pokémon habituels: Hippopotas, Scorplane et Griknot; Sancoki, Ceribou et Mustébouée; Archéomire, Moufouette et Riolu. Les niveaux et les probabilités restent les mêmes.
+= With the Gen 4 Pokemon: the three Poke Spots (Rock, Oasis, Cave) also offer Pokemon of the later games: five Gen 4 Pokemon at each spot, and five more for every later generation you chose (Gen 5, 6, 7), with the Alolan forms for Gen 7. The Pokemon the game has there stay, with smaller chances. Levels stay the same.
+> Avec les Pokémon de 4e génération: les trois Poké Spots (Roche, Oasis, Grotte) proposent aussi des Pokémon des jeux suivants: cinq Pokémon de 4e génération à chaque spot, et cinq de plus pour chaque génération suivante choisie (5e, 6e, 7e), avec les formes d'Alola pour la 7e. Les Pokémon habituels du jeu restent, avec des probabilités plus faibles. Les niveaux restent les mêmes.
 
 = Level caps
 > Niveaux maximum
@@ -4808,6 +4811,9 @@
 
 = The connection to your friend was lost. The battle ended without a winner.
 > La connexion avec votre ami a été perdue. Le combat s'est terminé sans vainqueur.
+
+= The battle ended in a draw.
+> Le combat s'est terminé par un match nul.
 
 = The two games stopped agreeing about the battle, so it was ended. Nobody won.
 > Les deux jeux ne sont plus d'accord sur le combat, il a donc été arrêté. Personne n'a gagné.
@@ -7395,6 +7401,15 @@
 =  (MALE)
 >  (MÂLE)
 
+= LEVEL %d, DARK POKEMON IN PARTY
+> NIVEAU %d, POKEMON TENEBRES DANS L'EQUIPE
+
+= LEVEL %d (FEMALE)
+> NIVEAU %d (FEMELLE)
+
+= LEVEL UP KNOWING 
+> NIVEAU AVEC ATTAQUE 
+
 = ATTACK > DEFENSE
 > ATTAQUE > DÉFENSE
 
@@ -9443,3 +9458,160 @@
 
 = It was made by an older version of the converter: the Gen 4 and Gen 5-7 Pokemon lack their own box pictures, and the cries from the 3DS games are not matched to the game's volume yet (some crackle). It still works; press Make to make it again.
 > Il a été fait par une ancienne version du convertisseur : les Pokémon de Gen 4 et Gen 5-7 n'ont pas leurs propres images de boîte, et les cris des jeux 3DS ne sont pas encore réglés au volume du jeu (certains grésillent). Il fonctionne toujours ; appuie sur Make pour le refaire.
+
+= A controller is plugged in, but the program does not know its buttons yet (see below).
+> Une manette est branchée, mais le programme ne connaît pas encore ses boutons (voir ci-dessous).
+
+= Not recognised yet: the program sees these controllers but has no button list for them. Set one up once (you press each button) and it works here and in the game.
+> Pas encore reconnues : le programme voit ces manettes mais n'a pas de liste de boutons pour elles. Configurez-en une une seule fois (vous appuyez sur chaque bouton) et elle fonctionne ici et dans le jeu.
+
+= %s (not recognised)
+> %s (non reconnue)
+
+= Set it up...
+> Configurer...
+
+= USB ID %s
+> ID USB %s
+
+= %d buttons, %d axes, %d D-pad hats
+> %d boutons, %d axes, %d croix directionnelles
+
+= Windows lists a game controller (%s), but the program gets no controller from it.
+> Windows voit une manette de jeu (%s), mais le programme n'en reçoit rien.
+
+= Things to try: if the controller has a PC / Switch / Xbox mode switch, set it to PC (or X) and plug it in again; plug it into the computer itself, not into a hub; close Steam, DS4Windows, HidHide and other programs that take controllers over, then plug it in again. If it stays like this, the Reports page holds the details (a list of every controller the program and Windows can see).
+> À essayer : si la manette a un interrupteur de mode PC / Switch / Xbox, mettez-le sur PC (ou X) et rebranchez-la ; branchez-la directement sur l'ordinateur, pas sur un hub ; fermez Steam, DS4Windows, HidHide et les autres programmes qui prennent le contrôle des manettes, puis rebranchez-la. Si rien ne change, la page Rapports contient les détails (la liste de toutes les manettes que le programme et Windows voient).
+
+= %s: set up by you.
+> %s : configurée par vous.
+
+= Forget this set-up
+> Oublier cette configuration
+
+= Main stick: left
+> Stick principal : gauche
+
+= Main stick: up
+> Stick principal : haut
+
+= C stick: left
+> Stick C : gauche
+
+= C stick: up
+> Stick C : haut
+
+= Press the D-pad up.
+> Appuyez sur la croix directionnelle vers le haut.
+
+= Press the D-pad down.
+> Appuyez sur la croix directionnelle vers le bas.
+
+= Press the D-pad left.
+> Appuyez sur la croix directionnelle vers la gauche.
+
+= Press the D-pad right.
+> Appuyez sur la croix directionnelle vers la droite.
+
+= Push the main stick all the way to the left.
+> Poussez le stick principal à fond vers la gauche.
+
+= Push the main stick all the way up.
+> Poussez le stick principal à fond vers le haut.
+
+= Push the C stick (the right stick) all the way to the left.
+> Poussez le stick C (le stick droit) à fond vers la gauche.
+
+= Push the C stick (the right stick) all the way up.
+> Poussez le stick C (le stick droit) à fond vers le haut.
+
+= Press the button that should be %s.
+> Appuyez sur le bouton qui doit être %s.
+
+= Z is the small button above R on a GameCube controller. Use a bumper or any spare button.
+> Z est le petit bouton au-dessus de R sur une manette GameCube. Utilisez un bouton d'épaule ou n'importe quel bouton libre.
+
+= For L and R you can pull a trigger or press a bumper, whichever you want to use.
+> Pour L et R, vous pouvez tirer une gâchette ou appuyer sur un bouton d'épaule, comme vous voulez.
+
+= Let go of it afterwards. The other direction is worked out by itself.
+> Relâchez-le ensuite. L'autre sens se déduit tout seul.
+
+= Button %d
+> Bouton %d
+
+= Axis %d
+> Axe %d
+
+= D-pad hat %d
+> Croix %d
+
+= skipped
+> ignoré
+
+= Set up a controller
+> Configurer une manette
+
+= The program does not know the buttons of "%s" yet. Press the button it asks for in each step and it learns which is which. You can then try it, and it is kept for the launcher and for the game. The controller itself cannot be used on this page yet, so click the buttons with the mouse or the keyboard.
+> Le programme ne connaît pas encore les boutons de "%s". Appuyez sur le bouton demandé à chaque étape : il apprend lequel est lequel. Vous pouvez ensuite l'essayer, puis il est conservé pour le lanceur et pour le jeu. La manette elle-même ne peut pas encore servir sur cette page : cliquez sur les boutons à la souris ou au clavier.
+
+= The controller was unplugged. Plug it in again: the set-up goes on where it stopped.
+> La manette a été débranchée. Rebranchez-la : la configuration reprend là où elle s'était arrêtée.
+
+= The controller is set up for now. Press its buttons and move its sticks: they light up below. If something is wrong, start over. When everything is right, save it: the launcher and the game use it from then on.
+> La manette est configurée pour l'instant. Appuyez sur ses boutons et bougez ses sticks : ils s'allument ci-dessous. Si quelque chose ne va pas, recommencez. Quand tout est bon, enregistrez : le lanceur et le jeu l'utiliseront ensuite.
+
+= The program has not opened the controller yet.
+> Le programme n'a pas encore ouvert la manette.
+
+= Main stick: left / right
+> Stick principal : gauche / droite
+
+= Main stick: up / down
+> Stick principal : haut / bas
+
+= C stick: left / right
+> Stick C : gauche / droite
+
+= C stick: up / down
+> Stick C : haut / bas
+
+= Save this set-up
+> Enregistrer cette configuration
+
+= Start over
+> Recommencer
+
+= Nothing was set up
+> Rien n'a été configuré
+
+= Every step was skipped, so there is nothing to save. Start over, or cancel.
+> Toutes les étapes ont été ignorées, il n'y a donc rien à enregistrer. Recommencez ou annulez.
+
+= Step %d of %d
+> Étape %d sur %d
+
+= Got it: %s.
+> Compris : %s.
+
+= That one is already used for %s. Press another one, or skip this step.
+> Celui-ci est déjà utilisé pour %s. Appuyez sur un autre, ou passez cette étape.
+
+= A stick moves along an axis, and that was a button. Push the stick instead, or skip this step.
+> Un stick se déplace le long d'un axe, et c'était un bouton. Poussez plutôt le stick, ou passez cette étape.
+
+= Skip
+> Passer
+
+= Your answers
+> Vos réponses
+
+= The room was made by another version of the game (its battles are not the same as yours). Both players need the same game version: update the game, or ask your friend to.
+> Le salon a été créé par une autre version du jeu (ses combats ne sont pas les mêmes que les vôtres). Les deux joueurs ont besoin de la même version du jeu : mettez le jeu à jour ou demandez à votre ami de le faire.
+
+= Your friend's game is another version from yours (its battles are not the same as yours). Both players need the same game version: ask them to update the game, or update yours.
+> Le jeu de votre ami est d'une autre version que le vôtre (ses combats ne sont pas les mêmes que les vôtres). Les deux joueurs ont besoin de la même version du jeu : demandez-lui de mettre le jeu à jour, ou mettez le vôtre à jour.
+
+= Your friend's Gen 5-7 pack is a different version from yours. Ask them to make it again in the launcher.
+> Le pack 5e-7e génération de votre ami est d'une autre version que le vôtre. Demandez-lui de le recréer dans le lanceur.
+

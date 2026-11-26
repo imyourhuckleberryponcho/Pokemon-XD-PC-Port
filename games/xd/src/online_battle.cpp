@@ -84,6 +84,9 @@ uint8_t pokemonIsDarkPokemon(void* pokemon);
 uint16_t pokemon_GetDarkpokemonDataId(void* pokemon);
 void* fightTrainerBiosGetFightPokemonPtr(void* trainer, uint32_t slot);
 void* fightPokemonGetPokemonPtr(void* fp);
+uint16_t pokemon_GetPokemonDataId(void* poke);
+int16_t fightPokemon_GetEntryId(void* fp);
+bool fightPokemonCheckFightOut(void* fp);
 uint8_t pokemonIsJoutaiDataId(void* pokemon, int32_t joutai);
 uint8_t fightOutPokemonIsJoutaiDataId(void* fop, int32_t joutai);
 int32_t itemUse2Pokemon(void* log, void* pokemon, void* fightPokemon, uint16_t item, uint8_t moveSlot);
@@ -112,6 +115,7 @@ void fightPokemonCreate(void* trainer, void* fightPokemon, void* pokemon, int16_
 void* fightPokemon_GetPokemonBuffPtr(void* fp);
 uint8_t pokemonBiosGetLevel(void* poke);
 uint8_t pokemonCheckValid(void* poke);
+void pokemonInit(void* poke);
 uint8_t pokemonCheckFightOut(void* poke);
 uint8_t menuCBBios_CurrentlyWorkingToolBattle(void);
 void PortXD_PokemonSetLevelStats(void* poke, uint8_t level);
@@ -121,6 +125,9 @@ uint8_t fightFloorIsUseFightTimerCommand(void* floor);
 uint8_t fightTimerCommandIsOver(void);
 void fightFloorSetMenuFightAction(void* floor, void* fop, void* work);
 uint32_t fightMenuFightTrainerGcHeroOpenMenu(void* trainer, uint16_t id, uint8_t cancel);
+int16_t fightMenuFightTrainerGcHeroSelectIrekaeFightPokemon(void* trainer, void* fop, uint16_t id, uint8_t cancel, uint8_t nested);
+void* fightTrainer_GetHeroPtr(void* trainer);
+void* heroBiosGetPokemonPtr(void* hero, uint32_t index);
 uint8_t fightFloorGetNowTenkouDataId(void* floor, uint8_t checkTokusei);
 uint16_t pokemonGetTokuseiDataId(void* poke);
 uint16_t pokemonGetSoubiItemDataId(void* poke);
@@ -279,23 +286,9 @@ xd::online::Capabilities MyCapabilities() {
   c.formatsDigest = xd::online::Hex(xd::online::Fnv64(c.knownFormats.data(), c.knownFormats.size()));
   if (xd::xg::Off(xd::xg::Feature::Gen4Pokemon) == nullptr && (xd::gen4::Loaded() || xd::gen4::PackPresent())) {
     if (xd::gen4::Loaded()) c.ruleSet = "gen4";
-    std::string text;
-    std::error_code ec;
-    std::ifstream in(xd::gen4::PackFolder() / L"gen4.json", std::ios::binary);
-    if (in) {
-      std::ostringstream o;
-      o << in.rdbuf();
-      text = o.str();
-      c.gen4Pack = xd::online::Hex(xd::online::Fnv64(text.data(), text.size()));
-    } else {
-      c.gen4Pack = "unknown";
-    }
+    c.gen4Pack = xd::online::PackBattleDigest(xd::gen4::PackFolder());
     if (xd::gen57::Loaded()) {
-      std::ifstream in57(xd::gen57::PackFolder() / L"gen57.json", std::ios::binary);
-      std::ostringstream o57;
-      if (in57) o57 << in57.rdbuf();
-      const std::string t57 = o57.str();
-      c.gen4Pack += "+g57" + (in57 ? xd::online::Hex(xd::online::Fnv64(t57.data(), t57.size())) : std::string("unknown"));
+      c.gen4Pack += "+g57" + xd::online::PackBattleDigest(xd::gen57::PackFolder());
     }
     if (xd::xg::On()) c.gen4Pack += "+xg2";
   }
@@ -1118,7 +1111,7 @@ bool ExchangeTeams() {
         auto list = [](const std::vector<xd::save::Pokemon>& t) { std::string o; for (const xd::save::Pokemon& m : t) o += (o.empty() ? "" : ",") + std::to_string(m.species); return o; };
         pv = "host " + list(ht) + " guest " + list(gt);
       }
-      xd::replay::OnlineExtras(xd::online::NeedsExtras(S.rules) ? xd::online::kBattleProtocol : 0, pv);
+      xd::replay::OnlineExtras(xd::online::NeedsExtras(S.rules) ? xd::online::kExtrasProtocol : 0, pv);
     }
     HubBegin(xd::online::RulesKeyText(S.rules), hh, gh, __hsd_rand_seed_hold ? *__hsd_rand_seed_hold : 0u);
   }
@@ -2041,6 +2034,21 @@ uint8_t PortXD_NetSelectAction(void* trainer, uint32_t side) {
   return static_cast<uint8_t>(r);
 }
 
+static void LogSwitchMembers(const char* when, void* trainer, uintptr_t out) {
+  char buf[400];
+  int n = std::snprintf(buf, sizeof buf, "forced switch, %s:", when);
+  for (uint16_t i = 0; i < 6 && n > 0 && n < 330; i++) {
+    void* fp = fightTrainerBiosGetFightPokemonPtr(trainer, i);
+    void* pk = fp ? fightPokemonGetPokemonPtr(fp) : nullptr;
+    if (!pk) continue;
+    n += std::snprintf(buf + n, sizeof buf - static_cast<size_t>(n), " [%u] entry %d species %u HP %u %s;", static_cast<unsigned>(i), static_cast<int>(fightPokemon_GetEntryId(fp)),
+                       static_cast<unsigned>(pokemon_GetPokemonDataId(pk)), static_cast<unsigned>(pokemon_GetHp(pk)), fightPokemonCheckFightOut(fp) ? "can fight" : "can't fight");
+  }
+  void* fop = reinterpret_cast<void*>(out);
+  if (fop) std::snprintf(buf + n, sizeof buf - static_cast<size_t>(n), " out: species %u", static_cast<unsigned>(figthOutPokemonGetPokemonDataId(fop)));
+  Log("%s", buf);
+}
+
 int16_t PortXD_NetSelectIrekae(void* trainer, uint32_t a, uint32_t b, uintptr_t c) {
   EnsureInit();
   if (!S.active) return xd::replay::SelectIrekae(trainer, a, b, c, fightTrainerSelectIrekaeFightPokemon);
@@ -2052,7 +2060,9 @@ int16_t PortXD_NetSelectIrekae(void* trainer, uint32_t a, uint32_t b, uintptr_t 
     int16_t r;
     {
       SeedKeep keep;
-      r = fightTrainerSelectIrekaeFightPokemon(trainer, a, b, c);
+      LogSwitchMembers("asked", trainer, c);
+      r = (S.human && !S.host) ? fightMenuFightTrainerGcHeroSelectIrekaeFightPokemon(trainer, nullptr, static_cast<uint16_t>(a), static_cast<uint8_t>(b), 0)
+                               : fightTrainerSelectIrekaeFightPokemon(trainer, a, b, c);
     }
     Send("S " + std::to_string(seq) + " " + std::to_string(r));
     S.sent++;
@@ -2451,6 +2461,32 @@ int32_t PortXD_MenuOpenCustom(int32_t id, int32_t a, void* cursor, int32_t b, in
   return menuOpenCustom(id, a, cursor, b, c, d, work);
 }
 
+static void FillHeroWithTeam(void* trainer, const std::vector<xd::save::Pokemon>& team, int sideNo) {
+  if (team.empty() || Env("XD_ONLINE_TEST_NOAPPLY")) return;
+  void* hero = fightTrainer_GetHeroPtr(trainer);
+  if (!hero) return;
+  size_t n = team.size();
+  if (S.spectator) {
+    const int party = S.feed ? (sideNo == 0 ? S.feed->partyHost : S.feed->partyGuest) : 0;
+    if (party <= 0) return;
+    n = static_cast<size_t>(party);
+  }
+  if (n > 6) n = 6;
+  int filled = 0, cleared = 0;
+  for (size_t i = 1; i < 6; i++) {
+    void* slot = heroBiosGetPokemonPtr(hero, static_cast<uint32_t>(i));
+    if (!slot) continue;
+    if (i < n && i < team.size()) {
+      std::memcpy(slot, team[i].raw.data(), xd::save::kPokemonSize);
+      filled++;
+    } else if (i >= n && pokemonCheckValid(slot)) {
+      pokemonInit(slot);
+      cleared++;
+    }
+  }
+  Log("side %d: the trainer's party is the whole team now: %zu (%d put in, %d taken out)", sideNo, n, filled + 1, cleared);
+}
+
 void PortXD_NetPokemonCreate(void* trainer, void* fightPokemon, void* pokemon, int16_t entryId) {
   if (xd::online::Active() && pokemon != nullptr) {
     if (!Begin()) { EndWithError(); }
@@ -2459,6 +2495,7 @@ void PortXD_NetPokemonCreate(void* trainer, void* fightPokemon, void* pokemon, i
       const int sideNo = hostSide ? 0 : 1;
       const std::vector<xd::save::Pokemon>& team = (hostSide == S.host) ? S.teamMine : S.teamFriend;
       const size_t k = static_cast<size_t>(S.created[sideNo]++);
+      if (k == 0) FillHeroWithTeam(trainer, team, sideNo);
       if (!sBagDone[sideNo]) { sBagDone[sideNo] = true; SetupBag(trainer, hostSide == S.host); }
       if (k < team.size() && !Env("XD_ONLINE_TEST_NOAPPLY")) {
         {
@@ -2530,8 +2567,17 @@ void PortXD_OnlineTurnActions(void) {
 }
 
 static bool sPocketInline = false, sPocketRunning = false;
+uint8_t PortXD_FloorPushRoom(uint32_t id);
+int32_t PortXD_FloorDepth(void);
+static uint8_t RoomPush(uint32_t id, const char* what) {
+  if (!xd::online::Active() || fightIsFight() == 0) return GSfloorPush(id);
+  const int32_t depth = PortXD_FloorDepth();
+  const uint8_t ok = PortXD_FloorPushRoom(id);
+  Log("%s: floor 0x%x pushed at depth %d: %s", what, static_cast<unsigned>(id), static_cast<int>(depth), ok ? "ok" : "REFUSED");
+  return ok;
+}
 uint8_t PortXD_PocketPush(uint32_t id) {
-  const uint8_t ok = GSfloorPush(id);
+  const uint8_t ok = RoomPush(id, "bag window");
   if (!ok && xd::online::Active()) { sPocketInline = true; Log("bag window: the floor stack is full, the bag runs inside the battle's task"); return 1; }
   return ok;
 }
@@ -2540,6 +2586,20 @@ void PortXD_PocketWait(void) {
   floorWaitForChange();
 }
 uint8_t PortXD_PocketPop(void) { return sPocketRunning ? 1 : GSfloorPop(); }
+
+int32_t menuPokemonMain(void);
+static bool sPartyInline = false, sPartyRunning = false;
+uint8_t PortXD_PartyPush(uint32_t id) {
+  const uint8_t ok = RoomPush(id, "party menu");
+  if (!ok && xd::online::Active() && fightIsFight() != 0) { sPartyInline = true; Log("party menu: the floor stack is full, the menu runs inside the battle's task"); return 1; }
+  return ok;
+}
+void PortXD_PartyWait(void) {
+  if (sPartyInline) { sPartyInline = false; sPartyRunning = true; menuPokemonMain(); sPartyRunning = false; return; }
+  if (sPartyRunning) return;
+  floorWaitForChange();
+}
+uint8_t PortXD_PartyPop(void) { return sPartyRunning ? 1 : GSfloorPop(); }
 
 bool GSfloorIsFloorPushed(void);
 uint8_t GSfloorIsPush(void);

@@ -1,4 +1,5 @@
 #include "xd_gen57.h"
+#include "xd_move_targets.h"
 #include "xd_spare.h"
 
 #include "xd_forms.h"
@@ -114,9 +115,256 @@ void ParseAbilities(const std::string& text) {
   }
 }
 
+std::string NormKey(const std::string& s) {
+  std::string out;
+  for (char c : s) {
+    if (std::isalnum(static_cast<unsigned char>(c))) out += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  }
+  return out;
+}
+bool NumberKey(const std::string& s, uint32_t& out) {
+  if (s.empty()) return false;
+  const char* p = s.c_str() + (s[0] == '#' ? 1 : 0);
+  char* end = nullptr;
+  const unsigned long v = std::strtoul(p, &end, 10);
+  if (end == p || *end != 0) return false;
+  out = static_cast<uint32_t>(v);
+  return true;
+}
+std::vector<uint16_t> sEvoShop;
+
+void ReadEvolutions(const engine::mods::LoadResult& result) {
+  sEvoShop.clear();
+  std::string text;
+  if (!ReadText(xd::gen57::PackFolder() / L"evolutions.txt", text)) return;
+  std::map<std::string, uint32_t> species, items;
+  for (const auto& r : result.addedRows) {
+    if (r.mod == "gen57" && r.table == "pokemon_data") species[NormKey(r.key)] = r.id;
+    if (r.table == "item_data_prime") items[NormKey(r.key)] = r.id;
+  }
+  auto find = [&](const std::string& key, bool isItem, uint32_t& id) {
+    if (NumberKey(key, id)) return true;
+    const auto& m = isItem ? items : species;
+    const auto it = m.find(NormKey(key));
+    if (it == m.end()) return false;
+    id = it->second;
+    return true;
+  };
+  size_t added = 0, refused = 0;
+  std::istringstream in(text);
+  std::string line;
+  while (std::getline(in, line)) {
+    if (!line.empty() && line.back() == '\r') line.pop_back();
+    if (line.empty() || line[0] == '#') continue;
+    std::istringstream ls(line);
+    std::string key;
+    ls >> key;
+    if (key == "evo") {
+      std::string sp, kind, param, to, fallback;
+      ls >> sp >> kind >> param >> to >> fallback;
+      uint32_t s = 0, k = 0, p = 0, t = 0;
+      const bool itemKind = kind == "6" || kind == "7";
+      if (!find(sp, false, s) || !NumberKey(kind, k) || !find(to, false, t) || !find(param, itemKind, p)) {
+        std::fprintf(stderr, "[gen57] evolution \"%s\" left out (a name has no row in this run)\n", line.c_str());
+        refused++;
+        continue;
+      }
+      if (k == 22 && xd::xg::On() && xd::gen4::xg::Active() != nullptr) {
+        uint32_t level[20] = {1}, move[20] = {p};
+        xd::gen4::xg::Active()->MapLearnset(level, move);
+        uint32_t fb = 0;
+        if (move[0] != 0) {
+          p = move[0];
+        } else if (NumberKey(fallback, fb) && fb > 0) {
+          k = 23;
+          p = fb;
+          std::fprintf(stderr, "[gen57] \"%s\": XG has no such move, the evolution is a level %u one here\n", line.c_str(), fb);
+        }
+      }
+      xd::gen4::AddExtraEvolution({static_cast<uint16_t>(s), static_cast<uint8_t>(k), static_cast<uint16_t>(p), static_cast<uint16_t>(t)});
+      added++;
+    } else if (key == "shop") {
+      std::string item;
+      ls >> item;
+      uint32_t i = 0;
+      if (find(item, true, i)) sEvoShop.push_back(static_cast<uint16_t>(i));
+      else std::fprintf(stderr, "[gen57] shop item \"%s\" is not in this run\n", item.c_str());
+    }
+  }
+  std::string shop;
+  for (uint16_t i : sEvoShop) shop += " " + std::to_string(i);
+  std::fprintf(stderr, "[gen57] evolutions.txt: %zu in the list (%zu left out), %zu items for the prize desk:%s\n", added, refused, sEvoShop.size(), shop.c_str());
+}
+
+struct SpotEntry { int nat; const char* form; };
+struct SpotList {
+  const char* table;
+  SpotEntry gen[3][5];
+  SpotEntry alola[3];
+  int alolas;
+};
+const SpotList kSpotLists[3] = {
+    {"esabapokemondata_E1",
+     {{{524, nullptr}, {529, nullptr}, {551, nullptr}, {610, nullptr}, {498, nullptr}},
+      {{659, nullptr}, {667, nullptr}, {688, nullptr}, {696, nullptr}, {653, nullptr}},
+      {{744, nullptr}, {749, nullptr}, {757, nullptr}, {782, nullptr}, {725, nullptr}}},
+     {{0, "Geodude (Alola)"}, {0, "Diglett (Alola)"}, {0, "Sandshrew (Alola)"}},
+     3},
+    {"esabapokemondata_E2",
+     {{{540, nullptr}, {548, nullptr}, {506, nullptr}, {636, nullptr}, {495, nullptr}},
+      {{664, nullptr}, {661, nullptr}, {669, nullptr}, {705, nullptr}, {650, nullptr}},
+      {{742, nullptr}, {753, nullptr}, {751, nullptr}, {759, nullptr}, {722, nullptr}}},
+     {{0, "Vulpix (Alola)"}, {0, "Meowth (Alola)"}, {0, nullptr}},
+     2},
+    {"esabapokemondata_E3",
+     {{{527, nullptr}, {532, nullptr}, {595, nullptr}, {633, nullptr}, {501, nullptr}},
+      {{679, nullptr}, {708, nullptr}, {703, nullptr}, {714, nullptr}, {656, nullptr}},
+      {{739, nullptr}, {755, nullptr}, {767, nullptr}, {778, nullptr}, {728, nullptr}}},
+     {{0, "Rattata (Alola)"}, {0, "Grimer (Alola)"}, {0, nullptr}},
+     2},
+};
+
+struct SpotPlan {
+  bool on = false;
+  int maxGen = 7;
+  bool alola = false;
+  int xd[3] = {0, 0, 0};
+  int gen4[5] = {0, 0, 0, 0, 0};
+  int later[3][5] = {};
+  uint32_t top[3] = {0, 0, 0}, rate[3][3] = {};
+};
+SpotPlan sSpotPlan;
+int sSpotsMaxGen = 7;
+
+void Split5(int share, int out[5]) {
+  static const int k25[5] = {6, 6, 6, 4, 3}, k20[5] = {5, 5, 5, 3, 2}, k15[5] = {4, 4, 3, 2, 2};
+  const int* p = share == 25 ? k25 : share == 20 ? k20 : k15;
+  for (int i = 0; i < 5; i++) out[i] = p[i];
+}
+void SplitXd(int share, int out[3]) {
+  static const int k50[3] = {27, 16, 7}, k40[3] = {22, 13, 5}, k30[3] = {16, 10, 4};
+  const int* p = share == 50 ? k50 : share == 40 ? k40 : k30;
+  for (int i = 0; i < 3; i++) out[i] = p[i];
+}
+
+bool PackHasSpotForms(const std::filesystem::path& pack) {
+  std::string text;
+  if (!ReadText(pack / L"forms.txt", text)) return false;
+  for (const SpotList& l : kSpotLists) {
+    for (int i = 0; i < l.alolas; i++) {
+      if (text.find(std::string("form ") + l.alola[i].form + "|") != std::string::npos) return true;
+    }
+  }
+  return false;
+}
+
+bool PlanSpots(const std::filesystem::path& pack, std::string& dataText) {
+  SpotPlan p;
+  p.maxGen = std::max(5, std::min(7, sSpotsMaxGen));
+  p.alola = p.maxGen >= 7 && PackHasSpotForms(pack);
+  const int gens = p.maxGen - 3;
+  const int share = p.alola ? 15 : (p.maxGen == 5 ? 25 : p.maxGen == 6 ? 20 : 15);
+  const int xdShare = 100 - gens * share - (p.alola ? 10 : 0);
+  for (int t = 0; t < 3; t++) {
+    for (int i = 0; i < 3; i++) {
+      if (!xd::gen4::SpotRowValues(kSpotLists[t].table, 3 + i, p.top[t], p.rate[t][i])) return false;
+    }
+  }
+  SplitXd(xdShare, p.xd);
+  Split5(share, p.gen4);
+  for (int g = 0; g < p.maxGen - 4; g++) Split5(share, p.later[g]);
+  p.on = true;
+  std::string json = "{\n \"_note\": \"Poke Spot odds with the Gen 4 and Gen 5-7 sets (made by the game, gen57_pack.cpp)\"";
+  for (int t = 0; t < 3; t++) {
+    json += std::string(",\n \"") + kSpotLists[t].table + "\": {";
+    for (int i = 0; i < 3; i++) {
+      json += std::string(i ? "," : "") + "\n  \"#" + std::to_string(i) + "\": {\"prob, rate\": [" + std::to_string(p.xd[i]) + ", " + std::to_string(p.rate[t][i]) + "]}";
+    }
+    json += "\n }";
+    for (int k = 0; k < 5; k++) {
+      uint32_t top = 0, rate = 0;
+      xd::gen4::SpotRowValues(kSpotLists[t].table, 3 + k, top, rate);
+      xd::gen4::SetSpotRow(kSpotLists[t].table, 3 + k, static_cast<uint32_t>(p.gen4[k]), rate);
+    }
+  }
+  json += "\n}\n";
+  dataText = json;
+  std::fprintf(stderr, "[gen57] Poke Spots: Gen 5-%d%s; the disc's three %d%%, Gen 4 %d%%, %d later generation(s) %d%% each%s\n", p.maxGen, p.alola ? " with the Alolan forms" : "",
+               xdShare, share, p.maxGen - 4, share, p.alola ? ", Alolan 10%" : "");
+  sSpotPlan = p;
+  return true;
+}
+
+void AppendSpotRows(const engine::mods::LoadResult& result) {
+  SpotPlan& p = sSpotPlan;
+  if (!p.on) return;
+  std::map<std::string, uint32_t> byName;
+  for (const auto& r : result.addedRows) {
+    if (r.mod == "gen57" && r.table == "pokemon_data") byName[NormKey(r.key)] = r.id;
+  }
+  std::map<int, std::string> nameOf;
+  for (const auto& s : sTables.species) nameOf[static_cast<int>(s.dex)] = s.key;
+  std::map<std::string, uint32_t> formRow;
+  for (const auto& f : xd::forms::All()) formRow[f.key] = f.row;
+  const auto find = [&](const SpotEntry& e) -> uint32_t {
+    if (e.form != nullptr) {
+      const auto it = formRow.find(e.form);
+      return it == formRow.end() ? 0 : it->second;
+    }
+    const auto n = nameOf.find(e.nat);
+    if (n == nameOf.end()) return 0;
+    const auto it = byName.find(NormKey(n->second));
+    return it == byName.end() ? 0 : it->second;
+  };
+  for (int t = 0; t < 3; t++) {
+    const SpotList& list = kSpotLists[t];
+    struct Row { uint32_t id; int prob; int rateOf; };
+    std::vector<Row> rows;
+    int toGen4 = 0;
+    const auto block = [&](const SpotEntry* entries, const int* probs, int n, const char* what) {
+      std::vector<Row> mine;
+      int left = 0;
+      for (int i = 0; i < n; i++) {
+        const uint32_t id = find(entries[i]);
+        if (id == 0) {
+          std::fprintf(stderr, "[gen57] Poke Spots: %s entry %d of %s is not in this run (%s %d): its share goes to the block's first\n", what, i + 1, list.table,
+                       entries[i].form ? entries[i].form : "species", entries[i].nat);
+          left += probs[i];
+          continue;
+        }
+        mine.push_back({id, probs[i], i < 3 ? i : 2});
+      }
+      if (left != 0) {
+        if (mine.empty()) toGen4 += left;
+        else mine[0].prob += left;
+      }
+      for (const Row& r : mine) rows.push_back(r);
+    };
+    for (int g = 0; g < p.maxGen - 4; g++) block(list.gen[g], p.later[g], 5, g == 0 ? "Gen 5" : g == 1 ? "Gen 6" : "Gen 7");
+    if (p.alola) {
+      int probs[3] = {0, 0, 0};
+      if (list.alolas == 3) { probs[0] = 4; probs[1] = 3; probs[2] = 3; } else { probs[0] = 5; probs[1] = 5; }
+      block(list.alola, probs, list.alolas, "Alolan");
+    }
+    if (toGen4 != 0) {
+      uint32_t top = 0, rate = 0;
+      xd::gen4::SpotRowValues(list.table, 3, top, rate);
+      xd::gen4::SetSpotRow(list.table, 3, static_cast<uint32_t>(p.gen4[0] + toGen4), rate);
+    }
+    std::string log;
+    for (const Row& r : rows) {
+      sRowsAll.push_back({list.table, 0xFFFFFFFFu, 1, r.rateOf, {0, 1, 10, 1, 1, p.top[t], 2, 2, r.id, 4, 4, static_cast<uint32_t>(r.prob), 8, 4, p.rate[t][r.rateOf]}});
+      log += " " + std::to_string(r.id) + ":" + std::to_string(r.prob);
+    }
+    std::fprintf(stderr, "[gen57] Poke Spots: %s gets %zu Gen 5-7 entries (species:percent)%s\n", list.table, rows.size(), log.c_str());
+  }
+}
+
 }
 
 namespace xd::gen57 {
+
+const std::vector<uint16_t>& EvolutionShopItems() { return sEvoShop; }
 
 std::filesystem::path PackFolder() { return xd::SettingsFolder() / L"extra_assets" / L"usum_gen57"; }
 
@@ -188,12 +436,16 @@ uint32_t ModelRowsTaken() {
 }
 uint32_t WaveRowsTaken() { return sLoaded ? sPadWaves + static_cast<uint32_t>(sTables.waves.size()) : 0; }
 
+void SetSpotsMaxGen(int gen) { sSpotsMaxGen = gen; }
+
 void Prepare(bool wanted, bool spots, engine::mods::LoadOptions& options, std::vector<engine::mods::DataModFile>& dataFiles) {
   sLoaded = false;
   sSpots = false;
+  sSpotPlan = SpotPlan();
   sTables = {};
   sRowsAll.clear();
   sAbilities.clear();
+  sEvoShop.clear();
   sOwnCries = false;
   sReserved = sPadSndFile = sPadSndData = sPadWaves = 0;
   if (!wanted) return;
@@ -270,6 +522,10 @@ void Prepare(bool wanted, bool spots, engine::mods::LoadOptions& options, std::v
       sTables = {};
       return;
     }
+    if (f.filename() == "01_moves.json") {
+      const int n = xd::movetargets::PatchPackMoves(d.text, true);
+      if (n > 0) std::fprintf(stderr, "[gen57] move targets: %d field(s) of the pack's moves put right (a pack made before 0.7.5)\n", n);
+    }
     mine.push_back(std::move(d));
   }
   if (mine.empty()) {
@@ -292,15 +548,11 @@ void Prepare(bool wanted, bool spots, engine::mods::LoadOptions& options, std::v
     d.builtIn = true;
     d.modName = "Gen 5-7 Pokemon and moves";
     d.label = "gen57/optional/spots.json";
-    std::string spotText;
-    xd::pack::PackTables spotTables;
-    if (ReadText(pack / L"optional" / L"spots.json", d.text) && ReadText(pack / L"optional" / L"spots_tables.txt", spotText) &&
-        xd::pack::ParseTables(spotText, spotTables, error)) {
-      for (auto& r : spotTables.rows) sRowsAll.push_back(std::move(r));
+    if (PlanSpots(pack, d.text)) {
       dataFiles.push_back(std::move(d));
       sSpots = true;
     } else {
-      std::fprintf(stderr, "[gen57] the Poke Spot set is not in the pack: the spots keep the Gen 4 set\n");
+      std::fprintf(stderr, "[gen57] the Poke Spot set could not be made (the Gen 4 entries' rows are missing): the spots keep the Gen 4 set\n");
     }
   }
   xd::gen4::SetMoreRows(sRowsAll);
@@ -308,6 +560,40 @@ void Prepare(bool wanted, bool spots, engine::mods::LoadOptions& options, std::v
   std::fprintf(stderr, "[gen57] pack %s: %zu data file(s) (%s), %zu table row group(s), %zu model rows, %zu abilities\n",
                pack.string().c_str(), files.size(), dataDir.filename().string().c_str(), sRowsAll.size(), sTables.pkx.size(),
                sAbilities.size());
+}
+
+bool FairySlots(std::map<uint32_t, std::array<bool, 2>>& species, std::map<std::string, std::array<bool, 2>>& forms) {
+  namespace J = engine::mods::json;
+  const std::filesystem::path pack = PackFolder();
+  const auto readJson = [&](const std::filesystem::path& file, J::Value& root) {
+    std::string text;
+    if (!ReadText(file, text)) return false;
+    J::Reader rd(text);
+    return rd.Document(root) && root.kind == J::Value::Kind::Array;
+  };
+  const auto num = [](const J::Value& v) { return v.kind == J::Value::Kind::Number ? static_cast<int>(v.number) : -1; };
+  species.clear();
+  forms.clear();
+  J::Value root;
+  if (!readJson(pack / L"report.json", root)) return false;
+  for (const J::Value& e : root.items) {
+    if (e.kind != J::Value::Kind::Object) continue;
+    const auto nat = e.fields.find("nat"), types = e.fields.find("types");
+    if (nat == e.fields.end() || types == e.fields.end() || types->second.items.size() != 2) continue;
+    const std::array<bool, 2> s = {num(types->second.items[0]) == 17, num(types->second.items[1]) == 17};
+    if (s[0] || s[1]) species[static_cast<uint32_t>(num(nat->second))] = s;
+  }
+  root = J::Value();
+  if (readJson(pack / L"forms_report.json", root)) {
+    for (const J::Value& e : root.items) {
+      if (e.kind != J::Value::Kind::Object) continue;
+      const auto key = e.fields.find("key"), types = e.fields.find("types");
+      if (key == e.fields.end() || types == e.fields.end() || types->second.items.size() != 2) continue;
+      const std::array<bool, 2> s = {num(types->second.items[0]) == 17, num(types->second.items[1]) == 17};
+      if (s[0] || s[1]) forms[key->second.text] = s;
+    }
+  }
+  return true;
 }
 
 bool XgInfo(xd::gen4::xg::Gen57Info& out) {
@@ -389,6 +675,8 @@ void AfterLoad(const engine::mods::LoadResult& result) {
       std::fprintf(stderr, "[gen57] Eevee does not evolve into Sylveon here (species %u, Shiny Stone %u: a row is missing)\n", sylveon, shiny);
     }
   }
+  ReadEvolutions(result);
+  AppendSpotRows(result);
   for (uint32_t id : all) sRowsAll.push_back({"pdapokemonsortdata", 0xFFFFFFFFu, 1, -1, {0, 2, id}});
   if (xd::forms::Loaded() && !xd::xg::On()) {
     for (uint32_t i = 0; i < xd::forms::ShopSpareRows(); i++) sRowsAll.push_back({"shopGoods", 0xFFFFFFFFu, 1, -1, {0, 2, 0}});
@@ -424,7 +712,8 @@ void ApplyMainTables() {
                    r.row, old);
       continue;
     }
-    pokemon_pkx_data[r.row].a = r.group;
+    const auto moved = xd::pack::TocGroupRemap().find(r.group);
+    pokemon_pkx_data[r.row].a = moved != xd::pack::TocGroupRemap().end() ? moved->second : r.group;
     pokemon_pkx_data[r.row].b = r.res;
     last = std::max(last, r.row + 1);
   }

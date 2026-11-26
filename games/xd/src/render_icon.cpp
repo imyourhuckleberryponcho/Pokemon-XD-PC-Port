@@ -745,6 +745,23 @@ void Collect(uint32_t frame) {
   }
   job.width = job.height = sSize;
   if (job.offer) {
+    if (std::getenv("XD_RENDER_ICON_TEST_BAD_OFFER") != nullptr && job.tries == 0 && job.rgba.size() >= 4)
+      for (size_t i = 0; i + 3 < job.rgba.size(); i += 4) job.rgba[i] = job.rgba[i + 1] = job.rgba[i + 2] = job.rgba[i + 3] = 255;
+    size_t ring = 0, ringOpaque = 0;
+    const size_t side = static_cast<size_t>(sSize), edge = std::max<size_t>(2, side / 32);
+    if (job.rgba.size() >= side * side * 4) {
+      for (size_t y = 0; y < side; y++)
+        for (size_t x = 0; x < side; x++) {
+          if (x >= edge && x < side - edge && y >= edge && y < side - edge) { x = side - edge - 1; continue; }
+          ring++, ringOpaque += job.rgba[(y * side + x) * 4 + 3] >= 200;
+        }
+    }
+    if (ring > 0 && ringOpaque * 2 > ring) {
+      std::fprintf(stderr, "[render icon] %s: the background is not see-through (%zu of %zu edge pixels opaque)\n", job.name.c_str(), ringOpaque, ring);
+      job.failed = true, job.note = "background not see-through";
+      job.rgba.clear();
+      return;
+    }
     WriteOfferPicture(job);
     return;
   }

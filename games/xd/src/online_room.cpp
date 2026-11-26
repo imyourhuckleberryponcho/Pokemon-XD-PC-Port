@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
 #include <iterator>
 #include <map>
 #include <set>
@@ -370,10 +371,15 @@ Verdict Judge(const Capabilities& room, const RoomRules& rules, const Capabiliti
   }
   const bool newKind = NeedsNewProtocol(rules);
   const int needed = NeedsExtras(rules) ? 3 : newKind ? 2 : 1;
-  const bool known = room.protocol >= 1 && room.protocol <= 3 && mine.protocol >= 1 && mine.protocol <= 3;
+  const bool known = room.protocol >= 1 && room.protocol <= 4 && mine.protocol >= 1 && mine.protocol <= 4 && (room.protocol == 4) == (mine.protocol == 4);
   const bool compatible = known && mine.protocol >= needed && room.protocol >= needed;
+  if (!compatible && room.protocol != mine.protocol && (room.protocol == 4) != (mine.protocol == 4)) {
+    v.refuse.push_back(joiner ? "The room was made by another version of the game (its battles are not the same as yours). Both players need the same game version: update the game, or ask your friend to."
+                              : "Your friend's game is another version from yours (its battles are not the same as yours). Both players need the same game version: ask them to update the game, or update yours.");
+    return v;
+  }
   if (!compatible && room.protocol != mine.protocol) {
-    if (needed == 3 && mine.protocol < 3) {
+    if (needed == kExtrasProtocol && mine.protocol < kExtrasProtocol) {
       v.refuse.push_back(joiner ? "This room uses format rules (Sleep clause, team preview or a battle clock) that your game version does not have. Update the game to join it."
                                 : "Your friend's game version does not know this room's format rules (Sleep clause, team preview or a battle clock). Ask them to update.");
       return v;
@@ -426,6 +432,11 @@ Verdict Judge(const Capabilities& room, const RoomRules& rules, const Capabiliti
     if (mine.gen4Pack.empty()) {
       v.refuse.push_back(joiner ? "This room plays with Gen 4 Pokemon. You need the Gen 4 pack from your Pokemon Battle Revolution disc (the launcher makes it)."
                                 : "Your friend does not have the Gen 4 pack from the Pokemon Battle Revolution disc, which this room needs.");
+    } else if (room.gen4Pack != mine.gen4Pack && room.gen4Pack.substr(0, room.gen4Pack.find("+g57")) == mine.gen4Pack.substr(0, mine.gen4Pack.find("+g57"))) {
+      const auto tail = [](const std::string& s) { const size_t p = s.find("+g57"); return p == std::string::npos ? std::string("none") : s.substr(p + 4, 8); };
+      v.refuse.push_back(joiner ? "Your Gen 5-7 pack is a different version from the room's (yours " + tail(mine.gen4Pack) + ", the room's " + tail(room.gen4Pack) +
+                                      "). Make the pack again in the launcher."
+                                : "Your friend's Gen 5-7 pack is a different version from yours. Ask them to make it again in the launcher.");
     } else if (room.gen4Pack != mine.gen4Pack) {
       v.refuse.push_back(joiner ? "Your Gen 4 pack is a different version from the room's (yours " + mine.gen4Pack.substr(0, 8) + ", the room's " +
                                       room.gen4Pack.substr(0, 8) + "). Make the pack again in the launcher."
@@ -463,6 +474,32 @@ Verdict Judge(const Capabilities& room, const RoomRules& rules, const Capabiliti
     v.refuse.push_back("The game data of the two games differs in a way the list above does not explain. Both players should use the same game version.");
   }
   return v;
+}
+
+std::string PackBattleDigest(const std::filesystem::path& folder) {
+  namespace fs = std::filesystem;
+  std::string all;
+  bool any = false;
+  const auto add = [&](const fs::path& file, const std::string& name) {
+    std::ifstream in(file, std::ios::binary);
+    if (!in) return;
+    std::ostringstream o;
+    o << in.rdbuf();
+    const std::string bytes = o.str();
+    all += name + '\n' + std::to_string(bytes.size()) + '\n' + bytes + '\n';
+    any = true;
+  };
+  std::error_code ec;
+  for (const char* sub : {"data", "battle"}) {
+    std::vector<std::string> names;
+    for (const auto& e : fs::directory_iterator(folder / sub, ec)) {
+      if (e.is_regular_file(ec) && e.path().extension() == ".json") names.push_back(e.path().filename().string());
+    }
+    std::sort(names.begin(), names.end());
+    for (const std::string& n : names) add(folder / sub / n, std::string(sub) + "/" + n);
+  }
+  for (const char* n : {"tables.txt", "machines.txt"}) add(folder / n, n);
+  return any ? Hex(Fnv64(all.data(), all.size())) : std::string("unknown");
 }
 
 }

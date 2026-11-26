@@ -213,6 +213,15 @@ GfModel parse_model(const Bytes& b) {
       r.u32();
       m.coords.push_back(std::move(co));
     }
+    for (size_t k = 101; k + 2 <= ln / 4 && start + 4 * (k + 2) <= r.b.size(); k++) {
+      size_t at = start + 4 * (k + 1);
+      uint32_t hdr = r.b[at] | r.b[at + 1] << 8 | r.b[at + 2] << 16 | (uint32_t)r.b[at + 3] << 24;
+      if (((hdr >> 16) & 0xf) != 0xf || ((hdr >> 20) & 0x7ff) != 0) continue;
+      size_t vt = start + 4 * k;
+      uint32_t val = r.b[vt] | r.b[vt + 1] << 8 | r.b[vt + 2] << 16 | (uint32_t)r.b[vt + 3] << 24;
+      if ((hdr & 0xffff) == 0x101) { m.blend = val; m.has_blend = true; }
+      if ((hdr & 0xffff) == 0x107) { m.depth = val; m.has_depth = true; }
+    }
     r.p = start + ln;
     gm.materials.push_back(std::move(m));
   }

@@ -1,0 +1,498 @@
+diff --git a/lib/gx/texture.cpp b/lib/gx/texture.cpp
+--- a/lib/gx/texture.cpp
++++ b/lib/gx/texture.cpp
+@@ -26,6 +26,7 @@
+ #include <cstdint>
+ #include <cstring>
+ #include <map>
++#include <mutex>
+ #include <optional>
+ #include <utility>
+ #include <vector>
+@@ -146,6 +147,23 @@
+ #endif
+ 
+ constexpr uint32_t div_ceil(uint32_t value, uint32_t divisor) noexcept { return (value + divisor - 1) / divisor; }
++
++// (patch 0065) Test-only stress switches: they make the cache sweeps and evictions that a long session reaches after hours
++// happen in minutes. A picture must not change with any of them (tools/lostpics: same run, switches on and off, every picture hashed).
++//   XD_TEX_STRESS_BUDGET_MB=<n>  content cache budget (default 128)   XD_TEX_STRESS_IDLE=<frames>  object cache idle limit (default 600)
++//   XD_TEX_STRESS_SWEEP=<frames> sweep period (default 64)
++uint64_t stress_value(const char* name, uint64_t fallback) {
++  const char* v = std::getenv(name);
++  return (v != nullptr && v[0] != 0) ? std::strtoull(v, nullptr, 10) : fallback;
++}
++uint64_t object_idle_frames() {
++  static const uint64_t v = stress_value("XD_TEX_STRESS_IDLE", texture::ObjectCacheIdleFrames);
++  return v;
++}
++uint64_t sweep_period() {
++  static const uint64_t v = std::max<uint64_t>(1, stress_value("XD_TEX_STRESS_SWEEP", 64));
++  return v;
++}
+ 
+ void do_clear_static_texture_cache() noexcept {
+   s_textureObjectCaches.clear();
+@@ -667,7 +685,7 @@
+ 
+ void sweep_object_caches() {
+   const auto expired = [](uint64_t lastUsedFrame) {
+-    return s_frameCount > lastUsedFrame && s_frameCount - lastUsedFrame > texture::ObjectCacheIdleFrames;
++    return s_frameCount > lastUsedFrame && s_frameCount - lastUsedFrame > object_idle_frames();
+   };
+ 
+   for (auto it = s_textureObjectCaches.begin(); it != s_textureObjectCaches.end();) {
+@@ -709,6 +727,210 @@
+     ++s_stats.replacementHits;
+   }
+   return true;
++}
++
++// ---------------------------------------------------------------------------------------------------------------------
++// (patch 0065) Which texture is which: a note per texture made (address, format, size, contents hash, TLUT), the textures
++// every draw of the last picture sampled (written into F10's textures.txt: numbers and hashes only, never pixels), and a
++// self-check for tests (XD_TEX_AUDIT=1): at every use the bytes in memory are hashed again, without the memo and without
++// the hash-on-write skip, and compared with the hash the cached picture was made from. A difference means the cache hands
++// out a picture that no longer matches the game's memory ("STALE"), a difference between the hash and the upload at
++// creation means the bytes changed while being read ("TORN"). Costs a second read of every texture used: tests only.
++// ---------------------------------------------------------------------------------------------------------------------
++enum PathKind : uint8_t { PathNone = 0, PathObject = 1, PathContent = 2, PathNew = 3, PathReplacement = 4, PathBound = 5, PathCopy = 6 };
++const char* path_name(uint8_t p) {
++  switch (p) {
++  case PathObject: return "object-cache";
++  case PathContent: return "content-cache";
++  case PathNew: return "new";
++  case PathReplacement: return "replacement";
++  case PathBound: return "still-bound";
++  case PathCopy: return "efb-copy";
++  default: return "?";
++  }
++}
++
++struct TexInfo {
++  const void* addr = nullptr;
++  size_t bytes = 0;
++  u32 width = 0, height = 0, format = 0, mips = 0;
++  XXH128_hash_t hash{};
++  const void* tlutAddr = nullptr;
++  u32 tlutEntries = 0, tlutFormat = 0;
++  XXH128_hash_t tlutHash{};
++  uint64_t createdFrame = 0;
++  u32 texObjId = 0;
++  bool hasTlut = false;
++};
++absl::flat_hash_map<const void*, TexInfo> s_texInfo; // by the picture's handle (decoder thread only)
++uint8_t s_lastPath = PathNone;
++
++bool audit_on() {
++  static const bool on = [] {
++    const char* v = std::getenv("XD_TEX_AUDIT");
++    return v != nullptr && v[0] != '0';
++  }();
++  return on;
++}
++
++struct PicTex {
++  TexInfo info;
++  bool known = false;
++  uint8_t path = PathNone;
++  u32 slot = 0;
++  const void* handle = nullptr;
++  u32 width = 0, height = 0, handleFormat = 0;
++  uint64_t seenFrame = 0;
++};
++struct AuditFail {
++  const char* kind = "";
++  uint8_t path = PathNone;
++  TexInfo info;
++  XXH128_hash_t now{};
++  const void* addr = nullptr;
++  uint64_t frame = 0;
++  bool tlutPart = false;
++};
++std::mutex s_reportMutex;
++std::vector<PicTex> s_curPic, s_lastPic;
++std::vector<AuditFail> s_failRing; // the newest 64
++uint64_t s_auditChecks = 0, s_auditStale = 0, s_auditTorn = 0;
++
++void audit_log(const AuditFail& f) {
++  std::fprintf(stderr,
++               "[texaudit] %s%s frame %llu path %s addr %p (mem offset 0x%zx) %ux%u fmt %u mips %u bytes %zu: made from hash %016llx%016llx at frame %llu, "
++               "memory now %016llx%016llx\n",
++               f.kind, f.tlutPart ? " (palette)" : "", static_cast<unsigned long long>(f.frame), path_name(f.path), f.addr,
++               memdirty::offset_of(f.addr), f.info.width, f.info.height, f.info.format, f.info.mips, f.info.bytes,
++               static_cast<unsigned long long>(f.info.hash.high64), static_cast<unsigned long long>(f.info.hash.low64),
++               static_cast<unsigned long long>(f.info.createdFrame), static_cast<unsigned long long>(f.now.high64),
++               static_cast<unsigned long long>(f.now.low64));
++}
++
++void audit_fail(const char* kind, uint8_t path, const TexInfo& info, XXH128_hash_t now, const void* addr, bool tlutPart) {
++  AuditFail f{kind, path, info, now, addr, s_frameCount, tlutPart};
++  if (kind[0] == 'S') {
++    ++s_auditStale;
++  } else {
++    ++s_auditTorn;
++  }
++  if (s_auditStale + s_auditTorn <= 400) {
++    audit_log(f);
++  }
++  std::lock_guard lock{s_reportMutex};
++  if (s_failRing.size() >= 64) {
++    s_failRing.erase(s_failRing.begin());
++  }
++  s_failRing.push_back(f);
++}
++
++bool same_hash(const XXH128_hash_t& a, const XXH128_hash_t& b) noexcept { return a.low64 == b.low64 && a.high64 == b.high64; }
++
++TexInfo make_info(const GXTexObj_& obj, const GXTlutObj_* tlut, const TextureKeys& keys) {
++  TexInfo i;
++  i.addr = obj.data;
++  i.bytes = texture::texture_source_size(obj.format(), obj.width(), obj.height(), obj.mip_count());
++  i.width = obj.width();
++  i.height = obj.height();
++  i.format = obj.format();
++  i.mips = obj.mip_count();
++  i.hash = keys.contentKey.textureHash;
++  i.createdFrame = s_frameCount;
++  i.texObjId = obj.texObjId;
++  if (tlut != nullptr) {
++    i.hasTlut = true;
++    i.tlutAddr = tlut->data;
++    i.tlutEntries = tlut->numEntries;
++    i.tlutFormat = static_cast<u32>(tlut->format);
++    i.tlutHash = keys.contentKey.tlutHash;
++  }
++  return i;
++}
++
++void note_texture(const gfx::TextureHandle& handle, const TexInfo& info) {
++  if (!handle) {
++    return;
++  }
++  if (s_texInfo.size() >= 20000) {
++    s_texInfo.clear();
++  }
++  s_texInfo[handle.get()] = info;
++}
++
++// Check what the cache handed out against the memory now (XD_TEX_AUDIT=1).
++void audit_use(const GXTexObj_& obj, const GXTlutObj_* tlut, const gfx::TextureHandle& handle, uint8_t path) {
++  if (!audit_on() || !handle || path == PathReplacement) {
++    return;
++  }
++  const auto it = s_texInfo.find(handle.get());
++  if (it == s_texInfo.end()) {
++    return;
++  }
++  const TexInfo& info = it->second;
++  ++s_auditChecks;
++  if (info.width != obj.width() || info.height != obj.height() || info.format != obj.format()) {
++    audit_fail("STALE-SHAPE", path, info, {}, obj.data, false);
++    return;
++  }
++  const size_t bytes = texture::texture_source_size(obj.format(), obj.width(), obj.height(), obj.mip_count());
++  const XXH128_hash_t now = aurora::xxh3_128(obj.data, bytes);
++  if (!same_hash(now, info.hash)) {
++    audit_fail("STALE", path, info, now, obj.data, false);
++  }
++  if (tlut != nullptr && info.hasTlut) {
++    const XXH128_hash_t tnow = aurora::xxh3_128(tlut->data, texture::tlut_source_size(tlut->numEntries));
++    if (!same_hash(tnow, info.tlutHash)) {
++      audit_fail("STALE", path, info, tnow, tlut->data, true);
++    }
++  }
++}
++
++// Right after a picture was made from the bytes: were they still the ones that were hashed?
++void audit_made(const GXTexObj_& obj, const GXTlutObj_* tlut, const gfx::TextureHandle& handle, const TexInfo& info) {
++  if (!audit_on() || !handle) {
++    return;
++  }
++  ++s_auditChecks;
++  const XXH128_hash_t now = aurora::xxh3_128(obj.data, info.bytes);
++  if (!same_hash(now, info.hash)) {
++    audit_fail("TORN", PathNew, info, now, obj.data, false);
++  }
++  if (tlut != nullptr) {
++    const XXH128_hash_t tnow = aurora::xxh3_128(tlut->data, texture::tlut_source_size(tlut->numEntries));
++    if (!same_hash(tnow, info.tlutHash)) {
++      audit_fail("TORN", PathNew, info, tnow, tlut->data, true);
++    }
++  }
++}
++
++void note_sampled(u32 slot, const GXTexObj_& obj, const gfx::TextureHandle& handle, uint8_t path) {
++  if (!handle) {
++    return;
++  }
++  PicTex t;
++  t.handle = handle.get();
++  t.slot = slot;
++  t.path = path;
++  t.width = handle->size.width;
++  t.height = handle->size.height;
++  t.handleFormat = handle->gxFormat;
++  t.seenFrame = s_frameCount;
++  if (const auto it = s_texInfo.find(handle.get()); it != s_texInfo.end()) {
++    t.info = it->second;
++    t.known = true;
++  } else {
++    t.info.addr = obj.data;
++    t.info.texObjId = obj.texObjId;
++  }
++  std::lock_guard lock{s_reportMutex};
++  if (s_curPic.size() < 600) {
++    for (const auto& e : s_curPic) {
++      if (e.handle == t.handle && e.slot == t.slot) {
++        return;
++      }
++    }
++    s_curPic.push_back(std::move(t));
++  }
+ }
+ } // namespace
+ 
+@@ -825,6 +1047,8 @@
+       if (entry.handle && entry.texDataVersion == obj.texDataVersion && entry.tlutObjId == 0) {
+         entry.lastUsedFrame = s_frameCount;
+         ++s_stats.objectHits;
++        s_lastPath = PathObject;
++        audit_use(obj, nullptr, entry.handle, PathObject);
+         return entry.handle;
+       }
+     }
+@@ -845,6 +1069,10 @@
+       keys = hash_texture_source(obj, nullptr, BuildSourceKeyForDebug);
+     }
+     handle = find_content_texture(keys->contentKey);
++    s_lastPath = handle ? PathContent : PathNew;
++    if (handle) {
++      audit_use(obj, nullptr, handle, PathContent);
++    }
+     if (!handle) {
+ #if DEBUG
+       const auto name = gfx::texture_replacement::build_texture_replacement_name(*keys->sourceKey);
+@@ -857,8 +1085,15 @@
+                                           {static_cast<const uint8_t*>(obj.data), sourceBytes}, false, nameStr);
+       ++s_stats.misses;
+       s_stats.uploadBytes += texture_handle_size(handle);
++      {
++        const TexInfo info = make_info(obj, nullptr, *keys);
++        note_texture(handle, info);
++        audit_made(obj, nullptr, handle, info);
++      }
+       cache_content_texture(std::move(keys->contentKey), handle);
+     }
++  } else {
++    s_lastPath = PathReplacement;
+   }
+   if (!obj.no_cache()) {
+     store_cached_texture(obj, handle, 0, 0, replacementId);
+@@ -879,6 +1114,8 @@
+           tlutIt->second.lastUsedFrame = s_frameCount;
+         }
+         ++s_stats.objectHits;
++        s_lastPath = PathObject;
++        audit_use(obj, &tlut, entry.handle, PathObject);
+         return entry.handle;
+       }
+     }
+@@ -898,6 +1135,10 @@
+       keys = hash_texture_source(obj, &tlut, false);
+     }
+     handle = find_content_texture(keys->contentKey);
++    s_lastPath = handle ? PathContent : PathNew;
++    if (handle) {
++      audit_use(obj, &tlut, handle, PathContent);
++    }
+     if (!handle) {
+       const size_t textureBytes = texture_source_size(obj.format(), obj.width(), obj.height(), obj.mip_count());
+       const size_t tlutBytes = tlut_source_size(tlut.numEntries);
+@@ -913,8 +1154,15 @@
+       handle->hasArbitraryMips = converted.hasArbitraryMips;
+       ++s_stats.misses;
+       s_stats.uploadBytes += texture_handle_size(handle);
++      {
++        const TexInfo info = make_info(obj, &tlut, *keys);
++        note_texture(handle, info);
++        audit_made(obj, &tlut, handle, info);
++      }
+       cache_content_texture(std::move(keys->contentKey), handle);
+     }
++  } else {
++    s_lastPath = PathReplacement;
+   }
+   if (!obj.no_cache() && !tlut.no_cache()) {
+     store_cached_texture(obj, handle, tlut.tlutObjId, tlut.tlutDataVersion, replacementId);
+@@ -960,6 +1208,18 @@
+       g.frames = frames;
+     }
+   }
++  {
++    std::lock_guard lock{s_reportMutex};
++    if (!s_curPic.empty()) {
++      s_lastPic = std::move(s_curPic);
++      s_curPic.clear();
++    }
++  }
++  if (audit_on() && (s_frameCount % 1800) == 0 && s_frameCount != 0) {
++    std::fprintf(stderr, "[texaudit] frame %llu: %llu checks, %llu STALE, %llu TORN\n", static_cast<unsigned long long>(s_frameCount),
++                 static_cast<unsigned long long>(s_auditChecks), static_cast<unsigned long long>(s_auditStale),
++                 static_cast<unsigned long long>(s_auditTorn));
++  }
+   s_stats = {};
+   s_stats.pendingLoads = streamingStats.pendingLoads;
+   s_stats.publishes = streamingStats.publishes;
+@@ -969,8 +1229,14 @@
+   // Port patch 0029: the sweep walks every texture object seen in the last ObjectCacheIdleFrames frames (tens of
+   // thousands when a game sets up its texture objects anew each frame), on the game's thread at every frame end;
+   // doing it every 64th frame keeps entries at most 64 frames longer and costs 1/64 of the time.
+-  if ((s_frameCount & 63) == 0) {
++  if ((s_frameCount % sweep_period()) == 0) {
+     sweep_object_caches();
++  }
++  if (s_frameCount == 1) {
++    if (const uint64_t mb = stress_value("XD_TEX_STRESS_BUDGET_MB", 0); mb != 0) {
++      s_contentCache.set_budget(mb * 1024ull * 1024ull);
++      std::fprintf(stderr, "[texstress] content cache budget %llu MB\n", static_cast<unsigned long long>(mb));
++    }
+   }
+   s_copyCache.end_frame();
+   s_contentCache.end_frame();
+@@ -1079,8 +1345,10 @@
+     if (textureBind.generation == s_bindGeneration && obj.texObjId != 0 &&
+         obj.texObjId == textureBind.texObj.texObjId && obj.texDataVersion == textureBind.texObj.texDataVersion) {
+       touch_bound_texture(obj);
++      note_sampled(i, obj, textureBind.ref, PathBound);
+       continue;
+     }
++    s_lastPath = PathNone;
+ 
+     gfx::TextureHandle handle;
+     const auto copyIt = g_gxState.copyTextures.find(obj.data);
+@@ -1103,8 +1371,74 @@
+       handle = texture::resolve_static_texture(obj);
+     }
+ 
++    note_sampled(i, obj, handle, copyRef != nullptr && !is_palette_format(obj.format()) ? PathCopy : s_lastPath);
+     obj.mFormat = resolved_format_for_handle(handle);
+     textureBind = gfx::TextureBind{obj, std::move(handle), s_bindGeneration};
+   }
+ }
++// F10: what the last picture sampled, as text: addresses, formats, sizes, hashes, ages. No pixels.
++void write_texture_report(const char* path) {
++  std::vector<PicTex> pic;
++  std::vector<AuditFail> fails;
++  {
++    std::lock_guard lock{s_reportMutex};
++    pic = s_lastPic.empty() ? s_curPic : s_lastPic;
++    fails = s_failRing;
++  }
++  std::FILE* f = std::fopen(path, "wb");
++  if (f == nullptr) {
++    return;
++  }
++  std::fprintf(f,
++               "textures of the last picture (numbers and hashes only, no pixels). frame %llu\r\n"
++               "tracking: hash-on-write %s, self-check (XD_TEX_AUDIT) %s\r\n"
++               "caches: %llu pictures / %llu bytes in the content cache, object cache %llu, texture notes %llu\r\n"
++               "self-check totals: %llu checks, %llu STALE, %llu TORN\r\n\r\n",
++               static_cast<unsigned long long>(s_frameCount),
++               dirty_mode() == DirtyMode::Off ? "off" : (dirty_mode() == DirtyMode::Verify ? "verify" : "on"), audit_on() ? "on" : "off",
++               static_cast<unsigned long long>(s_contentCache.cached_count()),
++               static_cast<unsigned long long>(s_contentCache.cached_bytes()),
++               static_cast<unsigned long long>(s_textureObjectCaches.size()), static_cast<unsigned long long>(s_texInfo.size()),
++               static_cast<unsigned long long>(s_auditChecks), static_cast<unsigned long long>(s_auditStale),
++               static_cast<unsigned long long>(s_auditTorn));
++  std::fprintf(f, "slot path           handle           memory offset  fmt  size      mips hash(texture)                     palette(offset/entries/fmt/hash)                 age(frames) object\r\n");
++  for (const auto& t : pic) {
++    const TexInfo& i = t.info;
++    const size_t off = i.addr != nullptr ? memdirty::offset_of(i.addr) : SIZE_MAX;
++    char offs[32];
++    if (off == SIZE_MAX) {
++      std::snprintf(offs, sizeof offs, "outside");
++    } else {
++      std::snprintf(offs, sizeof offs, "0x%07zx", off);
++    }
++    if (t.known) {
++      char pal[120] = "-";
++      if (i.hasTlut) {
++        const size_t toff = memdirty::offset_of(i.tlutAddr);
++        std::snprintf(pal, sizeof pal, "0x%07zx/%u/%u/%016llx%016llx", toff == SIZE_MAX ? 0 : toff, i.tlutEntries, i.tlutFormat,
++                      static_cast<unsigned long long>(i.tlutHash.high64), static_cast<unsigned long long>(i.tlutHash.low64));
++      }
++      std::fprintf(f, "%-4u %-14s %p %-13s  %-4u %ux%-5u %-4u %016llx%016llx %-52s %-11llu %u\r\n", t.slot, path_name(t.path), t.handle, offs,
++                   i.format, i.width, i.height, i.mips, static_cast<unsigned long long>(i.hash.high64),
++                   static_cast<unsigned long long>(i.hash.low64), pal,
++                   static_cast<unsigned long long>(t.seenFrame >= i.createdFrame ? t.seenFrame - i.createdFrame : 0), i.texObjId);
++    } else {
++      std::fprintf(f, "%-4u %-14s %p %-13s  (not a plain texture: render copy, replacement or unnoted)  %ux%u fmt %u\r\n", t.slot,
++                   path_name(t.path), t.handle, offs, t.width, t.height, t.handleFormat);
++    }
++  }
++  if (!fails.empty()) {
++    std::fprintf(f, "\r\nself-check differences (newest %zu)\r\n", fails.size());
++    for (const auto& x : fails) {
++      std::fprintf(f, "%s%s frame %llu %s offset 0x%zx %ux%u fmt %u made-from %016llx%016llx (frame %llu) now %016llx%016llx\r\n", x.kind,
++                   x.tlutPart ? "(palette)" : "", static_cast<unsigned long long>(x.frame), path_name(x.path), memdirty::offset_of(x.addr),
++                   x.info.width, x.info.height, x.info.format, static_cast<unsigned long long>(x.info.hash.high64),
++                   static_cast<unsigned long long>(x.info.hash.low64), static_cast<unsigned long long>(x.info.createdFrame),
++                   static_cast<unsigned long long>(x.now.high64), static_cast<unsigned long long>(x.now.low64));
++    }
++  }
++  std::fclose(f);
++}
+ } // namespace aurora::gx
++
++extern "C" void aurora_texture_report(const char* path) { aurora::gx::write_texture_report(path); }
+diff --git a/include/aurora/gfx.h b/include/aurora/gfx.h
+--- a/include/aurora/gfx.h
++++ b/include/aurora/gfx.h
+@@ -35,6 +35,8 @@
+ void aurora_debug_lose_device(bool removeDevice);
+ /** Testing: the render worker stops at its next item for `seconds` (0: for good), as a worker stuck in a driver. */
+ void aurora_debug_stall_render_worker(unsigned seconds);
++/** (patch 0065) F10: writes the textures the last picture sampled (address, format, size, hash, palette, age; numbers only) to a text file. */
++void aurora_texture_report(const char* path);
+ 
+ const AuroraStats* aurora_get_stats();
+ float aurora_get_fps();
+diff --git a/lib/gfx/resource_cache.cpp b/lib/gfx/resource_cache.cpp
+--- a/lib/gfx/resource_cache.cpp
++++ b/lib/gfx/resource_cache.cpp
+@@ -7,6 +7,7 @@
+ 
+ #include <cstddef>
+ #include <cstdint>
++#include <cstdlib>
+ #include <mutex>
+ 
+ #include <absl/container/flat_hash_map.h>
+@@ -40,8 +41,16 @@
+   uint32_t lastUsedFrame = 0;
+ };
+ 
+-constexpr uint32_t BindGroupCacheRetainFrames = 32;
++constexpr uint32_t BindGroupCacheRetainFramesDefault = 32;
+ constexpr uint32_t BindGroupCacheSweepPeriod = 16;
++// (patch 0065) test only: XD_TEX_STRESS_BG_RETAIN=<frames> (a bind group must be kept at least a few frames: the picture replays use them)
++uint32_t bind_group_retain_frames() {
++  static const uint32_t v = [] {
++    const char* e = std::getenv("XD_TEX_STRESS_BG_RETAIN");
++    return (e != nullptr && e[0] != 0) ? static_cast<uint32_t>(std::strtoul(e, nullptr, 10)) : BindGroupCacheRetainFramesDefault;
++  }();
++  return v;
++}
+ 
+ absl::flat_hash_map<BindGroupRef, CachedBindGroup> g_cachedBindGroups;
+ absl::flat_hash_map<SamplerRef, wgpu::Sampler> g_cachedSamplers;
+@@ -66,7 +75,7 @@
+ 
+   ZoneScoped;
+   for (auto it = g_cachedBindGroups.begin(); it != g_cachedBindGroups.end();) {
+-    if (frameIndex - it->second.lastUsedFrame > BindGroupCacheRetainFrames) {
++    if (frameIndex - it->second.lastUsedFrame > bind_group_retain_frames()) {
+       g_cachedBindGroups.erase(it++);
+     } else {
+       ++it;

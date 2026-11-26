@@ -250,6 +250,115 @@ def scenario_controls(r):
                     shot('ctl_1'), 'pad:down:6', shot('ctl_2'), 'pad:a', shot('ctl_listen'), 'padwhere', 'quit']))
 
 
+def pad_press(kind, n, down, up=0):
+    """Script steps that press and let go of a control of the virtual joystick (fakepad:...)."""
+    if kind == 'axis':
+        return ['fakepad:axis:%d:%s' % (n, down), 'fakepad:axis:%d:%s' % (n, up)]
+    return ['fakepad:%s:%d:%s' % (kind, n, down), 'fakepad:%s:%d:%s' % (kind, n, up)]
+
+
+
+HAT_PAD = [('button', 1, 1, 0), ('button', 0, 1, 0), ('button', 3, 1, 0), ('button', 2, 1, 0), ('button', 9, 1, 0),
+           ('button', 5, 1, 0), ('axis', 4, 1, -1), ('axis', 5, 1, -1),
+           ('hat', 0, 1, 0), ('hat', 0, 4, 0), ('hat', 0, 8, 0), ('hat', 0, 2, 0),
+           ('axis', 0, -1, 0), ('axis', 1, -1, 0), ('axis', 2, -1, 0), ('axis', 3, -1, 0)]
+
+
+def scenario_padsetup(r):
+    """Set up a controller (launcher/README.md "Controls: set up a controller"): a virtual joystick SDL has no mapping for
+    shows up by name as not recognised, "Set it up..." walks through the 16 steps (with the mouse-driven page only),
+    the mapping is tried, saved in pad_mappings.txt, loaded again by a new launcher, then forgotten."""
+    mapdir = os.path.join(r.dir, 'padmap')
+    shutil.rmtree(mapdir, ignore_errors=True)
+    os.makedirs(mapdir)
+    env = {'XD_PAD_MAPPING_DIR': mapdir}
+    steps = ['size:1280x800'] + UPD + ['padmode:off', 'page:controls', shot('padsetup_0_none'), 'fakepad:add:hat', 'page:controls',
+             shot('padsetup_1_listed'), 'padsetup:start', shot('padsetup_2_step1')]
+    for kind, n, down, up in HAT_PAD:
+        steps += pad_press(kind, n, down, up)
+        if len(steps) % 5 == 0:
+            steps.append(shot('padsetup_walk_%d' % len(steps)))
+    steps += [shot('padsetup_3_try'), 'fakepad:button:1:1', 'fakepad:hat:0:4', 'fakepad:axis:4:1', 'fakepad:axis:0:-1',
+              shot('padsetup_3b_try_pressed'), 'fakepad:button:1:0', 'fakepad:hat:0:0', 'fakepad:axis:4:-1', 'fakepad:axis:0:0',
+              'padsetup:save', shot('padsetup_4_saved'), 'quit']
+    r.run('|'.join(steps), env)
+    check(r.has(r'\[pads\] device 1: "Fake Pad \(hat\)" VID/PID 1234:0101'), 'padsetup: the unrecognised pad is logged by name and VID/PID')
+    check(r.has(r'NOT recognised \(no mapping\)'), 'padsetup: ... and as not recognised')
+    check(r.has(r'6 axes, 1 hats') or r.has(r'12 buttons, 6 axes, 1 hats'), 'padsetup: buttons / axes / hats counted in the log')
+    check(r.has(r'pads: set-up started for "Fake Pad \(hat\)"'), 'padsetup: Set it up... opened the page')
+    check(r.has(r'pads: set-up: trying .*a:b1,b:b0,x:b3,y:b2,start:b9,rightshoulder:b5,lefttrigger:a4,righttrigger:a5,dpup:h0\.1,dpdown:h0\.4,dpleft:h0\.8,dpright:h0\.2,leftx:a0,lefty:a1,rightx:a2,righty:a3'),
+          'padsetup: all 16 steps answered, mapping as expected')
+    check(r.has(r'pads: set-up saved'), 'padsetup: saved')
+    text = ''
+    try:
+        with open(os.path.join(mapdir, 'pad_mappings.txt'), encoding='utf-8') as f:
+            text = f.read()
+    except OSError:
+        pass
+    check('Fake Pad (hat),a:b1' in text, 'padsetup: pad_mappings.txt holds the line')
+    check(r.has(r'RECOGNISED as a gamepad'), 'padsetup: afterwards the log block says recognised')
+
+    r2 = Run(r.work, 'padsetup2', r.exe)
+    r2.run('|'.join(['size:1280x800'] + UPD + ['padmode:off', 'page:controls', 'fakepad:add:hat', 'page:controls', shot('padsetup_5_again'),
+                     'padsetup:forget', shot('padsetup_6_forgot'), 'quit']), env)
+    check(r2.has(r'pads: .*pad_mappings.txt: 1 set-up\(s\) loaded'), 'padsetup: a new launcher loaded the set-up')
+    check(r2.has(r'device 1: "Fake Pad \(hat\)".*RECOGNISED as a gamepad'), 'padsetup: plugged in again = recognised at once')
+    check(r2.has(r'forget the set-up of .*removed from pad_mappings.txt'), 'padsetup: forget removed it from the file')
+    try:
+        with open(os.path.join(mapdir, 'pad_mappings.txt'), encoding='utf-8') as f:
+            text = f.read()
+    except OSError:
+        text = ''
+    check('Fake Pad (hat),a:b1' not in text, 'padsetup: the file no longer holds it')
+    check(r2.has(r'after forgetting a set-up ---[\s\S]*NOT recognised'), 'padsetup: after forgetting it is not recognised again')
+
+
+def scenario_padsetup_axes(r):
+    """A pad whose triggers rest at 0 and whose D-pad is two axes; Skip and Back on the page; cancelled while trying."""
+    mapdir = os.path.join(r.dir, 'padmap')
+    shutil.rmtree(mapdir, ignore_errors=True)
+    os.makedirs(mapdir)
+    env = {'XD_PAD_MAPPING_DIR': mapdir}
+    steps = ['size:1280x800'] + UPD + ['padmode:off', 'page:controls', 'fakepad:add:axes', 'page:controls', 'padsetup:start']
+    layout = [('button', 0, 1, 0), ('button', 1, 1, 0), ('button', 2, 1, 0), ('button', 3, 1, 0), ('button', 7, 1, 0),
+              ('button', 5, 1, 0)]
+    for kind, n, down, up in layout:
+        steps += pad_press(kind, n, down, up)
+    steps += ['padsetup:skip']
+    steps += pad_press('axis', 5, 1, 0)
+    steps += ['padsetup:back', 'padsetup:back']
+    steps += pad_press('axis', 4, 1, 0)
+    steps += pad_press('axis', 5, 1, 0)
+    steps += pad_press('axis', 7, -1, 0) + pad_press('axis', 7, 1, 0) + pad_press('axis', 6, -1, 0) + pad_press('axis', 6, 1, 0)
+    steps += pad_press('axis', 0, -1, 0) + pad_press('axis', 1, 1, 0) + pad_press('axis', 2, 1, 0) + pad_press('axis', 3, -1, 0)
+    steps += [shot('padsetup_axes_try'), 'padsetup:cancel', shot('padsetup_axes_cancelled'), 'quit']
+    r.run('|'.join(steps), env)
+    check(r.has(r'pads: set-up: trying .*lefttrigger:\+a4,righttrigger:\+a5,dpup:-a7,dpdown:\+a7,dpleft:-a6,dpright:\+a6,leftx:a0,lefty:a1~,rightx:a2~,righty:a3'),
+          'padsetup axes: triggers at rest 0 = "+a", D-pad on axes, inverted stick = "~"')
+    check(r.has(r'set-up: cancelled'), 'padsetup axes: cancelled')
+    check(not os.path.exists(os.path.join(mapdir, 'pad_mappings.txt')), 'padsetup axes: cancelled = nothing saved')
+
+
+def scenario_padsetup_unplug(r):
+    """Unplugged in the middle of the set-up (after A and B): the page says so, and goes on from step 3 when the same
+    kind of controller is plugged in again."""
+    mapdir = os.path.join(r.dir, 'padmap')
+    shutil.rmtree(mapdir, ignore_errors=True)
+    os.makedirs(mapdir)
+    steps = ['size:1280x800'] + UPD + ['padmode:off', 'page:controls', 'fakepad:add:hat', 'page:controls', 'padsetup:start']
+    steps += pad_press(*HAT_PAD[0]) + pad_press(*HAT_PAD[1])
+    steps += ['fakepad:remove', 'page:controls', 'page:controls', 'page:controls', shot('padsetup_unplugged')]
+    steps += ['fakepad:add:hat'] + ['page:controls'] * 14 + [shot('padsetup_replugged')]
+    for kind, n, down, up in HAT_PAD[2:]:
+        steps += pad_press(kind, n, down, up)
+    steps += [shot('padsetup_unplug_try'), 'padsetup:cancel', 'quit']
+    r.run('|'.join(steps), {'XD_PAD_MAPPING_DIR': mapdir})
+    check(r.has(r'set-up: the controller was unplugged'), 'padsetup unplug: noticed')
+    check(r.has(r'set-up: the controller is back'), 'padsetup unplug: found again')
+    check(r.has(r'pads: set-up: trying .*a:b1,b:b0,x:b3,y:b2,start:b9,rightshoulder:b5,lefttrigger:a4,righttrigger:a5,dpup:h0\.1,'),
+          'padsetup unplug: the steps done before the unplug were kept and the rest went on')
+
+
 def scenario_names(r):
     steps = ['size:1280x800', 'padmode:on'] + UPD + ['page:settings']
     for t in ('xbox', 'ps', 'switch'):
@@ -480,6 +589,9 @@ SCENARIOS = {
     'settings': scenario_settings,
     'controls': scenario_controls,
     'names': scenario_names,
+    'padsetup': scenario_padsetup,
+    'padsetup_axes': scenario_padsetup_axes,
+    'padsetup_unplug': scenario_padsetup_unplug,
     'reach': scenario_reach,
     'tour': scenario_tour,
     'preset': scenario_preset,

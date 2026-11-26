@@ -23,7 +23,12 @@ FIRST, LAST = 468, 728
 STAT = {1: 'atk', 2: 'def', 3: 'spa', 4: 'spd', 5: 'spe', 6: 'acc', 7: 'eva'}
 INFLICT = {1: 'paralysis', 2: 'sleep', 3: 'freeze', 4: 'burn', 5: 'poison', 6: 'confusion'}
 
-RANGE = {0: 0, 1: 5, 2: 5, 3: 0, 4: 6, 5: 4, 6: 5, 7: 5, 8: 5, 9: 0, 10: 5, 11: 5, 12: 5}
+
+
+
+
+
+RANGE = {0: 0, 1: 5, 2: 5, 3: 0, 4: 6, 5: 4, 6: 5, 7: 5, 8: 5, 9: 3, 10: 5, 11: 7, 12: 5, 13: 1}
 
 
 ANIM_PHYS = {0: 'Body Slam', 1: 'Mega Kick', 2: 'Wing Attack', 3: 'Poison Tail', 4: 'Bonemerang', 5: 'Rock Throw', 6: 'Fury Cutter',

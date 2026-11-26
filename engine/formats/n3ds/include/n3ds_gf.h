@@ -27,6 +27,8 @@ struct GfMaterial {
   std::string name, shader, vtx_shader, frag_shader;
   uint8_t colors[12][4] = {};
   std::vector<GfCoord> coords;
+  uint32_t blend = 0, depth = 0;
+  bool has_blend = false, has_depth = false;
 };
 
 struct GfAttr {

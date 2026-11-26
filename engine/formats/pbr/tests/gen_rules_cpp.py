@@ -46,5 +46,8 @@ o.append('const std::map<std::string, int> kFixedPower = {' + ', '.join('{%s, %d
 o.append('const std::map<std::string, std::string> kAnimDonor = {' + ', '.join('{%s, %s}' % (q(k), q(v)) for k, v in M.ANIM_DONOR.items()) + '};')
 o.append('const std::map<std::string, int> kEffectSlots = {' + ', '.join('{%s, %d}' % (q(k), v) for k, v in M.EFFECT_SLOTS.items()) + '};')
 o.append('const std::set<std::string> kImplemented = {' + ', '.join(q(b) for b in sorted(M.IMPLEMENTED)) + '};')
+o.append('const std::map<int, int> kRangeOfTarget = {' + ', '.join('{%d, %d}' % (k, v) for k, v in M.RANGE_OF_TARGET.items()) + '};')
+o.append('const std::map<std::string, std::vector<std::pair<std::string, int>>> kFlagFix = {' + ', '.join('{%s, {%s}}' % (q(k), ', '.join('{%s, %d}' % (q(f), v) for f, v in fl)) for k, fl in M.FLAG_FIX.items()) + '};')
+o.append('const std::set<std::string> kKeepRange = {' + ', '.join(q(b) for b in sorted(M.KEEP_RANGE)) + '};')
 o.append('}  // namespace pbr')
 open(os.path.join(ROOT, 'engine', 'formats', 'pbr', 'pbr_pack_rules.cpp'), 'w', encoding='utf-8', newline='\n').write('\n'.join(o) + '\n')

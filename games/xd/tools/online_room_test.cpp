@@ -2,6 +2,8 @@
 #include "../src/online_room.h"
 
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
 #include <string>
 
 using namespace xd::online;
@@ -145,7 +147,7 @@ int main() {
   c.disc = "GXXP01";
   CHECK(Has(Judge(back.caps, back.rules, c, true).refuse, "GXXP01"));
   c = host.caps;
-  c.protocol = 4;
+  c.protocol = 5;
   v = Judge(back.caps, back.rules, c, true);
   CHECK(v.refuse.size() == 1 && Has(v.refuse, "another version"));
 
@@ -226,6 +228,7 @@ int main() {
     CHECK(!ParseRules("rs=Gen 5", r, &err));
 
     Capabilities mine;
+    mine.protocol = 3;
     Capabilities roomCaps;
     roomCaps.protocol = 1;
     CHECK(Judge(roomCaps, legacy, mine, true).refuse.empty() || !Has(Judge(roomCaps, legacy, mine, true).refuse, "another version"));
@@ -291,6 +294,7 @@ int main() {
     RoomRules again;
     CHECK(ParseRules("rules=classic" + ExtrasKeyText(x), again, &err) && again.sleepClause && again.pick == 3 && again.format == "gen4_singles");
     Capabilities mine;
+    mine.protocol = 3;
     mine.knownFormats = "gen4_singles:ab12cd34";
     Capabilities roomCaps;
     roomCaps.protocol = 3;
@@ -330,7 +334,59 @@ int main() {
     formatRoom.rules.formatHash = "ab12cd34";
     formatRoom.rules.rs = "gen4";
     formatRoom.rules.gens = "3,4";
-    Capabilities cheater = casual.caps;
+    {
+      namespace fs = std::filesystem;
+      const fs::path root = fs::temp_directory_path() / "xd_pack_digest_test";
+      std::error_code ec;
+      fs::remove_all(root, ec);
+      fs::create_directories(root / "data", ec);
+      fs::create_directories(root / "battle", ec);
+      const auto write = [&](const char* rel, const std::string& text) { std::ofstream(root / rel, std::ios::binary) << text; };
+      CHECK(PackBattleDigest(root) == "unknown");
+      write("data/02_species.json", "{\"add\":{\"pokemon\":{\"A\":{\"zokuseiDataId\":[1,1]}}}}");
+      write("data/01_moves.json", "{}");
+      write("battle/moves.json", "{\"moves\":{}}");
+      write("tables.txt", "format 1\n");
+      write("gen57.json", "{\"version\": 1, \"converter\": \"0.2.0\", \"dump\": \"x-1\", \"make\": 5}");
+      const std::string first = PackBattleDigest(root);
+      CHECK(first != "unknown" && first.size() == 16);
+      write("gen57.json", "{\"version\": 1, \"converter\": \"0.2.2\", \"dump\": \"y-2\", \"make\": 7, \"recipe\": 2}");
+      write("gen4.json", "{\"recipe\": 2}");
+      CHECK(PackBattleDigest(root) == first);
+      write("data/02_species.json", "{\"add\":{\"pokemon\":{\"A\":{\"zokuseiDataId\":[1,2]}}}}");
+      CHECK(PackBattleDigest(root) != first);
+      write("data/02_species.json", "{\"add\":{\"pokemon\":{\"A\":{\"zokuseiDataId\":[1,1]}}}}");
+      CHECK(PackBattleDigest(root) == first);
+      write("battle/moves.json", "{\"moves\":{\"B\":{}}}");
+      CHECK(PackBattleDigest(root) != first);
+      fs::remove_all(root, ec);
+    }
+    {
+    CHECK(kBattleProtocol == 4);
+    Fingerprint cur;
+    cur.caps.protocol = kBattleProtocol;
+    const std::vector<uint8_t> blob = Encode(cur);
+    CHECK(std::string(blob.begin(), blob.end()).find("cap=4\n") != std::string::npos);
+    Fingerprint back4;
+    CHECK(Decode(blob, back4) && back4.caps.protocol == 4);
+    Capabilities now, old3;
+    now.protocol = 4;
+    old3.protocol = 3;
+    RoomRules classic;
+    for (const char* rs : {"classic", "gen4pokemon", "gen4", "gen4mt"}) {
+      classic.ruleSet = rs;
+      const Verdict joinOld = Judge(old3, classic, now, true), hostOld = Judge(now, classic, old3, false), joinNew = Judge(now, classic, old3, true), hostNew = Judge(old3, classic, now, false);
+      CHECK(Has(joinOld.refuse, "same game version") && Has(hostOld.refuse, "same game version") && Has(joinNew.refuse, "same game version") && Has(hostNew.refuse, "same game version"));
+      CHECK(joinOld.refuse.size() == 1 && hostOld.refuse.size() == 1);
+    }
+    classic.ruleSet = "classic";
+    Capabilities now2 = now;
+    CHECK(Judge(now, classic, now2, true).refuse.empty() && Judge(now, classic, now2, false).refuse.empty());
+    Capabilities old1 = old3, old2 = old3;
+    old1.protocol = 1, old2.protocol = 2;
+    CHECK(Has(Judge(old1, classic, now, true).refuse, "same game version") && Has(Judge(old2, classic, now, true).refuse, "same game version"));
+  }
+  Capabilities cheater = casual.caps;
     cheater.cheats = true;
     const std::vector<uint8_t> plainBytes = Encode(casual);
     const std::string plainBlob(plainBytes.begin(), plainBytes.end());

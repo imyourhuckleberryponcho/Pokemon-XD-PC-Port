@@ -27,6 +27,9 @@ void PortInput_GcAdapterHints(void);
 void PortInput_GcAdapterLog(void);
 void PortInput_GcAdapterTick(void);
 
+void PortInput_PadSetupHints(const char* dataFolderUtf8);
+void PortInput_PadSetupLog(void);
+
 #ifdef __cplusplus
 }
 #endif

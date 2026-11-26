@@ -15,6 +15,7 @@ import gen57_abilities as AB
 import gen57_all as A
 import gen57_forms as F
 import gen57_patch as PT
+import gen57_evolutions as EV
 import gen57_pack as GP
 
 
@@ -33,6 +34,8 @@ def build():
     t['forms'] = dict(stone_doc=F.STONE_DOC, charm_doc={k: list(v) for k, v in F.CHARM_DOC.items()}, stone_coupon=F.STONE_COUPON, charm_coupon=F.CHARM_COUPON,
                       rotom_signature={str(k): v for k, v in F.ROTOM_SIGNATURE.items()}, model_form_code=F.MODEL_FORM_CODE)
     t['patch'] = dict(coupon=PT.PATCH_COUPON, memory_coupon=PT.MEMORY_COUPON, memories=PT.MEMORIES, doc={k: list(v) for k, v in PT.DOC.items()}, folders=PT.FOLDERS)
+    t['evolutions'] = dict(rules=[list(r) for r in EV.RULES], classic=EV.CLASSIC, shop_order=EV.SHOP_ORDER, items=EV.ITEMS, item_doc=EV.ITEM_DOC, coupon=EV.COUPON,
+                           folders=EV.FOLDERS, dump_lang=EV.DUMP_LANG, how_text=EV.HOW_TEXT)
     return t
 
 

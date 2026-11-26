@@ -1050,6 +1050,7 @@ bool BuildDataCatalog(const em::EntryReader& read, em::DataCatalog& out, std::st
       t.addMax = XD_PC_SPARE_SPECIES;
       t.idList = "species";
       t.assetKeys = {"face", "icon", "model", "cry", "dex"};
+      t.editAssetKeys = {"face", "icon"};
       t.textFields = {"name", "typeName", "doc"};
       t.primaryText = "name";
     } else if (t.name == "waza_data") {

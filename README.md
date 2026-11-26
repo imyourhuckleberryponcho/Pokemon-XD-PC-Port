@@ -13,7 +13,7 @@ This repository contains **no game assets, ROMs, ISOs or executables**, and none
 You need your own legally obtained copy of the game (USA, `GXXE01`); the port reads everything from your disc
 image while it runs.
 
-## Status: public beta — version 0.7.4
+## Status: public beta — version 0.7.5
 
 **Playable from New Game into the story, with known bugs.** It is not finished: expect crashes, stalls and
 graphics differences, and keep backups of saves you care about. Downloads are on the [Releases](../../releases)
@@ -159,6 +159,25 @@ Saves, settings, mods, logs and bug reports live in one data folder (`%APPDATA%\
 - Launcher, Save page, "Where your data is kept": "Open data folder"; "Move my data..." (user folder <-> portable: it
   copies everything, checks the copy, switches, and puts the old folder in the recycle bin / trash so nothing is lost; the
   launcher then starts again); "Remove all game data..." (asks first, names the folder, offers to export your saves first).
+
+### New in 0.7.5
+
+- Online battles: when your Pokemon fainted in a room, the game sent the fainted Pokemon out again instead of opening the party menu, until the battle broke. The party menu now opens, is drawn, and refuses a fainted Pokemon or one already in battle. (0.5.0 to 0.7.4)
+- Online battles: your whole team fights in single rooms (up to six); before, only the first two took part. The bag also opens in rooms, and a drawn battle says it was a draw instead of "the connection was lost".
+- Online battles: 0.7.5 only meets 0.7.5 (the battles changed). Older versions are turned away with a clear message on both sides. A room also says which pack differs (Gen 4 or Gen 5-7) when two players' packs don't match.
+- Fairy type: with "Modern types" on, the Gen 5-7 Fairy Pokemon and forms (Sylveon, Flabebe, Xerneas, Mega Gardevoir...) are Fairy now; before they kept their old type. Without the rule they keep the old types, as before.
+- Poke Spots: Gen 5, Gen 6 and Gen 7 each add five Pokemon a spot (three common, one rare, one starter), and with Gen 7 the Alolan Geodude, Diglett, Sandshrew (Rock), Vulpix, Meowth (Oasis), Rattata and Grimer (Cave). Only the generations your playthrough has; a Pokemon already waiting at a spot stays.
+- Poke Spots: with Gen 4 and Gen 5-7 Pokemon on, a warning window at every start ("esabapokemondata ... no #3") is gone, and the chances add up again (the last Gen 5-7 Pokemon of each spot could never appear). No need to make your pack again.
+- Alolan Rattata made from your Ultra Sun / Ultra Moon dump was invisible in battle and in the summary; it shows now, with the packs you already have.
+- Ultra Sun / Ultra Moon packs (press Make again once; the launcher says "out of date", older packs still work): the Gen 5-7 Pokemon that evolve by a stone, a trade, a held item or a condition (Sachet, Whipped Dream, knowing a move...) evolve the way they should, and the prize desk sells the items they need. Spiritomb's face shows through its shell; Magcargo, Dusknoir, Finneon, Umbreon, Dialga and six more have their right colours; Munchlax gets its own pictures and can be picked as a starter again.
+- Playing online with Ultra Sun / Ultra Moon packs: both players make the pack again, a re-made pack doesn't match an older one.
+- Double battles with Gen 4-7 moves: moves aim at the right targets (Dark Void puts both foes to sleep, Aura Sphere hits one).
+- Pokemon XG: the Gen 4 and Gen 5-7 Pokemon show their own faces and PC box pictures (Gothita had Mew's face).
+- The opening's Eevee offer: a picture that came out wrong on your PC (a white box) is drawn again, or the Pokemon's face is shown.
+- Controllers: the launcher shows every controller the PC sees, and "Set it up..." makes a button list for one the program doesn't know yet (you press each button once).
+- Making the pack no longer says "64 Pokedex pictures are missing" every time (those were empty rows, not Pokemon).
+- Bug reports (F10) also list the textures in use, to find missing or white pictures.
+- Thanks to everyone who tested and reported bugs.
 
 ### New in 0.7.4
 

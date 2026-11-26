@@ -834,12 +834,16 @@ extern "C" int32_t OSSetAllocMethodHeap(int32_t heap, int32_t method) {
   return old;
 }
 
+extern "C" void (*PortXD_NotedAlloc)(uint32_t pc, uint32_t gc, void* p);
+void (*PortXD_NotedAlloc)(uint32_t pc, uint32_t gc, void* p) = nullptr;
+
 extern "C" void* OSAllocFromHeap(int heap, uint32_t size) {
   const Note note = tNote;
   tNote = Note{};
   void* frames[12];
   const int n = sLog != nullptr ? RtlCaptureStackBackTrace(1, 12, frames, nullptr) : 0;
   void* p = PortHeapReal_OSAllocFromHeap(heap, size);
+  if (PortXD_NotedAlloc != nullptr && note.set && !note.pcOnly && note.pc == size) PortXD_NotedAlloc(note.pc, static_cast<uint32_t>(note.gc), p);
   std::lock_guard<std::mutex> g(sLock);
   Heap* h = heap_at(heap);
   if (h == nullptr) return p;

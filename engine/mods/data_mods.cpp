@@ -123,10 +123,42 @@ public:
           if (fieldKey.empty() || fieldKey[0] == '_') {
             continue;
           }
+          if (EditAsset(file, *table, entry, fieldKey, ev.fields.at(fieldKey))) {
+            continue;
+          }
           Field(file, *table, entry, fieldKey, ev.fields.at(fieldKey));
         }
       }
     }
+  }
+
+  bool EditAsset(const DataModFile& file, const DataTable& t, uint32_t entry, const std::string& key, const Value& v) {
+    const auto asset = std::find_if(t.editAssetKeys.begin(), t.editAssetKeys.end(), [&](const std::string& a) { return Lower(a) == Lower(key); });
+    if (asset == t.editAssetKeys.end()) {
+      return false;
+    }
+    if (v.kind != Value::Kind::String || v.text.empty()) {
+      Problem(file, v.line, Quote(key) + " of " + EntryText(t, entry) + " must be a text in quotes (a picture file of the mod, or a name)");
+    } else if (v.text.find("..") != std::string::npos || v.text.find('\\') != std::string::npos || v.text[0] == '/' || (v.text.find(':') == 1 && v.text.size() > 2)) {
+      Problem(file, v.line, Quote(key) + " of " + EntryText(t, entry) + " must be a path inside the mod with '/' (no \"..\", no drive letter)");
+    } else if (entry >= t.count) {
+      if (Decl* d = AddedAt(t.name, entry)) {
+        d->row.assets[*asset] = v.text;
+      }
+    } else {
+      mModNames[file.mod] = file.modName;
+      EditedAsset a;
+      a.table = t.name;
+      a.entry = entry;
+      a.key = *asset;
+      a.text = v.text;
+      a.mod = file.mod;
+      a.modName = file.modName;
+      a.where = Where(file, v.line);
+      a.builtIn = file.builtIn;
+      mEditedAssets.push_back(std::move(a));
+    }
+    return true;
   }
 
   void Texts(const DataModFile& file, const Value& v) {
@@ -354,6 +386,14 @@ public:
       return a.table != b.table ? a.table < b.table : a.row < b.row;
     });
     out.addedTexts = std::move(mAddedTexts);
+    for (EditedAsset& a : mEditedAssets) {
+      const auto same = std::find_if(out.editedAssets.begin(), out.editedAssets.end(), [&](const EditedAsset& o) { return o.table == a.table && o.entry == a.entry && o.key == a.key; });
+      if (same != out.editedAssets.end()) {
+        *same = std::move(a);
+      } else {
+        out.editedAssets.push_back(std::move(a));
+      }
+    }
     return out;
   }
 
@@ -393,6 +433,7 @@ private:
   uint32_t mTextNext = 1;
   std::vector<AddedText> mAddedTexts;
   std::set<std::string> mNoTextSaid;
+  std::vector<EditedAsset> mEditedAssets;
 
   static std::string DeclKey(const DataModFile& f, const std::string& table, const std::string& key) {
     return f.mod + "\n" + f.label + "\n" + table + "\n" + key;

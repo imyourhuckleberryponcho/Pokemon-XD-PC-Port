@@ -5,8 +5,10 @@
 
 #include <mods.h>
 
+#include <array>
 #include <cstdint>
 #include <filesystem>
+#include <map>
 #include <string>
 #include <utility>
 #include <vector>
@@ -23,6 +25,8 @@ uint32_t ExtraRowCount(const char* table);
 uint32_t ModelRowsTaken();
 uint32_t WaveRowsTaken();
 std::vector<std::string> FairyMoveNames();
+bool FairySlots(std::map<uint32_t, std::array<bool, 2>>& species, std::map<std::string, std::array<bool, 2>>& forms);
+void SetSpotsMaxGen(int gen);
 void AfterLoad(const engine::mods::LoadResult& result);
 void ApplyMainTables();
 
@@ -30,6 +34,7 @@ void AppendAbilityTexts(std::vector<std::pair<uint32_t, std::string>>& texts);
 void InstallAbilityRows();
 bool XgInfo(xd::gen4::xg::Gen57Info& out);
 std::vector<std::string> AbilityNamesForXG();
+const std::vector<uint16_t>& EvolutionShopItems();
 const char* AbilityName(uint32_t id);
 
 }

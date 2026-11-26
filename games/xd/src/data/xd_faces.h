@@ -11,6 +11,7 @@ namespace xd::faces {
 
 void BuildFaces(engine::mods::RowsJob& job);
 void BuildBoxIcons(engine::mods::RowsJob& job);
+void BuildPictures(engine::mods::RowsJob& job);
 void SetFaceRowsTaken(uint32_t count);
 
 void SetFaceRowsTaken(uint32_t count);

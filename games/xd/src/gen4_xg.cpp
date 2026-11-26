@@ -340,7 +340,8 @@ bool Translator::RunPack(bool gen57, std::vector<engine::mods::DataModFile>& fil
     else if (ends("01_moves.json")) moves = &f;
     else if (ends("02_species.json")) species = &f;
     else if (gen57 && ends("03_forms.json")) forms = &f;
-    else if (gen57 && (ends("04_ability_patch.json") || ends("05_rks_memories.json"))) patches.push_back(&f);
+    else if (gen57 && (ends("04_ability_patch.json") || ends("05_rks_memories.json") || ends("06_evolution_items.json"))) patches.push_back(&f);
+    else if (gen57 && ends("07_stone_coupons.json")) f.text = "{\"_note\": \"XD only: XG's own prize desk sells the classic stones with its own prices\"}";
   }
   if (!moves || !species) {
     error = "the pack has no moves or species file";
@@ -498,7 +499,7 @@ bool Translator::RunPack(bool gen57, std::vector<engine::mods::DataModFile>& fil
   };
   const auto refValue = [&](const MoveRef& r) { return r.id >= 0 ? Num(r.id) : r.name.empty() ? Num(0) : Str(r.name); };
   size_t withoutMoves = 0;
-  const auto doRow = [&](const std::string& sname, J::Value& s) {
+  const auto doRow = [&](const std::string& sname, J::Value& s, bool discRow = false) {
     if (s.kind != J::Value::Kind::Object) return;
     if (gen57) {
       if (J::Value* c = Get(s, "copy")) {
@@ -508,9 +509,7 @@ bool Translator::RunPack(bool gen57, std::vector<engine::mods::DataModFile>& fil
         }
       }
     }
-    if (gen57) {
-      Erase(s, "face");
-      Erase(s, "icon");
+    if (true) {
       Erase(s, "nakigoeId");
       Erase(s, "voice");
     }
@@ -613,7 +612,7 @@ bool Translator::RunPack(bool gen57, std::vector<engine::mods::DataModFile>& fil
       J::Value& s = old->fields.at(key);
       if (s.kind != J::Value::Kind::Object) continue;
       if (Get(s, "waza.dataId")) {
-        doRow(key, s);
+        doRow(key, s, true);
         continue;
       }
       std::vector<std::pair<std::string, J::Value>> moved;

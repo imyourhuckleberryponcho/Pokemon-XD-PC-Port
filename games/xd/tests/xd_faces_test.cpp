@@ -238,6 +238,45 @@ int main() {
     FsysEntry e;
     check(Fsys_Entry(&f, 3, &e) && (uint32_t(e.id) << 16 | 0x1200) == texNormal, "step: its resource id is the one in the rows");
   }
+  {
+    std::vector<em::AddedRow> none;
+    em::RowsJob j2;
+    j2.rows = &none;
+    j2.gameId = "GXXE01";
+    j2.modFolders["m"] = root / "mod";
+    j2.catalog = &catalog;
+    j2.discFiles = job.discFiles;
+    j2.readFile = job.readFile;
+    j2.readEntry = job.readEntry;
+    std::vector<std::string> said2;
+    j2.say = [&](em::Message::Level, const std::string& t) { said2.push_back(t); };
+    const auto ask = [&](uint32_t entry, const std::string& text) {
+      em::EditedAsset a;
+      a.table = "pokemon_data", a.entry = entry, a.key = "face", a.text = text, a.mod = "m", a.modName = "M", a.where = "data/x.json line 9";
+      return a;
+    };
+    j2.editedAssets = {ask(3, "textures/faces/z.png"), ask(1, "Gamma"), ask(2, "Nobody")};
+    xd::faces::BuildPictures(j2);
+    check(none.size() == 2 && none[0].table == "poke_face" && none[1].table == "poke_face", "disc rows: the picture makes two poke_face rows and no look-alike species row stays in the list");
+    check(j2.editedRows.size() == 2, "disc rows: two rows come back with new bytes (the unknown name and a disc row nobody asked about stay as the disc has them) (got " + std::to_string(j2.editedRows.size()) + ")");
+    uint32_t n1 = 0, s1 = 0, n3 = 0, s3 = 0;
+    for (const em::RowsJob::EditedRow& e : j2.editedRows) {
+      const uint32_t n = uint32_t(e.bytes[0x16] << 8 | e.bytes[0x17]), sh = uint32_t(e.bytes[0x1E] << 8 | e.bytes[0x1F]);
+      check(e.table == "pokemon_data" && e.bytes.size() == 0x24, "disc rows: a whole row of the table's size");
+      if (e.entry == 1) n1 = n, s1 = sh;
+      if (e.entry == 3) n3 = n, s3 = sh;
+    }
+    check(n1 == 5 && s1 == 9, "disc rows: \"face\": \"Gamma\" on a disc row gives it that species' sprite ids");
+    check(n3 == 10 && s3 == 11, "disc rows: a picture on a disc row gives it the two new poke_face rows");
+    check(said2.size() == 1, "disc rows: the unknown name is told to the player once (got " + std::to_string(said2.size()) + ")");
+    check(j2.outFiles.size() == 1 && j2.outFiles[0].discPath == "poke_face.fsys", "disc rows: the longer archive is handed back");
+    std::vector<em::AddedRow> none2;
+    em::RowsJob j3 = j2;
+    j3.rows = &none2;
+    j3.editedAssets.clear(), j3.editedRows.clear(), j3.outFiles.clear();
+    xd::faces::BuildPictures(j3);
+    check(none2.empty() && j3.editedRows.empty() && j3.outFiles.empty(), "disc rows: no key given = no change at all");
+  }
   fs::remove_all(root, ec);
   std::printf(sOk ? "xd_faces_test: all passed\n" : "xd_faces_test: FAILED\n");
   return sOk ? 0 : 1;

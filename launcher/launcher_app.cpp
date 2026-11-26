@@ -16,6 +16,7 @@
 #include <port_window_icon.h>
 #include <settings_ui.h>
 #include <gc_adapter_sdl.h>
+#include <pad_sdl.h>
 #include <update.h>
 
 #include <SDL3/SDL.h>
@@ -652,6 +653,32 @@ class App {
   std::string waitFor_;
   std::string shotFile_;
   std::vector<SDL_Gamepad*> pads_;
+  std::vector<engine::controls::padsdl::JoyInfo> joys_;
+  std::vector<std::string> windowsPadNames_;
+  uint64_t windowsPadsAt_ = 0;
+  struct PadSetupState {
+    bool active = false;
+    bool trying = false;
+    bool lost = false;
+    SDL_Joystick* joy = nullptr;
+    unsigned id = 0;
+    std::string message;
+    std::string error;
+    std::string mapping;
+    uint64_t lostAt = 0;
+    engine::controls::padsetup::Session session;
+  } padSetup_;
+  fs::path PadFolder() const { return game_.saves.dataFolder; }
+  void SyncPads();
+  void LogPads(const char* when);
+  void LookAtWindowsPads();
+  void StartPadSetup(unsigned id);
+  void EndPadSetup(bool keep);
+  void FeedPadSetup();
+  void DrawPadSetup();
+  void ForgetPad(const std::string& guid);
+  bool PadSetupScript(const std::string& arg);
+  std::vector<std::pair<SDL_JoystickID, SDL_Joystick*>> fakes_;
   pad::Input padIn_;
   pad::Keyboard osk_;
   pad::FileBrowser files_;
@@ -3345,6 +3372,8 @@ bool App::DoStep(const std::string& step) {
       controls_.StartListening(controls_.Port(), static_cast<size_t>(*input), false, false);
     }
     controls_.FeedPadButton(registry_, button->code);
+  } else if (verb == "padsetup" || verb == "fakepad") {
+    return PadSetupScript(step);
   } else if (verb == "padmode") {
     SetController(Lower(arg) == "on");
   } else if (verb == "padtype") {
@@ -3890,6 +3919,13 @@ void App::RunScript() {
 std::vector<pad::PadInfo> App::PadInfos() const {
   std::vector<pad::PadInfo> out;
   for (SDL_Gamepad* p : pads_) {
+    if (padSetup_.active && padSetup_.trying) {
+      char a[33]{};
+      SDL_GUIDToString(SDL_GetJoystickGUIDForID(SDL_GetGamepadID(p)), a, sizeof(a));
+      if (a == padSetup_.session.Guid()) {
+        continue;
+      }
+    }
     out.push_back({p, DeviceOf(p)});
   }
   return out;
@@ -5200,14 +5236,87 @@ void App::DrawSettingsPage() {
 }
 
 void App::UpdatePads() {
+  namespace pad_sdl = engine::controls::padsdl;
+  std::vector<std::string> own;
+  for (const std::string& line : engine::controls::padsetup::LoadMappings(PadFolder())) {
+    own.push_back(engine::controls::padsetup::GuidOfLine(line));
+  }
   std::vector<ui::ControlsPanel::Pad> list;
   for (SDL_Gamepad* pad : pads_) {
     char guid[33]{};
     SDL_GUIDToString(SDL_GetGamepadGUIDForID(SDL_GetGamepadID(pad)), guid, sizeof(guid));
     const char* name = SDL_GetGamepadName(pad);
-    list.push_back({guid, name != nullptr ? name : "", DeviceOf(pad)});
+    const bool ownMapping = std::find(own.begin(), own.end(), engine::controls::padsetup::GuidOfLine(std::string(guid) + ",")) != own.end();
+    list.push_back({guid, name != nullptr ? name : "", DeviceOf(pad), ownMapping});
   }
   controls_.SetPads(std::move(list));
+  joys_ = pad_sdl::ListJoysticks(true);
+  std::vector<ui::ControlsPanel::Unrecognised> unknown;
+  for (const pad_sdl::JoyInfo& j : joys_) {
+    if (j.gamepad) {
+      continue;
+    }
+    if (j.buttons >= 0 && j.buttons + j.hats < 4 && j.axes < 2) {
+      continue;
+    }
+    unknown.push_back({static_cast<unsigned>(j.id), j.name, pad_sdl::Hex4(j.vid) + ":" + pad_sdl::Hex4(j.pid), j.buttons, j.axes, j.hats, j.nth});
+  }
+  controls_.SetUnrecognised(std::move(unknown));
+}
+
+void App::SyncPads() {
+  namespace pad_sdl = engine::controls::padsdl;
+  std::vector<SDL_JoystickID> want;
+  int n = 0;
+  if (SDL_JoystickID* ids = SDL_GetGamepads(&n)) {
+    for (int i = 0; i < n; i++) {
+      char guid[33]{};
+      SDL_GUIDToString(SDL_GetJoystickGUIDForID(ids[i]), guid, sizeof(guid));
+      if (!pad_sdl::IsForgotten(guid)) {
+        want.push_back(ids[i]);
+      }
+    }
+    SDL_free(ids);
+  }
+  for (auto it = pads_.begin(); it != pads_.end();) {
+    if (std::find(want.begin(), want.end(), SDL_GetGamepadID(*it)) == want.end()) {
+      SDL_CloseGamepad(*it);
+      it = pads_.erase(it);
+    } else {
+      ++it;
+    }
+  }
+  for (SDL_JoystickID id : want) {
+    const bool have = std::any_of(pads_.begin(), pads_.end(), [id](SDL_Gamepad* p) { return SDL_GetGamepadID(p) == id; });
+    if (!have) {
+      if (SDL_Gamepad* pad = SDL_OpenGamepad(id); pad != nullptr) {
+        pads_.push_back(pad);
+      }
+    }
+  }
+  UpdatePads();
+}
+
+void App::LogPads(const char* when) {
+  engine::controls::padsdl::LogJoysticks(when);
+}
+
+void App::LookAtWindowsPads() {
+#ifdef _WIN32
+  std::string error;
+  const std::vector<engine::controls::WindowsPad> list = engine::controls::ListWindowsGamePads(&error);
+  windowsPadNames_.clear();
+  for (const engine::controls::WindowsPad& w : list) {
+    if (!w.xinput || pads_.empty()) {
+      windowsPadNames_.push_back(w.name.empty() ? "HID game controller" : w.name);
+    }
+  }
+#endif
+  if (pads_.empty() && joys_.empty()) {
+    controls_.SetWindowsPads(windowsPadNames_);
+  } else {
+    controls_.SetWindowsPads({});
+  }
 }
 
 void App::LogGameCubeAdapter(const char* when) {
@@ -5222,8 +5331,14 @@ void App::LookAtAdapter() {
     if (std::getenv("XD_GC_ADAPTER_FAKE") == nullptr) {
       LogGameCubeAdapter("Controls page opened");
     }
+    LogPads("Controls page opened");
+    windowsPadsAt_ = 0;
   }
   controlsDrawnAt_ = tick == 0 ? 1 : tick;
+  if (windowsPadsAt_ == 0 || tick - windowsPadsAt_ > 3000) {
+    windowsPadsAt_ = tick == 0 ? 1 : tick;
+    LookAtWindowsPads();
+  }
   if (adapterLookedAt_ != 0 && tick - adapterLookedAt_ < 3000) {
     return;
   }
@@ -5286,6 +5401,21 @@ void App::FeedLiveInputs() {
 }
 
 void App::DrawControlsPage() {
+  {
+    unsigned setupId = 0;
+    std::string forget;
+    if (controls_.TakeSetupRequest(&setupId)) {
+      StartPadSetup(setupId);
+    }
+    if (controls_.TakeForgetRequest(&forget)) {
+      ForgetPad(forget);
+    }
+  }
+  if (padSetup_.active) {
+    FeedPadSetup();
+    DrawPadSetup();
+    return;
+  }
   PageTitle(Tr("Controls"), "");
   Dim(Tr("Which PC controller and which keys play each of the four GameCube controllers. Controls are yours in every "
          "preset, Original too: they change how you press the buttons, never what the game does with them."));
@@ -5329,6 +5459,452 @@ void App::DrawControlsPage() {
     EndCard();
   }
   ImGui::EndChild();
+}
+
+namespace {
+
+using PadRole = engine::controls::padsetup::Role;
+
+std::string PadRoleName(PadRole r) {
+  switch (r) {
+  case PadRole::A: return "A";
+  case PadRole::B: return "B";
+  case PadRole::X: return "X";
+  case PadRole::Y: return "Y";
+  case PadRole::Start: return Tr("Start");
+  case PadRole::Z: return "Z";
+  case PadRole::L: return "L";
+  case PadRole::R: return "R";
+  case PadRole::DpadUp: return Tr("D-pad Up");
+  case PadRole::DpadDown: return Tr("D-pad Down");
+  case PadRole::DpadLeft: return Tr("D-pad Left");
+  case PadRole::DpadRight: return Tr("D-pad Right");
+  case PadRole::StickLeft: return Tr("Main stick: left");
+  case PadRole::StickUp: return Tr("Main stick: up");
+  case PadRole::CStickLeft: return Tr("C stick: left");
+  case PadRole::CStickUp: return Tr("C stick: up");
+  case PadRole::Count: break;
+  }
+  return {};
+}
+
+std::string PadPrompt(PadRole r) {
+  switch (r) {
+  case PadRole::DpadUp: return Tr("Press the D-pad up.");
+  case PadRole::DpadDown: return Tr("Press the D-pad down.");
+  case PadRole::DpadLeft: return Tr("Press the D-pad left.");
+  case PadRole::DpadRight: return Tr("Press the D-pad right.");
+  case PadRole::StickLeft: return Tr("Push the main stick all the way to the left.");
+  case PadRole::StickUp: return Tr("Push the main stick all the way up.");
+  case PadRole::CStickLeft: return Tr("Push the C stick (the right stick) all the way to the left.");
+  case PadRole::CStickUp: return Tr("Push the C stick (the right stick) all the way up.");
+  default: return Fmt(Tr("Press the button that should be %s."), PadRoleName(r).c_str());
+  }
+}
+
+std::string PadHint(PadRole r) {
+  switch (r) {
+  case PadRole::Z: return Tr("Z is the small button above R on a GameCube controller. Use a bumper or any spare button.");
+  case PadRole::L:
+  case PadRole::R: return Tr("For L and R you can pull a trigger or press a bumper, whichever you want to use.");
+  case PadRole::StickLeft:
+  case PadRole::CStickLeft: return Tr("Let go of it afterwards. The other direction is worked out by itself.");
+  default: return {};
+  }
+}
+
+std::string PadSourceText(const engine::controls::padsetup::Source& s) {
+  using K = engine::controls::padsetup::Source::Kind;
+  switch (s.kind) {
+  case K::Button: return Fmt(Tr("Button %d"), s.index);
+  case K::Axis: return Fmt(Tr("Axis %d"), s.index) + (s.direction < 0 ? " -" : " +");
+  case K::Hat: return Fmt(Tr("D-pad hat %d"), s.index) + " (" + std::to_string(s.hatMask) + ")";
+  case K::None: break;
+  }
+  return Tr("skipped");
+}
+
+}
+
+void App::StartPadSetup(unsigned id) {
+  const auto it = std::find_if(joys_.begin(), joys_.end(), [id](const auto& j) { return static_cast<unsigned>(j.id) == id; });
+  if (it == joys_.end()) {
+    Log("pads: set-up: no such controller " + std::to_string(id));
+    return;
+  }
+  EndPadSetup(true);
+  padSetup_ = PadSetupState{};
+  padSetup_.joy = SDL_OpenJoystick(it->id);
+  padSetup_.id = id;
+  padSetup_.session.Start(it->guid, it->name, SDL_GetPlatform());
+  padSetup_.active = true;
+  page_ = Page::Controls;
+  Log("pads: set-up started for \"" + it->name + "\" (" + it->guid + ", " + std::to_string(it->buttons) + " buttons, " +
+      std::to_string(it->axes) + " axes, " + std::to_string(it->hats) + " hats)");
+}
+
+void App::EndPadSetup(bool keep) {
+  if (!padSetup_.active) {
+    return;
+  }
+  if (!keep && padSetup_.trying) {
+    engine::controls::padsdl::ForgottenGuids().push_back(engine::controls::padsetup::GuidOfLine(padSetup_.session.Guid() + ","));
+  }
+  if (padSetup_.joy != nullptr) {
+    SDL_CloseJoystick(padSetup_.joy);
+  }
+  padSetup_.joy = nullptr;
+  padSetup_.active = false;
+  padSetup_.trying = false;
+  SyncPads();
+}
+
+void App::ForgetPad(const std::string& guid) {
+  std::string error;
+  const bool had = engine::controls::padsdl::ForgetAndRemove(PadFolder(), guid, &error);
+  Log(std::string("pads: forget the set-up of ") + guid + (had ? ": removed from pad_mappings.txt" : ": it was not in pad_mappings.txt (SDL's own or a database mapping)") +
+      (error.empty() ? std::string() : ", " + error));
+  SyncPads();
+  LogPads("after forgetting a set-up");
+}
+
+void App::FeedPadSetup() {
+  namespace pad_sdl = engine::controls::padsdl;
+  PadSetupState& st = padSetup_;
+  if (!st.active || st.trying) {
+    return;
+  }
+  if (st.joy == nullptr || !SDL_JoystickConnected(st.joy)) {
+    const uint64_t tick = SDL_GetTicks();
+    if (!st.lost) {
+      st.lost = true;
+      st.lostAt = tick;
+      if (st.joy != nullptr) {
+        SDL_CloseJoystick(st.joy);
+        st.joy = nullptr;
+      }
+      Log("pads: set-up: the controller was unplugged (the steps done are kept)");
+    }
+    if (tick - st.lostAt > 400) {
+      st.lostAt = tick;
+      for (const pad_sdl::JoyInfo& j : pad_sdl::ListJoysticks(false)) {
+        if (j.guid == st.session.Guid() && !j.gamepad) {
+          st.joy = SDL_OpenJoystick(j.id);
+          st.id = static_cast<unsigned>(j.id);
+          st.lost = st.joy == nullptr;
+          st.session.Resume();
+          Log("pads: set-up: the controller is back");
+          break;
+        }
+      }
+    }
+    return;
+  }
+  st.session.Feed(pad_sdl::ReadSnapshot(st.joy));
+  if (st.session.Finished()) {
+    st.mapping = st.session.Mapping();
+    if (st.mapping.empty()) {
+      return;
+    }
+    st.error.clear();
+    if (SDL_AddGamepadMapping(st.mapping.c_str()) < 0) {
+      st.error = SDL_GetError();
+      Log("pads: set-up: SDL refused the mapping: " + st.error);
+      st.session.Restart();
+      return;
+    }
+    auto& forgotten = pad_sdl::ForgottenGuids();
+    forgotten.erase(std::remove(forgotten.begin(), forgotten.end(), engine::controls::padsetup::GuidOfLine(st.session.Guid() + ",")), forgotten.end());
+    st.trying = true;
+    Log("pads: set-up: trying " + st.mapping);
+    SyncPads();
+  }
+}
+
+void App::DrawPadSetup() {
+  namespace ps = engine::controls::padsetup;
+  PadSetupState& st = padSetup_;
+  ps::Session& se = st.session;
+  PageTitle(Tr("Set up a controller"), "");
+  Dim(Fmt(Tr("The program does not know the buttons of \"%s\" yet. Press the button it asks for in each step and it learns which "
+             "is which. You can then try it, and it is kept for the launcher and for the game. The controller itself cannot "
+             "be used on this page yet, so click the buttons with the mouse or the keyboard."),
+          se.Name().c_str()));
+  ImGui::Spacing();
+  if (BeginCard("##padsetup")) {
+    if (st.lost) {
+      ImGui::PushStyleColor(ImGuiCol_Text, kWarn);
+      ImGui::TextWrapped("%s", Tr("The controller was unplugged. Plug it in again: the set-up goes on where it stopped."));
+      ImGui::PopStyleColor();
+    } else if (st.trying) {
+      Heading(Tr("Try it"));
+      Dim(Tr("The controller is set up for now. Press its buttons and move its sticks: they light up below. If something is "
+             "wrong, start over. When everything is right, save it: the launcher and the game use it from then on."));
+      ImGui::Spacing();
+      SDL_Gamepad* g = nullptr;
+      for (SDL_Gamepad* p : pads_) {
+        char guid[33]{};
+        SDL_GUIDToString(SDL_GetJoystickGUIDForID(SDL_GetGamepadID(p)), guid, sizeof(guid));
+        if (se.Guid() == guid) {
+          g = p;
+        }
+      }
+      if (g == nullptr) {
+        Dim(Tr("The program has not opened the controller yet."));
+      } else {
+        const auto lit = [&](const char* label, bool on) {
+          ImGui::TextColored(on ? kGood : kFaint, "[%s]", label);
+          ImGui::SameLine();
+        };
+        lit("A", SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_SOUTH));
+        lit("B", SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_EAST));
+        lit("X", SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_WEST));
+        lit("Y", SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_NORTH));
+        lit(Tr("Start"), SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_START));
+        lit("Z", SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER));
+        lit(Tr("D-pad Up"), SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_DPAD_UP));
+        lit(Tr("D-pad Down"), SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_DPAD_DOWN));
+        lit(Tr("D-pad Left"), SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_DPAD_LEFT));
+        lit(Tr("D-pad Right"), SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_DPAD_RIGHT));
+        ImGui::NewLine();
+        const auto bar = [&](const char* label, SDL_GamepadAxis axis, bool trigger) {
+          const float v = static_cast<float>(SDL_GetGamepadAxis(g, axis)) / 32767.0f;
+          ImGui::SetNextItemWidth(220 * scale_);
+          ImGui::ProgressBar(trigger ? std::clamp(v, 0.0f, 1.0f) : (v + 1.0f) * 0.5f, ImVec2(220 * scale_, 0), label);
+        };
+        bar("L", SDL_GAMEPAD_AXIS_LEFT_TRIGGER, true);
+        ImGui::SameLine();
+        bar("R", SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, true);
+        bar(Tr("Main stick: left / right"), SDL_GAMEPAD_AXIS_LEFTX, false);
+        ImGui::SameLine();
+        bar(Tr("Main stick: up / down"), SDL_GAMEPAD_AXIS_LEFTY, false);
+        bar(Tr("C stick: left / right"), SDL_GAMEPAD_AXIS_RIGHTX, false);
+        ImGui::SameLine();
+        bar(Tr("C stick: up / down"), SDL_GAMEPAD_AXIS_RIGHTY, false);
+      }
+      ImGui::Spacing();
+      if (!st.error.empty()) {
+        ImGui::TextColored(kBad, "%s", st.error.c_str());
+      }
+      if (ImGui::Button(Lbl(Tr("Save this set-up"), "Save this set-up").c_str())) {
+        std::string error;
+        if (PadFolder().empty() && std::getenv("XD_PAD_MAPPING_DIR") == nullptr) {
+          error = "no data folder";
+        } else if (engine::controls::padsdl::ApplyAndStore(PadFolder(), st.mapping, &error)) {
+          Log("pads: set-up saved: " + st.mapping);
+          EndPadSetup(true);
+          LogPads("after a set-up was saved");
+          ImGui::EndChild();
+          ImGui::PopStyleVar();
+          ImGui::PopStyleColor();
+          return;
+        }
+        st.error = error;
+        Log("pads: set-up: could not save: " + error);
+      }
+      ImGui::SameLine();
+      if (ImGui::Button(Lbl(Tr("Start over"), "Start over").c_str())) {
+        Log("pads: set-up: start over");
+        EndPadSetup(false);
+        StartPadSetup(st.id);
+        ImGui::EndChild();
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor();
+        return;
+      }
+      ImGui::SameLine();
+      if (ImGui::Button(Lbl(Tr("Cancel"), "Cancel").c_str()) || BackPressed()) {
+        Log("pads: set-up: cancelled while trying");
+        EndPadSetup(false);
+        ImGui::EndChild();
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor();
+        return;
+      }
+    } else {
+      const bool finishedEmpty = se.Finished() && st.mapping.empty();
+      if (finishedEmpty) {
+        Heading(Tr("Nothing was set up"));
+        Dim(Tr("Every step was skipped, so there is nothing to save. Start over, or cancel."));
+      } else {
+        Heading(Fmt(Tr("Step %d of %d"), se.Step() + 1, ps::kRoleCount).c_str());
+        ImGui::ProgressBar(static_cast<float>(se.Step()) / static_cast<float>(ps::kRoleCount), ImVec2(-1, 6 * scale_), "");
+        ImGui::Spacing();
+        ImGui::PushStyleColor(ImGuiCol_Text, kText);
+        ImGui::PushFont(fonts_.title);
+        ImGui::TextWrapped("%s", PadPrompt(se.Current()).c_str());
+        ImGui::PopFont();
+        ImGui::PopStyleColor();
+        const std::string hint = PadHint(se.Current());
+        if (!hint.empty()) {
+          Dim(hint);
+        }
+        const auto event = se.LastEvent();
+        if (event == ps::Session::Event::Answered) {
+          ImGui::TextColored(kGood, "%s", Fmt(Tr("Got it: %s."), PadSourceText(se.LastSource()).c_str()).c_str());
+        } else if (event == ps::Session::Event::Taken) {
+          ImGui::PushStyleColor(ImGuiCol_Text, kWarn);
+          ImGui::TextWrapped("%s", Fmt(Tr("That one is already used for %s. Press another one, or skip this step."),
+                                       PadRoleName(*ps::RoleFromId(se.TakenByRole())).c_str()).c_str());
+          ImGui::PopStyleColor();
+        } else if (event == ps::Session::Event::WrongKind) {
+          ImGui::PushStyleColor(ImGuiCol_Text, kWarn);
+          ImGui::TextWrapped("%s", Tr("A stick moves along an axis, and that was a button. Push the stick instead, or skip this step."));
+          ImGui::PopStyleColor();
+        }
+      }
+      ImGui::Spacing();
+      if (!finishedEmpty) {
+        if (ImGui::Button(Lbl(Tr("Skip"), "Skip").c_str())) {
+          se.Skip();
+        }
+        ImGui::SameLine();
+      }
+      if (!finishedEmpty) {
+        ImGui::BeginDisabled(se.Step() == 0);
+        if (ImGui::Button(Lbl(Tr("Back"), "Back").c_str())) {
+          se.Back();
+        }
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+      }
+      if (ImGui::Button(Lbl(Tr("Start over"), "Start over").c_str())) {
+        se.Restart();
+        st.mapping.clear();
+      }
+      ImGui::SameLine();
+      if (ImGui::Button(Lbl(Tr("Cancel"), "Cancel").c_str()) || BackPressed()) {
+        Log("pads: set-up: cancelled");
+        EndPadSetup(false);
+        ImGui::EndChild();
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor();
+        return;
+      }
+    }
+  }
+  EndCard();
+  if (!st.trying && !st.lost) {
+    ImGui::Spacing();
+    if (BeginCard("##padsetup_list")) {
+      Heading(Tr("Your answers"));
+      if (ImGui::BeginTable("##padsteps", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH)) {
+        for (int i = 0; i < ps::kRoleCount; i++) {
+          const PadRole role = static_cast<PadRole>(i);
+          ImGui::TableNextRow();
+          ImGui::TableSetColumnIndex(0);
+          const bool current = i == se.Step() && !se.Finished();
+          ImGui::TextColored(current ? kAccentHover : kText, "%s%s", current ? "> " : "", PadRoleName(role).c_str());
+          ImGui::TableSetColumnIndex(1);
+          if (i < se.Step() || se.Finished()) {
+            ImGui::TextColored(se.GetAnswers().Has(role) ? kGood : kFaint, "%s", PadSourceText(se.GetAnswers().source[i]).c_str());
+          }
+        }
+        ImGui::EndTable();
+      }
+    }
+    EndCard();
+  }
+}
+
+bool App::PadSetupScript(const std::string& step) {
+  namespace pad_sdl = engine::controls::padsdl;
+  const std::vector<std::string> parts = Split(step, ':');
+  const std::string verb = Lower(parts[0]);
+  const std::string what = parts.size() > 1 ? Lower(parts[1]) : std::string();
+  const auto num = [&](size_t i) { return parts.size() > i ? std::atof(parts[i].c_str()) : 0.0; };
+  page_ = Page::Controls;
+  if (verb == "fakepad") {
+    if (what == "add") {
+      const bool axes = parts.size() > 2 && Lower(parts[2]) == "axes";
+      SDL_VirtualJoystickDesc desc;
+      SDL_INIT_INTERFACE(&desc);
+      desc.type = SDL_JOYSTICK_TYPE_UNKNOWN;
+      desc.vendor_id = 0x1234;
+      desc.product_id = axes ? 0x0102 : 0x0101;
+      desc.naxes = axes ? 8 : 6;
+      desc.nbuttons = axes ? 10 : 12;
+      desc.nhats = axes ? 0 : 1;
+      desc.name = axes ? "Fake Pad (axes)" : "Fake Pad (hat)";
+      const SDL_JoystickID id = SDL_AttachVirtualJoystick(&desc);
+      if (id == 0) {
+        Log(std::string("fakepad: ") + SDL_GetError());
+        return false;
+      }
+      SDL_Joystick* joy = SDL_OpenJoystick(id);
+      const Sint16 rest = axes ? 0 : -32768;
+      SDL_SetJoystickVirtualAxis(joy, 4, rest);
+      SDL_SetJoystickVirtualAxis(joy, 5, rest);
+      fakes_.emplace_back(id, joy);
+      return true;
+    }
+    if (what == "remove") {
+      for (auto& [id, joy] : fakes_) {
+        SDL_CloseJoystick(joy);
+        SDL_DetachVirtualJoystick(id);
+      }
+      fakes_.clear();
+      return true;
+    }
+    if (fakes_.empty()) {
+      Log("fakepad: none added");
+      return false;
+    }
+    SDL_Joystick* joy = fakes_.front().second;
+    if (what == "button") {
+      SDL_SetJoystickVirtualButton(joy, static_cast<int>(num(2)), num(3) != 0.0);
+    } else if (what == "axis") {
+      SDL_SetJoystickVirtualAxis(joy, static_cast<int>(num(2)), static_cast<Sint16>(std::clamp(num(3), -1.0, 1.0) * 32767.0));
+    } else if (what == "hat") {
+      SDL_SetJoystickVirtualHat(joy, static_cast<int>(num(2)), static_cast<Uint8>(num(3)));
+    } else {
+      Log("fakepad: unknown step " + step);
+      return false;
+    }
+    return true;
+  }
+  if (what == "start") {
+    const auto it = std::find_if(joys_.begin(), joys_.end(), [](const auto& j) { return !j.gamepad; });
+    if (it == joys_.end()) {
+      Log("padsetup: no unrecognised controller");
+      return false;
+    }
+    controls_.RequestSetup(static_cast<unsigned>(it->id));
+  } else if (what == "skip") {
+    padSetup_.session.Skip();
+  } else if (what == "back") {
+    padSetup_.session.Back();
+  } else if (what == "restart") {
+    padSetup_.session.Restart();
+    padSetup_.mapping.clear();
+  } else if (what == "cancel") {
+    Log("pads: set-up: cancelled");
+    EndPadSetup(false);
+  } else if (what == "save") {
+    std::string error;
+    if (!padSetup_.active || !padSetup_.trying) {
+      Log("padsetup: nothing to save yet");
+      return false;
+    }
+    if (!pad_sdl::ApplyAndStore(PadFolder(), padSetup_.mapping, &error)) {
+      Log("padsetup: could not save: " + error);
+      return false;
+    }
+    Log("pads: set-up saved: " + padSetup_.mapping);
+    EndPadSetup(true);
+    LogPads("after a set-up was saved");
+  } else if (what == "forget") {
+    for (const pad_sdl::JoyInfo& j : joys_) {
+      if (j.gamepad) {
+        ForgetPad(j.guid);
+        break;
+      }
+    }
+  } else {
+    Log("padsetup: unknown step " + step);
+    return false;
+  }
+  return true;
 }
 
 void App::DrawModsPage() {
@@ -8455,7 +9031,13 @@ int App::Run() {
     return 1;
   }
   LogGameCubeAdapter("launcher start");
-  scale_ = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
+  if (!PadFolder().empty() || std::getenv("XD_PAD_MAPPING_DIR") != nullptr) {
+    const engine::controls::padsdl::LoadResult loaded = engine::controls::padsdl::AddMappings(PadFolder());
+    Log("pads: " + loaded.text);
+  }
+  LogPads("launcher start");
+  SyncPads();
+  scale_ =SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
   if (scale_ <= 0.0f) {
     scale_ = 1.0f;
   }
@@ -8598,19 +9180,14 @@ int App::Run() {
           }
           break;
         case SDL_EVENT_GAMEPAD_ADDED:
-          if (SDL_Gamepad* pad = SDL_OpenGamepad(e.gdevice.which); pad != nullptr) {
-            pads_.push_back(pad);
-            UpdatePads();
-          }
-          break;
         case SDL_EVENT_GAMEPAD_REMOVED:
-          for (auto it = pads_.begin(); it != pads_.end(); ++it) {
-            if (SDL_GetGamepadID(*it) == e.gdevice.which) {
-              SDL_CloseGamepad(*it);
-              pads_.erase(it);
-              UpdatePads();
-              break;
-            }
+        case SDL_EVENT_GAMEPAD_REMAPPED:
+        case SDL_EVENT_JOYSTICK_ADDED:
+        case SDL_EVENT_JOYSTICK_REMOVED:
+          SyncPads();
+          if (e.type == SDL_EVENT_JOYSTICK_ADDED || e.type == SDL_EVENT_JOYSTICK_REMOVED) {
+            LogPads(e.type == SDL_EVENT_JOYSTICK_ADDED ? "a controller was plugged in" : "a controller was unplugged");
+            windowsPadsAt_ = 0;
           }
           break;
         case SDL_EVENT_MOUSE_MOTION:
@@ -8813,6 +9390,13 @@ int App::Run() {
   ImGui::DestroyContext();
   for (SDL_Gamepad* pad : pads_) {
     SDL_CloseGamepad(pad);
+  }
+  if (padSetup_.joy != nullptr) {
+    SDL_CloseJoystick(padSetup_.joy);
+  }
+  for (auto& [id, joy] : fakes_) {
+    SDL_CloseJoystick(joy);
+    SDL_DetachVirtualJoystick(id);
   }
   if (presence_) {
     presence_->Stop();

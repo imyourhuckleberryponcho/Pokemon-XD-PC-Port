@@ -72,10 +72,11 @@
    "6": 5,
    "7": 5,
    "8": 5,
-   "9": 0,
+   "9": 3,
    "10": 5,
-   "11": 5,
-   "12": 5
+   "11": 7,
+   "12": 5,
+   "13": 1
   },
   "features_done": [
    "blocks",
@@ -2474,7 +2475,7 @@
    210,
    468
   ],
-  "evo_notes": "USUM methods: 1-3 friendship (kept, 1), 4 level (kept), 5 trade (kept), 9-11 stat comparison (kept as 8-10), 12 / 13 Silcoon / Cascoon, 14 Ninjask, 15 Shedinja, 16 beauty (kept as the Gen 3 kinds), 6 trade with item, 7 trade for species, 8 / 17 / 18 / 19 / 20 use item (stones), 21 knows a move, 22 species in the party, 23 / 24 level by gender, 25-... places and special rules: XD cannot do the item / place ones, so they become LEVEL 36 (22 for a first stage, 40 for a second): the Pokemon evolves by level in Orre instead",
+  "evo_notes": "USUM methods: 1-3 friendship (kept, 1), 4 level (kept), 5 trade (kept), 9-11 stat comparison (kept as 8-10), 12 / 13 Silcoon / Cascoon, 14 Ninjask, 15 Shedinja, 16 beauty (kept as the Gen 3 kinds), 6 trade with item, 7 trade for species, 8 / 17 / 18 / 19 / 20 use item (stones), 21 knows a move, 22 species in the party, 23 / 24 level by gender, 25-... places and special rules: XD cannot do the item / place ones, so they become LEVEL 36 (22 for a first stage, 40 for a second): the Pokemon evolves by level in Orre instead. 0.7.5: 24 of those evolutions keep their meaning (gen57_evolutions.py: stones, the Sachet and Whipped Dream, trade, Dark Pokemon in the party, female, knowing Stomp / Dragon Pulse): they are in the pack file evolutions.txt, or, for Karrablast and Shelmet, a trade evolution in the record",
   "no_effect": {
    "en": " (No effect in this game yet.)",
    "de": " (In diesem Spiel noch ohne Wirkung.)",
@@ -2589,6 +2590,205 @@
    "data_it": "it",
    "data_sp": "es",
    "data_jp": "jp"
+  }
+ },
+ "evolutions": {
+  "rules": [
+   [
+    "Pansage",
+    "Simisage",
+    "item",
+    "Leaf Stone"
+   ],
+   [
+    "Pansear",
+    "Simisear",
+    "item",
+    "Fire Stone"
+   ],
+   [
+    "Panpour",
+    "Simipour",
+    "item",
+    "Water Stone"
+   ],
+   [
+    "Munna",
+    "Musharna",
+    "item",
+    "Moon Stone"
+   ],
+   [
+    "Cottonee",
+    "Whimsicott",
+    "item",
+    "Sun Stone"
+   ],
+   [
+    "Petilil",
+    "Lilligant",
+    "item",
+    "Sun Stone"
+   ],
+   [
+    "Helioptile",
+    "Heliolisk",
+    "item",
+    "Sun Stone"
+   ],
+   [
+    "Minccino",
+    "Cinccino",
+    "item",
+    "Shiny Stone"
+   ],
+   [
+    "Floette",
+    "Florges",
+    "item",
+    "Shiny Stone"
+   ],
+   [
+    "Lampent",
+    "Chandelure",
+    "item",
+    "Dusk Stone"
+   ],
+   [
+    "Doublade",
+    "Aegislash",
+    "item",
+    "Dusk Stone"
+   ],
+   [
+    "Eelektrik",
+    "Eelektross",
+    "item",
+    "Thunder Stone"
+   ],
+   [
+    "Charjabug",
+    "Vikavolt",
+    "item",
+    "Thunder Stone"
+   ],
+   [
+    "Crabrawler",
+    "Crabominable",
+    "item",
+    "Ice Stone"
+   ],
+   [
+    "Cosmoem",
+    "Solgaleo",
+    "item",
+    "Sun Stone"
+   ],
+   [
+    "Cosmoem",
+    "Lunala",
+    "item",
+    "Moon Stone"
+   ],
+   [
+    "Karrablast",
+    "Escavalier",
+    "trade",
+    ""
+   ],
+   [
+    "Shelmet",
+    "Accelgor",
+    "trade",
+    ""
+   ],
+   [
+    "Spritzee",
+    "Aromatisse",
+    "held",
+    "Sachet"
+   ],
+   [
+    "Swirlix",
+    "Slurpuff",
+    "held",
+    "Whipped Dream"
+   ],
+   [
+    "Pancham",
+    "Pangoro",
+    "level_dark",
+    ""
+   ],
+   [
+    "Salandit",
+    "Salazzle",
+    "level_female",
+    ""
+   ],
+   [
+    "Steenee",
+    "Tsareena",
+    "knows_move",
+    ""
+   ],
+   [
+    "Poipole",
+    "Naganadel",
+    "knows_move",
+    ""
+   ]
+  ],
+  "classic": {
+   "Sun Stone": 93,
+   "Moon Stone": 94,
+   "Fire Stone": 95,
+   "Thunder Stone": 96,
+   "Water Stone": 97,
+   "Leaf Stone": 98
+  },
+  "shop_order": [
+   "Fire Stone",
+   "Thunder Stone",
+   "Water Stone",
+   "Leaf Stone",
+   "Moon Stone",
+   "Sun Stone"
+  ],
+  "items": {
+   "Sachet": 647,
+   "Whipped Dream": 646
+  },
+  "item_doc": {
+   "us": "Loved by a certain{00}Pok\u00e9mon. Helps it{00}evolve.",
+   "ge": "Beliebt bei einem{00}bestimmten Pok\u00e9mon.{00}Hilft Entwicklung.",
+   "fr": "Aim\u00e9 d'un certain{00}Pok\u00e9mon. Aide \u00e0{00}\u00e9voluer.",
+   "it": "Piace a un Pok\u00e9mon{00}in particolare.{00}Aiuta l'evoluzione.",
+   "sp": "Gusta a ciertos{00}Pok\u00e9mon. Ayuda a{00}evolucionar.",
+   "jp": "\u3042\u308b\u30dd\u30b1\u30e2\u30f3\u304c{00}\u3053\u306e\u3093\u3067\u3044\u308b\u3002{00}\u3057\u3093\u304b\u306b\u3000\u3064\u304b\u3046\u3002"
+  },
+  "coupon": 6000,
+  "folders": {
+   "data": "us",
+   "data_fr": "fr",
+   "data_ge": "ge",
+   "data_it": "it",
+   "data_sp": "sp",
+   "data_jp": "jp"
+  },
+  "dump_lang": {
+   "us": "en",
+   "ge": "de",
+   "fr": "fr",
+   "it": "it",
+   "sp": "es",
+   "jp": "ja"
+  },
+  "how_text": {
+   "trade": "trade (the game's own kind 5; the Linking Cord does it too)",
+   "level_dark": "level up with a Dark Pokemon in the party",
+   "level_female": "level up, female only",
+   "knows_move": "level up knowing the move"
   }
  }
 }

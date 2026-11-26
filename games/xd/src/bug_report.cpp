@@ -194,6 +194,8 @@ bool WriteBundle(Press& p) {
     mark = PortInput_MarkAndCopy(recording.c_str());
   }
   const bool shot = PortXD_SavePng(p.bitmap, (p.folder / L"screenshot.png").c_str());
+  const std::string texturesPath = Utf8(p.folder / L"textures.txt");
+  const bool texturesTxt = WithTimeout([texturesPath] { aurora_texture_report(texturesPath.c_str()); }, kStepTimeoutMs);
   std::fflush(stdout);
   std::fflush(stderr);
   PortLog_Flush();
@@ -248,6 +250,8 @@ bool WriteBundle(Press& p) {
   } else {
     info << "log.txt         (none: this run has no log file)\r\n";
   }
+  info << "textures.txt    "
+       << (texturesTxt ? "the textures of the last picture: numbers and hashes only (no pictures)" : "(none)") << "\r\n";
   info << "settings.ini    " << (settings ? "the player's settings now" : "(none)") << "\r\n"
        << "mods.ini        " << (mods ? "the player's mod list now (the mods themselves are not copied)" : "(none)")
        << "\r\n";

@@ -222,6 +222,20 @@ ep::Evolution MakeEvolution(uint8_t kind, uint16_t param, uint16_t target) {
       if (kind == 18) e.text += Tr(" (FEMALE)");
       if (kind == 19) e.text += Tr(" (MALE)");
       break;
+    case 20:
+      e.kind = ep::EvoKind::Level;
+      std::snprintf(b, sizeof b, Tr("LEVEL %d, DARK POKEMON IN PARTY").c_str(), static_cast<int>(param));
+      e.text = b;
+      break;
+    case 21:
+      e.kind = ep::EvoKind::Level;
+      std::snprintf(b, sizeof b, Tr("LEVEL %d (FEMALE)").c_str(), static_cast<int>(param));
+      e.text = b;
+      break;
+    case 22:
+      e.kind = ep::EvoKind::Level;
+      e.text = Tr("LEVEL UP KNOWING ") + Upper(MoveName(param));
+      break;
     case 8: e.kind = ep::EvoKind::Stats; e.text = Tr("ATTACK > DEFENSE"); break;
     case 9: e.kind = ep::EvoKind::Stats; e.text = Tr("ATTACK = DEFENSE"); break;
     case 10: e.kind = ep::EvoKind::Stats; e.text = Tr("ATTACK < DEFENSE"); break;
@@ -564,4 +578,11 @@ void SetLists(const std::string& caught, const std::string& shiny, bool kept) {
 bool ListsKept() { return sKept; }
 unsigned ListsChanged() { return sChanged; }
 
+}
+
+extern "C" void PortXD_LogTypesTable() {
+  if (pokemon_data == nullptr || pokemon_data_number == nullptr) return;
+  for (u32 i = 0; i < *pokemon_data_number; i++)
+    std::fprintf(stderr, "[types table] row %u dex %u types %u %u\n", i, static_cast<unsigned>(pokemon_data[i].numPokemon),
+                 static_cast<unsigned>(pokemon_data[i].zokuseiDataId[0]), static_cast<unsigned>(pokemon_data[i].zokuseiDataId[1]));
 }

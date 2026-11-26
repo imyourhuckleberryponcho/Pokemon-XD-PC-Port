@@ -11,6 +11,7 @@ import gen57_pack as P
 import gen57_moves as MV
 import gen57_move_plan as MP
 import gen57_abilities as AB
+import gen57_evolutions as EV
 
 
 def personal_bytes():
@@ -134,6 +135,24 @@ class Tests(unittest.TestCase):
         row, _ = P.species_row(Fake(), 506, 228, 525, None, [0] * 58, [0] * 12, {506}, {}, notes)
         self.assertEqual(row['sinka.kind'][0], 0)
         self.assertTrue(any('not in the pack' in n for n in notes))
+
+    def test_evolution_rules(self):
+        class U:
+            def species_name(self, n, lang='en'): return {1: 'Pancham', 2: 'Pangoro', 3: 'Spritzee', 4: 'Aromatisse', 5: 'Karrablast', 6: 'Escavalier', 7: 'Steenee', 8: 'Tsareena', 9: 'Pansear', 10: 'Simisear'}[n]
+            def levelup(self, n): return [(1, 33), (29, 23)]
+            def evolutions(self, n):
+                e = {1: (30, 0, 2, 32), 3: (6, 647, 4, 0), 5: (7, 0, 6, 0), 7: (21, 23, 8, 0), 9: (8, 82, 10, 0)}.get(n)
+                return [D.Evo(struct.pack('<HHHBB', e[0], e[1], e[2], 255, e[3]))] if e else []
+        lines = EV.evolution_lines(U(), [1, 3, 5, 7, 9])
+        self.assertEqual(lines[:8], ['format 1', 'evo Pancham 20 32 Pangoro', 'evo Spritzee 6 Sachet Aromatisse', 'evo Spritzee 7 Sachet Aromatisse',
+                                     'evo Steenee 22 #23 Tsareena 29', 'evo Pansear 7 #95 Simisear', 'shop #95', 'shop #96'])
+        self.assertEqual(lines[-2:], ['shop Sachet', 'shop Whipped_Dream'])
+        self.assertEqual(EV.move_row(406), 426)
+        self.assertEqual(EV.side_targets(U(), 5), [])
+        self.assertEqual(EV.side_targets(U(), 3), ['Aromatisse'])
+        self.assertEqual(len(EV.RULES), 24)
+        self.assertEqual(sorted(EV.CLASSIC.values()), [93, 94, 95, 96, 97, 98])
+        self.assertTrue(all(len(line) <= 19 for lg, doc in EV.ITEM_DOC.items() if lg != 'jp' for line in doc.split('{00}')))
 
 
 if __name__ == '__main__':

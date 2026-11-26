@@ -68,6 +68,30 @@ IGNORES_PROTECT = {'Feint', 'Shadow Force'}
 CHANCE = {'Chatter': 31}
 
 
+
+
+
+
+
+RANGE_OF_TARGET = {0x000: 0, 0x001: 1, 0x002: 3, 0x004: 4, 0x008: 6, 0x010: 5, 0x020: 5, 0x040: 5, 0x080: 7, 0x100: 5, 0x200: 5}
+
+
+
+
+
+KEEP_RANGE = {'Discharge', 'Lava Plume'}
+
+
+
+
+
+
+
+FLAG_FIX = {'Bug Buzz': (('bouon', 1),), 'Chatter': (('bouon', 1), ('yubiwohuru', 0), ('monomane', 0), ('nekonote', 0), ('negoto', 0)),
+            'Dark Void': (('bouon', 0),), 'Metal Burst': (('yubiwohuru', 1), ('nekonote', 1)), 'Me First': (('monomane', 1),),
+            'Copycat': (('monomane', 1),), 'Shadow Force': (('hidenFlag', 0),)}
+
+
 FIXED_POWER = {'Gyro Ball': 60, 'Brine': 65, 'Wring Out': 60, 'Crush Grip': 60, 'Punishment': 60, 'Payback': 50, 'Assurance': 50}
 
 

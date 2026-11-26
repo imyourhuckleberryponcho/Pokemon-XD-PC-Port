@@ -35,6 +35,7 @@ import gen57_data as D
 import gen57_moves as MV
 import gen57_abilities as AB
 import gen57_speed as SP
+import gen57_evolutions as EV
 
 FIRST, LAST = 494, 807
 SLOW_FIRST = {655, 724, 727, 764, 780, 791, 805, 806}
@@ -45,7 +46,9 @@ EVO_NOTES = ('USUM methods: 1-3 friendship (kept, 1), 4 level (kept), 5 trade (k
              '12 / 13 Silcoon / Cascoon, 14 Ninjask, 15 Shedinja, 16 beauty (kept as the Gen 3 kinds), 6 trade with item, 7 trade for species, '
              '8 / 17 / 18 / 19 / 20 use item (stones), 21 knows a move, 22 species in the party, 23 / 24 level by gender, 25-... places and '
              'special rules: XD cannot do the item / place ones, so they become LEVEL 36 (22 for a first stage, 40 for a second): '
-             'the Pokemon evolves by level in Orre instead')
+             'the Pokemon evolves by level in Orre instead. 0.7.5: 24 of those evolutions keep their meaning (gen57_evolutions.py: stones, the '
+             'Sachet and Whipped Dream, trade, Dark Pokemon in the party, female, knowing Stomp / Dragon Pulse): they are in the pack file evolutions.txt, '
+             'or, for Karrablast and Shelmet, a trade evolution in the record')
 
 
 def model_number(nat, table):
@@ -96,9 +99,18 @@ def move_row(usum_id, defined):
 
 def evo_pairs(u, nat, pre, rec=None):
     out, notes = [], []
+    sname = u.species_name(nat)
     for e in u.evolutions(nat if rec is None else rec):
         tname = u.species_name(e.species)
         m = e.method
+        r = EV.rule(sname, tname) if rec is None or rec == nat else None
+        if r is not None and r[2] == 'trade':
+            notes.append(EV.note(sname, tname))
+            out.append((5, 0, tname))
+            continue
+        if r is not None:
+            notes.append(EV.note(sname, tname))
+            continue
         if m in (1, 2, 3):
             kind, buff = 1, 0
         elif m == 4:
@@ -309,8 +321,10 @@ def randomizer_lines(u, report, rows_by_nat):
         nat = r['nat']
         row = rows_by_nat[nat]
         evo = []
+        targets = [t for t in row['sinka.pokemonDataId'] if t] + EV.side_targets(u, nat)
+        targets = (targets + [0] * 5)[:5]
         for k in range(5):
-            tgt = row['sinka.pokemonDataId'][k]
+            tgt = targets[k]
             tn = next((n for n in range(FIRST, LAST + 1) if u.species_name(n, 'en') == tgt), 0) if tgt else 0
             evo.append(tn + ROW_SHIFT if tn else 0)
         lv = row['waza.level']
@@ -483,6 +497,8 @@ def main():
         spots_files(tmp)
     rz_lines, name_lines = randomizer_lines(u, report, rows_us)
     open(os.path.join(tmp, 'randomizer.txt'), 'w').write(NL.join(rz_lines) + NL)
+    open(os.path.join(tmp, 'evolutions.txt'), 'w').write(NL.join(EV.evolution_lines(u, nats)) + NL)
+    EV.write_items(u, tmp, P.shown)
     os.makedirs(os.path.join(tmp, 'battle'), exist_ok=True)
     json.dump({'_note': 'made by gen57_all.py: what the new moves do (docs/modding/battle-effects.md)', 'moves': mbattle},
               open(os.path.join(tmp, 'battle', 'moves.json'), 'w', encoding='utf-8'), indent=1)

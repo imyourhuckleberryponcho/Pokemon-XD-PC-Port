@@ -690,9 +690,66 @@ bool ControlsPanel::DrawController(es::Registry& registry, const Options& option
                           : Tr("No PC controller: controller %d is played with the keyboard only (if you give it keys below)."),
                 port + 1));
   } else {
-    Wrapped(options.colors.dim, pads_.empty() ? std::string(Tr("No PC controller is plugged in. Plug one in: it shows "
-                                                               "up here at once."))
+    Wrapped(options.colors.dim, pads_.empty() ? (unrecognised_.empty()
+                                                     ? std::string(Tr("No PC controller is plugged in. Plug one in: it shows "
+                                                                      "up here at once."))
+                                                     : std::string(Tr("A controller is plugged in, but the program does not "
+                                                                      "know its buttons yet (see below).")))
                                               : std::string(Tr("No free PC controller for it right now.")));
+  }
+  if (!unrecognised_.empty()) {
+    ImGui::Spacing();
+    Wrapped(options.colors.accent,
+            Tr("Not recognised yet: the program sees these controllers but has no button list for them. Set one up "
+               "once (you press each button) and it works here and in the game."));
+    for (const Unrecognised& u : unrecognised_) {
+      ImGui::PushID(static_cast<int>(u.id));
+      std::string label = u.name.empty() ? std::string(Tr("A controller")) : u.name;
+      if (u.nth > 0) {
+        label += " (" + std::to_string(u.nth + 1) + ")";
+      }
+      ImGui::AlignTextToFramePadding();
+      ImGui::TextUnformatted(Fmt(Tr("%s (not recognised)"), label.c_str()).c_str());
+      ImGui::SameLine();
+      if (ImGui::Button(Lbl(Tr("Set it up..."), "Set it up...").c_str())) {
+        setupRequest_ = true;
+        setupId_ = u.id;
+      }
+      std::string detail = u.ids.empty() ? std::string() : Fmt(Tr("USB ID %s"), u.ids.c_str());
+      if (u.buttons >= 0) {
+        detail += (detail.empty() ? "" : ", ") + Fmt(Tr("%d buttons, %d axes, %d D-pad hats"), u.buttons, u.axes, u.hats);
+      }
+      if (!detail.empty()) {
+        Wrapped(options.colors.faint, detail);
+      }
+      ImGui::PopID();
+    }
+  } else if (pads_.empty() && !windowsPads_.empty()) {
+    std::string names;
+    for (size_t i = 0; i < windowsPads_.size(); i++) {
+      names += (i == 0 ? "" : ", ") + windowsPads_[i];
+    }
+    ImGui::Spacing();
+    Wrapped(options.colors.accent,
+            Fmt(Tr("Windows lists a game controller (%s), but the program gets no controller from it."), names.c_str()));
+    Wrapped(options.colors.dim,
+            Tr("Things to try: if the controller has a PC / Switch / Xbox mode switch, set it to PC (or X) and plug it in "
+               "again; plug it into the computer itself, not into a hub; close Steam, DS4Windows, HidHide and other "
+               "programs that take controllers over, then plug it in again. If it stays like this, the Reports page "
+               "holds the details (a list of every controller the program and Windows can see)."));
+  }
+  for (size_t i = 0; i < pads_.size(); i++) {
+    if (!pads_[i].ownMapping) {
+      continue;
+    }
+    ImGui::PushID(1000 + static_cast<int>(i));
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted(Fmt(Tr("%s: set up by you."), padLabel(i).c_str()).c_str());
+    ImGui::SameLine();
+    if (ImGui::Button(Lbl(Tr("Forget this set-up"), "Forget this set-up").c_str())) {
+      forgetGuid_ = pads_[i].guid;
+    }
+    ImGui::PopID();
   }
   if (!AdapterPadShown()) {
     switch (adapterState_) {

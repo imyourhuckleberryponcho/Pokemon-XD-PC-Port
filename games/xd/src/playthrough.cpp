@@ -755,6 +755,16 @@ int BootRuleGen() {
   return g;
 }
 
+int BootMaxGen() {
+  if (const char* v = std::getenv("XD_SPOTS_MAXGEN")) {
+    const int g = std::atoi(v);
+    if (g >= 5 && g <= 7) return g;
+  }
+  const ep::Setup* s = sRestarted ? &sRestartSetup : sCardState == CardState::Setup ? &sCardSetup : nullptr;
+  if (s != nullptr && s->rules.present && !s->rules.gens.empty()) return std::max(5, std::min(7, s->rules.gens.back()));
+  return 7;
+}
+
 bool BootGen4Spots() {
   if (EnvIs("XD_REQUIRE_ORIGINAL", "1")) return false;
   if (HasGen4Spots(xd::challenges::TestSwitch())) return true;

@@ -3,21 +3,28 @@
 #include "xd_gen57.h"
 #include "xd_mod_battle.h"
 
+#include "../../../engine/mods/json.h"
+
 #include "data/common_rel.h"
 #include "data/xd_data_mods.h"
 #include "xd_type_icons.h"
 
+#include <array>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <map>
 
 extern "C" {
 uint16_t PortXD_RealJoutai(uint32_t id, uint32_t target);
 void* PortXD_RealSpritePtr(uint32_t id);
+void PortXD_LogTypesTable();
 }
 
 namespace {
 
 bool sLoaded = false;
+int sGen57FairyRows = 0;
 constexpr uint32_t kFairy = 18;
 constexpr uint32_t kText = 0xBE00;
 constexpr uint32_t kSprite = 2000;
@@ -93,9 +100,17 @@ void LogChartOnce() {
   }
   std::fprintf(stderr, "[modern types] chart check: %s\n", bad == 0 ? "all as the later games have it" : "DIFFERENT");
 }
+
+void LogTypesTableOnce() {
+  static bool done = false;
+  if (done) return;
+  done = true;
+  if (std::getenv("XD_TYPES_TABLE") != nullptr) PortXD_LogTypesTable();
+}
 }
 
 extern "C" uint16_t zokuseiBiosGetWazaJoutai(uint32_t id, uint32_t target) {
+  LogTypesTableOnce();
   if (xd::modbattle::Rules()) return xd::modbattle::InverseJoutai(sLoaded ? Modern(id, target, PortXD_RealJoutai(id, target)) : PortXD_RealJoutai(id, target));
   if (!sLoaded) return PortXD_RealJoutai(id, target);
   LogChartOnce();
@@ -155,6 +170,51 @@ bool PatchPackType(std::string& text, const std::string& key, int type) {
   }
   return false;
 }
+int PatchGen57FairyRows(std::vector<engine::mods::DataModFile>& files, int* speciesRows, int* formRows) {
+  namespace J = engine::mods::json;
+  std::map<uint32_t, std::array<bool, 2>> species;
+  std::map<std::string, std::array<bool, 2>> forms;
+  if (!xd::gen57::FairySlots(species, forms)) return -1;
+  int n = 0, failed = 0;
+  *speciesRows = *formRows = 0;
+  for (engine::mods::DataModFile& f : files) {
+    const bool isSpecies = f.label.find("02_species") != std::string::npos, isForms = f.label.find("03_forms") != std::string::npos;
+    if (f.mod != "gen57" || (!isSpecies && !isForms)) continue;
+    J::Value root;
+    J::Reader reader(f.text);
+    if (!reader.Document(root) || root.kind != J::Value::Kind::Object) continue;
+    const auto add = root.fields.find("add");
+    if (add == root.fields.end() || add->second.kind != J::Value::Kind::Object) continue;
+    const auto rows = add->second.fields.find("pokemon");
+    if (rows == add->second.fields.end() || rows->second.kind != J::Value::Kind::Object) continue;
+    for (const std::string& key : rows->second.order) {
+      const J::Value& row = rows->second.fields.at(key);
+      const auto types = row.fields.find("zokuseiDataId");
+      if (row.kind != J::Value::Kind::Object || types == row.fields.end() || types->second.items.size() != 2) continue;
+      std::array<bool, 2> slots = {false, false};
+      if (isSpecies) {
+        const auto nat = row.fields.find("numPokemon");
+        const auto it = nat == row.fields.end() ? species.end() : species.find(static_cast<uint32_t>(nat->second.number));
+        if (it != species.end()) slots = it->second;
+      } else {
+        const auto it = forms.find(key);
+        if (it != forms.end()) slots = it->second;
+      }
+      if (!slots[0] && !slots[1]) continue;
+      const int a = slots[0] ? static_cast<int>(kFairy) : static_cast<int>(types->second.items[0].number);
+      const int b = slots[1] ? static_cast<int>(kFairy) : static_cast<int>(types->second.items[1].number);
+      if (PatchPackTypes(f.text, key, a, b)) {
+        n++;
+        (isSpecies ? *speciesRows : *formRows) += 1;
+      } else {
+        failed++;
+        std::fprintf(stderr, "[modern types] the pack's row of %s could not be changed in place\n", key.c_str());
+      }
+    }
+  }
+  (void)failed;
+  return n;
+}
 }
 
 namespace xd::modern {
@@ -162,6 +222,8 @@ namespace xd::modern {
 uint16_t ChartCode(uint32_t attack, uint32_t defend) { return zokuseiBiosGetWazaJoutai(attack, defend); }
 
 bool Loaded() { return sLoaded; }
+
+int Gen57FairyRows() { return sLoaded ? sGen57FairyRows : 0; }
 
 void AppendTexts(std::vector<std::pair<uint32_t, std::string>>& texts) {
   if (!sLoaded) return;
@@ -220,6 +282,14 @@ void Prepare(bool wanted, bool gen4, std::vector<engine::mods::DataModFile>& dat
       }
     }
     std::fprintf(stderr, "[modern types] the Gen 5-7 pack's moves that become Fairy: %d of %zu\n", n, names.size());
+  }
+  sGen57FairyRows = 0;
+  if (xd::gen57::Loaded()) {
+    int sp = 0, fm = 0;
+    const int n = PatchGen57FairyRows(dataFiles, &sp, &fm);
+    if (n < 0) std::fprintf(stderr, "[modern types] the Gen 5-7 pack has no report.json: its Fairy species keep their Normal / other type (make the pack again)\n");
+    else std::fprintf(stderr, "[modern types] the Gen 5-7 pack's rows that become Fairy: %d species and %d forms\n", sp, fm);
+    sGen57FairyRows = n > 0 ? n : 0;
   }
   json += "\n },\n \"moves\": {\n  \"#204\": {\"zokuseiDataId\": 18},\n  \"#186\": {\"zokuseiDataId\": 18},\n  \"#236\": {\"zokuseiDataId\": 18}\n }\n}\n";
   engine::mods::DataModFile d;

@@ -540,8 +540,9 @@ const std::vector<Rule>& Rules() {
        "Snubbull, Marill, Mr. Mime, Ralts and Mawile lines) and the moves Charm, Sweet Kiss and Moonlight. Steel no longer resists "
        "Ghost and Dark moves. Online battles need the same choice on both sides."); }},
       {"gen4_spots", [] { return Tr("Gen 4 Pokemon at the Poke Spots"); },
-       [] { return Tr("With the Gen 4 Pokemon: the three Poke Spots (Rock, Oasis, Cave) offer nine of them instead of their usual Pokemon: "
-       "Hippopotas, Skorupi and Gible; Shellos, Cherubi and Buizel; Bronzor, Stunky and Riolu. Levels and chances stay the same."); }},
+       [] { return Tr("With the Gen 4 Pokemon: the three Poke Spots (Rock, Oasis, Cave) also offer Pokemon of the later games: five Gen 4 Pokemon at each spot, "
+       "and five more for every later generation you chose (Gen 5, 6, 7), with the Alolan forms for Gen 7. The Pokemon the game has there stay, with smaller chances. "
+       "Levels stay the same."); }},
       {"level_cap", [] { return Tr("Level caps"); },
        [] { return Tr("Your Pokemon can't grow past the level of the next story boss's strongest Pokemon: at the cap they gain no "
        "experience, and Rare Candy has no effect. The cap rises when the boss is beaten."); }},

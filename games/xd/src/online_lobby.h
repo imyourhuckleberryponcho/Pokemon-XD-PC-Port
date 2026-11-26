@@ -62,7 +62,7 @@ struct Peer {
 };
 bool Apply(Peer& peer, const std::string& line);
 
-enum class Outcome { Won, Lost, YouQuit, FriendQuit, ConnectionLost, Desync };
+enum class Outcome { Won, Lost, YouQuit, FriendQuit, ConnectionLost, Desync, Draw };
 Outcome OutcomeOf(unsigned result, bool host, bool desync);
 std::string OutcomeText(Outcome o);
 

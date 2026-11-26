@@ -617,4 +617,83 @@ void BuildBoxIcons(em::RowsJob& job) {
   job.outFiles.push_back(std::move(out));
 }
 
+void BuildPictures(em::RowsJob& job) {
+  if (job.rows == nullptr) return;
+  std::vector<em::AddedRow>& rows = *job.rows;
+  const size_t addedCount = rows.size();
+  const em::DataTable* species = job.catalog != nullptr ? job.catalog->FindTable("pokemon_data") : nullptr;
+  std::vector<std::vector<uint8_t>> disc;
+  if (species != nullptr && !species->places.empty()) {
+    std::vector<uint8_t> table;
+    bool have = false;
+    const em::NameList* names = job.catalog->FindList("species");
+    for (const em::EditedAsset& a : job.editedAssets) {
+      if (a.table != "pokemon_data" || a.entry >= species->count || (a.key != "face" && a.key != "icon")) continue;
+      if (!have) {
+        have = job.readEntry && job.readEntry(species->places[0].archive, species->places[0].entry, table);
+        if (!have) break;
+      }
+      if (a.builtIn) {
+        const em::DataField* field = nullptr;
+        for (const em::DataField& f : species->fields) {
+          if (f.name == (a.key == "face" ? "cgData.spriteId" : "cgData.pokebodyId")) field = &f;
+        }
+        const size_t at = species->places[0].offset + static_cast<size_t>(a.entry) * species->entrySize;
+        if (field != nullptr && at + field->offset + field->size <= table.size()) {
+          uint32_t v = 0;
+          for (uint32_t b = 0; b < field->size; b++) v = v << 8 | table[at + field->offset + b];
+          if (v != 0) {
+            std::fprintf(stderr, "[mods] %s of species row %u: it has its own already, the pack's is not used\n", a.key.c_str(), a.entry);
+            continue;
+          }
+        }
+      }
+      em::AddedRow* row = nullptr;
+      for (size_t i = addedCount; i < rows.size(); i++) {
+        if (rows[i].existing && rows[i].id == a.entry) row = &rows[i];
+      }
+      if (row == nullptr) {
+        const size_t at = species->places[0].offset + static_cast<size_t>(a.entry) * species->entrySize;
+        if (at + species->entrySize > table.size()) continue;
+        em::AddedRow made;
+        made.table = "pokemon_data";
+        made.id = made.row = made.copyOf = a.entry;
+        made.existing = true;
+        made.key = "#" + std::to_string(a.entry);
+        if (names != nullptr) {
+          for (const auto& [name, number] : names->names) {
+            if (number == a.entry) made.key = name;
+          }
+        }
+        made.bytes.assign(table.begin() + static_cast<std::ptrdiff_t>(at), table.begin() + static_cast<std::ptrdiff_t>(at + species->entrySize));
+        disc.push_back(made.bytes);
+        rows.push_back(std::move(made));
+        row = &rows.back();
+      }
+      row->assets[a.key] = a.text;
+      row->mod = a.mod, row->modName = a.modName, row->where = a.where;
+    }
+  }
+  BuildFaces(job);
+  BuildBoxIcons(job);
+  if (disc.empty()) return;
+  std::vector<em::AddedRow> keep;
+  keep.reserve(rows.size());
+  size_t k = 0;
+  for (size_t i = 0; i < rows.size(); i++) {
+    if (!rows[i].existing) {
+      keep.push_back(std::move(rows[i]));
+      continue;
+    }
+    if (k < disc.size() && rows[i].bytes != disc[k]) {
+      em::RowsJob::EditedRow e;
+      e.table = rows[i].table, e.entry = rows[i].row, e.bytes = rows[i].bytes, e.mods = rows[i].mod;
+      std::fprintf(stderr, "[mods] pictures of %s (species row %u) from the mod \"%s\"\n", rows[i].key.c_str(), rows[i].row, rows[i].mod.c_str());
+      job.editedRows.push_back(std::move(e));
+    }
+    k++;
+  }
+  rows = std::move(keep);
+}
+
 }

@@ -3516,6 +3516,9 @@
 = Crash dump: a snapshot of the game program's memory at that moment. It helps a developer find the cause of a crash, but may contain bits of whatever was in memory.
 > Absturzabbild: eine Momentaufnahme des Speichers des Spielprogramms in diesem Moment. Es hilft einem Entwickler, die Ursache eines Absturzes zu finden, kann aber Reste von allem enthalten, was im Speicher war.
 
+= Which textures (picture parts) the last picture was drawn from: numbers and codes only, no pictures.
+> Aus welchen Texturen (Bildteilen) das letzte Bild gezeichnet wurde: nur Zahlen und Codes, keine Bilder.
+
 = Another file the report holds.
 > Eine weitere Datei des Berichts.
 
@@ -4143,8 +4146,8 @@
 = Gen 4 Pokemon at the Poke Spots
 > Gen-4-Pokémon an den Pokéspots
 
-= With the Gen 4 Pokemon: the three Poke Spots (Rock, Oasis, Cave) offer nine of them instead of their usual Pokemon: Hippopotas, Skorupi and Gible; Shellos, Cherubi and Buizel; Bronzor, Stunky and Riolu. Levels and chances stay the same.
-> Mit den Gen-4-Pokémon: Die drei Pokéspots (Fels, Oase, Höhle) bieten neun davon statt ihrer üblichen Pokémon: Hippopotas, Skorgla und Kaumalat; Schalellos, Kinoso und Bamelin; Bronzel, Skunkapuh und Riolu. Level und Chancen bleiben gleich.
+= With the Gen 4 Pokemon: the three Poke Spots (Rock, Oasis, Cave) also offer Pokemon of the later games: five Gen 4 Pokemon at each spot, and five more for every later generation you chose (Gen 5, 6, 7), with the Alolan forms for Gen 7. The Pokemon the game has there stay, with smaller chances. Levels stay the same.
+> Mit den Gen-4-Pokémon: Die drei Pokéspots (Fels, Oase, Höhle) bieten auch Pokémon der späteren Spiele: fünf Gen-4-Pokémon an jedem Spot und fünf weitere für jede spätere Generation, die du gewählt hast (Gen 5, 6, 7), mit den Alola-Formen bei Gen 7. Die Pokémon des Spiels bleiben, mit kleineren Chancen. Die Level bleiben gleich.
 
 = Level caps
 > Level-Limits
@@ -4808,6 +4811,9 @@
 
 = The connection to your friend was lost. The battle ended without a winner.
 > Die Verbindung zu deinem Freund wurde unterbrochen. Der Kampf endete ohne Sieger.
+
+= The battle ended in a draw.
+> Der Kampf endete unentschieden.
 
 = The two games stopped agreeing about the battle, so it was ended. Nobody won.
 > Die beiden Spiele waren sich über den Kampf nicht mehr einig, deshalb wurde er beendet. Niemand hat gewonnen.
@@ -7395,6 +7401,15 @@
 =  (MALE)
 >  (MÄNNLICH)
 
+= LEVEL %d, DARK POKEMON IN PARTY
+> LEVEL %d, UNLICHT-POKEMON IM TEAM
+
+= LEVEL %d (FEMALE)
+> LEVEL %d (WEIBLICH)
+
+= LEVEL UP KNOWING 
+> LEVEL MIT ATTACKE 
+
 = ATTACK > DEFENSE
 > ANGRIFF > VERTEIDIGUNG
 
@@ -9441,3 +9456,160 @@
 
 = It was made by an older version of the converter: the Gen 4 and Gen 5-7 Pokemon lack their own box pictures, and the cries from the 3DS games are not matched to the game's volume yet (some crackle). It still works; press Make to make it again.
 > Es wurde von einer älteren Version des Konverters gemacht: Den Pokémon der Gen 4 und Gen 5-7 fehlen ihre eigenen Box-Bilder, und die Schreie aus den 3DS-Spielen sind noch nicht auf die Lautstärke des Spiels abgestimmt (manche knistern). Es funktioniert weiterhin; drücke Make, um es neu zu machen.
+
+= A controller is plugged in, but the program does not know its buttons yet (see below).
+> Ein Controller ist angeschlossen, aber das Programm kennt seine Tasten noch nicht (siehe unten).
+
+= Not recognised yet: the program sees these controllers but has no button list for them. Set one up once (you press each button) and it works here and in the game.
+> Noch nicht erkannt: Das Programm sieht diese Controller, hat aber keine Tastenliste für sie. Richte einen einmal ein (du drückst jede Taste), dann funktioniert er hier und im Spiel.
+
+= %s (not recognised)
+> %s (nicht erkannt)
+
+= Set it up...
+> Einrichten...
+
+= USB ID %s
+> USB-ID %s
+
+= %d buttons, %d axes, %d D-pad hats
+> %d Tasten, %d Achsen, %d Steuerkreuze
+
+= Windows lists a game controller (%s), but the program gets no controller from it.
+> Windows listet einen Game-Controller (%s), aber das Programm bekommt davon keinen Controller.
+
+= Things to try: if the controller has a PC / Switch / Xbox mode switch, set it to PC (or X) and plug it in again; plug it into the computer itself, not into a hub; close Steam, DS4Windows, HidHide and other programs that take controllers over, then plug it in again. If it stays like this, the Reports page holds the details (a list of every controller the program and Windows can see).
+> Das kannst du versuchen: Hat der Controller einen Modusschalter PC / Switch / Xbox, stelle ihn auf PC (oder X) und stecke ihn neu ein; stecke ihn direkt am Computer an, nicht an einem Hub; schließe Steam, DS4Windows, HidHide und andere Programme, die Controller übernehmen, und stecke ihn dann neu ein. Bleibt es so, stehen die Einzelheiten auf der Seite Berichte (eine Liste aller Controller, die das Programm und Windows sehen).
+
+= %s: set up by you.
+> %s: von dir eingerichtet.
+
+= Forget this set-up
+> Diese Einrichtung vergessen
+
+= Main stick: left
+> Hauptstick: links
+
+= Main stick: up
+> Hauptstick: oben
+
+= C stick: left
+> C-Stick: links
+
+= C stick: up
+> C-Stick: oben
+
+= Press the D-pad up.
+> Drücke das Steuerkreuz nach oben.
+
+= Press the D-pad down.
+> Drücke das Steuerkreuz nach unten.
+
+= Press the D-pad left.
+> Drücke das Steuerkreuz nach links.
+
+= Press the D-pad right.
+> Drücke das Steuerkreuz nach rechts.
+
+= Push the main stick all the way to the left.
+> Drücke den Hauptstick ganz nach links.
+
+= Push the main stick all the way up.
+> Drücke den Hauptstick ganz nach oben.
+
+= Push the C stick (the right stick) all the way to the left.
+> Drücke den C-Stick (den rechten Stick) ganz nach links.
+
+= Push the C stick (the right stick) all the way up.
+> Drücke den C-Stick (den rechten Stick) ganz nach oben.
+
+= Press the button that should be %s.
+> Drücke die Taste, die %s sein soll.
+
+= Z is the small button above R on a GameCube controller. Use a bumper or any spare button.
+> Z ist die kleine Taste über R am GameCube-Controller. Nimm eine Schultertaste oder irgendeine freie Taste.
+
+= For L and R you can pull a trigger or press a bumper, whichever you want to use.
+> Für L und R kannst du einen Trigger ziehen oder eine Schultertaste drücken, ganz wie du möchtest.
+
+= Let go of it afterwards. The other direction is worked out by itself.
+> Lass ihn danach los. Die Gegenrichtung ergibt sich von selbst.
+
+= Button %d
+> Taste %d
+
+= Axis %d
+> Achse %d
+
+= D-pad hat %d
+> Steuerkreuz %d
+
+= skipped
+> übersprungen
+
+= Set up a controller
+> Controller einrichten
+
+= The program does not know the buttons of "%s" yet. Press the button it asks for in each step and it learns which is which. You can then try it, and it is kept for the launcher and for the game. The controller itself cannot be used on this page yet, so click the buttons with the mouse or the keyboard.
+> Das Programm kennt die Tasten von "%s" noch nicht. Drücke bei jedem Schritt die verlangte Taste, dann lernt es, welche welche ist. Danach kannst du es ausprobieren, und es wird für den Launcher und das Spiel gespeichert. Der Controller selbst kann auf dieser Seite noch nicht bedient werden, klicke die Schaltflächen daher mit der Maus oder der Tastatur.
+
+= The controller was unplugged. Plug it in again: the set-up goes on where it stopped.
+> Der Controller wurde abgesteckt. Stecke ihn wieder ein: Die Einrichtung geht dort weiter, wo sie aufgehört hat.
+
+= The controller is set up for now. Press its buttons and move its sticks: they light up below. If something is wrong, start over. When everything is right, save it: the launcher and the game use it from then on.
+> Der Controller ist vorerst eingerichtet. Drücke seine Tasten und bewege seine Sticks: Sie leuchten unten auf. Stimmt etwas nicht, fange neu an. Wenn alles passt, speichere es: Der Launcher und das Spiel benutzen es dann.
+
+= The program has not opened the controller yet.
+> Das Programm hat den Controller noch nicht geöffnet.
+
+= Main stick: left / right
+> Hauptstick: links / rechts
+
+= Main stick: up / down
+> Hauptstick: oben / unten
+
+= C stick: left / right
+> C-Stick: links / rechts
+
+= C stick: up / down
+> C-Stick: oben / unten
+
+= Save this set-up
+> Diese Einrichtung speichern
+
+= Start over
+> Neu anfangen
+
+= Nothing was set up
+> Nichts eingerichtet
+
+= Every step was skipped, so there is nothing to save. Start over, or cancel.
+> Alle Schritte wurden übersprungen, also gibt es nichts zu speichern. Fange neu an oder brich ab.
+
+= Step %d of %d
+> Schritt %d von %d
+
+= Got it: %s.
+> Erkannt: %s.
+
+= That one is already used for %s. Press another one, or skip this step.
+> Diese ist schon für %s belegt. Drücke eine andere oder überspringe diesen Schritt.
+
+= A stick moves along an axis, and that was a button. Push the stick instead, or skip this step.
+> Ein Stick bewegt sich entlang einer Achse, und das war eine Taste. Bewege stattdessen den Stick oder überspringe diesen Schritt.
+
+= Skip
+> Überspringen
+
+= Your answers
+> Deine Antworten
+
+= The room was made by another version of the game (its battles are not the same as yours). Both players need the same game version: update the game, or ask your friend to.
+> Der Raum wurde mit einer anderen Version des Spiels erstellt (seine Kämpfe sind nicht dieselben wie deine). Beide Spieler brauchen dieselbe Spielversion: Aktualisiere das Spiel oder bitte deinen Freund darum.
+
+= Your friend's game is another version from yours (its battles are not the same as yours). Both players need the same game version: ask them to update the game, or update yours.
+> Das Spiel deines Freundes hat eine andere Version als deins (seine Kämpfe sind nicht dieselben wie deine). Beide Spieler brauchen dieselbe Spielversion: Bitte ihn, das Spiel zu aktualisieren, oder aktualisiere deins.
+
+= Your friend's Gen 5-7 pack is a different version from yours. Ask them to make it again in the launcher.
+> Das Gen-5-7-Paket deines Freundes hat eine andere Version als deins. Bitte ihn, es im Launcher neu zu erstellen.
+

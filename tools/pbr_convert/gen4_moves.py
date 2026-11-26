@@ -12,7 +12,8 @@ How a row is made (rules in gen4_move_rules.py): the Gen 4 move's PBR "battle ef
 moves (ids 1..354 are the same moves in both games); a Gen 1-3 move with that effect is the DONOR and its XD row is copied
 (effect script, extra-effect id, range, AI row). Then the Gen 4 numbers go over it: type, power, accuracy (PBR 0 = never
 misses = 100 in XD), PP, priority, effect chance, the six flags (contact, Protect, Magic Coat, Snatch, Mirror Move, King's
-Rock), the animation of a similar XD move, and the physical/special category in the byte XD's rows leave unused (pad37: 1 =
+Rock), who it hits (rangeId: PBR's own target of the move, not the donor's), a few flags the donor has wrong for the Gen 4 move
+(sound, the Metronome / Mimic / Assist / Sleep Talk lists), the animation of a similar XD move, and the physical/special category in the byte XD's rows leave unused (pad37: 1 =
 physical, 2 = special; games/xd/src/move_split.cpp reads it).
 """
 import argparse, collections, concurrent.futures as cf, json, os, re, subprocess, sys
@@ -77,7 +78,8 @@ class Data:
         for k, v in c['pbr'].items():
             b = bytes.fromhex(v['hex'])
             self.pbr[int(k)] = dict(name=v['name'], eff=(b[0] << 8) | b[1], cls=b[14], power=b[15], type=b[16], acc=b[17],
-                                    pp=b[18], chance=b[19], pri=b[20] - 256 if b[20] > 127 else b[20], flags=b[21])
+                                    pp=b[18], chance=b[19], pri=b[20] - 256 if b[20] > 127 else b[20], flags=b[21],
+                                    target=(b[2] << 8) | b[3])
         self.groups = collections.defaultdict(list)
         for m in range(1, 355):
             self.groups[self.pbr[m]['eff']].append(m)
@@ -154,6 +156,9 @@ def make_row(d, m, donor):
     f['wazawzxdataId'] = d.xd[anim_row(d, name, donor)]['wazawzxdataId']
     f['pad37'] = 1 if p['cls'] == 0 else 2 if p['cls'] == 1 else 0
     f['unk16'] = [0xA4, 1 if name in M.PUNCH else 0]
+    f['rangeId'] = x['rangeId'] if name in M.KEEP_RANGE else M.RANGE_OF_TARGET.get(p['target'], x['rangeId'])
+    for fld, v in M.FLAG_FIX.get(name, ()):
+        f[fld] = v
     if name in M.EFFECT_SLOTS and name in M.IMPLEMENTED:
         f['seqId'] = M.EFFECT_SLOTS[name]
     return f

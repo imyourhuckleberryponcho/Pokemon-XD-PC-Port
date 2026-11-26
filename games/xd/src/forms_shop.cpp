@@ -1,4 +1,5 @@
 #include "xd_forms.h"
+#include "xd_gen57.h"
 #include "xd_gen4.h"
 #include "xd_hidden_ability.h"
 #include "xd_xg.h"
@@ -48,6 +49,7 @@ static void ShopTablesLinked() {
   for (const uint16_t* p = shopGoods + old; *p != 0 && list.size() < 60; p++) list.push_back(*p);
   auto has = [&](uint32_t item) { for (uint16_t g : list) if (g == item) return true; return false; };
   if (xg) for (uint16_t g : xd::gen4::DeskItems()) if (!has(g) && list.size() < 100) list.push_back(g);
+  if (xd::gen57::Loaded()) for (uint16_t g : xd::gen57::EvolutionShopItems()) if (!has(g) && list.size() < 100) list.push_back(g);
   const uint32_t charm = xd::forms::Loaded() ? xd::forms::CharmItem() : 0;
   if (charm != 0 && !has(charm)) list.push_back(static_cast<uint16_t>(charm));
   if (const uint32_t patch = xd::forms::Loaded() ? xd::forms::PatchItem() : 0; patch != 0 && xd::hidden::Enabled() && !has(patch)) list.push_back(static_cast<uint16_t>(patch));

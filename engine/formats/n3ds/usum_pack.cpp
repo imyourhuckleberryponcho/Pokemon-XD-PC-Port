@@ -45,6 +45,27 @@ int move_row(int usum_id) {
   return -1;
 }
 
+const Json* evo_rule(const Json& tables, const std::string& source, const std::string& target) {
+  for (const Json& r : jget(jget(tables, "evolutions"), "rules").a) {
+    if (r.a.at(0).s == source && r.a.at(1).s == target) return &r;
+  }
+  return nullptr;
+}
+std::string evo_item_ref(const Json& tables, const std::string& name) {
+  const Json* c = jget(jget(tables, "evolutions"), "classic").find(name.c_str());
+  if (c) return "#" + std::to_string(c->i);
+  std::string s = name;
+  std::replace(s.begin(), s.end(), ' ', '_');
+  return s;
+}
+std::string evo_note(const Json& tables, const std::string& tname, const Json& rule) {
+  const std::string how = rule.a.at(2).s, item = rule.a.at(3).s;
+  if (how == "item") return "evolution to " + tname + ": use the " + item + " (evolutions.txt)";
+  if (how == "held") return "evolution to " + tname + ": use the " + item + ", or trade holding it (evolutions.txt)";
+  return "evolution to " + tname + ": " + jget(jget(jget(tables, "evolutions"), "how_text"), how.c_str()).s + (how == "trade" ? "" : " (evolutions.txt)");
+}
+int evo_move_row(int usum_id) { return usum_id >= 1 && usum_id <= 354 ? usum_id : usum_id + 20; }
+
 struct RowOut {
   Json row, rep;
   std::vector<std::string> notes;
@@ -85,10 +106,21 @@ RowOut build_row(Ctx& c, int nat, int standin, int rec, int pkx_row, std::vector
   if (learn.size() > 20) learn.resize(20);
   struct Ev { int kind, buff; std::string name; };
   std::vector<Ev> evo;
+  const std::string sname = u.species_name(nat);
   for (const EvoRec& e : u.evolutions(rec)) {
     const std::string tname = u.species_name(e.species);
     const int m = e.method;
     int kind, buff;
+    const Json* rule = rec == nat ? evo_rule(c.tables, sname, tname) : nullptr;
+    if (rule && rule->a.at(2).s == "trade") {
+      r.notes.push_back(evo_note(c.tables, tname, *rule));
+      evo.push_back({5, 0, tname});
+      continue;
+    }
+    if (rule) {
+      r.notes.push_back(evo_note(c.tables, tname, *rule));
+      continue;
+    }
     if (m >= 1 && m <= 3) { kind = 1; buff = 0; }
     else if (m == 4) { kind = 4; buff = e.level; }
     else if (m == 5) { kind = 5; buff = 0; }
@@ -522,10 +554,19 @@ void make_gen57_data(const DataOptions& o, const Plan& plan, const ModelResults&
       const Json& row = rows_us.at(nat);
       std::vector<int> evo;
       const Json& tg = jget(row, "sinka.pokemonDataId");
+      std::vector<std::string> targets;
+      for (const Json& t : tg.a) if (t.kind == Json::Str && !t.s.empty()) targets.push_back(t.s);
+      for (const EvoRec& e : u.evolutions(nat)) {
+        const std::string tname = u.species_name(e.species);
+        const Json* rule = evo_rule(tables, u.species_name(nat), tname);
+        if (rule && rule->a.at(2).s != "trade") targets.push_back(tname);
+      }
+      targets.resize(std::max<size_t>(targets.size(), 5));
+      targets.resize(5);
       for (int k = 0; k < 5; k++) {
         int tn = 0;
-        if (tg.a[(size_t)k].kind == Json::Str && !tg.a[(size_t)k].s.empty()) {
-          for (int n = FIRST; n <= LAST; n++) if (u.species_name(n, "en") == tg.a[(size_t)k].s) { tn = n; break; }
+        if (!targets[(size_t)k].empty()) {
+          for (int n = FIRST; n <= LAST; n++) if (u.species_name(n, "en") == targets[(size_t)k]) { tn = n; break; }
         }
         evo.push_back(tn ? tn + ROW_SHIFT : 0);
       }
@@ -543,6 +584,63 @@ void make_gen57_data(const DataOptions& o, const Plan& plan, const ModelResults&
     std::string t;
     for (auto& l : rz) t += l + "\n";
     pf.write("randomizer.txt", t);
+  }
+  {
+    const Json& ev = jget(tables, "evolutions");
+    std::string t = "format 1\n";
+    for (int nat : nats) {
+      const std::string sname = u.species_name(nat);
+      std::string s = sname;
+      std::replace(s.begin(), s.end(), ' ', '_');
+      for (const EvoRec& e : u.evolutions(nat)) {
+        const std::string tname = u.species_name(e.species);
+        const Json* rule = evo_rule(tables, sname, tname);
+        if (!rule || rule->a.at(2).s == "trade") continue;
+        std::string tt = tname;
+        std::replace(tt.begin(), tt.end(), ' ', '_');
+        const std::string how = rule->a.at(2).s, item = rule->a.at(3).s;
+        if (how == "item") t += "evo " + s + " 7 " + evo_item_ref(tables, item) + " " + tt + "\n";
+        else if (how == "held") t += "evo " + s + " 6 " + evo_item_ref(tables, item) + " " + tt + "\nevo " + s + " 7 " + evo_item_ref(tables, item) + " " + tt + "\n";
+        else if (how == "level_dark") t += "evo " + s + " 20 " + std::to_string(e.level) + " " + tt + "\n";
+        else if (how == "level_female") t += "evo " + s + " 21 " + std::to_string(e.level) + " " + tt + "\n";
+        else if (how == "knows_move") {
+          int lvl = 1;
+          for (auto& lm : u.levelup(nat)) if (lm.second == e.arg) { lvl = lm.first; break; }
+          t += "evo " + s + " 22 #" + std::to_string(evo_move_row(e.arg)) + " " + tt + " " + std::to_string(std::max(lvl, 1)) + "\n";
+        }
+      }
+    }
+    for (const Json& n : jget(ev, "shop_order").a) t += "shop " + evo_item_ref(tables, n.s) + "\n";
+    for (auto& kv : jget(ev, "items").o) t += "shop " + evo_item_ref(tables, kv.first) + "\n";
+    pf.write("evolutions.txt", t);
+    for (auto& kv : jget(ev, "folders").o) {
+      if (!fs::is_directory(tmp + "/" + kv.first)) continue;
+      const std::string lg = kv.second.s, dl = jget(jget(ev, "dump_lang"), lg.c_str()).s;
+      Json items = Json::object();
+      for (auto& it : jget(ev, "items").o) {
+        Json x = Json::object(), text = Json::object();
+        x.set("copy", Json("Thunder Stone"));
+        text.set("name", Json(shown(u.item_name((int)it.second.i, dl))));
+        text.set("doc", jget(jget(ev, "item_doc"), lg.c_str()));
+        x.set("text", text);
+        x.set("coupon", jget(ev, "coupon"));
+        items.set(it.first, x);
+      }
+      Json add = Json::object(), top = Json::object();
+      add.set("items", items);
+      top.set("_note", Json("made by gen57_evolutions.py: the Sachet and the Whipped Dream (items that evolve Spritzee and Swirlix; 0.7.5; placeholder price)"));
+      top.set("add", add);
+      pf.write(kv.first + "/06_evolution_items.json", top.dump(1, false));
+      Json citems = Json::object(), top2 = Json::object();
+      for (auto& cl : jget(ev, "classic").o) {
+        Json cp = Json::object();
+        cp.set("coupon", jget(ev, "coupon"));
+        citems.set("#" + std::to_string(cl.second.i), cp);
+      }
+      top2.set("_note", Json("made by gen57_evolutions.py: the six classic stones get a Poke Coupon price, so the prize desk can sell them (XD only: XG sells them itself; 0.7.5; placeholder price)"));
+      top2.set("items", citems);
+      pf.write(kv.first + "/07_stone_coupons.json", top2.dump(1, false));
+    }
   }
   Json top = Json::object();
   top.set("_note", Json("made by gen57_all.py: what the new moves do (docs/modding/battle-effects.md)"));

@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -36,6 +37,7 @@ struct PackTables {
 };
 
 bool ReadText(const std::filesystem::path& p, std::string& out);
+std::map<uint32_t, uint32_t>& TocGroupRemap();
 bool ParseTables(const std::string& text, PackTables& out, std::string& error);
 
 }

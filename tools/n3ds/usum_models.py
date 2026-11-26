@@ -36,7 +36,7 @@ for sub in ('pbr_survey', 'pbr_convert'):
 import ncch, garc, gfpack, gf_read, gf_to_xd, gamedetect
 import make_proto as M
 
-CONVERTER_VERSION = '0.2.2'
+CONVERTER_VERSION = '0.2.3'
 MOD_ID = 'ultra-sun-moon-models'
 XD_ID = 'GXXE01'
 REC = 292

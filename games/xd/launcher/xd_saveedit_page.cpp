@@ -674,7 +674,6 @@ bool OpenImpl(const fs::path& cardRoot, const std::string& disc, EditView& out, 
   error.clear();
   for (size_t i = 1; i < s->rules->rules.species.size(); i++) {
     if (!s->rules->rules.species[i].exists) continue;
-    if (i == 414) continue;
     const std::string n = s->rules->Species(static_cast<uint16_t>(i));
     if (!n.empty()) s->speciesList.push_back({std::to_string(i), n});
   }

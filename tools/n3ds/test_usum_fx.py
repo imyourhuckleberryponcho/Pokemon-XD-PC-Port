@@ -168,6 +168,37 @@ class Tests(unittest.TestCase):
         dark = (1, 1, np.zeros((1, 1, 4), np.uint8))
         self.assertEqual(int(usum_fx.bake_emission(base, dark)[0, 0, 0]), 100)
 
+    def test_emission_mask_in_normal_map_alpha(self):
+
+        mt = {'coords': [{'unit': 0, 'name': 'b1.tga'}, {'unit': 1, 'name': 'b_Inc.tga'}, {'unit': 2, 'name': 'b_Nor.tga'}]}
+        nor = np.full((4, 4, 4), 128, np.uint8)
+        nor[..., 3] = 0
+        nor[0, 0, 3] = 255
+        texs = {'b1.tga': (4, 4, np.zeros((4, 4, 4), np.uint8)), 'b_Inc.tga': (4, 4, np.full((4, 4, 4), 255, np.uint8)), 'b_Nor.tga': (4, 4, nor)}
+        self.assertEqual(usum_fx.emission_mask(mt, texs), 'b_Nor.tga')
+        base = np.full((4, 4, 4), 100, np.uint8)
+        out = usum_fx.bake_emission(base, texs['b_Inc.tga'], mask=texs['b_Nor.tga'])
+        self.assertEqual(int(out[0, 0, 0]), 255)
+        self.assertEqual(int(out[3, 3, 0]), 100)
+
+        texs['b_Nor.tga'] = (4, 4, np.full((4, 4, 4), 255, np.uint8))
+        self.assertIsNone(usum_fx.emission_mask(mt, texs))
+        self.assertIsNone(usum_fx.emission_mask({'coords': [{'unit': 1, 'name': 'b_Inc.tga'}]}, texs))
+
+    def test_register_to_colour(self):
+
+        mask = np.zeros((2, 8, 4), np.uint8)
+        mask[:, :4, 3] = 255
+        c0 = {'scale': (2.0, 1.0), 'trans': (0.0, 0.0), 'wrap': (3, 2)}
+        ck = {'scale': (1.0, 1.0), 'trans': (0.0, 0.0), 'wrap': (2, 2)}
+        out = usum_fx.register_to_colour(mask, ck, c0, 4, 2)
+        self.assertEqual(out.shape, (2, 4, 4))
+        self.assertTrue((out[..., 3] == 255).all())
+        same = usum_fx.register_to_colour(mask, c0, c0, 4, 2)
+        self.assertIs(same, mask)
+        ck2 = {'scale': (1.0, 1.0), 'trans': (0.5, 0.0), 'wrap': (2, 2)}
+        self.assertTrue((usum_fx.register_to_colour(mask, ck2, c0, 4, 2)[..., 3] == 0).all())
+
     def test_no_fire_no_change(self):
         m = Model()
         gm = {'materials': [{'name': 'BodyA', 'shader': 'PDC_Body_ShadowALW', 'coords': []}]}

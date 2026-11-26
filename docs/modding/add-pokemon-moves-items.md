@@ -199,6 +199,20 @@ one shows that one's small picture (a copy of Umbreon shows Umbreon there, even 
 
 The packs the launcher makes from an Ultra Sun / Ultra Moon dump set this key for every Gen 4 and Gen 5-7 species (pictures drawn from the models).
 
+### A Pokémon the game already has
+
+`"face"` and `"icon"` also work when you **change** a Pokémon the game already has, not only in an `"add"` block. This is for a row that has no
+picture of its own (Munchlax's row on the disc is an empty one: it has no face and no small picture, so the PC box showed a blank cell):
+
+```json
+{ "pokemon": { "Munchlax": { "face": "textures/faces/446.png", "icon": "textures/icons/446.png" } } }
+```
+
+- The pictures are read exactly as for a new Pokémon (see above). A name works for `"face"` too (`"face": "Snorlax"`).
+- It replaces what the row had, so give it only to a row that needs it: leave the key out and the Pokémon keeps the picture the game gave it.
+- Only these two keys work on a changed row; a model, a cry and the Pokédex marks are still for new Pokémon.
+- Not in the Pokémon XG edition (the same limit as for new Pokémon there).
+
 ## Its own model
 ```json
 "Quillfox": {
@@ -358,6 +372,28 @@ port's side table", which holds the real 16-bit ability number for that species 
 battler have" (already routed through the port for `battle.ability`) and the ability name / description lookup answer from the side table. It
 needs the decomp to widen those two answers to 16 bits. Not built: it is not cheap, and nothing in the plain game or the Gen 4 pack needs
 it. Gen 1 to 7 together have 233 abilities, so the table has room for about 22 more before Gen 8's abilities (the 267th and up) need this.
+
+## How a new Pokémon evolves
+
+A species row has five evolution places: `"sinka.kind"`, `"sinka.buff"` (the number that goes with the kind) and
+`"sinka.pokemonDataId"` (what it becomes), each a list of five. These are the kinds the game itself knows:
+
+| `sinka.kind` | The Pokémon evolves... | `sinka.buff` |
+|---|---|---|
+| 1 | by friendship | 0 |
+| 2, 3 | by friendship by day / at night (XD's clock never moves, so these never happen) | 0 |
+| 4 | at that level | the level |
+| 5 | when traded (the Linking Cord from the Gen 4 Pokémon does this too) | 0 |
+| 6 | when traded while holding an item | the item |
+| 7 | when that item is used on it (a stone) | the item |
+| 8, 9, 10 | at that level if Attack is higher than / equal to / lower than Defense (Tyrogue) | the level |
+| 11, 12 | at that level, by the Pokémon's personality (Wurmple) | the level |
+| 14, 15 | Shedinja's and the beauty rules | see the game |
+| 16 | by friendship while the item is in the bag (Espeon, Umbreon) | the item |
+
+A mod can use exactly these. The longer lists of the Gen 4 and Gen 5-7 Pokémon (more than five evolutions, "level up
+holding an item", "only female", "with a Dark Pokémon in the party", "knowing a move") are made by the port from the
+packs' own `evolutions.txt` and are not something a mod can add.
 
 ## Numbers
 

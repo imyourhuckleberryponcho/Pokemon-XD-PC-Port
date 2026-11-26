@@ -2942,6 +2942,9 @@
 = Crash dump: a snapshot of the game program's memory at that moment. It helps a developer find the cause of a crash, but may contain bits of whatever was in memory.
 > クラッシュダンプ: そのときのゲームプログラムのメモリの記録。開発者がクラッシュの原因を見つけるのに役立ちますが、メモリにあったものの一部が入っていることがあります。
 
+= Which textures (picture parts) the last picture was drawn from: numbers and codes only, no pictures.
+> 最後の画面が描かれたときのテクスチャ(絵の部品)の情報。数字とコードだけで、画像は含まれません。
+
 = Another file the report holds.
 > レポートにあるもう1つのファイル。
 
@@ -3467,8 +3470,8 @@
 = Gen 4 Pokemon at the Poke Spots
 > ポケスポットの第4世代ポケモン
 
-= With the Gen 4 Pokemon: the three Poke Spots (Rock, Oasis, Cave) offer nine of them instead of their usual Pokemon: Hippopotas, Skorupi and Gible; Shellos, Cherubi and Buizel; Bronzor, Stunky and Riolu. Levels and chances stay the same.
-> 第4世代のポケモンといっしょに: 3つのポケスポット(いわ、オアシス、ほらあな)が、いつものポケモンのかわりに9ひきを出します: ヒポポタス、スコルピ、フカマル。カラナクシ、チェリンボ、ブイゼル。ドーミラー、スカンプー、リオル。レベルと出る確率は同じです。
+= With the Gen 4 Pokemon: the three Poke Spots (Rock, Oasis, Cave) also offer Pokemon of the later games: five Gen 4 Pokemon at each spot, and five more for every later generation you chose (Gen 5, 6, 7), with the Alolan forms for Gen 7. The Pokemon the game has there stay, with smaller chances. Levels stay the same.
+> 第4世代のポケモンといっしょに: 3つのポケスポット(いわ、オアシス、ほらあな)に、あとのゲームのポケモンも出ます: 各スポットに第4世代のポケモン5ひき、えらんだ世代(第5、6、7世代)ごとにさらに5ひき、第7世代ではアローラのすがたも。もとのポケモンもそのまま出ますが、確率は下がります。レベルは同じです。
 
 = Level caps
 > レベル上限
@@ -4102,6 +4105,9 @@
 
 = The connection to your friend was lost. The battle ended without a winner.
 > 友だちとの接続が切れました。勝者なしで戦闘が終わりました。
+
+= The battle ended in a draw.
+> バトルは引き分けに終わりました。
 
 = The two games stopped agreeing about the battle, so it was ended. Nobody won.
 > 2つのゲームが戦闘について食い違ったため、終了しました。勝者はいません。
@@ -7495,6 +7501,15 @@
 =  (MALE)
 >  (オス)
 
+= LEVEL %d, DARK POKEMON IN PARTY
+> レベル%d、あくポケモンが手持ちにいる
+
+= LEVEL %d (FEMALE)
+> レベル%d (メス)
+
+= LEVEL UP KNOWING 
+> レベルアップ:覚えている技 
+
 = ATTACK > DEFENSE
 > こうげき > ぼうぎょ
 
@@ -9516,3 +9531,160 @@
 
 = It was made by an older version of the converter: the Gen 4 and Gen 5-7 Pokemon lack their own box pictures, and the cries from the 3DS games are not matched to the game's volume yet (some crackle). It still works; press Make to make it again.
 > 変換プログラムの古い版で作られています。第4世代と第5〜7世代のポケモンに専用のボックス画像がなく、3DSゲームの鳴き声もまだゲームの音量に合わせられていません（音割れするものがあります）。そのまま使えますが、Make を押して作り直してください。
+
+= A controller is plugged in, but the program does not know its buttons yet (see below).
+> コントローラーは接続されていますが、まだボタンの割り当てがわかりません(下を見てください)。
+
+= Not recognised yet: the program sees these controllers but has no button list for them. Set one up once (you press each button) and it works here and in the game.
+> まだ認識されていません: このコントローラーは見えていますが、ボタンの一覧がありません。一度だけ設定すれば(各ボタンを押します)、ここでもゲームでも使えます。
+
+= %s (not recognised)
+> %s(未認識)
+
+= Set it up...
+> 設定する...
+
+= USB ID %s
+> USB ID %s
+
+= %d buttons, %d axes, %d D-pad hats
+> ボタン%d個、軸%d個、十字キー%d個
+
+= Windows lists a game controller (%s), but the program gets no controller from it.
+> Windowsにはゲームコントローラー(%s)が表示されていますが、このプログラムには届いていません。
+
+= Things to try: if the controller has a PC / Switch / Xbox mode switch, set it to PC (or X) and plug it in again; plug it into the computer itself, not into a hub; close Steam, DS4Windows, HidHide and other programs that take controllers over, then plug it in again. If it stays like this, the Reports page holds the details (a list of every controller the program and Windows can see).
+> 試してみてください: コントローラーにPC / Switch / Xboxの切り替えスイッチがあれば、PC(またはX)にして挿し直す。ハブを使わず、パソコンに直接つなぐ。Steam、DS4Windows、HidHideなど、コントローラーを横取りするプログラムを閉じてから挿し直す。それでも変わらない場合は、レポートのページに詳細(プログラムとWindowsが見えるすべてのコントローラーの一覧)があります。
+
+= %s: set up by you.
+> %s: あなたが設定したものです。
+
+= Forget this set-up
+> この設定を削除
+
+= Main stick: left
+> コントロールスティック: 左
+
+= Main stick: up
+> コントロールスティック: 上
+
+= C stick: left
+> Cスティック: 左
+
+= C stick: up
+> Cスティック: 上
+
+= Press the D-pad up.
+> 十字キーの上を押してください。
+
+= Press the D-pad down.
+> 十字キーの下を押してください。
+
+= Press the D-pad left.
+> 十字キーの左を押してください。
+
+= Press the D-pad right.
+> 十字キーの右を押してください。
+
+= Push the main stick all the way to the left.
+> コントロールスティックを左いっぱいに倒してください。
+
+= Push the main stick all the way up.
+> コントロールスティックを上いっぱいに倒してください。
+
+= Push the C stick (the right stick) all the way to the left.
+> Cスティック(右スティック)を左いっぱいに倒してください。
+
+= Push the C stick (the right stick) all the way up.
+> Cスティック(右スティック)を上いっぱいに倒してください。
+
+= Press the button that should be %s.
+> %sにしたいボタンを押してください。
+
+= Z is the small button above R on a GameCube controller. Use a bumper or any spare button.
+> ZはGameCubeコントローラーのRの上にある小さなボタンです。バンパーか、空いているボタンを使ってください。
+
+= For L and R you can pull a trigger or press a bumper, whichever you want to use.
+> LとRには、トリガーを引いても、バンパーを押しても構いません。使いたい方を押してください。
+
+= Let go of it afterwards. The other direction is worked out by itself.
+> その後は手を離してください。反対方向は自動で決まります。
+
+= Button %d
+> ボタン%d
+
+= Axis %d
+> 軸%d
+
+= D-pad hat %d
+> 十字キー%d
+
+= skipped
+> スキップ
+
+= Set up a controller
+> コントローラーの設定
+
+= The program does not know the buttons of "%s" yet. Press the button it asks for in each step and it learns which is which. You can then try it, and it is kept for the launcher and for the game. The controller itself cannot be used on this page yet, so click the buttons with the mouse or the keyboard.
+> "%s"のボタンはまだわかりません。各ステップで求められたボタンを押すと、どれがどれかを覚えます。そのあと試すことができ、ランチャーとゲームの両方で使えるように保存されます。この画面ではコントローラー自体はまだ使えないので、マウスかキーボードでボタンをクリックしてください。
+
+= The controller was unplugged. Plug it in again: the set-up goes on where it stopped.
+> コントローラーが外れました。もう一度つなぐと、止まったところから続きます。
+
+= The controller is set up for now. Press its buttons and move its sticks: they light up below. If something is wrong, start over. When everything is right, save it: the launcher and the game use it from then on.
+> コントローラーは今のところ設定されています。ボタンを押したり、スティックを動かしたりすると、下で光ります。おかしいときはやり直してください。問題なければ保存すると、ランチャーとゲームがそれを使うようになります。
+
+= The program has not opened the controller yet.
+> プログラムはまだコントローラーを開いていません。
+
+= Main stick: left / right
+> コントロールスティック: 左 / 右
+
+= Main stick: up / down
+> コントロールスティック: 上 / 下
+
+= C stick: left / right
+> Cスティック: 左 / 右
+
+= C stick: up / down
+> Cスティック: 上 / 下
+
+= Save this set-up
+> この設定を保存
+
+= Start over
+> やり直す
+
+= Nothing was set up
+> 何も設定されていません
+
+= Every step was skipped, so there is nothing to save. Start over, or cancel.
+> すべてのステップをスキップしたため、保存するものがありません。やり直すか、キャンセルしてください。
+
+= Step %d of %d
+> ステップ %d / %d
+
+= Got it: %s.
+> 認識しました: %s。
+
+= That one is already used for %s. Press another one, or skip this step.
+> それはすでに%sに使われています。別のものを押すか、このステップをスキップしてください。
+
+= A stick moves along an axis, and that was a button. Push the stick instead, or skip this step.
+> スティックは軸に沿って動きますが、今押したのはボタンでした。スティックを倒すか、このステップをスキップしてください。
+
+= Skip
+> スキップ
+
+= Your answers
+> 入力内容
+
+= The room was made by another version of the game (its battles are not the same as yours). Both players need the same game version: update the game, or ask your friend to.
+> このルームは別のバージョンのゲームで作られました(バトルの内容があなたのものと同じではありません)。2人とも同じバージョンのゲームが必要です。ゲームを更新するか、友だちに更新してもらってください。
+
+= Your friend's game is another version from yours (its battles are not the same as yours). Both players need the same game version: ask them to update the game, or update yours.
+> 友だちのゲームは、あなたのものと別のバージョンです(バトルの内容が同じではありません)。2人とも同じバージョンのゲームが必要です。友だちにゲームを更新してもらうか、あなたのゲームを更新してください。
+
+= Your friend's Gen 5-7 pack is a different version from yours. Ask them to make it again in the launcher.
+> 友だちの第5〜7世代パックは、あなたのとバージョンが違います。ランチャーでもう一度作るように伝えてください。
+

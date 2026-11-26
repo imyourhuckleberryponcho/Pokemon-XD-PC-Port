@@ -242,6 +242,26 @@ int main(int argc, char** argv) {
     check(sawLevel && r.changes.size() == 7, "each change listed with before, after, entry name, mod and line");
   }
   {
+    DataCatalog withKey = catalog;
+    withKey.tables[0].editAssetKeys = {"pic"};
+    std::vector<Message> m;
+    const DataApplyResult r = ApplyDataMods(
+        withKey,
+        {{"a", "A", "data/a.json", "{ \"things\": { \"Alpha\": { \"pic\": \"textures/a.png\", \"level\": 51 }, \"Beta\": { \"pic\": \"\" }, \"#2\": { \"Pic\": \"..\\\\x.png\" } } }"},
+         {"b", "B", "data/b.json", "{ \"things\": { \"Alpha\": { \"pic\": \"textures/b.png\" } } }"}},
+        read, m);
+    check(r.editedAssets.size() == 1 && r.editedAssets[0].entry == 0 && r.editedAssets[0].key == "pic" && r.editedAssets[0].text == "textures/b.png" &&
+              r.editedAssets[0].mod == "b" && r.editedAssets[0].table == "things",
+          "a picture key on a disc row is kept (the last file's text for the row)");
+    check(has_message(m, Message::Level::Problem, "must be a text in quotes") && has_message(m, Message::Level::Problem, "must be a path inside the mod"),
+          "an empty picture text and a path with \"..\" are told");
+    const auto it = r.entries.find({"data.fsys", "table.bin"});
+    check(it != r.entries.end() && it->second[kHeader + 2] == 51, "the ordinary field of the same row is still set");
+    std::vector<Message> m2;
+    const DataApplyResult r2 = ApplyDataMods(catalog, {{"a", "A", "data/a.json", "{ \"things\": { \"Alpha\": { \"pic\": \"textures/a.png\" } } }"}}, read, m2);
+    check(r2.editedAssets.empty() && has_message(m2, Message::Level::Problem, "has no field \"pic\""), "a table that does not take the key: \"has no field\" as before");
+  }
+  {
     std::vector<Message> m;
     const DataApplyResult r = ApplyDataMods(
         catalog,
@@ -660,6 +680,46 @@ int main(int argc, char** argv) {
     called = 0;
     const LoadResult n = Load(none);
     check(called == 0 && n.addedRows.size() == 1, "no finishRows: the rows stay as the data mods made them");
+  }
+  {
+    const fs::path mods5 = root / "edited" / "mods", list5 = root / "edited" / "mods.ini";
+    write_file(mods5 / "pic-mod" / "mod.json", manifest("pic-mod"));
+    write_file(mods5 / "pic-mod" / "data" / "things.json", "{ \"things\": { \"Alpha\": { \"pic\": \"textures/a.png\", \"level\": 51 } } }");
+    write_file(list5, "[profile default]\npic-mod = on\n");
+    LoadOptions g{mods5, list5, disc.View()};
+    g.dataCatalog = [&](const EntryReader&, DataCatalog& out, std::string&) {
+      out = make_catalog();
+      out.tables[0].editAssetKeys = {"pic"};
+      return true;
+    };
+    int called = 0;
+    bool sawAsset = false;
+    g.finishRows = [&](RowsJob& job) {
+      called++;
+      sawAsset = job.editedAssets.size() == 1 && job.editedAssets[0].entry == 0 && job.editedAssets[0].key == "pic" && job.editedAssets[0].text == "textures/a.png";
+      std::vector<uint8_t> bytes;
+      if (!job.readEntry("data.fsys", "table.bin", bytes)) return;
+      RowsJob::EditedRow e;
+      e.table = "things";
+      e.entry = 0;
+      e.bytes.assign(bytes.begin() + kHeader, bytes.begin() + kHeader + kEntry);
+      e.bytes[11] = 0x77;
+      e.mods = "pic-mod";
+      job.editedRows.push_back(std::move(e));
+    };
+    const LoadResult r = Load(g);
+    const Replacement* data = nullptr;
+    const Replacement* copy = nullptr;
+    for (const Replacement& x : r.files) {
+      data = x.discPath == "data.fsys" ? &x : data;
+      copy = x.discPath == "copy.fsys" ? &x : copy;
+    }
+    check(called == 1 && sawAsset && r.addedRows.empty(), "edited assets: finishRows is called (no added row) with the picture key of the disc row");
+    std::vector<uint8_t> want = table;
+    entry_of(want, 0)[2] = 51;
+    entry_of(want, 0)[11] = 0x77;
+    check(data != nullptr && extract(data->data, "table.bin") == want && copy != nullptr && extract(copy->data, "table.bin") == want,
+          "edited assets: the new row bytes are in both copies of the table, on top of the mod's own data change");
   }
   {
     const fs::path mods4 = root / "objects" / "mods", list4 = root / "objects" / "mods.ini";

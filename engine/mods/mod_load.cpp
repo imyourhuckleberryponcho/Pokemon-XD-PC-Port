@@ -179,6 +179,7 @@ private:
   std::map<std::string, std::string> mDiscFiles;
   std::map<std::string, Layer> mLayers;
   std::map<std::string, std::vector<uint8_t>> mBaseCache;
+  std::vector<EditedAsset> mEditedAssets;
   std::set<std::string> mScriptsOff;
 
   void Say(Message::Level level, std::string text) { mResult.messages.push_back({level, std::move(text)}); }
@@ -749,6 +750,7 @@ private:
     mResult.dataChanges = std::move(applied.changes);
     mResult.addedRows = std::move(applied.added);
     mResult.addedTexts = std::move(applied.addedTexts);
+    mEditedAssets = std::move(applied.editedAssets);
     mResult.addedTextGroup = catalog->addedTextGroup;
     if (!mResult.addedRows.empty()) {
       std::string list;
@@ -759,10 +761,63 @@ private:
     }
   }
 
+  void PutEditedRows(const std::vector<RowsJob::EditedRow>& rows) {
+    std::set<std::string> touched;
+    for (const RowsJob::EditedRow& r : rows) {
+      const DataTable* t = mResult.catalog ? mResult.catalog->FindTable(r.table) : nullptr;
+      if (t == nullptr || r.entry >= t->count || r.bytes.size() != t->entrySize) continue;
+      for (const DataPlace& p : t->places) {
+        std::vector<uint8_t> entry;
+        if (p.archive == kProgramArchive) {
+          entry = !mResult.program.empty() ? mResult.program : std::vector<uint8_t>();
+          if (entry.empty() && !ReadEntry(p.archive, p.entry, entry)) continue;
+        } else if (!ReadEntry(p.archive, p.entry, entry)) {
+          continue;
+        }
+        const size_t at = p.offset + static_cast<size_t>(r.entry) * t->entrySize;
+        if (at + t->entrySize > entry.size()) continue;
+        std::copy(r.bytes.begin(), r.bytes.end(), entry.begin() + static_cast<std::ptrdiff_t>(at));
+        if (p.archive == kProgramArchive) {
+          mResult.program = std::move(entry);
+          continue;
+        }
+        bool isNew = false;
+        Layer& layer = LayerFor(p.archive, isNew);
+        uint32_t index = 0;
+        std::string findError;
+        if (!FindEntry(layer, p.entry, index, findError)) continue;
+        Layer::Entry& e = layer.entries[index];
+        if (!e.generated) e.from = r.mods;
+        else if (!r.mods.empty() && e.from.find(r.mods) == std::string::npos) e.from += (e.from.empty() ? "" : ", ") + r.mods;
+        e.generated = true;
+        e.data = std::move(entry);
+        e.file.clear();
+        e.name = p.entry;
+        touched.insert(Lower(p.archive));
+      }
+    }
+    for (const std::string& key : touched) {
+      const auto layer = mLayers.find(key);
+      if (layer == mLayers.end()) continue;
+      Replacement r;
+      if (!BuildLayer(layer->second, r)) continue;
+      bool replaced = false;
+      for (Replacement& old : mResult.files) {
+        if (EqualNoCase(old.discPath, r.discPath)) {
+          old = std::move(r);
+          replaced = true;
+          break;
+        }
+      }
+      if (!replaced) mResult.files.push_back(std::move(r));
+    }
+  }
+
   void FinishRows(const std::vector<const FoundMod*>& on) {
-    if (!mOpt.finishRows || !mResult.catalog || (mResult.addedRows.empty() && !AnyHasObjects(on))) return;
+    if (!mOpt.finishRows || !mResult.catalog || (mResult.addedRows.empty() && mEditedAssets.empty() && !AnyHasObjects(on))) return;
     RowsJob job;
     job.rows = &mResult.addedRows;
+    job.editedAssets = mEditedAssets;
     job.gameId = mOpt.disc.gameId;
     for (const FoundMod* m : on) job.modFolders[m->manifest.id] = m->folder;
     for (const auto& [id, folder] : mOpt.builtInFolders) job.modFolders[id] = folder;
@@ -783,6 +838,7 @@ private:
       return mOpt.disc.read && mOpt.disc.read(path, out);
     };
     mOpt.finishRows(job);
+    PutEditedRows(job.editedRows);
     for (RowsJob::OutFile& f : job.outFiles) {
       Replacement* at = nullptr;
       for (Replacement& r : mResult.files) {
@@ -846,21 +902,25 @@ private:
     return ResolveEntry(fsys, layer.discPath, name, index, error);
   }
 
+  bool BuildLayer(const Layer& layer, Replacement& r) {
+    r.discPath = layer.discPath;
+    r.added = !layer.onDisc;
+    r.file = layer.whole;
+    r.from = layer.wholeFrom.empty() ? std::string() : layer.wholeFrom;
+    if (!layer.entries.empty() && !Rebuild(layer, r)) {
+      if (layer.wholeFrom.empty()) {
+        return false;
+      }
+      r.rebuilt = false;
+      r.data.clear();
+    }
+    return true;
+  }
+
   void Build() {
     for (auto& [key, layer] : mLayers) {
       Replacement r;
-      r.discPath = layer.discPath;
-      r.added = !layer.onDisc;
-      r.file = layer.whole;
-      r.from = layer.wholeFrom.empty() ? std::string() : layer.wholeFrom;
-      if (!layer.entries.empty() && !Rebuild(layer, r)) {
-        if (layer.wholeFrom.empty()) {
-          continue;
-        }
-        r.rebuilt = false;
-        r.data.clear();
-      }
-      mResult.files.push_back(std::move(r));
+      if (BuildLayer(layer, r)) mResult.files.push_back(std::move(r));
     }
   }
 

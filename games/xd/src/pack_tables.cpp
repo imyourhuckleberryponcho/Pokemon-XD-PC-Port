@@ -7,6 +7,11 @@
 
 namespace xd::pack {
 
+std::map<uint32_t, uint32_t>& TocGroupRemap() {
+  static std::map<uint32_t, uint32_t> remap;
+  return remap;
+}
+
 bool ReadText(const std::filesystem::path& p, std::string& out) {
   std::ifstream f(p, std::ios::binary);
   if (!f) return false;

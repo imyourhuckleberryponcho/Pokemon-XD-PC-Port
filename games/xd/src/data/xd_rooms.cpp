@@ -722,8 +722,7 @@ void BuildRoomTexts(em::RowsJob& job) {
 
 void BuildRooms(em::RowsJob& job) {
   BuildNewRooms(job);
-  xd::faces::BuildFaces(job);
-  xd::faces::BuildBoxIcons(job);
+  xd::faces::BuildPictures(job);
   xd::species::BuildSpecies(job);
   xd::sound::BuildSounds(job);
   BuildObjects(job);

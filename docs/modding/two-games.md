@@ -190,8 +190,8 @@ settings, card and cache folder (the disc is never written):
 | The opening battle with the new Pokémon in front and the new move as its first move | the Pokémon has its own (higher) HP and the new move takes the foe's HP down |
 | A new item (a copy of Oran Berry) given three times, saved, CONTINUE with the mod; without the mod; with no setup file | gets number 594, loads with the mod, refused without it, and the last guard stops a save with no setup file (the item is in the bag); the card is untouched each time |
 
-What stays **off on XG** because it was not tried there: new story flags, rooms, battles and trainer decks, and a new Pokémon's own face, model,
-cry and Pokédex marks, and a move's animation. A mod with those still loads; those parts are skipped and the log says so.
+What stays **off on XG** because it was not tried there: new story flags, rooms, battles and trainer decks, and a new Pokémon's own model,
+cry and Pokédex marks (its face and box picture do work on XG), and a move's animation. A mod with those still loads; those parts are skipped and the log says so.
 
 A mod written for XD needs `"game": ["xd", "xg"]` (or `"xg"`) to load on XG at all, and its copies (`"copy": "Eevee"`) must name rows XG has;
 XG's own moves are renumbered, so a mod that copies by *number* means something else on XG. Copy by name.

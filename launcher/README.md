@@ -57,6 +57,37 @@ Choose your disc, how you want to play, your controls and mods, then press **Pla
     stick pressed in on every PC controller; works only while Settings > Gameplay > Fast-forward key is on).
     Script: `key:fast_forward=43`, `padbutton:fast_forward=back`.
   - *Sticks and triggers*: deadzones, L/R click points (for triggers without a click), button layout, walk tilt.
+  - *A controller the program cannot use yet* (0.7.5, branch pads-075; `engine/controls` pad_setup.h / pad_sdl.h /
+    pad_windows.h): the card lists EVERY joystick SDL sees. One with no mapping (SDL has none for it: a cheap or new pad
+    that is not in SDL's list, e.g. a "Switch 2" Horipad in its PC mode) shows by name as "(not recognised)" with its USB
+    ID and counts, and a **Set it up...** button, instead of "No PC controller is plugged in". If SDL sees nothing but
+    Windows lists a game controller (SetupAPI, HID class "game controller" / usage gamepad / joystick), the card says
+    that and what to try (the PC / Switch mode switch, no hub, close Steam / DS4Windows / HidHide). Nothing for a pad SDL
+    already knows, a Deck, a Steam virtual pad or the GameCube adapter.
+    **Set it up...** opens a page (it replaces the Controls page until it ends; works with the mouse or the keyboard, the
+    pad itself cannot be used yet): 16 steps (A, B, X, Y, Start, Z, L, R, D-pad up/down/left/right, main stick left + up,
+    C stick left + up), each waiting for the press (`padsetup::Detector`: a button, a hat direction or an axis that moved
+    0.6 from where it rested; things held at the start of a step are ignored). Skip, Back, Start over, Cancel. A control
+    cannot be given to two steps; a stick step needs an axis. Triggers resting at -1 become `a4`, at 0 `+a4`, at +1 `a4~`,
+    or a button; a D-pad may be a hat, buttons or two half axes; a stick that goes the wrong way gets `~`. When every step
+    is answered the mapping string is put into SDL and the pad is TRIED LIVE (buttons light up, bars move; the pad does not
+    move the launcher's focus meanwhile); **Save this set-up** writes it to `<data folder>\pad_mappings.txt` (one SDL
+    mapping per controller MODEL = GUID, so a second identical pad is set up too). Unplugging in the middle waits for the
+    same model to come back and goes on from the same step. A pad that was set up shows "set up by you" and **Forget this
+    set-up** (removes the line; SDL has no call that takes a mapping back, so the launcher hides the pad for the rest of
+    the run and it is gone at the next start). An optional `gamecontrollerdb.txt` (SDL's community list) in the data folder
+    is read as well; the player's own set-ups win. The game (xd.exe) reads both files as SDL hints before SDL starts
+    (`PortInput_PadSetupHints`, platform/input/gc_adapter_log.cpp) and again 2 seconds later; the launcher adds them with
+    `SDL_AddGamepadMapping` at start. `XD_PAD_MAPPING_DIR=<folder>` moves both files (tests).
+    **Log**: one `[pads]` block (SDL version, hints, then one line per joystick: name, VID/PID, version, GUID, buttons / axes /
+    hats, type, "RECOGNISED as a gamepad (...)" or "NOT recognised (no mapping)", the path SDL gave it (the driver), the
+    mapping; then Windows' own list) at launcher start, when the Controls page opens, when a controller comes or goes, after a
+    set-up is saved or forgotten, and in the game at start, 2 seconds later and whenever a joystick comes or goes: so a
+    Reports page export / F10 report carries it. Reading only: the game's input timing and recordings are unchanged.
+    Tests: `pad_setup_test` (platform/tests: the builder, the file, SDL virtual joysticks of five layouts, two identical pads,
+    unplug, forget, the hint path the game uses), `python tools/test_launcher_pad.py --only padsetup,padsetup_axes` (script
+    steps `fakepad:add:hat|axes`, `fakepad:button|axis|hat:<n>:<v>`, `fakepad:remove`, `padsetup:start|skip|back|restart|
+    save|cancel|forget`: a virtual joystick SDL has no mapping for). NOT seen: a real unrecognised pad.
   Remapping is a preference, not a gameplay setting: it is allowed in every preset, Original too, and never
   makes a run "not Original" (it decides how you press the GameCube's buttons, not what the game does). The
   defaults are the GameCube layout. xd.exe reads the same settings.ini (`[keyboardN]`, `[gamepadN]`, docs/SETTINGS.md)

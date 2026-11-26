@@ -177,6 +177,11 @@ int Describe(File& f) {
                           "Your mod list: which mods were switched on (not the mods themselves)."));
     return 5;
   }
+  if (n == "textures.txt") {
+    SetDescription(f, Say(Tr("Which textures (picture parts) the last picture was drawn from: numbers and codes only, no pictures."),
+                          "Which textures (picture parts) the last picture was drawn from: numbers and codes only, no pictures."));
+    return 6;
+  }
   if (Lower(Utf8(fs::path(f.name).extension())) == ".dmp") {
     f.dump = true;
     SetDescription(f, Say(Tr("Crash dump: a snapshot of the game program's memory at that moment. It helps a developer find "

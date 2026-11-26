@@ -13,6 +13,7 @@
 #include "xd_added_rows.h"
 #include "xd_gen4.h"
 #include "xd_gen57.h"
+#include "pack_tables.h"
 #include "xd_gen_rules.h"
 #include "xd_gen4_xg.h"
 #include "xd_modern_types.h"
@@ -75,6 +76,7 @@ std::string BootRandomizer();
 bool BootGen4();
 bool BootGen4Spots();
 bool BootGen57();
+int BootMaxGen();
 int BootRuleGen();
 bool BootModernTypes();
 bool BootLooks(engine::rulesets::Looks& out);
@@ -254,6 +256,53 @@ void MergeLanguageToc(engine::mods::LoadResult& result) {
     return;
   }
 }
+
+void RepairDuplicateTocIds(engine::mods::LoadResult& result) {
+  xd::pack::TocGroupRemap().clear();
+  for (engine::mods::Replacement& r : result.files) {
+    std::string lower = r.discPath;
+    for (char& c : lower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    if (lower != "gsfsys.toc") continue;
+    std::vector<uint8_t> d;
+    if (r.rebuilt ? (d = r.data, true) : ReadAll(r.file, d)) {
+      uint32_t count = 0, groups = 0;
+      if (!TocValid(d, count, groups)) return;
+      auto nameOf = [&](uint32_t i) {
+        const uint32_t at = TocBe32(d.data() + groups + 16 * i + 4);
+        std::string n;
+        for (size_t k = at; at < d.size() && k < d.size() && d[k] != 0; k++) n.push_back(static_cast<char>(std::tolower(d[k])));
+        return n;
+      };
+      auto isModel = [](const std::string& n) { return n.rfind("pkx_", 0) == 0; };
+      uint32_t highest = 0;
+      for (uint32_t i = 0; i < count; i++) highest = std::max(highest, TocBe32(d.data() + groups + 16 * i));
+      std::map<uint32_t, uint32_t> firstOf;
+      bool changed = false;
+      for (uint32_t i = 0; i < count; i++) {
+        const uint32_t id = TocBe32(d.data() + groups + 16 * i);
+        const auto it = firstOf.find(id);
+        if (it == firstOf.end()) {
+          firstOf[id] = i;
+          continue;
+        }
+        if (!isModel(nameOf(i)) || isModel(nameOf(it->second)) || xd::pack::TocGroupRemap().count(id) != 0) continue;
+        const uint32_t fresh = ++highest;
+        TocPut32(d.data() + groups + 16 * i, fresh);
+        xd::pack::TocGroupRemap()[id] = fresh;
+        changed = true;
+        std::fprintf(stderr, "[mods] archive list: number %u was there twice (%s hid %s); the model archive now has %u\n", id,
+                     nameOf(it->second).c_str(), nameOf(i).c_str(), fresh);
+      }
+      if (!changed) return;
+      r.data = std::move(d);
+      r.rebuilt = true;
+      r.file.clear();
+      r.entries.clear();
+      r.generated.clear();
+    }
+    return;
+  }
+}
 }
 
 extern "C" const char* PortXD_LanguageText(void);
@@ -377,7 +426,15 @@ extern "C" bool PortXD_LoadMods(void) {
       for (em::DataTable& t : out.tables) {
         if (t.name == "pokemon_data" || t.name == "waza_data" || t.name == "item_data_prime") {
           t.addableBuiltIn = t.addable;
-          t.assetKeys.clear();
+          if (t.name == "pokemon_data") {
+            std::vector<std::string> kept;
+            for (const std::string& k : t.assetKeys) {
+              if (k == "face" || k == "icon") kept.push_back(k);
+            }
+            t.assetKeys = std::move(kept);
+          } else {
+            t.assetKeys.clear();
+          }
         } else {
           t.addableBuiltIn = false;
           t.addable = false;
@@ -395,6 +452,7 @@ extern "C" bool PortXD_LoadMods(void) {
   std::vector<em::DataModFile> gen4Files;
   xd::gen4::SetGen57Wanted(xd::pt::BootGen57());
   xd::gen4::Prepare(xd::pt::BootGen4(), xd::pt::BootGen4Spots(), options, gen4Files);
+  xd::gen57::SetSpotsMaxGen(xd::pt::BootMaxGen());
   xd::gen57::Prepare(xd::pt::BootGen57(), xd::pt::BootGen4Spots(), options, gen4Files);
   for (em::LoadOptions::ExtraLayer& layer : lookLayers) options.extraLayers.push_back(std::move(layer));
   xd::faces::SetFaceRowsTaken(xd::gen4::ExtraRowCount("poke_face") + xd::gen57::ExtraRowCount("poke_face"));
@@ -493,6 +551,7 @@ extern "C" bool PortXD_LoadMods(void) {
 
   em::LoadResult result = em::Load(options);
   MergeLanguageToc(result);
+  RepairDuplicateTocIds(result);
   xd::pt::AfterModsLoaded(result, options.modsFolder, options.listFile, options.disc);
   for (const em::Message& m : result.messages) {
     static const char* const kLabel[] = {"", "warning: ", "problem: "};

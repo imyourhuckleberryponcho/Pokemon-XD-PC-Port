@@ -3,12 +3,14 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <string>
 #include <vector>
 
 namespace xd::online {
 
-constexpr int kBattleProtocol = 3;
+constexpr int kExtrasProtocol = 3;
+constexpr int kBattleProtocol = 4;
 
 struct RoomRules {
   std::string ruleSet = "classic";
@@ -89,6 +91,7 @@ int ActionNumbers(const std::string& text);
 
 uint64_t Fnv64(const void* data, size_t size, uint64_t seed = 1469598103934665603ull);
 std::string Hex(uint64_t v);
+std::string PackBattleDigest(const std::filesystem::path& folder);
 
 }
 

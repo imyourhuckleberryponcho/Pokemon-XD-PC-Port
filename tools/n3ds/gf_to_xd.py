@@ -403,10 +403,18 @@ def make_images(gm, texs, log, max_side=256, opts=None):
         eye_mat = bool(opts and opts.get('eye_blend') and 'Eye' in mt['name'] and 'Iris' not in mt['name'] and nm and 'Eye' in nm)
         inc = usum_fx.emission_map(mt, texs) if opts and opts.get('fx') else None
 
+        incmask = usum_fx.emission_mask(mt, texs) if inc and (usum_fx.species_of(gm) if gm.get("bones") else 0) != 457 else None
+
 
         ghost = bool(opts and opts.get('ghost_alpha') and 'ghos_BodyAdd' in mt['shader'] and 'Eye' not in mt['name'] and 'Iris' not in mt['name'])
         cell = 'uniran_Cell' in mt['shader']
         if ghost or cell:
+            tra = True
+
+
+
+        blend_shell = (usum_fx.species_of(gm) if gm.get('bones') else 0) == 442 and mt.get('blend') == 0x76760000 and mt.get('depth') is not None and not (mt['depth'] >> 12) & 1
+        if blend_shell:
             tra = True
         if patch:
             tra = True
@@ -417,7 +425,7 @@ def make_images(gm, texs, log, max_side=256, opts=None):
         flat_ = usum_hand.flat_for(nat_, mt['name']) if hand_on else None
         plate_ = hand_on and usum_hand.plates_follow_match(nat_, mt['name'])
         do_match = bool((opts or {}).get('_match_plan') is not None and (match_piece_ok(mt, fixes_) or (plate_ and not fixes_)) and not ghost)
-        key = (nm, tra, inc, ghost, cell, patch, tuple(id(f_) for f_ in fixes_), do_match, plate_, tuple(id(r_[1]) for r_ in hand_rules), flat_, tuple(plan_.get(mt['name'], ())))
+        key = (nm, tra, inc, incmask, ghost, cell, patch, tuple(id(f_) for f_ in fixes_), do_match, plate_, tuple(id(r_[1]) for r_ in hand_rules), flat_, tuple(plan_.get(mt['name'], ())))
         if nm is None or nm not in texs:
             out.append((None, 'opa'))
             continue
@@ -451,6 +459,9 @@ def make_images(gm, texs, log, max_side=256, opts=None):
             if not tra:
                 rgba = rgba.copy()
                 rgba[..., 3] = 255
+            if blend_shell:
+                rgba = rgba.copy()
+                rgba[..., 3] = (rgba[..., 3].astype(int) // 2).astype(np.uint8)
             if opts and opts.get('lure') and is_lure_glow(mt):
                 rgba = lure_fill(rgba)
                 c = 'opa'
@@ -481,7 +492,14 @@ def make_images(gm, texs, log, max_side=256, opts=None):
                 if opts.get('cheeks') and 'Neon' in mt['shader']:
                     rgba = cheek_boost(rgba, opts['cheeks'])
                 if inc:
-                    rgba = usum_fx.bake_emission(rgba, texs[inc], strength=usum_hand.glow_strength(nat_), raw=texs[nm][2])
+                    inc_t, mask_t = texs[inc], (texs[incmask] if incmask else None)
+                    if incmask:
+                        ci, cm, c0_ = usum_fx.coord_of(mt, inc), usum_fx.coord_of(mt, incmask), colour_coord(mt)
+                        if ci and c0_:
+                            inc_t = (inc_t[0], inc_t[1], usum_fx.register_to_colour(inc_t[2], ci, c0_, rgba.shape[1], rgba.shape[0]))
+                        if cm and c0_:
+                            mask_t = (mask_t[0], mask_t[1], usum_fx.register_to_colour(mask_t[2], cm, c0_, rgba.shape[1], rgba.shape[0]))
+                    rgba = usum_fx.bake_emission(rgba, inc_t, strength=usum_hand.glow_strength(nat_), raw=texs[nm][2], mask=mask_t)
             if os.environ.get('N3DS_WHITE'):
                 rgba = rgba.copy()
                 rgba[..., :3] = 255

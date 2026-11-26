@@ -497,8 +497,14 @@ std::string TrVerdictLine(const std::string& s) {
     return Tr("Your friend does not have the Gen 4 pack from the Pokemon Battle Revolution disc, which this room needs.");
   if (s == "Your friend's Gen 4 pack is a different version from yours. Ask them to make it again in the launcher.")
     return Tr("Your friend's Gen 4 pack is a different version from yours. Ask them to make it again in the launcher.");
+  if (s == "Your friend's Gen 5-7 pack is a different version from yours. Ask them to make it again in the launcher.")
+    return Tr("Your friend's Gen 5-7 pack is a different version from yours. Ask them to make it again in the launcher.");
   if (s == "The game data of the two games differs in a way the list above does not explain. Both players should use the same game version.")
     return Tr("The game data of the two games differs in a way the list above does not explain. Both players should use the same game version.");
+  if (s == "The room was made by another version of the game (its battles are not the same as yours). Both players need the same game version: update the game, or ask your friend to.")
+    return Tr("The room was made by another version of the game (its battles are not the same as yours). Both players need the same game version: update the game, or ask your friend to.");
+  if (s == "Your friend's game is another version from yours (its battles are not the same as yours). Both players need the same game version: ask them to update the game, or update yours.")
+    return Tr("Your friend's game is another version from yours (its battles are not the same as yours). Both players need the same game version: ask them to update the game, or update yours.");
   return s;
 }
 
@@ -510,6 +516,7 @@ std::string TrOutcomeText(xd::online::Outcome o) {
   case xd::online::Outcome::FriendQuit: return Tr("Your friend gave in. You win!");
   case xd::online::Outcome::ConnectionLost: return Tr("The connection to your friend was lost. The battle ended without a winner.");
   case xd::online::Outcome::Desync: return Tr("The two games stopped agreeing about the battle, so it was ended. Nobody won.");
+  case xd::online::Outcome::Draw: return Tr("The battle ended in a draw.");
   }
   return "";
 }

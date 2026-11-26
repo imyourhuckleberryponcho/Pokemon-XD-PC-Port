@@ -515,9 +515,13 @@ MadeImages make_images(const GfModel& gm, const std::map<std::string, pbr::Rgba>
     bool eye_mat = opts.eye_blend && contains(mt.name, "Eye") && !contains(mt.name, "Iris") && have_nm && contains(nm, "Eye");
     const char* inc_c = opts.fx ? emission_map(mt, texs) : nullptr;
     std::string inc = inc_c ? inc_c : "";
+    const char* incmask_c = (inc_c && nat != 457) ? emission_mask(mt, texs) : nullptr;
+    std::string incmask = incmask_c ? incmask_c : "";
     bool ghost = opts.ghost_alpha > 0 && contains(mt.shader, "ghos_BodyAdd") && !contains(mt.name, "Eye") && !contains(mt.name, "Iris");
     bool cell = contains(mt.shader, "uniran_Cell");
     if (ghost || cell) tra = true;
+    const bool blend_shell = nat == 442 && mt.has_blend && mt.blend == 0x76760000u && mt.has_depth && !((mt.depth >> 12) & 1u);
+    if (blend_shell) tra = true;
     if (patch) tra = true;
     std::vector<int> fixes = opts.recolour ? recolour_fixes_for(nat, mt.name) : std::vector<int>();
     std::vector<int> hrules = opts.hand ? hand_rules_for(nat, mt.name) : std::vector<int>();
@@ -534,8 +538,8 @@ MadeImages make_images(const GfModel& gm, const std::map<std::string, pbr::Rgba>
     for (int f : hrules) hr += std::to_string(f) + ",";
     std::string pl;
     for (auto& e : plan_) if (e.first == mt.name) for (auto& n : e.second) pl += n + ",";
-    snprintf(kb, sizeof kb, "%s|%d|%d|%d|%d|%s|%s|%d|%s|%d|%d|%s", nm.c_str(), (int)tra, (int)ghost, (int)cell, (int)patch, fx.c_str(), hr.c_str(),
-             flat ? (((*flat)[0] << 16) | ((*flat)[1] << 8) | (*flat)[2]) : -1, inc.c_str(), (int)do_match, (int)plate, pl.c_str());
+    snprintf(kb, sizeof kb, "%s|%d|%d|%d|%d|%s|%s|%d|%s|%s|%d|%d|%s", nm.c_str(), (int)tra, (int)ghost, (int)cell, (int)patch, fx.c_str(), hr.c_str(),
+             flat ? (((*flat)[0] << 16) | ((*flat)[1] << 8) | (*flat)[2]) : -1, inc.c_str(), incmask.c_str(), (int)do_match, (int)plate, pl.c_str());
     std::string key = kb;
     if (!name_to_img.count(key)) {
       pbr::Rgba rgba = it->second;
@@ -583,6 +587,7 @@ MadeImages make_images(const GfModel& gm, const std::map<std::string, pbr::Rgba>
         }
       }
       if (!tra) for (size_t i = 3; i < rgba.px.size(); i += 4) rgba.px[i] = 255;
+      if (blend_shell) for (size_t i = 3; i < rgba.px.size(); i += 4) rgba.px[i] = (uint8_t)((int)rgba.px[i] / 2);
       bool is_fire = contains(mt.shader, "Fire") || contains(mt.name, "Fire");
       bool grey = true;
       if (opts.fire && is_fire) {
@@ -609,7 +614,19 @@ MadeImages make_images(const GfModel& gm, const std::map<std::string, pbr::Rgba>
                                 ((nat == 304 || nat == 305 || nat == 306) && !contains(mt.name, "Eye") && !contains(mt.name, "Iris") && !contains(mt.name, "Mouth"))))
           rgba = steel_tint(rgba, opts.steel);
         if (opts.cheeks != 0 && contains(mt.shader, "Neon")) rgba = cheek_boost(rgba, opts.cheeks);
-        if (!inc.empty()) rgba = bake_emission(rgba, texs.at(inc), hand_glow_strength(nat), &it->second);
+        if (!inc.empty()) {
+          pbr::Rgba inc_reg, mask_reg;
+          const pbr::Rgba* incp = &texs.at(inc);
+          const pbr::Rgba* maskp = nullptr;
+          if (incmask_c) {
+            const GfCoord* ci = coord_of(mt, inc);
+            const GfCoord* cm = coord_of(mt, incmask);
+            if (ci && co) { inc_reg = register_to_colour(*incp, *ci, *co, rgba.w, rgba.h); incp = &inc_reg; }
+            mask_reg = (cm && co) ? register_to_colour(texs.at(incmask), *cm, *co, rgba.w, rgba.h) : texs.at(incmask);
+            maskp = &mask_reg;
+          }
+          rgba = bake_emission(rgba, *incp, hand_glow_strength(nat), &it->second, maskp);
+        }
       }
       for (auto& e : plan_) if (e.first == mt.name) rgba = bake_eye_irises(gm, texs, mt, e.second, rgba, opts);
       int nw = std::min(w, opts.max_side), nh = std::min(h, opts.max_side);

@@ -55,9 +55,40 @@ class ControlsPanel {
     std::string guid;
     std::string name;
     controls::Device device = controls::Device::Generic;
+    bool ownMapping = false;
   };
   void SetPads(std::vector<Pad> pads) { pads_ = std::move(pads); }
   const std::vector<Pad>& Pads() const { return pads_; }
+  struct Unrecognised {
+    unsigned id = 0;
+    std::string name;
+    std::string ids;
+    int buttons = -1, axes = -1, hats = -1;
+    int nth = 0;
+  };
+  void SetUnrecognised(std::vector<Unrecognised> list) { unrecognised_ = std::move(list); }
+  const std::vector<Unrecognised>& UnrecognisedList() const { return unrecognised_; }
+  void SetWindowsPads(std::vector<std::string> names) { windowsPads_ = std::move(names); }
+  bool TakeSetupRequest(unsigned* id) {
+    if (!setupRequest_) {
+      return false;
+    }
+    setupRequest_ = false;
+    *id = setupId_;
+    return true;
+  }
+  bool TakeForgetRequest(std::string* guid) {
+    if (forgetGuid_.empty()) {
+      return false;
+    }
+    *guid = std::move(forgetGuid_);
+    forgetGuid_.clear();
+    return true;
+  }
+  void RequestSetup(unsigned id) {
+    setupRequest_ = true;
+    setupId_ = id;
+  }
   void SetAdapterState(controls::AdapterState state, int libusbError, const std::string& driver = {}) {
     adapterState_ = state;
     adapterError_ = libusbError;
@@ -117,6 +148,11 @@ class ControlsPanel {
   Listen listen_;
   controls::Device device_ = controls::Device::Generic;
   std::vector<Pad> pads_;
+  std::vector<Unrecognised> unrecognised_;
+  std::vector<std::string> windowsPads_;
+  bool setupRequest_ = false;
+  unsigned setupId_ = 0;
+  std::string forgetGuid_;
   controls::AdapterState adapterState_ = controls::AdapterState::NoLibrary;
   int adapterError_ = 0;
   std::string adapterDriver_;

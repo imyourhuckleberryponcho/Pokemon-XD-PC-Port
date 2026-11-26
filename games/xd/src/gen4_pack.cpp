@@ -9,6 +9,7 @@
 #include "xd_xg.h"
 #include "xd_gen57.h"
 #include "xd_forms.h"
+#include "xd_move_targets.h"
 #include "pack_match.h"
 
 #include "pack_tables.h"
@@ -221,6 +222,32 @@ uint32_t ExtraRowCount(const char* table) {
   return n;
 }
 bool SpotsLoaded() { return sLoaded && sSpots; }
+bool SpotRowValues(const char* table, uint32_t row, uint32_t& top, uint32_t& rate) {
+  if (!sLoaded || !sSpots) return false;
+  for (const RowSpec& r : sRows) {
+    if (r.table != table || r.row != row || r.count != 1) continue;
+    bool gotTop = false, gotRate = false;
+    for (size_t i = 0; i + 2 < r.sets.size(); i += 3) {
+      if (r.sets[i] == 1 && r.sets[i + 1] == 1) { top = r.sets[i + 2]; gotTop = true; }
+      if (r.sets[i] == 8 && r.sets[i + 1] == 4) { rate = r.sets[i + 2]; gotRate = true; }
+    }
+    return gotTop && gotRate;
+  }
+  return false;
+}
+bool SetSpotRow(const char* table, uint32_t row, uint32_t prob, uint32_t rate) {
+  if (!sLoaded || !sSpots) return false;
+  for (RowSpec& r : sRows) {
+    if (r.table != table || r.row != row || r.count != 1) continue;
+    bool gotProb = false, gotRate = false;
+    for (size_t i = 0; i + 2 < r.sets.size(); i += 3) {
+      if (r.sets[i] == 4 && r.sets[i + 1] == 4) { r.sets[i + 2] = prob; gotProb = true; }
+      if (r.sets[i] == 8 && r.sets[i + 1] == 4) { r.sets[i + 2] = rate; gotRate = true; }
+    }
+    return gotProb && gotRate;
+  }
+  return false;
+}
 const std::vector<uint16_t>& DeskItems() { return sDeskItems; }
 void SetMoreRows(const std::vector<xd::pack::RowSpec>& rows) {
   sMoreRows = rows;
@@ -283,6 +310,10 @@ void Prepare(bool wanted, bool spots, engine::mods::LoadOptions& options, std::v
     if (!ReadText(f, d.text)) {
       std::fprintf(stderr, "[gen4] could not read %s: the game starts without the Gen 4 Pokemon\n", f.string().c_str());
       return;
+    }
+    if (f.filename() == "01_moves.json") {
+      const int n = xd::movetargets::PatchPackMoves(d.text, false);
+      if (n > 0) std::fprintf(stderr, "[gen4] move targets: %d field(s) of the pack's moves put right (a pack made before 0.7.5; Make it again to have them in the file)\n", n);
     }
     GuardMunchlaxFace(d.text);
     dataFiles.push_back(std::move(d));

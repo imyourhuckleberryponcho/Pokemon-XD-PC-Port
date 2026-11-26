@@ -17,6 +17,8 @@ void Prepare(bool wanted, bool gen4, std::vector<engine::mods::DataModFile>& dat
 
 bool Loaded();
 
+int Gen57FairyRows();
+
 void AppendTexts(std::vector<std::pair<uint32_t, std::string>>& texts);
 
 uint16_t ChartCode(uint32_t attack, uint32_t defend);

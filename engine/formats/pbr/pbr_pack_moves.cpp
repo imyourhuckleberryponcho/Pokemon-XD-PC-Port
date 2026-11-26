@@ -43,6 +43,7 @@ struct XdMove {
 struct PbrMove {
   std::string name;
   int eff, cls, power, type, acc, pp, chance, pri, flags;
+  int target = 0;
 };
 
 struct Data {
@@ -79,6 +80,7 @@ struct Data {
       q.chance = b[19];
       q.pri = b[20] > 127 ? b[20] - 256 : b[20];
       q.flags = b[21];
+      q.target = (b[2] << 8) | b[3];
       pbr[m] = q;
     }
     for (int m = 1; m < 355; m++) groups[pbr[m].eff].push_back(m);
@@ -212,6 +214,13 @@ Json make_row(const Data& d, int m, int donor) {
   u.push(0xA4);
   u.push(kPunch.count(name) ? 1 : 0);
   f.set("unk16", u);
+  {
+    const auto r = kRangeOfTarget.find(p.target);
+    f.set("rangeId", (r != kRangeOfTarget.end() && !kKeepRange.count(name)) ? (int64_t)r->second : x.get("rangeId"));
+    const auto fx = kFlagFix.find(name);
+    if (fx != kFlagFix.end())
+      for (const auto& kv : fx->second) f.set(kv.first, (int64_t)kv.second);
+  }
   if (kEffectSlots.count(name) && kImplemented.count(name)) f.set("seqId", kEffectSlots.at(name));
   return f;
 }

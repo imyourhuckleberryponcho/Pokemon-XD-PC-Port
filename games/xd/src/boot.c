@@ -95,6 +95,8 @@ void PortInput_UpdateControls(void);
 void PortInput_GcAdapterHints(void);
 void PortInput_GcAdapterLog(void);
 void PortInput_GcAdapterTick(void);
+void PortInput_PadSetupHints(const char* dataFolderUtf8);
+void PortInput_PadSetupLog(void);
 void PortInput_ControlsHandleEvent(const SDL_Event* event);
 void PortXD_InstallTexturePackSource(void);
 void PortXD_HdTexturesUpdate(void);
@@ -919,8 +921,10 @@ int aurora_main(int argc, char** argv) {
   }
   {
     PortInput_GcAdapterHints();
+    PortInput_PadSetupHints(PortUser_FolderUtf8("Pokemon XD"));
     const AuroraInfo started = aurora_initialize(argc, argv, &config);
     PortInput_GcAdapterLog();
+    PortInput_PadSetupLog();
     const char* nullOk = getenv("XD_GPU_NULL_OK");
     if (started.backend == BACKEND_NULL && (nullOk == NULL || nullOk[0] != '1')) {
       return fail(Tr("No usable graphics device was found, so the game could not draw anything. "

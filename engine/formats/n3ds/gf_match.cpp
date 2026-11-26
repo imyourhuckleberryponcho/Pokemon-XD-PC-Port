@@ -576,14 +576,66 @@ const char* emission_map(const GfMaterial& mt, const std::map<std::string, pbr::
   return nullptr;
 }
 
-pbr::Rgba bake_emission(const pbr::Rgba& rgba, const pbr::Rgba& inc_in, double strength, const pbr::Rgba* raw) {
+const char* emission_mask(const GfMaterial& mt, const std::map<std::string, pbr::Rgba>& texs) {
+  for (auto& c : mt.coords) {
+    if (c.unit != 2 || !contains(c.name, "Nor")) continue;
+    auto it = texs.find(c.name);
+    if (it == texs.end()) continue;
+    int mn = 255;
+    for (size_t i = 3; i < it->second.px.size(); i += 4) mn = std::min<int>(mn, it->second.px[i]);
+    if (mn < 250) return c.name.c_str();
+  }
+  return nullptr;
+}
+
+const GfCoord* coord_of(const GfMaterial& mt, const std::string& name) {
+  for (auto& c : mt.coords) if (c.name == name && c.unit != 0) return &c;
+  return nullptr;
+}
+
+namespace {
+double wrap_coord(double q, uint32_t mode) {
+  if (mode == 2) return q - std::floor(q);
+  if (mode == 3) {
+    double m = q - 2.0 * std::floor(q / 2.0);
+    return m > 1.0 ? 2.0 - m : m;
+  }
+  return q < 0.0 ? 0.0 : (q > 1.0 ? 1.0 : q);
+}
+}
+
+pbr::Rgba register_to_colour(const pbr::Rgba& src, const GfCoord& ck, const GfCoord& c0, int w, int h) {
+  if (ck.scale == c0.scale && ck.trans == c0.trans) return src;
+  pbr::Rgba out(w, h);
+  for (int y = 0; y < h; y++) {
+    double py = ((double)y + 0.5) / (double)h;
+    double uy = py / c0.scale[1] + c0.trans[1];
+    double qy = wrap_coord(ck.scale[1] * (uy - ck.trans[1]), ck.wrap[1]);
+    int iy = std::min((int)(qy * (double)src.h), src.h - 1);
+    for (int x = 0; x < w; x++) {
+      double px = ((double)x + 0.5) / (double)w;
+      double ux = px / c0.scale[0] + c0.trans[0];
+      double qx = wrap_coord(ck.scale[0] * (ux - ck.trans[0]), ck.wrap[0]);
+      int ix = std::min((int)(qx * (double)src.w), src.w - 1);
+      for (int c = 0; c < 4; c++) out.px[((size_t)y * w + x) * 4 + c] = src.px[((size_t)iy * src.w + ix) * 4 + c];
+    }
+  }
+  return out;
+}
+
+pbr::Rgba bake_emission(const pbr::Rgba& rgba, const pbr::Rgba& inc_in, double strength, const pbr::Rgba* raw, const pbr::Rgba* mask) {
   pbr::Rgba inc = inc_in;
   if (inc.h != rgba.h || inc.w != rgba.w) inc = pbr::gx_resize(inc, rgba.w, rgba.h);
   size_t n = inc.px.size() / 4;
+  pbr::Rgba mk;
+  if (mask) {
+    mk = *mask;
+    if (mk.h != inc.h || mk.w != inc.w) mk = pbr::gx_resize(mk, inc.w, inc.h);
+  }
   if (strength == 1.0) {
     std::vector<double> v;
     v.reserve(n * 3);
-    for (size_t i = 0; i < n; i++) for (int c = 0; c < 3; c++) v.push_back((double)inc.px[i * 4 + c]);
+    for (size_t i = 0; i < n; i++) for (int c = 0; c < 3; c++) v.push_back((double)inc.px[i * 4 + c] * (mask ? (double)mk.px[i * 4 + 3] / 255.0 : 1.0));
     double mean = np_sum(v.data(), v.size()) / (double)v.size();
     strength = (mean / 255.0 < 0.12) ? 1.0 : 0.3;
   }
@@ -605,6 +657,7 @@ pbr::Rgba bake_emission(const pbr::Rgba& rgba, const pbr::Rgba& inc_in, double s
     }
     for (int c = 0; c < 3; c++) {
       double glow = (double)inc.px[i * 4 + c] * al;
+      if (mask) glow = glow * ((double)mk.px[i * 4 + 3] / 255.0);
       if (raw) glow = glow * wgt;
       out.px[i * 4 + c] = u8(clip((double)rgba.px[i * 4 + c] + glow * strength, 0, 255));
     }

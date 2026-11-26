@@ -348,6 +348,7 @@ Outcome OutcomeOf(unsigned result, bool host, bool desync) {
   case 3: return host ? Outcome::Lost : Outcome::Won;
   case 4: return host ? Outcome::YouQuit : Outcome::FriendQuit;
   case 5: return host ? Outcome::FriendQuit : Outcome::YouQuit;
+  case 6: case 7: return Outcome::Draw;
   default: return Outcome::ConnectionLost;
   }
 }
@@ -360,6 +361,7 @@ std::string OutcomeText(Outcome o) {
   case Outcome::FriendQuit: return "Your friend gave in. You win!";
   case Outcome::ConnectionLost: return "The connection to your friend was lost. The battle ended without a winner.";
   case Outcome::Desync: return "The two games stopped agreeing about the battle, so it was ended. Nobody won.";
+  case Outcome::Draw: return "The battle ended in a draw.";
   }
   return "";
 }

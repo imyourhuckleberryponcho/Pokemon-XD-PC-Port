@@ -38,7 +38,7 @@ add_executable(settings_test settings/tests/settings_test.cpp)
 target_link_libraries(settings_test PRIVATE engine_settings)
 
 add_library(engine_controls STATIC controls/controls.cpp controls/controls_names.cpp controls/controls_settings.cpp
-  controls/gc_adapter.cpp)
+  controls/gc_adapter.cpp controls/pad_setup.cpp controls/pad_windows.cpp)
 target_include_directories(engine_controls PUBLIC controls/include)
 target_link_libraries(engine_controls PRIVATE ${CMAKE_DL_LIBS})
 if (WIN32)

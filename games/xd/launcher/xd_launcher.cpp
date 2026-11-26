@@ -1046,7 +1046,7 @@ bool RenderOfferPictures(const std::string& discPath, const std::string& id, con
   if (!fs::exists(pack, ec) || !fs::exists(sGameProgram, ec)) return true;
   const fs::path folder = xd::UserFolder() / L"icons" / L"offer";
   const fs::path done = folder / (L"render_offer_" + fs::path(id).wstring() + L".done");
-  const std::string stamp = std::to_string(static_cast<long long>(fs::last_write_time(pack, ec).time_since_epoch().count()));
+  const std::string stamp = std::to_string(static_cast<long long>(fs::last_write_time(pack, ec).time_since_epoch().count())) + "|2";
   std::string have;
   if (std::ifstream in(done); in) std::getline(in, have);
   if (have == stamp) return true;

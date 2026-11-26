@@ -126,6 +126,14 @@ struct RowsJob {
     std::string mods;
   };
   std::vector<OutFile> outFiles;
+  std::vector<EditedAsset> editedAssets;
+  struct EditedRow {
+    std::string table;
+    uint32_t entry = 0;
+    std::vector<uint8_t> bytes;
+    std::string mods;
+  };
+  std::vector<EditedRow> editedRows;
 };
 
 struct LoadOptions {

@@ -107,6 +107,8 @@ u16 memoDataGetCount(u32 kind);
 void* pokemonDataBiosGetPtr(u16 id);
 u16 pokemonDataBiosGetHeight(void* pdata);
 void pokemonBiosSetItemDataId(void* pokemon, u16 item);
+u32 pokemonGetSex(void* pokemon);
+u8 pokemonBiosGetLevel(void* pokemon);
 void pokemon_SetPokemonWazaDataId(void* pokemon, u32 index, u16 waza);
 void pokemon_SetPokemonWazaPp(void* pokemon, u32 index, u8 pp);
 u8 wazaDB_GetPp(u16 waza);
@@ -567,6 +569,38 @@ void Perform(const std::string& action) {
     pokemonDB_SetMitaFlag(static_cast<u16>(species), true);
     pokemonDB_SetTukamaetaFlag(static_cast<u16>(species), true);
     sStatus = "caught: species " + std::to_string(species) + " marked caught";
+  } else if (k == "evolvetable") {
+    const long species = Num(w, 1, 0);
+    const int32_t mode = static_cast<int32_t>(Num(w, 2, 0));
+    const uint16_t item = static_cast<uint16_t>(Num(w, 3, 0));
+    const long level = Num(w, 4, 20);
+    int wantSex = 2;
+    long move = 0, hold = 0;
+    for (size_t i = 5; i < w.size(); i++) {
+      if (w[i] == "female") wantSex = 1;
+      else if (w[i] == "male") wantSex = 0;
+      else if (w[i].compare(0, 5, "move=") == 0) move = std::atol(w[i].c_str() + 5);
+      else if (w[i].compare(0, 5, "hold=") == 0) hold = std::atol(w[i].c_str() + 5);
+    }
+    if (species < 1 || species > 0x3FFF || level < 1 || level > 100) {
+      sStatus = "evolvetable: <species row> <mode> <item> [level] [female|male] [move=<row>] [hold=<item>]";
+      return;
+    }
+    alignas(16) static uint8_t pokemon[1024];
+    unsigned sex = 2;
+    for (int tries = 0; tries < 400; tries++) {
+      std::memset(pokemon, 0, sizeof pokemon);
+      pokemonCreate(pokemon, static_cast<u16>(species), static_cast<u8>(level), reinterpret_cast<void*>(gamedataGetStatus(nullptr, 1)));
+      sex = static_cast<unsigned>(pokemonGetSex(pokemon) & 0xFF);
+      if (wantSex == 2 || static_cast<int>(sex) == wantSex) break;
+    }
+    if (move != 0) pokemon_SetPokemonWazaDataId(pokemon, 0, static_cast<u16>(move));
+    if (hold != 0) pokemonBiosSetItemDataId(pokemon, static_cast<u16>(hold));
+    struct { uint8_t kind, reserved; uint16_t parameter; } info = {0, 0, 0};
+    uint16_t extra = 0;
+    const uint16_t answer = pokemonEvolutionCheck(pokemon, mode, item, &extra, &info);
+    std::fprintf(stderr, "[dev menu] evolvetable: species %ld level %ld mode %d item %u -> species row %u (sex %u, kind %u)\n", species, level, static_cast<int>(mode),
+                 static_cast<unsigned>(item), static_cast<unsigned>(answer), sex, static_cast<unsigned>(info.kind));
   } else if (k == "evolvecheck") {
     const int slot = w.size() > 1 ? std::atoi(w[1].c_str()) : 0;
     const int32_t mode = static_cast<int32_t>(Num(w, 2, 0));
@@ -579,7 +613,8 @@ void Perform(const std::string& action) {
     struct { uint8_t kind, reserved; uint16_t parameter; } info = {0, 0, 0};
     uint16_t extra = 0;
     const uint16_t species = pokemonEvolutionCheck(p, mode, item, &extra, &info);
-    std::fprintf(stderr, "[dev menu] evolvecheck: slot %d mode %d item %u -> species row %u\n", slot, static_cast<int>(mode), static_cast<unsigned>(item), static_cast<unsigned>(species));
+    std::fprintf(stderr, "[dev menu] evolvecheck: slot %d mode %d item %u -> species row %u (level %u, sex %u)\n", slot, static_cast<int>(mode), static_cast<unsigned>(item),
+                 static_cast<unsigned>(species), static_cast<unsigned>(pokemonBiosGetLevel(p)), static_cast<unsigned>(pokemonGetSex(p) & 0xFF));
     if (species != 0 && !(w.size() > 4 && w[4] == "ask")) {
       fadeSet(3, 0.5f);
       fadeCheck(1);

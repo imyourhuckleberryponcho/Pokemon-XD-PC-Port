@@ -86,6 +86,10 @@ add_executable(background_controller_test background_controller_test.cpp)
 target_link_libraries(background_controller_test PRIVATE ${AURORA_SDL3_TARGET})
 aurora_copy_runtime_dlls(background_controller_test)
 
+add_executable(pad_setup_test pad_setup_test.cpp)
+target_link_libraries(pad_setup_test PRIVATE engine_controls ${AURORA_SDL3_TARGET})
+aurora_copy_runtime_dlls(pad_setup_test)
+
 add_executable(keyboard_defaults_test keyboard_defaults_test.cpp)
 target_link_libraries(keyboard_defaults_test PRIVATE platform_input aurora::pad aurora::core aurora::gx aurora::os)
 aurora_copy_runtime_dlls(keyboard_defaults_test)

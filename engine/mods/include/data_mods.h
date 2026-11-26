@@ -59,6 +59,7 @@ struct DataTable {
   uint32_t addKeyOffset = 0;
   uint8_t addKeySize = 0;
   std::vector<std::string> assetKeys;
+  std::vector<std::string> editAssetKeys;
   bool addInChunk = false;
   std::vector<std::string> textFields;
   std::string primaryText;
@@ -131,7 +132,16 @@ struct AddedRow {
   std::map<std::string, std::string> assets;
   bool unbound = false;
   bool inFile = false;
+  bool existing = false;
   std::string label;
+};
+struct EditedAsset {
+  std::string table;
+  uint32_t entry = 0;
+  std::string entryName;
+  std::string key, text;
+  std::string mod, modName, where;
+  bool builtIn = false;
 };
 struct AddedText {
   uint32_t key = 0;
@@ -146,6 +156,7 @@ struct DataApplyResult {
   std::vector<TextChange> texts;
   std::vector<AddedRow> added;
   std::vector<AddedText> addedTexts;
+  std::vector<EditedAsset> editedAssets;
 };
 
 std::string AddedRowsJson(const std::vector<AddedRow>& rows);

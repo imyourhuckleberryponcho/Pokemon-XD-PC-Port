@@ -86,9 +86,11 @@ extern const std::map<int, std::string> kCategory;
 
 struct MovePlanEntry { char kind; const char* donor; const char* note; };
 extern const std::map<std::string, MovePlanEntry> kMovePlan;
-extern const std::set<std::string> kPunch, kImplemented, kIgnoresProtect;
+extern const std::set<std::string> kPunch, kImplemented, kIgnoresProtect, kKeepRange;
 extern const std::map<std::string, int> kFixedPower, kEffectSlots, kChance;
 extern const std::map<std::string, std::string> kAnimDonor;
+extern const std::map<int, int> kRangeOfTarget;
+extern const std::map<std::string, std::vector<std::pair<std::string, int>>> kFlagFix;
 
 struct MovesOut {
   std::string json;

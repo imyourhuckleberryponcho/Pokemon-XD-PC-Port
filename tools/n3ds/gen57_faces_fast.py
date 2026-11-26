@@ -233,9 +233,28 @@ def make_pictures(a, pack, gen4, out, progress, log, first_row):
     os.makedirs(out, exist_ok=True)
     info = json.load(open(os.path.join(pack, 'gen57.json')))
 
-    last = 494 + 26 + int(info.get('species', 314)) + int(info.get('forms', 0)) + 4
+
+
+    last = 494 + 26 + int(info.get('species', 314)) + int(info.get('forms', 0)) - 1
+    gen4_rows = set()
+    try:
+        for ln in open(os.path.join(gen4, 'tables.txt'), encoding='utf-8', errors='replace'):
+            p_ = ln.split()
+            if len(p_) >= 3 and p_[0] == 'species' and p_[1].isdigit() and p_[2].isdigit():
+                gen4_rows.add(int(p_[2]))
+    except OSError:
+        pass
+
+    def has_row(r):
+        if 252 <= r <= 276 or r == 412:
+            return False
+        if 412 <= r < 520:
+            return not gen4_rows or r in gen4_rows
+        return True
     names, items = ['michael.png'], ['michael']
     for r in range(first_row, last + 1):
+        if not has_row(r):
+            continue
         items += ['row:%d' % r, 'row:%d:shiny' % r]
         names += ['pokemon_%d.png' % r, 'pokemon_%d_shiny.png' % r]
     have = {f for f in os.listdir(out) if f.endswith('.png') and not whole_png(os.path.join(out, f))}
@@ -299,7 +318,7 @@ def make_pictures(a, pack, gen4, out, progress, log, first_row):
 
 
         if len(made) < total:
-            log('pictures MISSING: %d of %d; the pack is finished without them: make it again to draw them' % (total - len(made), total))
+            log('pictures MISSING: %d of %d (their models did not load); the pack is finished without them: make it again to draw them' % (total - len(made), total))
     finally:
         for link in links:
             if os.path.lexists(link):

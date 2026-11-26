@@ -29,6 +29,8 @@ uint32_t ExtraRowCount(const char* table);
 uint32_t ModelRowsTaken();
 uint32_t WaveRowsTaken();
 bool SpotsLoaded();
+bool SetSpotRow(const char* table, uint32_t row, uint32_t prob, uint32_t rate);
+bool SpotRowValues(const char* table, uint32_t row, uint32_t& top, uint32_t& rate);
 const std::vector<uint16_t>& DeskItems();
 
 void SetMoreRows(const std::vector<xd::pack::RowSpec>& rows);

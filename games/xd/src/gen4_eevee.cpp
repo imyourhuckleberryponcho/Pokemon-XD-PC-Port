@@ -235,6 +235,18 @@ void LoadOfferPicture(int k) {
     std::fprintf(stderr, "[gen4] the Eevee offer picture %s is not readable: the face is shown instead\n", path.c_str());
     return;
   }
+  {
+    const uint32_t xs[4] = {8, head[1] - 9, 8, head[1] - 9}, ys[4] = {8, 8, head[2] - 9, head[2] - 9};
+    int bright = 0;
+    for (int i = 0; i < 4; i++) {
+      const uint8_t* p = &px[(static_cast<size_t>(ys[i]) * head[1] + xs[i]) * 4];
+      bright += p[0] > 200 && p[1] > 200 && p[2] > 200 && p[3] > 200;
+    }
+    if (bright == 4) {
+      std::fprintf(stderr, "[gen4] the Eevee offer picture %s has a white background (a bad capture): the face is shown instead\n", path.c_str());
+      return;
+    }
+  }
   const uint32_t w = (head[1] + 3) & ~3u, h = (head[2] + 3) & ~3u;
   uint8_t* mem = static_cast<uint8_t*>(GSmemAllocAlign(w * h * 4, 32));
   void* rec = GSmemAllocAlign(sizeof(GStexture), 32);

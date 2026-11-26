@@ -15,6 +15,11 @@ uint16_t pokemonGetSoubiItemDataId(void* pokemon);
 void* itemDataBiosGetPtr(uint16_t item);
 uint16_t itemDataBiosGetItemSoubiDataId(void* itemData);
 uint32_t pokemonGetSex(void* pokemon);
+uint8_t pokemonBiosGetLevel(void* pokemon);
+int8_t pokemonSearchWazaDataId(void* pokemon, uint16_t move);
+void* pokemonDataBiosGetPtr(uint16_t species);
+uint8_t pokemonDataBiosGetZokuseiDataId(void* data, uint16_t index);
+uintptr_t heroGetStatus(void* hero, uint32_t selector, uint16_t index);
 }
 
 namespace {
@@ -26,10 +31,24 @@ struct EvolutionInfo {
 };
 
 constexpr uint8_t kLevelHolding = 17, kUseFemale = 18, kUseMale = 19;
+constexpr uint8_t kLevelDark = 20, kLevelFemale = 21, kKnowsMove = 22;
+constexpr uint8_t kLevelOnly = 23;
+constexpr uint8_t kDarkType = 17;
 constexpr uint16_t kEverstoneEffect = 0x26;
 
 std::vector<xd::gen4::ExtraEvolution> sList;
 int32_t sCord = -1;
+
+bool DarkInParty() {
+  for (uint16_t slot = 0; slot < 6; slot++) {
+    void* other = reinterpret_cast<void*>(heroGetStatus(nullptr, 3, slot));
+    if (other == nullptr || !(pokemonCheckValid(other) & 0xFF)) continue;
+    const uint16_t sp = pokemonBiosGetPokemonDataId(other);
+    void* data = sp != 0 ? pokemonDataBiosGetPtr(sp) : nullptr;
+    if (data != nullptr && (pokemonDataBiosGetZokuseiDataId(data, 0) == kDarkType || pokemonDataBiosGetZokuseiDataId(data, 1) == kDarkType)) return true;
+  }
+  return false;
+}
 
 bool Gen4On() { return xd::challenges::Active("gen4_pokemon"); }
 
@@ -87,13 +106,29 @@ static uint16_t Gen4EvolutionCheck(void* pokemon, int32_t mode, uint16_t item, u
       fits = askMode == 0 && pokemonBiosGetItemDataId(pokemon) == e.param;
       reportKind = 6;
       break;
+    case kLevelDark:
+      fits = askMode == 0 && pokemonBiosGetLevel(pokemon) >= e.param && DarkInParty();
+      reportKind = 4;
+      break;
+    case kLevelFemale:
+      fits = askMode == 0 && pokemonBiosGetLevel(pokemon) >= e.param && (pokemonGetSex(pokemon) & 0xFF) == 1;
+      reportKind = 4;
+      break;
+    case kLevelOnly:
+      fits = askMode == 0 && pokemonBiosGetLevel(pokemon) >= e.param;
+      reportKind = 4;
+      break;
+    case kKnowsMove:
+      fits = askMode == 0 && pokemonSearchWazaDataId(pokemon, e.param) >= 0;
+      reportKind = 4;
+      break;
     default:
       break;
     }
     if (!fits) continue;
     result = e.target;
     info->kind = reportKind;
-    info->parameter = e.param;
+    info->parameter = e.kind == kKnowsMove ? 0 : e.param;
   }
   return result;
 }

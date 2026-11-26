@@ -213,6 +213,16 @@ def parse_model(b):
             wu, wv, mag, mn, mlod = r.u32(), r.u32(), r.u32(), r.u32(), r.u32()
             coords.append(dict(name=nm, unit=unit, mapping=mapping, scale=sc, rot=rot, trans=tr, wrap=(wu, wv)))
         m['coords'] = coords
+
+        words = struct.unpack_from('<%dI' % (ln // 4), r.b, start)
+        m['blend'] = m['depth'] = None
+        for k in range(101, len(words) - 1):
+            hdr = words[k + 1]
+            if ((hdr >> 16) & 0xf) == 0xf and ((hdr >> 20) & 0x7ff) == 0:
+                if (hdr & 0xffff) == 0x101:
+                    m['blend'] = words[k]
+                elif (hdr & 0xffff) == 0x107:
+                    m['depth'] = words[k]
         r.p = start + ln
         mats.append(m)
     meshes = []

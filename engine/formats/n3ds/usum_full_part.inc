@@ -15,7 +15,7 @@ struct FullArgs {
 };
 
 const int GEN57_MAKE_VERSION = 7;
-const char* kConverterVersion = "0.2.2";
+const char* kConverterVersion = "0.2.3";
 
 int run_process(const std::string& exe, const std::vector<std::string>& args, const std::map<std::string, std::string>* env, const std::string& logfile,
                 const std::function<void(const std::string&)>& on_line = nullptr) {
@@ -155,9 +155,25 @@ void make_pictures(const FullArgs& a, const std::string& pack, const std::string
   fs::create_directories(out);
   pbr::Json info = pbr::Json::parse(read_all(fs::path(pack) / "gen57.json"));
   const int species = info.find("species") ? (int)info.find("species")->i : 314, forms = info.find("forms") ? (int)info.find("forms")->i : 0;
-  const int last = 494 + 26 + species + forms + 4;
+  const int last = 494 + 26 + species + forms - 1;
+  std::set<int> gen4_rows;
+  {
+    std::ifstream tf(fs::path(gen4) / "tables.txt");
+    std::string ln;
+    while (std::getline(tf, ln)) {
+      int nat = 0, row = 0;
+      if (ln.compare(0, 8, "species ") == 0 && std::sscanf(ln.c_str() + 8, "%d %d", &nat, &row) == 2 && row > 0) gen4_rows.insert(row);
+    }
+  }
+  auto has_row = [&](int r) {
+    if (r >= 252 && r <= 276) return false;
+    if (r == 412) return false;
+    if (r >= 412 && r < 520) return gen4_rows.empty() || gen4_rows.count(r) > 0;
+    return true;
+  };
   std::vector<std::string> names = {"michael.png"}, items = {"michael"};
   for (int r = first_row; r <= last; r++) {
+    if (!has_row(r)) continue;
     items.push_back("row:" + std::to_string(r));
     items.push_back("row:" + std::to_string(r) + ":shiny");
     names.push_back("pokemon_" + std::to_string(r) + ".png");
@@ -252,7 +268,7 @@ void make_pictures(const FullArgs& a, const std::string& pack, const std::string
   if (failed || made < total) {
     const std::string why = failed ? " (" + fail_text + ")" : std::string();
     log("pictures MISSING: " + std::to_string(total - made) + " of " + std::to_string(total) + why + "; the pack is finished without them: make it again to draw them");
-    say("progress 1 1 " + std::to_string(total - made) + " Pokedex pictures are missing: they show a question mark; make the pack again to draw them");
+    say("progress 1 1 " + std::to_string(total - made) + " Pokedex pictures could not be drawn: they show a question mark; making the pack again draws them if it was only a stop");
   }
 }
 
@@ -609,6 +625,12 @@ int run_full(FullArgs& a) {
             const Json* pr = kv.second.find("pkxDataId");
             if (np && pr && pr->i != 418) rowOf[(int)np->i] = (int)pr->i;
           }
+          const Json* ed = gen4species.find("pokemon");
+          if (ed) for (auto& kv : ed->o) {
+            const Json* np = kv.second.find("numPokemon");
+            const Json* pr = kv.second.find("pkxDataId");
+            if (np && pr && pr->i != 418) rowOf[(int)np->i] = (int)pr->i;
+          }
           for (auto& it : plan_all.items) {
             if (it.pack != "gen4" || it.nat == 438 || !it.skip.empty() || !rowOf.count(it.nat)) continue;
             const fs::path f = fs::path(a.gen4_pack) / "files" / ("pkx_g4_" + it.model + ".fsys");
@@ -645,6 +667,16 @@ int run_full(FullArgs& a) {
                 kv.second.set("face", Json("textures/faces/" + std::to_string(np->i) + ".png"));
                 if (fs::exists(fs::path(a.gen4_pack) / "textures" / "icons" / (std::to_string(np->i) + ".png"))) kv.second.set("icon", Json("textures/icons/" + std::to_string(np->i) + ".png"));
                 n++;
+              }
+              if (Json* ed = gen4species.find("pokemon")) {
+                for (auto& kv : ed->o) {
+                  const Json* np = kv.second.find("numPokemon");
+                  if (!np || !fa.extra.count((int)np->i)) continue;
+                  const fs::path png = fs::path(a.gen4_pack) / "textures" / "faces" / (std::to_string(np->i) + ".png");
+                  if (fs::exists(png)) kv.second.set("face", Json("textures/faces/" + std::to_string(np->i) + ".png"));
+                  if (fs::exists(fs::path(a.gen4_pack) / "textures" / "icons" / (std::to_string(np->i) + ".png"))) kv.second.set("icon", Json("textures/icons/" + std::to_string(np->i) + ".png"));
+                  if (fs::exists(png)) n++;
+                }
               }
               write_all(gen4json, eolfix(gen4species.dump(1, true), a.eol_crlf));
               log("Gen 4 faces: " + std::to_string(n) + " species rows point at their own face");
