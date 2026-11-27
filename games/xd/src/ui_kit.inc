@@ -606,6 +606,51 @@ void StageRow(ImDrawList* dl, const Screen& sc, const NRow& r, float y, bool sel
   }
 }
 
+struct DescPager {
+  std::string text;
+  int pages = 0, page = 0;
+  float start = 0.f;
+};
+DescPager sDescPager;
+int sDescTurn = 0;
+bool sDescKeyNext = false, sDescKeyBack = false;
+void DescInput(const PortMenuInput* in, bool shouldersFree) {
+  const uint16_t nextBtn = shouldersFree ? PAD_TRIGGER_R : PAD_BUTTON_X, backBtn = shouldersFree ? PAD_TRIGGER_L : PAD_BUTTON_Y;
+  sDescTurn = 0;
+  int turn = 0;
+  if ((in->pressed & nextBtn) != 0) turn++;
+  if ((in->pressed & backBtn) != 0) turn--;
+  const bool* keys = SDL_GetKeyboardState(nullptr);
+  const bool next = keys != nullptr && keys[SDL_SCANCODE_PAGEDOWN], back = keys != nullptr && keys[SDL_SCANCODE_PAGEUP];
+  if (next && !sDescKeyNext) turn++;
+  if (back && !sDescKeyBack) turn--;
+  sDescKeyNext = next, sDescKeyBack = back;
+  if (turn != 0) sDescTurn = turn > 0 ? 1 : -1;
+}
+float DescPageSeconds(int page, int pages, int totalLines, int perPage) {
+  const int lines = std::max(1, std::min(perPage, totalLines - page * perPage));
+  const float secs = std::max(3.2f, 5.f * static_cast<float>(lines) / static_cast<float>(perPage));
+  return page == pages - 1 ? secs + 1.5f : secs;
+}
+int DescPageNow(const std::string& text, int pages, int totalLines, int perPage) {
+  DescPager& d = sDescPager;
+  const float now = Time();
+  if (text != d.text || pages != d.pages) d.text = text, d.pages = pages, d.page = 0, d.start = now, sDescTurn = 0;
+  if (pages <= 1) {
+    sDescTurn = 0;
+    return 0;
+  }
+  if (sDescTurn != 0) {
+    d.page = ((d.page + sDescTurn) % pages + pages) % pages;
+    d.start = now;
+    sDescTurn = 0;
+  } else if (now - d.start >= DescPageSeconds(d.page, pages, totalLines, perPage)) {
+    d.page = (d.page + 1) % pages;
+    d.start = now;
+  }
+  return d.page;
+}
+
 void StageDesc(ImDrawList* dl, const Screen& sc, const std::string& desc, float descAge, int forcePage = -1) {
   MessageWindow(dl, sc, 27.f, 372.f, 613.f, 462.f);
   std::vector<std::string> lines;
@@ -615,7 +660,7 @@ void StageDesc(ImDrawList* dl, const Screen& sc, const std::string& desc, float 
   }
   fit::Region(52.f, 380.f, 584.f, 440.f, "description box");
   const int pages = std::max(1, (static_cast<int>(lines.size()) + 1) / 2);
-  const int page = forcePage >= 0 ? std::min(forcePage, pages - 1) : pages > 1 ? static_cast<int>(descAge / 3.4f) % pages : 0;
+  const int page = forcePage >= 0 ? std::min(forcePage, pages - 1) : DescPageNow(desc, pages, static_cast<int>(lines.size()), 2);
   for (int k = 0; k < 2; k++) {
     const size_t li = static_cast<size_t>(page * 2 + k);
     if (li < lines.size()) Text(dl, sc, 52.f, 384.f + 33.f * static_cast<float>(k), lines[li], kText, 1.f, 0.f, 0);

@@ -32,6 +32,9 @@ void ApplyMainTables();
 
 void AppendAbilityTexts(std::vector<std::pair<uint32_t, std::string>>& texts);
 void InstallAbilityRows();
+bool AbilityImplemented(uint32_t id);
+uint32_t PrismScaleItem();
+void SyncAbilityDescriptions();
 bool XgInfo(xd::gen4::xg::Gen57Info& out);
 std::vector<std::string> AbilityNamesForXG();
 const std::vector<uint16_t>& EvolutionShopItems();

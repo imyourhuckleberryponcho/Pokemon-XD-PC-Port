@@ -1,0 +1,266 @@
+diff --git a/lib/gfx/recording.cpp b/lib/gfx/recording.cpp
+index b6eaac5..6b90bda 100644
+--- a/lib/gfx/recording.cpp
++++ b/lib/gfx/recording.cpp
+@@ -20,7 +20,10 @@
+ #endif
+ #include "../window.hpp"
+ 
++#include <algorithm>
+ #include <array>
++#include <cstdint>
++#include <cstdlib>
+ #include <cstring>
+ #include <new>
+ #include <optional>
+@@ -284,7 +287,68 @@ void seal_pass(FramePacket& frame, uint32_t passIndex) {
+   pass.sealed = true;
+ }
+ 
++// (patch 0067) A frame's vertex / index / uniform / storage buffer is a fixed-size piece of GPU memory. Pushing past
++// its end used to abort the program (ByteBuffer::resize on a mapped view). Now: the push is refused, the first one
++// (then every 1000th) is logged, a flag says so (take_push_overflow: the draw that needed it is left out), and the
++// range handed back lies inside the buffer (offset 0) so nothing reads or writes outside it.
++// XD_GX_LIMIT_<VERTS|INDICES|UNIFORMS|STORAGE>=<bytes> (tests): the buffer counts as that big.
++namespace {
++bool g_pushOverflow = false;
++uint64_t g_pushOverflowCount = 0;
++size_t buffer_limit(const char* name, size_t capacity) {
++  const char* text = std::getenv(name);
++  if (text == nullptr || *text == 0) {
++    return capacity;
++  }
++  const auto value = static_cast<size_t>(std::strtoull(text, nullptr, 10));
++  return value < capacity ? value : capacity;
++}
++size_t effective_capacity(const ByteBuffer& target, const FramePacket& frame) {
++  static const size_t verts = buffer_limit("XD_GX_LIMIT_VERTS", SIZE_MAX);
++  static const size_t indices = buffer_limit("XD_GX_LIMIT_INDICES", SIZE_MAX);
++  static const size_t uniforms = buffer_limit("XD_GX_LIMIT_UNIFORMS", SIZE_MAX);
++  static const size_t storage = buffer_limit("XD_GX_LIMIT_STORAGE", SIZE_MAX);
++  size_t limit = SIZE_MAX;
++  if (&target == &frame.verts) {
++    limit = verts;
++  } else if (&target == &frame.indices) {
++    limit = indices;
++  } else if (&target == &frame.uniforms) {
++    // (the frame's last pass appends gx::MaxUniformSize bytes of padding: always keep room for it)
++    limit = uniforms;
++    return std::min(limit, target.capacity() - gx::MaxUniformSize);
++  } else if (&target == &frame.storage) {
++    limit = storage;
++  }
++  return std::min(limit, target.capacity());
++}
++const char* buffer_name(const ByteBuffer& target, const FramePacket& frame) {
++  return &target == &frame.verts      ? "vertex"
++         : &target == &frame.indices  ? "index"
++         : &target == &frame.uniforms ? "uniform"
++         : &target == &frame.storage  ? "storage"
++                                      : "texture upload";
++}
++Range refuse_push(const ByteBuffer& target, size_t length, size_t capacity) {
++  g_pushOverflow = true;
++  if (g_pushOverflowCount++ % 1000 == 0) {
++    Log.warn("A frame's {} buffer is full ({} of {} bytes used, {} more wanted): the draw(s) that need it are left "
++             "out ({} so far)",
++             buffer_name(target, current_frame_packet()), target.size(), capacity, length, g_pushOverflowCount);
++  }
++  return {0, static_cast<uint32_t>(std::min<size_t>(length, capacity))};
++}
++} // namespace
++
+ Range push(ByteBuffer& target, const uint8_t* data, size_t length, size_t alignment) {
++  {
++    const size_t capacity = effective_capacity(target, current_frame_packet());
++    const size_t begin = target.size();
++    const size_t alignedBegin = alignment != 0 ? AURORA_ALIGN(begin, alignment) : begin;
++    if (alignedBegin + length > capacity) {
++      return refuse_push(target, length, capacity);
++    }
++  }
+   if (alignment != 0) {
+     const size_t begin = target.size();
+     const size_t alignedBegin = AURORA_ALIGN(begin, alignment);
+@@ -300,6 +364,14 @@ Range push(ByteBuffer& target, const uint8_t* data, size_t length, size_t alignm
+ }
+ 
+ Range map(ByteBuffer& target, size_t length, size_t alignment) {
++  {
++    const size_t capacity = effective_capacity(target, current_frame_packet());
++    const size_t begin = target.size();
++    const size_t alignedBegin = alignment != 0 ? AURORA_ALIGN(begin, alignment) : begin;
++    if (alignedBegin + length > capacity) {
++      return refuse_push(target, length, capacity);
++    }
++  }
+   if (alignment != 0) {
+     const size_t begin = target.size();
+     const size_t alignedBegin = AURORA_ALIGN(begin, alignment);
+@@ -697,6 +769,12 @@ size_t storage_used() noexcept {
+ 
+ size_t storage_capacity() noexcept { return StorageBufferSize; }
+ 
++bool take_push_overflow() noexcept {
++  const bool value = g_pushOverflow;
++  g_pushOverflow = false;
++  return value;
++}
++
+ bool storage_has_room(size_t length) noexcept {
+   if (!g_recorder.active()) {
+     return true; // (push_storage itself says what is wrong then)
+diff --git a/lib/gfx/recording.hpp b/lib/gfx/recording.hpp
+index 5d1d7c7..7cafbab 100644
+--- a/lib/gfx/recording.hpp
++++ b/lib/gfx/recording.hpp
+@@ -53,6 +53,10 @@ float frame_buffer_use() noexcept;
+ size_t storage_used() noexcept;
+ size_t storage_capacity() noexcept;
+ bool storage_has_room(size_t length) noexcept;
++// (patch 0067) True when a push_verts / push_indices / push_uniform / push_storage since the last call did not fit
++// in its frame buffer (nothing was written, the range it gave lies inside the buffer but is not the data): the
++// caller leaves the draw out. Cleared by the call.
++bool take_push_overflow() noexcept;
+ // Hands the picture shown by the last display copy to the window now, as its own present (in-between pictures:
+ // several pictures of one game picture leave in one frame). Without the overlay of the frame's own present.
+ bool present_extra_picture();
+diff --git a/lib/gfx/resources.hpp b/lib/gfx/resources.hpp
+index a750690..cfdbc22 100644
+--- a/lib/gfx/resources.hpp
++++ b/lib/gfx/resources.hpp
+@@ -5,8 +5,8 @@
+ namespace aurora::gfx {
+ inline constexpr bool UseTextureBuffer = true;
+ inline constexpr uint64_t UniformBufferSize = 25165824; // 24 MiB
+-inline constexpr uint64_t VertexBufferSize = 5242880;   // 5 MiB
+-inline constexpr uint64_t IndexBufferSize = 2097152;    // 2 MiB
++inline constexpr uint64_t VertexBufferSize = 8388608;   // 8 MiB (5 before patch 0067)
++inline constexpr uint64_t IndexBufferSize = 8388608;    // 8 MiB (2 before patch 0067)
+ // (patch 0062) 16 MiB (was 8): a room with several Battle Revolution models needs more than 8 MiB of vertex arrays in one picture
+ inline constexpr uint64_t StorageBufferSize = 16777216; // 16 MiB
+ inline constexpr uint64_t TextureUploadSize = 25165824; // 24 MiB
+diff --git a/lib/gx/command_processor.cpp b/lib/gx/command_processor.cpp
+index d724747..4dce5e5 100644
+--- a/lib/gx/command_processor.cpp
++++ b/lib/gx/command_processor.cpp
+@@ -254,6 +254,9 @@ bool sArraysKept = false; // (clear_draw_cache(true): in-between pictures are be
+ size_t fast_array_storage_ceiling() noexcept { return (gfx::storage_capacity() / 8) * 5; }
+ bool sArrayNoRoom = false;
+ u64 sArrayNoRoomDraws = 0;
++// (patch 0067) A draw was left out because a frame buffer (vertices, indices, uniforms) was full: the next draw does
++// not merge into the one before it (its vertices are no longer right behind that draw's).
++bool sNoMerge = false;
+ 
+ gfx::Range push_array(const void* data, u32 length) {
+   static const bool fast = perf::option("XD_GX_ARRAYFAST");
+@@ -1005,6 +1008,16 @@ static void push_gx_draw(GXPrimitive prim, GXVtxFmt fmt, u16 vtxCount, gfx::Rang
+   } else if (prim == GX_POINTS) {
+     instanceCount = vtxCount;
+   }
++  if (gfx::take_push_overflow()) {
++    // (patch 0067) the uniforms (or the fog table) did not fit in the frame's buffer: this draw is left out
++    // (logged by the push), and the next one builds them again
++    cache.uniformRange = {};
++    cache.hasFogRange = false;
++    state.dirty |= DirtyUniform;
++    sNoMerge = true;
++    return;
++  }
++  sNoMerge = false;
+   cache.lastDrawFmt = fmt;
+   gfx::push_draw_command(DrawData{
+       .pipeline = cache.pipelineRef,
+@@ -1031,6 +1044,10 @@ static void handle_draw_unmerged(GXPrimitive prim, GXVtxFmt fmt, u16 vtxCount, g
+     numIndices = prepare_idx_buffer(idxBuf, prim, 0, vtxCount);
+     idxRange = gfx::push_indices(idxBuf.data(), idxBuf.size(), 4);
+     idxBuf.clear();
++    if (gfx::take_push_overflow()) { // (patch 0067) no room for the indices: the draw is left out
++      sNoMerge = true;
++      return;
++    }
+   }
+ 
+   push_gx_draw(prim, fmt, vtxCount, vertRange, idxRange, numIndices);
+@@ -1127,7 +1144,7 @@ static void draw_prim(GXPrimitive prim, GXVtxFmt fmt, u16 vtxCount, ByteReader&
+   const bool cleanState = g_gxState.dirty == 0 && fmt == sDrawCache.lastDrawFmt && sDrawCache.lineMode == 0 &&
+                           prim != GX_LINES && prim != GX_LINESTRIP && prim != GX_POINTS;
+   auto* lastDraw = cleanState ? gfx::get_last_draw_command<DrawData>() : nullptr;
+-  const bool canMerge = lastDraw != nullptr && lastDraw->instanceCount == 1;
++  const bool canMerge = lastDraw != nullptr && lastDraw->instanceCount == 1 && !sNoMerge;
+   // Photo modes: 2D hidden (AuroraSetViewOverride).
+   if (view_override_hides_draw())
+     UNLIKELY {
+@@ -1210,7 +1227,15 @@ static void draw_prim(GXPrimitive prim, GXVtxFmt fmt, u16 vtxCount, ByteReader&
+       }
+       interp_set_draw(id != 0 ? id : 1, loose != 0 ? loose : 1, !indexed);
+     }
++  gfx::take_push_overflow();
+   gfx::Range vertRange = gfx::push_verts(vertexData.data(), vertexData.size(), canMerge ? 0 : 4);
++  if (gfx::take_push_overflow()) {
++    // (patch 0067) no room for the vertices in the frame's buffer: this draw is left out (logged by the push)
++    sNoMerge = true;
++    if (interp)
++      UNLIKELY { interp_draw_done(interpSlots); }
++    return;
++  }
+ 
+   // Try to merge with previous draw call
+   if (canMerge) {
+@@ -1218,6 +1243,7 @@ static void draw_prim(GXPrimitive prim, GXVtxFmt fmt, u16 vtxCount, ByteReader&
+     gfx::Range idxRange;
+     static ByteBuffer idxBuf;
+     const bool hadIndexRange = lastDraw->idxRange.size != 0;
++    const u32 prevIndexCount = lastDraw->indexCount;
+     if (lastDraw->indexCount == 0 && prim != GX_TRIANGLES) {
+       // Generate triangle index buffer for previous draw
+       lastDraw->indexCount = prepare_idx_buffer(idxBuf, GX_TRIANGLES, 0, lastDraw->vtxCount);
+@@ -1226,6 +1252,14 @@ static void draw_prim(GXPrimitive prim, GXVtxFmt fmt, u16 vtxCount, ByteReader&
+       numIndices += prepare_idx_buffer(idxBuf, prim, lastDraw->vtxCount, vtxCount);
+       idxRange = gfx::push_indices(idxBuf.data(), idxBuf.size(), hadIndexRange ? 0 : 4);
+       idxBuf.clear();
++      if (gfx::take_push_overflow()) {
++        // (patch 0067) no room for the indices: this draw is left out and the one before stays as it was
++        lastDraw->indexCount = prevIndexCount;
++        sNoMerge = true;
++        if (interp)
++          UNLIKELY { interp_draw_done(interpSlots); }
++        return;
++      }
+     }
+     CHECK(lastDraw->vertRange.offset + lastDraw->vertRange.size == vertRange.offset,
+           "Non-consecutive vertex ranges ({} < {})", lastDraw->vertRange.offset + lastDraw->vertRange.size,
+@@ -1469,6 +1503,7 @@ void handle_aurora(ByteReader& reader) noexcept {
+     const size_t idxBytes = static_cast<size_t>(indexCount) * sizeof(u16);
+     // Index data is always host-endian; push it to the GPU buffer as-is
+     const auto indexData = reader.take(idxBytes);
++    gfx::take_push_overflow();
+     const gfx::Range idxRange = gfx::push_indices(indexData.data(), indexData.size(), 4);
+     u32 vtxSize;
+     if (g_gxState.lastVtxFmt == fmt) {
+@@ -1479,8 +1514,12 @@ void handle_aurora(ByteReader& reader) noexcept {
+     const u32 totalVtxBytes = vtxCount * vtxSize;
+     const auto vertexData = reader.take(totalVtxBytes);
+     const gfx::Range vertRange = gfx::push_verts(vertexData.data(), vertexData.size(), 4);
++    const bool noRoom = gfx::take_push_overflow(); // (patch 0067) the draw is left out (logged by the push)
++    if (noRoom) {
++      sNoMerge = true;
++    }
+     interp_set_draw(0, 0, false); // (in-between pictures: not a draw that can be told apart)
+-    if (indexCount != 0 && !view_override_hides_draw()) {
++    if (indexCount != 0 && !noRoom && !view_override_hides_draw()) {
+       push_gx_draw(prim, fmt, vtxCount, vertRange, idxRange, indexCount);
+       interp_draw_done(static_cast<u16>((1u << MaxPnMtx) - 1));
+     }
+diff --git a/lib/internal.hpp b/lib/internal.hpp
+index f032ad7..d6551ff 100644
+--- a/lib/internal.hpp
++++ b/lib/internal.hpp
+@@ -284,6 +284,7 @@ public:
+   [[nodiscard]] const uint8_t* data() const noexcept { return m_data; }
+   [[nodiscard]] size_t size() const noexcept { return m_length; }
+   [[nodiscard]] bool empty() const noexcept { return m_length == 0; }
++  [[nodiscard]] size_t capacity() const noexcept { return m_capacity; }
+ 
+   void append(const void* data, size_t size) {
+     resize(m_length + size, false);

@@ -10,7 +10,7 @@
 namespace xd::online {
 
 constexpr int kExtrasProtocol = 3;
-constexpr int kBattleProtocol = 4;
+constexpr int kBattleProtocol = 5;
 
 struct RoomRules {
   std::string ruleSet = "classic";

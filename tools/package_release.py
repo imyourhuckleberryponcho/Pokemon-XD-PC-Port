@@ -366,7 +366,12 @@ def main():
         f.write(read_me(version))
 
 
-    allowed_top = {'Pokemon XD Launcher.exe', 'Read me.txt', 'recomplauncher.json', 'game'}
+    for folder in (out, game):
+        with open(os.path.join(folder, 'Randomizer guide.txt'), 'w', encoding='ascii', newline='\r\n') as f:
+            f.write(readme_text.guide_text())
+
+
+    allowed_top = {'Pokemon XD Launcher.exe', 'Read me.txt', 'Randomizer guide.txt', 'recomplauncher.json', 'game'}
     allowed_ext = {'.exe', '.dll', '.ttf', '.txt'}
     allowed_exe = {'Pokemon XD Launcher.exe', 'xd.exe', 'xd_launcher.exe'}
     bad = [n for n in os.listdir(out) if n not in allowed_top]

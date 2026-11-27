@@ -40,6 +40,7 @@
 #include "script_ext.h"
 
 #include <SDL3/SDL_clipboard.h>
+#include <SDL3/SDL_keyboard.h>
 #include <SDL3/SDL_surface.h>
 #include <SDL3/SDL_stdinc.h>
 
@@ -1750,7 +1751,7 @@ void DrawScreenDesc(ImDrawList* dl, const Screen& sc, const std::string& text, f
   const std::vector<std::string> lines = WrapPaged(text, 446.f, 446.f, 2);
   fit::Region(90.f, 355.f, 542.f, 430.f, "description box");
   const int pages = std::max(1, (static_cast<int>(lines.size()) + 1) / 2);
-  const int page = forcePage >= 0 ? std::min(forcePage, pages - 1) : pages > 1 ? static_cast<int>(age / 3.2f) % pages : 0;
+  const int page = forcePage >= 0 ? std::min(forcePage, pages - 1) : kit::DescPageNow(text, pages, static_cast<int>(lines.size()), 2);
   for (int k = 0; k < 2; k++) {
     const size_t li = static_cast<size_t>(page * 2 + k);
     if (li < lines.size()) DrawText(dl, sc, 90.f, 363.f + 33.f * static_cast<float>(k), lines[li].c_str(), white);
@@ -1867,7 +1868,7 @@ void DrawDescription(ImDrawList* dl, const Screen& sc, const std::string& text, 
   const UseFont font(1);
   const std::vector<std::string> lines = WrapPaged(text, 210.f, 196.f, 3);
   const int pages = std::max(1, (static_cast<int>(lines.size()) + 2) / 3);
-  const int page = forcePage >= 0 ? std::min(forcePage, pages - 1) : pages > 1 ? static_cast<int>(age / 3.2f) % pages : 0;
+  const int page = forcePage >= 0 ? std::min(forcePage, pages - 1) : kit::DescPageNow(text, pages, static_cast<int>(lines.size()), 3);
   fit::Region(391.f, 350.f, 606.f, 430.f, "description box");
   for (int k = 0; k < 3; k++) {
     const size_t li = static_cast<size_t>(page * 3 + k);
@@ -1996,6 +1997,7 @@ bool ModsListFrame(const PortMenuInput* in) {
 }
 
 bool PageFrame(void*, const PortMenuInput* in) {
+  kit::DescInput(in, false);
   const PortMenuInput none{};
   struct CheatWarning {
     int sound = 0;
@@ -2268,78 +2270,171 @@ struct SwitchText {
 };
 const SwitchText kSwitchTexts[] = {
     {"wild", [] { return Tr("Poke Spot Pokemon"); },
-     [] { return Tr("Other wild Pokemon at the three Poke Spots. The visitors (Munchlax, Bonsly) stay."); }},
+     [] { return Tr("Other wild Pokemon at the three Poke Spots: the ones you find there are not the ones the game had. "
+                    "The two visitors, Munchlax and Bonsly, never change."); }},
     {"wild.similar", [] { return Tr("Similar strength"); },
-     [] { return Tr("Poke Spots: each Pokemon is replaced by one about as strong."); }},
+     [] { return Tr("Poke Spots. On: a weak Pokemon is replaced by another weak one and a strong one by a strong one "
+                    "(Sandshrew will not turn into Dragonite). Off: anything can replace anything."); }},
     {"trainers", [] { return Tr("Trainers' Pokemon"); },
-     [] { return Tr("Other Pokemon in the story trainers' teams. Team sizes stay; levels, held items and natures have "
-                 "their own rows."); }},
+     [] { return Tr("Other Pokemon in the story trainers' teams. Every team keeps its size. The Shadow Pokemon in a team "
+                    "are not touched here (the Shadow Pokemon row does those). Levels, held items and natures have rows of their own."); }},
     {"trainers.similar", [] { return Tr("Similar strength"); },
-     [] { return Tr("Trainers: each Pokemon is replaced by one about as strong."); }},
+     [] { return Tr("Trainers. On: each Pokemon is replaced by one about as strong, so early trainers stay easy and late ones "
+                    "stay hard. Off: anything can show up anywhere."); }},
     {"trainers.moves", [] { return Tr("Moves"); },
-     [] { return Tr("Trainers' new Pokemon. Kept: the moves the disc gave that slot. By level: the last four "
-                                "moves the new Pokemon learns up to its level."); }},
+     [] { return Tr("Which moves a trainer's new Pokemon knows. Kept: the moves the old Pokemon had. By level: the moves the new "
+                    "Pokemon would normally know at that level."); }},
     {"trainers.no_dupes", [] { return Tr("No repeats"); },
-     [] { return Tr("Trainers: a team never gets the same Pokemon twice."); }},
+     [] { return Tr("Trainers. On: a team never gets the same Pokemon twice. Off: two of the same can happen."); }},
     {"shadow", [] { return Tr("Shadow Pokemon"); },
-     [] { return Tr("Other species are the Shadow Pokemon (all 83 different; the P*DA's list follows). "
-                                 "Shadow moves, catch rates and heart gauges stay."); }},
+     [] { return Tr("Other species are the Shadow Pokemon you snag: each species is a Shadow only once, and the P*DA's "
+                    "list follows. Where and when you meet them stays. A Shadow Pokemon that is purified knows the moves its new species learns."); }},
     {"shadow.similar", [] { return Tr("Similar strength"); },
-     [] { return Tr("Shadows: each one is replaced by a Pokemon about as strong."); }},
+     [] { return Tr("Shadow Pokemon. On: each one is replaced by a Pokemon about as strong. Off: anything can be a Shadow Pokemon."); }},
     {"shadow.keep_lugia", [] { return Tr("Keep Shadow Lugia"); },
-     [] { return Tr("Shadow Lugia stays Lugia (the story and its scenes show Lugia)."); }},
+     [] { return Tr("On: Shadow Lugia stays Lugia, because the story and its scenes show Lugia. Recommended. Off: Lugia can be "
+                    "any Pokemon, and the scenes still show Lugia."); }},
     {"items.ground", [] { return Tr("Items on the ground"); },
-     [] { return Tr("The item boxes on the maps. Random: any item. Shuffle: the same items in "
-                                            "other places. Important items never move."); }},
+     [] { return Tr("The item boxes lying on the maps. Important items (the story's, Battle CDs) never move. "
+                    "Shuffle keeps the same items, so nothing is lost or doubled."); }},
+    {"items.named", [] { return Tr("Named items only"); },
+     [] { return Tr("Only for \"Random\" ground items. On: only items that have a name (no \"????\" items). Off: every item number, "
+                    "as codes from before version 0.7.2 did. Leave it On unless you are playing an old code."); }},
     {"abilities", [] { return Tr("Abilities"); },
-     [] { return Tr("Pokemon get other abilities. Wonder Guard and Forecast are never handed out."); }},
+     [] { return Tr("Pokemon get other abilities, so a Pokemon may surprise you in battle. Wonder Guard and Forecast "
+                    "are never handed out."); }},
     {"abilities.family", [] { return Tr("Same in a family"); },
-     [] { return Tr("Abilities: a Pokemon keeps its ability when it evolves."); }},
+     [] { return Tr("Abilities. On: a Pokemon keeps its ability when it evolves. Off: each stage gets its own."); }},
     {"tm_compat", [] { return Tr("TM learners"); },
-     [] { return Tr("Which Pokemon can learn each TM; each TM stays about as common as on the disc."); }},
+     [] { return Tr("Which Pokemon can learn each TM. Each TM stays about as common as on the disc. Off: as the game."); }},
     {"legendaries", [] { return Tr("Legendaries"); },
-     [] { return Tr("Whether legendary Pokemon can be picked: never, only where the disc had one, or anywhere."); }},
+     [] { return Tr("Whether the switches above may hand out legendary Pokemon (Mewtwo, Articuno, Entei...)."); }},
     {"tm_moves", [] { return Tr("TM moves"); },
      [] { return Tr("Each TM teaches another move, all different (never a Shadow move). The bag and the shops "
-                             "show the new move and its description. One-hit-KO moves can be ruled out."); }},
+                    "show the new move and its description. The TM names (TM01...) stay."); }},
     {"trainer_levels", [] { return Tr("Trainers' levels"); },
-     [] { return Tr("The story trainers' Pokemon are stronger by that much (never above level 100), or "
-                                           "\"To strength\": a stronger new Pokemon gets a lower level, a weaker one a higher "
-                                           "level. Shadow Pokemon keep their levels."); }},
+     [] { return Tr("How strong the story trainers' Pokemon are. Shadow Pokemon keep their levels."); }},
     {"trainer_items", [] { return Tr("Trainers' held items"); },
-     [] { return Tr("What the story trainers' Pokemon hold. Random: each holds one of the items "
-                                              "trainers' Pokemon hold in the game. None: nothing. Shadow Pokemon keep theirs."); }},
+     [] { return Tr("What the story trainers' Pokemon hold. Shadow Pokemon keep theirs."); }},
     {"trainer_natures", [] { return Tr("Trainers' natures"); },
-     [] { return Tr("Random: each of the story trainers' Pokemon gets any of the 25 natures. Shadow "
-                                             "Pokemon get theirs from the game, as always."); }},
+     [] { return Tr("The nature of the story trainers' Pokemon (it nudges their stats). Shadow Pokemon get theirs from "
+                    "the game, as always."); }},
     {"shops", [] { return Tr("Poke Mart stock"); },
-     [] { return Tr("What the Poke Marts sell. Shuffled: the Marts' own goods in other Marts. Everyday goods: "
-                                 "medicine, status cures, repels, battle items, berries. Anything: also held items, TMs, "
-                                 "vitamins, stones, valuables. Poke Balls and Poke Snacks stay where they are."); }},
+     [] { return Tr("What the Poke Marts sell. Poke Balls and Poke Snacks always stay where they are."); }},
     {"tutor_moves", [] { return Tr("Tutor moves"); },
-     [] { return Tr("The move tutor teaches other moves, all different and none a TM teaches. Each is "
-                                   "learned by the Pokemon that could learn the move it replaces. One-hit-KO moves can be "
-                                   "ruled out."); }},
+     [] { return Tr("The moves the move tutor teaches. All different, and none that a TM teaches. Each is learned by the "
+                    "Pokemon that could learn the move it replaces."); }},
     {"wild.scope", [] { return Tr("Scope"); },
-     [] { return Tr("Poke Spots, \"Same swap everywhere\": a Pokemon is replaced by the same new one in every spot, and no "
-                                           "two by the same one."); }},
+     [] { return Tr("Poke Spots. Whether a Pokemon is swapped the same way in every spot."); }},
     {"wild.types", [] { return Tr("Type theme"); },
-     [] { return Tr("Poke Spots, \"Similar types\": the new Pokemon shares a type with the one it replaces."); }},
+     [] { return Tr("Poke Spots. Similar types: the new Pokemon shares a type with the one it replaces, so a spot keeps "
+                    "its theme (a Rock Pokemon turns into something Rock or Ground, for instance). Off: any type."); }},
     {"wild_levels", [] { return Tr("Poke Spot levels"); },
-     [] { return Tr("Poke Spot Pokemon are that much higher in level (never above level 100)."); }},
+     [] { return Tr("How high the Poke Spot Pokemon are in level (never above level 100)."); }},
     {"starter", [] { return Tr("Starter Pokemon"); },
      [] { return Tr("You start with another Pokemon instead of Eevee, at level 10. The film scenes and the Eevee evolution "
                     "offer still say Eevee."); }},
     {"starter.choice", [] { return Tr("Starter choice"); },
-     [] { return Tr("Random: one Pokemon, chosen for you. Pick 1 of 3: you choose from three when the game would give you "
-                    "Eevee. Eevee family: Eevee or one of its evolutions."); }},
+     [] { return Tr("How your starter is picked (only if \"Starter Pokemon\" is on)."); }},
     {"starter.similar", [] { return Tr("Similar to Eevee"); },
-     [] { return Tr("On: the starter's base stats add up to about Eevee's (never a legendary). Off: any Pokemon the "
-                    "Legendaries row allows. Does not apply to Eevee family."); }},
+     [] { return Tr("On: the starter's base stats add up to about Eevee's, and it is never a legendary. Off: any Pokemon the "
+                    "Legendaries row allows. Not used for \"Eevee family\"."); }},
     {"starter.moves", [] { return Tr("Starter's moves"); },
-     [] { return Tr("By level: the last four moves the starter learns up to level 10. Kept: Eevee's four (Tackle, Tail Whip, "
-                    "Bite, Sand-Attack)."); }},
+     [] { return Tr("Which four moves the starter begins with."); }},
+    {"gen4", [] { return Tr("Include Gen 4 Pokemon"); },
+     [] { return Tr("Adds the 107 Gen 4 Pokemon (Turtwig, Lucario, Garchomp...) to everything above, so they can show up "
+                    "as Poke Spot Pokemon, in trainers' teams and as Shadow Pokemon. Needs the Gen 4 pack (launcher, Extra assets page)."); }},
+    {"gen57", [] { return Tr("Include Gen 5-7 Pokemon"); },
+     [] { return Tr("Also adds the 314 Gen 5-7 Pokemon. Needs the Gen 4 Pokemon switch on and the Gen 5-7 pack "
+                    "(launcher, Extra assets page)."); }},
 };
+
+std::string ChoiceNote(const std::string& id, uint32_t v) {
+  if (id == "trainers.moves") {
+    return v == 0 ? Tr("Kept: the new Pokemon uses the old one's moves, so a trainer's Eevee that replaced a Cacnea may know "
+                       "Poison Sting. Odd moves are normal with this choice, not a bug.")
+                  : Tr("By level: a trainer's Pokemon knows what its own species learns by that level, like a wild one.");
+  }
+  if (id == "items.ground") {
+    return v == 0 ? Tr("Off: every item box holds what the game put there.")
+         : v == 1 ? Tr("Random: each box holds any item, so you may find many of one kind and none of another.")
+                  : Tr("Shuffle: the boxes swap their items with each other: the same items exist, just in other places.");
+  }
+  if (id == "legendaries") {
+    return v == 0 ? Tr("Never: no legendary Pokemon is handed out. The ones the game had stay where they were.")
+         : v == 1 ? Tr("As on the disc: only a place that had a legendary may get another one (a Shadow legendary turns into "
+                       "another legendary); nobody else gets any.")
+                  : Tr("Any: legendaries can show up as Poke Spot Pokemon, in trainers' teams and as Shadow Pokemon.");
+  }
+  if (id == "tm_moves") {
+    return v == 0 ? Tr("Off: the TMs teach what they always did.")
+         : v == 1 ? Tr("Random: every TM teaches a random move, one-hit-KO moves too (Fissure, Sheer Cold...).")
+                  : Tr("Random, no one-hit-KO: random moves, but never Fissure, Guillotine, Horn Drill or Sheer Cold.");
+  }
+  if (id == "tutor_moves") {
+    return v == 0 ? Tr("Off: the tutor teaches what it always did.")
+         : v == 1 ? Tr("Random: the tutor's moves are random, one-hit-KO moves too.")
+                  : Tr("Random, no one-hit-KO: random moves, but never Fissure, Guillotine, Horn Drill or Sheer Cold.");
+  }
+  if (id == "trainer_levels") {
+    const char* const text[] = {
+        Tr("Kept: each Pokemon keeps the level the game gave it."),
+        Tr("+10%: every level is about a tenth higher (a level 40 Pokemon is level 44)."),
+        Tr("+20%: every level is about a fifth higher."),
+        Tr("+30%: every level is about a third higher."),
+        Tr("+50%: every level is half as high again. Trainers get hard."),
+        Tr("To strength: a new Pokemon that is stronger than the old one gets a lower level, a weaker one a higher level, so "
+           "the fight stays about as hard.")};
+    return v < 6 ? text[v] : std::string();
+  }
+  if (id == "trainer_items") {
+    return v == 0 ? Tr("Kept: each Pokemon holds what the game gave it.")
+         : v == 1 ? Tr("Random: each Pokemon holds one of the items trainers' Pokemon hold in the game.")
+                  : Tr("None: nobody holds anything.");
+  }
+  if (id == "trainer_natures") {
+    return v == 0 ? Tr("Kept: natures stay as the game made them.")
+                  : Tr("Random: each Pokemon gets any of the 25 natures.");
+  }
+  if (id == "shops") {
+    return v == 0 ? Tr("Off: every Poke Mart sells what it always did.")
+         : v == 1 ? Tr("Shuffled: the Marts' own goods turn up in other Marts.")
+         : v == 2 ? Tr("Everyday goods: medicine, status cures, repels, battle items and berries.")
+                  : Tr("Anything: also held items, TMs, vitamins, stones and valuables.");
+  }
+  if (id == "wild.scope") {
+    return v == 0 ? Tr("Each spot its own: every spot rolls its own Pokemon (Sandshrew may become Larvitar at one spot and Ralts at "
+                       "another).")
+                  : Tr("Same swap everywhere: one swap list for the whole game (if Sandshrew becomes Larvitar, it's Larvitar at every "
+                       "spot).");
+  }
+  if (id == "wild.types") {
+    return v == 0 ? Tr("Off: the new Pokemon can be of any type.")
+                  : Tr("Similar types: the new Pokemon shares a type with the old one.");
+  }
+  if (id == "wild_levels") {
+    const char* const text[] = {
+        Tr("Kept: the levels the game gave them."),
+        Tr("+10%: about a tenth higher."),
+        Tr("+20%: about a fifth higher."),
+        Tr("+30%: about a third higher."),
+        Tr("+50%: half as high again.")};
+    return v < 5 ? text[v] : std::string();
+  }
+  if (id == "starter.choice") {
+    return v == 0 ? Tr("Random: one Pokemon is picked for you.")
+         : v == 1 ? Tr("Pick 1 of 3: you choose from three Pokemon when the game would give you Eevee.")
+                  : Tr("Eevee family: Eevee or one of its evolutions (Vaporeon, Jolteon, Espeon...).");
+  }
+  if (id == "starter.moves") {
+    return v == 0 ? Tr("By level: the last four moves your starter learns up to level 10.")
+                  : Tr("Kept: Eevee's four moves (Tackle, Tail Whip, Bite, Sand-Attack), whoever your starter is.");
+  }
+  if (id == "tm_compat") {
+    return v == 0 ? std::string() : Tr("Random: a Pokemon that could learn a TM may now be unable to, and the other way round.");
+  }
+  return {};
+}
 const SwitchText* SwitchTextOf(const std::string& id) {
   for (const SwitchText& t : kSwitchTexts) {
     if (id == t.id) return &t;
@@ -2621,6 +2716,20 @@ std::string MoreShadowsInfo() {
   return Tr("Off: the plain game. Pick a percentage of story trainers' Pokemon to become Shadow Pokemon.");
 }
 
+std::string StyleNote(int style) {
+  switch (style) {
+  case 1: return Tr("Light: only the wild Pokemon at the Poke Spots, which Pokemon are Shadow Pokemon, and the item boxes (shuffled). "
+                    "Everything else stays as on the disc.");
+  case 2: return Tr("Classic: Light, plus the trainers' teams, abilities, TM learners and TM moves, with the fairness options on "
+                    "(similar strength, no repeats).");
+  case 3: return Tr("Chaos: the same as Classic, but with no fairness: strength is ignored, any legendary can show up and "
+                    "ground items are random.");
+  case 4: return Tr("Custom: you set every switch yourself in the rows below, starting from how they stood. (Every style shows "
+                    "the rows, and you can change any of them.)");
+  default: return Tr("Off: the game as it is on the disc. Left / right or A picks a style.");
+  }
+}
+
 std::string RowInfo(const SRow& r) {
   const bool restart = xd::pt::NeedsRestart(Chosen());
   switch (r.kind) {
@@ -2650,18 +2759,20 @@ std::string RowInfo(const SRow& r) {
   }
   case Kind::Randomizer:
     if (const char* xg = xd::xg::Off(xd::xg::Feature::Randomizer)) return Tr(xg);
-    return Tr("Makes a new game from your disc: other Pokemon in the Poke Spots, other Shadow Pokemon, items in other "
-              "places. Light: those only. Classic: also trainers, abilities, TM learners, similar strength. Chaos: all, no "
-              "fairness. Custom: each switch yourself.");
+    return StyleNote(s.rStyle) + " " +
+           Tr("Makes a new game from your own disc: other Pokemon in the Poke Spots, other Shadow Pokemon, items in "
+              "other places, and more. It is made when you start and can't be changed in a running game.");
   case Kind::RandomizerSwitch: {
     const auto& def = xd::randomizer::GetSchema().switches[r.sw];
     const SwitchText* t = SwitchTextOf(def.id);
-    if (t != nullptr) return t->info();
+    const std::string note = ChoiceNote(def.id, std::min(CodeSettings(s.rCode).Get(xd::randomizer::GetSchema(), def.id), def.Choices() - 1));
+    if (t != nullptr) return (note.empty() ? std::string() : note + " ") + t->info();
     return Fmt("%s.", Tr(def.label).c_str());
   }
   case Kind::RandomizerCode:
-    return Fmt(Tr("Code: %s. It holds the seed and every switch: a friend who uses it gets the same game. "
-                  "Left / right or A: a new random seed."),
+    return Fmt(Tr("Code: %s. It holds the seed and every switch below, so a friend who uses the same code gets exactly your game: "
+                  "same Pokemon, same teams, same items. Share it from the launcher's Save page. Left / right or A: a new random "
+                  "seed, which makes a different game. A save keeps its code for good."),
                s.rCode.c_str());
   case Kind::Starter:
     if (!StarterBlockedWhy().empty()) return StarterBlockedWhy() + " " + Tr("Turn its starter switch off to choose your own.");
@@ -2686,7 +2797,7 @@ std::string RowInfo(const SRow& r) {
     if (!s.moreShadowsNote.empty()) return s.moreShadowsNote;
     return MoreShadowsInfo();
   case Kind::RandomizerPaste:
-    return s.rMessage.empty() ? std::string(Tr("Copy a code (or a seed number) on the PC, then press A here to use it.")) : s.rMessage;
+    return s.rMessage.empty() ? std::string(Tr("Copy a code (or a seed number) on the PC, then press A here to use it. It replaces all the switches above with your friend's.")) : s.rMessage;
   case Kind::Challenges:
     if (const char* xg = xd::xg::OffForRule(xd::challenges::Rules()[r.sw].id)) return Tr(xg);
     if (!s.gen4Why.empty() && std::string(xd::challenges::Rules()[r.sw].id).rfind("gen4_", 0) == 0) {
@@ -3220,6 +3331,7 @@ void Audit(const AuditRun& run, ImDrawList* dl, const Screen& sc) {
 }
 
 bool Frame(void*, const PortMenuInput* in) {
+  kit::DescInput(in, true);
   if (s.view != 0) {
     const int ev = rp::FrameView(in);
     if (ev != 0) PlayMenuSound(kTitleMenu, ev);

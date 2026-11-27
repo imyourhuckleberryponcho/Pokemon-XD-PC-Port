@@ -212,6 +212,10 @@ void StopWorker() {
   sWorker.join();
 }
 
+struct WorkerJoiner {
+  ~WorkerJoiner() { StopWorker(); }
+} sWorkerJoiner;
+
 void CopyOut(std::vector<uint8_t>& dst, const void* src, size_t size) {
   if (dst.size() != size) dst.resize(size);
   std::memcpy(dst.data(), src, size);

@@ -5,6 +5,7 @@
 #include "xd_gen57.h"
 #include "xd_hidden_ability.h"
 #include "xd_modern_types.h"
+#include "xd_playthrough.h"
 #include "xd_xg.h"
 #include "xd_scripts.h"
 
@@ -395,6 +396,7 @@ bool Test(const xb::Condition& c, const Cx& x) {
   }
   case xb::Cond::SlowerThanTarget:
     r = x.holder != nullptr && x.other != nullptr && fightOutPokemonGetNowNimbleness(x.holder, 0, 0, 0, nullptr) < fightOutPokemonGetNowNimbleness(x.other, 0, 0, 0, nullptr);
+    if (std::getenv("XD_COND_LOG") != nullptr && x.holder != nullptr && x.other != nullptr) std::fprintf(stderr, "[mod battle] slower_than_target: holder %u, other %u -> %d\n", fightOutPokemonGetNowNimbleness(x.holder, 0, 0, 0, nullptr), fightOutPokemonGetNowNimbleness(x.other, 0, 0, 0, nullptr), r ? 1 : 0);
     break;
   case xb::Cond::TargetFainted: { void* pk = x.other != nullptr ? fightOutPokemonGetPokemonPtr(x.other) : nullptr; r = pk != nullptr && pokemon_GetHp(pk) == 0; break; }
   case xb::Cond::TargetFirstTurn: r = x.other != nullptr && MonOf(x.other).entry >= sLastTurn; break;
@@ -1232,9 +1234,6 @@ int32_t AuraAndConvert(void* attacker, void* defender, uint16_t waza, uint16_t t
   (void)defender;
   if (const xb::Convert* k = ConvertFor(attacker, waza, type); k != nullptr && wazaDB_GetIryoku(waza) > 0) {
     damage = Scale(damage, k->percent);
-    const bool hadFrom = HasType(attacker, type), hasTo = HasType(attacker, k->to);
-    if (hadFrom && !hasTo) damage = Scale(damage, 67);
-    else if (!hadFrom && hasTo) damage = Scale(damage, 150);
   }
   const uint16_t shownType = [&]() { const xb::Convert* k = ConvertFor(attacker, waza, type); return k != nullptr ? static_cast<uint16_t>(k->to) : type; }();
   AuraScan s{shownType, 133, false, false};
@@ -2249,6 +2248,32 @@ int8_t PortXD_ModPri(uint16_t waza) {
   sPriN = (sPriN + 1) % 2;
   if (sPriN == 0) sCmpN = 0;
   return static_cast<int8_t>(xd::modbattle::PriorityOf(fop, waza, pri));
+}
+
+void PortXD_RealWsTypeCheck(void);
+uint8_t wazaCheckDarkWaza(uint16_t waza);
+uint8_t pokemonIsDarkPokemon(void* pokemon);
+uint8_t fightSeqTameWazaTurnCheck(void* fop, uint16_t waza);
+void fightFloor_SetAttackPokemonFightWazaJoutaiDataId(uint32_t floor, uint32_t id);
+void fightOutPokemon_SetHitWazaDataId(void* fop, uint16_t waza);
+void fightOutPokemon_SetHitWazaZokuseiDataId(void* fop, uint16_t type);
+void WS_TYPE_CHECK(void) {
+  PortXD_RealWsTypeCheck();
+  static const bool off = std::getenv("XD_SHADOW_WONDER_GUARD") != nullptr && std::getenv("XD_SHADOW_WONDER_GUARD")[0] == '0';
+  const bool enabled = !off && (!xd::pt::LoadedRandomizer().empty() || !xd::pt::LoadedMoreShadows().empty());
+  if (!enabled) return;
+  void* atk = fightTargetGetPtrAsNowFightType(0x11, 0);
+  void* def = fightTargetGetPtrAsNowFightType(0x12, 0);
+  if (atk == nullptr || def == nullptr) return;
+  const uint16_t waza = fightOutPokemon_GetUseWazaDataId(atk);
+  if (waza == 0xA5 || wazaCheckDarkWaza(waza) != 1 || wazaDB_GetIryoku(waza) == 0) return;
+  if (fightOutPokemonGetTokuseiDataId(def) != 0x19 || pokemonIsDarkPokemon(fightOutPokemonGetPokemonPtr(def)) != 1) return;
+  if (fightSeqTameWazaTurnCheck(atk, waza) != 2) return;
+  fightFloor_SetAttackPokemonFightWazaJoutaiDataId(0, 0x40);
+  fightOutPokemon_SetHitWazaDataId(def, 0);
+  fightOutPokemon_SetHitWazaZokuseiDataId(def, 9);
+  ServerWork[6] = 3;
+  std::fprintf(stderr, "[mod battle] Wonder Guard: a Shadow Pokemon blocks the Shadow move %u\n", static_cast<unsigned>(waza));
 }
 
 }

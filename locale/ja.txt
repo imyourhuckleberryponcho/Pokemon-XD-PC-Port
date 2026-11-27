@@ -9688,3 +9688,291 @@
 = Your friend's Gen 5-7 pack is a different version from yours. Ask them to make it again in the launcher.
 > 友だちの第5〜7世代パックは、あなたのとバージョンが違います。ランチャーでもう一度作るように伝えてください。
 
+# Randomizer explanations (0.7.7)
+
+= Randomizer guide
+> ランダマイザーのガイド
+
+= A text that explains every randomizer option, with examples. It opens in your text viewer.
+> ランダマイザーの各オプションを例つきで説明するテキストです。テキストビューアで開きます。
+
+= Other wild Pokemon at the three Poke Spots: the ones you find there are not the ones the game had. The two visitors, Munchlax and Bonsly, never change.
+> 3つのポケスポットに出る野生ポケモンが入れかわります。ただし、ゴンベとウソハチは変わりません。
+
+= Poke Spots. On: a weak Pokemon is replaced by another weak one and a strong one by a strong one (about the same base stats). Off: anything can replace anything.
+> ポケスポット用。オン:弱いポケモンは弱いポケモンに、強いポケモンは強いポケモンに入れかわります(種族値が近いもの)。オフ:どのポケモンにもなりえます。
+
+= Other Pokemon in the story trainers' teams. Every team keeps its size. The Shadow Pokemon in a team are not touched here (the Shadow Pokemon row does those). Levels, held items and natures have rows of their own.
+> ストーリーのトレーナーのパーティのポケモンが入れかわります。パーティの人数は変わりません。ダークポケモンはここでは変わりません(「ダークポケモン」の項目で変わります)。レベル・持ち物・せいかくは別の項目です。
+
+= Trainers. On: each Pokemon is replaced by one about as strong, so early trainers stay easy and late ones stay hard. Off: anything can show up anywhere.
+> トレーナー用。オン:同じくらいの強さのポケモンに入れかわるので、序盤は簡単、終盤は手ごわいままです。オフ:どこで何が出るか分かりません。
+
+= Which moves a trainer's new Pokemon knows. Kept: the moves the old Pokemon had. By level: the moves the new Pokemon would normally know at that level.
+> トレーナーの新しいポケモンが覚えているわざです。そのまま:元のポケモンのわざ。レベルしだい:新しいポケモンがそのレベルで普通に覚えているわざ。
+
+= Trainers. On: a team never gets the same Pokemon twice. Off: two of the same can happen.
+> トレーナー用。オン:同じポケモンが同じパーティに2匹入ることはありません。オフ:重なることがあります。
+
+= Other species are the Shadow Pokemon you snag: each species is a Shadow only once, and the P*DA's list follows. Where and when you meet them stays. A Shadow Pokemon that is purified knows the moves its new species learns.
+> ダークポケモンになるポケモンが入れかわります。同じ種類は1匹だけで、P*DAのリストも変わります。出会う場所とタイミングは同じです。ひとみのあるポケモンになったあとは、新しい種類のわざを覚えています。
+
+= Shadow Pokemon. On: each one is replaced by a Pokemon about as strong. Off: anything can be a Shadow Pokemon.
+> ダークポケモン用。オン:同じくらいの強さのポケモンに入れかわります。オフ:どのポケモンもなりえます。
+
+= On: Shadow Lugia stays Lugia, because the story and its scenes show Lugia. Recommended. Off: Lugia can be any Pokemon, and the scenes still show Lugia.
+> オン:ダークルギアはルギアのままです(ストーリーやムービーがルギアを映すため)。おすすめ。オフ:別のポケモンになりますが、ムービーはルギアのままです。
+
+= The item boxes lying on the maps. Important items (the story's, Battle CDs) never move. Shuffle keeps the same items, so nothing is lost or doubled.
+> マップに落ちているアイテムです。大事なもの(ストーリーのアイテム、バトルCD)は動きません。「シャッフル」は同じアイテムを場所だけ入れかえるので、なくなったり増えたりしません。
+
+= Items on the ground (random): only items that have a name
+> 地面のアイテム(ランダム):名前のあるアイテムだけ
+
+= Only for "Random" ground items. On: only items that have a name (no "????" items). Off: every item number, as codes from before version 0.7.2 did. Leave it On unless you are playing an old code.
+> 「ランダム」のときだけ有効です。オン:名前のあるアイテムだけ(「????」は出ません)。オフ:バージョン0.7.2より前のコードと同じく、すべてのアイテム番号が対象です。古いコードを遊ぶ時以外はオンのままにしてください。
+
+= Pokemon get other abilities, so a Pokemon may surprise you in battle. Wonder Guard and Forecast are never handed out.
+> ポケモンのとくせいが入れかわるので、バトルで驚くことがあります。ふしぎなまもりとてんきやは割り当てられません。
+
+= Abilities. On: a Pokemon keeps its ability when it evolves. Off: each stage gets its own.
+> とくせい用。オン:進化してもとくせいが変わりません。オフ:進化ごとに別のとくせいになります。
+
+= Which Pokemon can learn each TM. Each TM stays about as common as on the disc. Off: as the game.
+> どのポケモンがどのわざマシンを覚えられるかが変わります。各マシンの覚えられる数はディスクとほぼ同じです。オフ:ゲームのとおり。
+
+= Whether the switches above may hand out legendary Pokemon (Mewtwo, Articuno, Entei...).
+> 上のオプションで伝説のポケモン(ミュウツー、フリーザー、エンテイなど)が出るかどうかです。
+
+= Each TM teaches another move, all different (never a Shadow move). The bag and the shops show the new move and its description. The TM names (TM01...) stay.
+> 各わざマシンが別のわざを教えます(すべて別々で、ダークわざは出ません)。バッグやショップに新しいわざと説明が出ます。マシンの名前(ワザマシン01など)は変わりません。
+
+= How strong the story trainers' Pokemon are. Shadow Pokemon keep their levels.
+> ストーリーのトレーナーのポケモンの強さです。ダークポケモンのレベルは変わりません。
+
+= What the story trainers' Pokemon hold. Shadow Pokemon keep theirs.
+> ストーリーのトレーナーのポケモンの持ち物です。ダークポケモンの持ち物は変わりません。
+
+= The nature of the story trainers' Pokemon (it nudges their stats). Shadow Pokemon get theirs from the game, as always.
+> ストーリーのトレーナーのポケモンのせいかくです(能力が少し変わります)。ダークポケモンのせいかくは、いつもどおりゲームが決めます。
+
+= What the Poke Marts sell. Poke Balls and Poke Snacks always stay where they are.
+> ショップで売るものです。モンスターボールとポケモンのえさは、いつもの場所のままです。
+
+= The moves the move tutor teaches. All different, and none that a TM teaches. Each is learned by the Pokemon that could learn the move it replaces.
+> わざおしえじいさんが教えるわざです。すべて別々で、わざマシンのわざは含みません。入れかわる前のわざを覚えられたポケモンが覚えられます。
+
+= Poke Spots. How the swaps are made: each spot on its own, or one swap list for all of them.
+> ポケスポット用。入れかえ方です。場所ごとに別々か、全部の場所で同じ入れかえか。
+
+= Poke Spots. Similar types: the new Pokemon shares a type with the one it replaces, so a spot keeps its theme (a Rock Pokemon turns into something Rock or Ground, for instance). Off: any type.
+> ポケスポット用。「タイプが近い」:入れかわるポケモンと同じタイプを持つので、場所のテーマが保たれます(いわポケモンならいわ・じめんなど)。オフ:どのタイプでも。
+
+= How high the Poke Spot Pokemon are in level (never above level 100).
+> ポケスポットのポケモンのレベルです(100は超えません)。
+
+= How your starter is picked (only if "Starter Pokemon" is on).
+> 最初のポケモンの選び方です(「最初のポケモン」がオンのときだけ)。
+
+= On: the starter's base stats add up to about Eevee's, and it is never a legendary. Off: any Pokemon the Legendaries row allows. Not used for "Eevee family".
+> オン:最初のポケモンの種族値の合計がイーブイに近くなり、伝説のポケモンにはなりません。オフ:「伝説のポケモン」の設定で許されたどのポケモンでも。「イーブイの仲間」では使いません。
+
+= Which four moves the starter begins with.
+> 最初のポケモンが最初に覚えている4つのわざです。
+
+= Include Gen 4 Pokemon
+> 第4世代のポケモンを含める
+
+= Adds the 107 Gen 4 Pokemon (Turtwig, Lucario, Garchomp...) to everything above, so they can show up as Poke Spot Pokemon, in trainers' teams and as Shadow Pokemon. Needs the Gen 4 pack (launcher, Extra assets page).
+> 上のすべてに第4世代のポケモン107匹(ナエトル、ルカリオ、ガブリアスなど)が加わります。ポケスポット、トレーナーのパーティ、ダークポケモンに出ます。Gen 4パックが必要です(ランチャーの「追加アセット」ページ)。
+
+= Include Gen 5-7 Pokemon
+> 第5〜7世代のポケモンを含める
+
+= Also adds the 314 Gen 5-7 Pokemon. Needs the Gen 4 Pokemon switch on and the Gen 5-7 pack (launcher, Extra assets page).
+> 第5〜7世代のポケモン314匹も加わります。Gen 4のオプションがオンで、Gen 5-7パックが必要です(ランチャーの「追加アセット」ページ)。
+
+= Kept: the new Pokemon uses the old one's moves, so a trainer's Eevee that replaced a Cacnea may know Poison Sting. Odd moves are normal with this choice, not a bug.
+> そのまま:新しいポケモンが元のポケモンのわざを使います。サボネアと入れかわったイーブイが「どくばり」を使うこともあります。変なわざでもバグではありません。
+
+= By level: a trainer's Pokemon knows what its own species learns by that level, like a wild one.
+> レベルしだい:その種類がそのレベルまでに覚えるわざを使います。野生のポケモンと同じです。
+
+= Off: every item box holds what the game put there.
+> オフ:落ちているアイテムはゲームのままです。
+
+= Random: each box holds any item, so you may find many of one kind and none of another.
+> ランダム:どれも何かのアイテムになるので、同じ種類ばかり出たり、まったく出なかったりします。
+
+= Shuffle: the boxes swap their items with each other: the same items exist, just in other places.
+> シャッフル:アイテムどうしが場所を入れかえます。アイテムの種類と数は同じで、場所だけが変わります。
+
+= Never: no legendary Pokemon is handed out. The ones the game had stay where they were.
+> なし:伝説のポケモンは出ません。ゲームにもともといたものは元の場所のままです。
+
+= As on the disc: only a place that had a legendary may get another one (a Shadow legendary turns into another legendary); nobody else gets any.
+> ディスクどおり:伝説のポケモンがいた場所だけ別の伝説のポケモンになります(ダークの伝説は別の伝説に)。ほかには出ません。
+
+= Any: legendaries can show up as Poke Spot Pokemon, in trainers' teams and as Shadow Pokemon.
+> すべて:伝説のポケモンがポケスポット、トレーナーのパーティ、ダークポケモンに出ます。
+
+= Off: the TMs teach what they always did.
+> オフ:わざマシンはいつものわざを教えます。
+
+= Random: every TM teaches a random move, one-hit-KO moves too (Fissure, Sheer Cold...).
+> ランダム:わざマシンがランダムなわざを教えます。一撃必殺わざ(じわれ、ぜったいれいどなど)も含みます。
+
+= Random, no one-hit-KO: random moves, but never Fissure, Guillotine, Horn Drill or Sheer Cold.
+> ランダム(一撃必殺なし):ランダムなわざですが、じわれ・ハサミギロチン・つのドリル・ぜったいれいどは出ません。
+
+= Off: the tutor teaches what it always did.
+> オフ:わざおしえはいつものわざを教えます。
+
+= Random: the tutor's moves are random, one-hit-KO moves too.
+> ランダム:わざおしえのわざがランダムになります。一撃必殺わざも含みます。
+
+= Kept: each Pokemon keeps the level the game gave it.
+> そのまま:ポケモンはゲームのレベルのままです。
+
+= +10%: every level is about a tenth higher (a level 40 Pokemon is level 44).
+> +10%:レベルが約1割上がります(Lv.40のポケモンはLv.44に)。
+
+= +20%: every level is about a fifth higher.
+> +20%:レベルが約2割上がります。
+
+= +30%: every level is about a third higher.
+> +30%:レベルが約3割上がります。
+
+= +50%: every level is half as high again. Trainers get hard.
+> +50%:レベルが5割上がります。トレーナーがかなり手ごわくなります。
+
+= To strength: a new Pokemon that is stronger than the old one gets a lower level, a weaker one a higher level, so the fight stays about as hard.
+> 強さに合わせる:元より強いポケモンはレベルが下がり、弱いポケモンは上がるので、バトルの難しさがほぼ同じになります。
+
+= Kept: each Pokemon holds what the game gave it.
+> そのまま:ポケモンはゲームの持ち物のままです。
+
+= Random: each Pokemon holds one of the items trainers' Pokemon hold in the game.
+> ランダム:ゲームでトレーナーのポケモンが持つアイテムのどれかを持ちます。
+
+= None: nobody holds anything.
+> なし:だれも何も持ちません。
+
+= Kept: natures stay as the game made them.
+> そのまま:せいかくはゲームのままです。
+
+= Random: each Pokemon gets any of the 25 natures.
+> ランダム:25種類のせいかくのどれかになります。
+
+= Off: every Poke Mart sells what it always did.
+> オフ:ショップはいつもの品を売ります。
+
+= Shuffled: the Marts' own goods turn up in other Marts.
+> シャッフル:ショップの品が別のショップに並びます。
+
+= Everyday goods: medicine, status cures, repels, battle items and berries.
+> 日用品:きずぐすり、状態異常の治療、むしよけ、バトル用アイテム、きのみ。
+
+= Anything: also held items, TMs, vitamins, stones and valuables.
+> なんでも:持ち物用アイテム、わざマシン、ビタミン、進化の石、貴重品も並びます。
+
+= Each spot its own: every spot is changed on its own, so a Pokemon that lived in two spots may become two different ones.
+> 場所ごとに別々:場所ごとに入れかえるので、2か所にいたポケモンが別々のポケモンになることがあります。
+
+= Same swap everywhere: one Pokemon is replaced by the same new one in every spot (a 1 to 1 swap), and no two by the same one.
+> どこでも同じ入れかえ:同じポケモンはどの場所でも同じ新しいポケモンになります(1対1)。別のポケモンが同じものになることはありません。
+
+= Off: the new Pokemon can be of any type.
+> オフ:新しいポケモンはどのタイプでもかまいません。
+
+= Similar types: the new Pokemon shares a type with the old one.
+> タイプが近い:新しいポケモンは元のポケモンと同じタイプを持ちます。
+
+= Kept: the levels the game gave them.
+> そのまま:ゲームのレベルのままです。
+
+= +10%: about a tenth higher.
+> +10%:約1割上がります。
+
+= +20%: about a fifth higher.
+> +20%:約2割上がります。
+
+= +30%: about a third higher.
+> +30%:約3割上がります。
+
+= +50%: half as high again.
+> +50%:5割上がります。
+
+= Random: one Pokemon is picked for you.
+> ランダム:ポケモンが自動で選ばれます。
+
+= Pick 1 of 3: you choose from three Pokemon when the game would give you Eevee.
+> 3匹から1匹:本来イーブイをもらう場面で、3匹から選びます。
+
+= Eevee family: Eevee or one of its evolutions (Vaporeon, Jolteon, Espeon...).
+> イーブイの仲間:イーブイか、その進化形(シャワーズ、サンダース、エーフィなど)。
+
+= By level: the last four moves your starter learns up to level 10.
+> レベルしだい:Lv.10までに覚える最後の4つのわざです。
+
+= Kept: Eevee's four moves (Tackle, Tail Whip, Bite, Sand-Attack), whoever your starter is.
+> そのまま:最初のポケモンが誰でも、イーブイの4つのわざ(たいあたり・しっぽをふる・かみつく・すなかけ)になります。
+
+= Random: a Pokemon that could learn a TM may now be unable to, and the other way round.
+> ランダム:今まで覚えられたマシンが覚えられなくなったり、その逆になったりします。
+
+= Light: only the wild Pokemon at the Poke Spots, which Pokemon are Shadow Pokemon, and the item boxes (shuffled). Everything else stays as on the disc.
+> ライト:ポケスポットの野生ポケモン、ダークポケモンになる種類、地面のアイテム(シャッフル)だけ。ほかはディスクのままです。
+
+= Classic: Light, plus the trainers' teams, abilities, TM learners and TM moves, with the fairness options on (similar strength, no repeats).
+> クラシック:ライトに加えて、トレーナーのパーティ、とくせい、わざマシンを覚えるポケモンとそのわざが変わります。公平オプション(強さが近い、重複なし)がオンです。
+
+= Chaos: the same as Classic, but with no fairness: strength is ignored, any legendary can show up and ground items are random.
+> カオス:クラシックと同じですが公平オプションなし。強さは無視され、どの伝説のポケモンも出て、地面のアイテムはランダムです。
+
+= Custom: you set every switch yourself in the rows below, starting from how they stood. (Every style shows the rows, and you can change any of them.)
+> カスタム:下の項目を自分で設定します(今の状態からスタート)。どのスタイルでも項目は表示され、どれでも変更できます。
+
+= Off: the game as it is on the disc. Left / right or A picks a style.
+> オフ:ディスクのままのゲームです。左右かAでスタイルを選びます。
+
+= Makes a new game from your own disc: other Pokemon in the Poke Spots, other Shadow Pokemon, items in other places, and more. It is made when you start and can't be changed in a running game.
+> あなたのディスクから新しいゲームを作ります。ポケスポットのポケモン、ダークポケモン、アイテムの場所などが変わります。始めるときに作られ、プレイ中は変えられません。
+
+= Code: %s. It holds the seed and every switch below, so a friend who uses the same code gets exactly your game: same Pokemon, same teams, same items. Share it from the launcher's Save page. Left / right or A: a new random seed, which makes a different game. A save keeps its code for good.
+> コード:%s。シードと下のすべてのオプションが入っているので、同じコードを使う友だちはまったく同じゲーム(同じポケモン、パーティ、アイテム)になります。ランチャーの「セーブ」ページから共有できます。左右かA:新しいシード(別のゲーム)。セーブデータはずっとそのコードを保ちます。
+
+= Copy a code (or a seed number) on the PC, then press A here to use it. It replaces all the switches above with your friend's.
+> PCでコード(またはシード番号)をコピーしてから、ここでAを押すと使えます。上のすべてのオプションが友だちのものに置きかわります。
+
+= Named items only
+> 名前のあるアイテムのみ
+
+# Scope and similar-strength texts with an example (0.7.7)
+
+= Each spot its own: every spot rolls its own Pokemon (Sandshrew may become Larvitar at one spot and Ralts at another).
+> 場所ごとに別々:場所ごとに別々のポケモンになります(サンドがある場所ではヨーギラス、別の場所ではラルトスになることも)。
+
+= Same swap everywhere: one swap list for the whole game (if Sandshrew becomes Larvitar, it's Larvitar at every spot).
+> どこでも同じ入れかえ:ゲーム全体で入れかえは1つだけ(サンドがヨーギラスになったら、どの場所でもヨーギラス)。
+
+= Poke Spots. Whether a Pokemon is swapped the same way in every spot.
+> ポケスポット用。ポケモンをどの場所でも同じように入れかえるかどうかです。
+
+= Poke Spots. On: a weak Pokemon is replaced by another weak one and a strong one by a strong one (Sandshrew will not turn into Dragonite). Off: anything can replace anything.
+> ポケスポット用。オン:弱いポケモンは弱いポケモンに、強いポケモンは強いポケモンに入れかわります(サンドがカイリューにはなりません)。オフ:どのポケモンにもなりえます。
+
+= Its effect isn't in the game yet.
+> このとくせいの　こうかは　まだ　ありません。
+
+= Works in double battles only.
+> ダブルバトルでだけ　こうかが　あります。
+
+= PRISM SCALE
+> プリズムのウロコ
+
+= Held by Feebas, it{00}evolves when it{00}levels up.
+> ヒンバスが　もたせると{00}レベルアップで{00}しんかする。
+
+= %s: %u models are bigger than the disc's (normal for these models); XD_MODS_SIZE_LOG=1 lists them
+> %s: %u 個のモデルがディスクのものより大きくなっています（これらのモデルでは普通です）。XD_MODS_SIZE_LOG=1 で一覧を表示します

@@ -2,6 +2,7 @@
 #include "xd_challenges.h"
 #include "xd_rulesets.h"
 #include "xd_gen4_abilities.h"
+#include "xd_gen57.h"
 #include "xd_playthrough.h"
 #include "xd_xg.h"
 
@@ -611,6 +612,7 @@ void SetActive(const std::vector<std::string>& ids, const char* why) {
   sActive = known;
   xd::gen4::SyncSpeciesAbilities();
   xd::gen4::SyncAbilityDescriptions();
+  xd::gen57::SyncAbilityDescriptions();
   static const bool pcOff = [] {
     const char* e = std::getenv("XD_CHALLENGE_PC_REFUSAL");
     return e != nullptr && std::strcmp(e, "0") == 0;

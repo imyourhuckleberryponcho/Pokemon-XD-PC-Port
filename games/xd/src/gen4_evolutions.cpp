@@ -1,6 +1,7 @@
 #include "xd_challenges.h"
 #include "xd_forms.h"
 #include "xd_gen4.h"
+#include "xd_gen_rules.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -32,6 +33,7 @@ struct EvolutionInfo {
 
 constexpr uint8_t kLevelHolding = 17, kUseFemale = 18, kUseMale = 19;
 constexpr uint8_t kLevelDark = 20, kLevelFemale = 21, kKnowsMove = 22;
+constexpr uint8_t kLevelHoldingRules = 24;
 constexpr uint8_t kLevelOnly = 23;
 constexpr uint8_t kDarkType = 17;
 constexpr uint16_t kEverstoneEffect = 0x26;
@@ -104,6 +106,10 @@ static uint16_t Gen4EvolutionCheck(void* pokemon, int32_t mode, uint16_t item, u
       break;
     case kLevelHolding:
       fits = askMode == 0 && pokemonBiosGetItemDataId(pokemon) == e.param;
+      reportKind = 6;
+      break;
+    case kLevelHoldingRules:
+      fits = askMode == 0 && xd::rulegen::AtLeast(5) && pokemonBiosGetItemDataId(pokemon) == e.param;
       reportKind = 6;
       break;
     case kLevelDark:

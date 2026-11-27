@@ -1004,6 +1004,7 @@ class App {
   void ChoosePreset(es::Preset preset);
   void OpenInSystem(const fs::path& what);
   void DrawNotOpenedWindow();
+  void DrawRandomizerGuideButton();
   std::string notOpened_;
 
   void SetController(bool on);
@@ -5136,6 +5137,22 @@ void App::OpenInSystem(const fs::path& what) {
   }
 }
 
+void App::DrawRandomizerGuideButton() {
+  if (ImGui::Button(Lbl(Tr("Randomizer guide"), "Randomizer guide").c_str())) {
+    const fs::path guide = sys::ProgramFolder() / L"Randomizer guide.txt";
+    std::error_code ec;
+    Log("randomizer guide: " + Utf8(guide));
+    if (fs::exists(guide, ec)) {
+      OpenInSystem(guide);
+    } else {
+      notOpened_ = Utf8(guide);
+    }
+  }
+  if (Hot()) {
+    ImGui::SetTooltip("%s", Tr("A text that explains every randomizer option, with examples. It opens in your text viewer."));
+  }
+}
+
 void App::DrawNotOpenedWindow() {
   if (notOpened_.empty()) {
     return;
@@ -5166,6 +5183,8 @@ void App::DrawPresetPage() {
   if (ImGui::Button(Lbl(Tr("What's the difference?"), "whatsdiff").c_str())) {
     askPreset_ = true;
   }
+  ImGui::SameLine();
+  DrawRandomizerGuideButton();
   ImGui::Spacing();
   ui::DrawPresetChooser(registry_, options_);
   std::vector<size_t> startRows;
@@ -8171,6 +8190,8 @@ void App::DrawSetup(const SaveSummary& save) {
     if (ImGui::Button(Lbl(Tr("Copy code"), "Copy code").c_str())) {
       CopyCode(save.shareCode);
     }
+    ImGui::SameLine();
+    DrawRandomizerGuideButton();
     if (!save.spoilerFile.empty()) {
       ImGui::SameLine();
       if (ImGui::Button(Lbl(Tr("Show spoilers..."), "Show spoilers...").c_str())) {

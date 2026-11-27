@@ -419,6 +419,7 @@ foreach (_src ${XD_GAME_SOURCES})
   endif ()
   if (_src MATCHES "/fightSeq/fightSeqBasis\\.cpp$")
     list(APPEND _defs "WS_DAMAGE_LOSS=PortXD_RealWsDamageLoss" "WS_DAMAGE_LOSS_ONLY=PortXD_RealWsDamageLossOnly")
+    list(APPEND _defs "WS_TYPE_CHECK=PortXD_RealWsTypeCheck")
     list(APPEND _defs "zokuseiGetWazaJoutai=PortXD_Gen4TypeJoutai" "wazaDB_GetAvg=PortXD_Gen4GetAvg"
       "fightOutPokemonGetZokuseiDataId=PortXD_Gen4GetType" "fightWaza_SetCritical=PortXD_Gen4SetCritical"
       "fightOutPokemonIsZokuseiDataId=PortXD_ModIsType"

@@ -520,6 +520,10 @@ uint8_t PortXD_Gen4NokoriHp(void* fop, uint16_t waru) {
 uint32_t PortXD_Gen4WazaZokusei(void* fw) {
   uint32_t t = fightWaza_GetZokusei(fw);
   if (xd::modbattle::Active() && fw != nullptr) t = xd::modbattle::MoveTypeFromUser(fightTargetGetPtrAsNowFightType(0x11, 0), fw, t);
+  if (xd::modbattle::Active() && fw != nullptr) {
+    void* conv = fightTargetGetPtrAsNowFightType(0x11, 0);
+    if (conv != nullptr && fightOutPokemon_GetFightWazaPtr(conv) == fw) t = xd::modbattle::WazaType(conv, static_cast<uint8_t>(t));
+  }
   if (!On() || fw == nullptr) return t;
   void* a = fightTargetGetPtrAsNowFightType(0x11, 0);
   if (a != nullptr && Ab(a) == kNormalize && fightOutPokemon_GetFightWazaPtr(a) == fw) return 0;

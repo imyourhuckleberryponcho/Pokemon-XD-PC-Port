@@ -226,6 +226,11 @@ sed -e "/^=== SHARED TEXT /d" -e "s/@VERSION@/$VERSION/g" "$HERE/Read me (Mac).t
 # only in that shape (an app and nothing beside it). So the Read me also lives inside the app (Show Package Contents >
 # Contents > Resources); the copy beside the app stays in the folder for CI and for people who build it themselves.
 cp "$DEST/Read me.txt" "$APP/Contents/Resources/Read me.txt"
+# The Randomizer guide (docs/RANDOMIZER_GUIDE.txt, made from the .md by tools/readme_text.py --write-guide): beside the Read me, inside the
+# app, and linked in Contents/MacOS where the launcher's "Randomizer guide" button looks (next to the program, like the fonts).
+cp "$ROOT/docs/RANDOMIZER_GUIDE.txt" "$DEST/Randomizer guide.txt"
+cp "$ROOT/docs/RANDOMIZER_GUIDE.txt" "$APP/Contents/Resources/Randomizer guide.txt"
+ln -s "../Resources/Randomizer guide.txt" "$APP/Contents/MacOS/Randomizer guide.txt"
 # RecompLauncher (recomplauncher.com) reads this first from the download; the zip holds only the app (above), so it
 # goes inside the app (their note, 2026-11-14: "inside the app/AppImage"), with a copy beside it in the folder.
 cp "$ROOT/recomplauncher.json" "$APP/Contents/Resources/recomplauncher.json"

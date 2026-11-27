@@ -519,6 +519,7 @@ bool PickerFrame(const PortMenuInput* in, const Mouse& m, int& sound) {
 }
 
 bool Frame(void*, const PortMenuInput* in) {
+  kit::DescInput(in, false);
   const Screen sc = ScreenNow();
   const Mouse m = ReadMouse(sc);
   int sound = 0;

@@ -371,9 +371,10 @@ Verdict Judge(const Capabilities& room, const RoomRules& rules, const Capabiliti
   }
   const bool newKind = NeedsNewProtocol(rules);
   const int needed = NeedsExtras(rules) ? 3 : newKind ? 2 : 1;
-  const bool known = room.protocol >= 1 && room.protocol <= 4 && mine.protocol >= 1 && mine.protocol <= 4 && (room.protocol == 4) == (mine.protocol == 4);
+  const bool known = room.protocol >= 1 && room.protocol <= 5 && mine.protocol >= 1 && mine.protocol <= 5 &&
+                     (room.protocol >= 4) == (mine.protocol >= 4) && (room.protocol < 4 || room.protocol == mine.protocol);
   const bool compatible = known && mine.protocol >= needed && room.protocol >= needed;
-  if (!compatible && room.protocol != mine.protocol && (room.protocol == 4) != (mine.protocol == 4)) {
+  if (!compatible && room.protocol != mine.protocol && (room.protocol >= 4 || mine.protocol >= 4)) {
     v.refuse.push_back(joiner ? "The room was made by another version of the game (its battles are not the same as yours). Both players need the same game version: update the game, or ask your friend to."
                               : "Your friend's game is another version from yours (its battles are not the same as yours). Both players need the same game version: ask them to update the game, or update yours.");
     return v;

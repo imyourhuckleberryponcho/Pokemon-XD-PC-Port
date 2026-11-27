@@ -49,6 +49,17 @@ void* PortHeapReal_HSD_ObjAlloc(void* data);
 void PortHeapReal_HSD_ObjAllocInit(void* data, uint32_t size, uint32_t align);
 }
 
+static std::vector<std::string> sBiggerFiles;
+static bool sBiggerTold = false;
+void xd_heap_model_set_bigger_files(const std::vector<std::string>& list) { sBiggerFiles = list; }
+static void NoteBiggerFiles() {
+  if (sBiggerTold || sBiggerFiles.empty()) return;
+  sBiggerTold = true;
+  std::fprintf(stderr, "[heap model] out of memory: %zu loaded file(s) are bigger than the disc's own (extra-assets models); the first ones:", sBiggerFiles.size());
+  for (size_t i = 0; i < sBiggerFiles.size() && i < 12; i++) std::fprintf(stderr, "%s %s", i ? ";" : "", sBiggerFiles[i].c_str());
+  std::fprintf(stderr, "\n");
+}
+
 namespace {
 
 bool env_on(const char* name) {
@@ -618,7 +629,7 @@ extern "C" void* HSD_Alloc(uint32_t size) {
   if (h != nullptr) {
     at = model_alloc(*h, gc);
     if (at == 0) {
-      sStats.modelFailed++;
+      sStats.modelFailed++; NoteBiggerFiles();
     } else {
       h->byPtr[reinterpret_cast<uintptr_t>(p)] = h->allocated;
     }
@@ -728,7 +739,7 @@ extern "C" void* GSmemAllocPool(void* pool) {
     p->peak = std::max(p->peak, p->used);
     sPoolCell[reinterpret_cast<uintptr_t>(cell)] = p;
   } else {
-    sStats.modelFailed++;
+    sStats.modelFailed++; NoteBiggerFiles();
   }
   if (sLog != nullptr) {
     std::fprintf(sLog, "%d pool alloc %u %llx %u d\n", pass(), p->gc,
@@ -848,7 +859,7 @@ extern "C" void* OSAllocFromHeap(int heap, uint32_t size) {
   Heap* h = heap_at(heap);
   if (h == nullptr) return p;
   sStats.allocs++;
-  if (p == nullptr) sStats.realFailed++;
+  if (p == nullptr) { sStats.realFailed++; NoteBiggerFiles(); }
   uint32_t gc = size;
   char how = 'r';
   if (tInHsd > 0) {
@@ -875,7 +886,7 @@ extern "C" void* OSAllocFromHeap(int heap, uint32_t size) {
   } else if (p != nullptr) {
     at = model_alloc(*h, gc);
     if (at == 0) {
-      sStats.modelFailed++;
+      sStats.modelFailed++; NoteBiggerFiles();
     } else {
       h->byPtr[reinterpret_cast<uintptr_t>(p)] = h->allocated;
     }

@@ -41,9 +41,9 @@ on:
         required: true
         default: "imyourhuckleberryponcho/Pokemon-XD-Decomp"
       decomp_commit:
-        description: "Its commit to build: it must match this release's snapshot (0.7.4: f2aad018d9, public copy 4e51a0b0); empty = the newest, which may not build the same game"
+        description: "Its commit to build: it must match this release's snapshot (0.7.7: f209f75541, public copy 3015233e); empty = the newest, which may not build the same game"
         required: false
-        default: "4e51a0b004e9e9562325f1aa03a9c8d7ca4104dd"
+        default: "3015233e2ccd9bfba59608b0b9abf3f5f88e770e"
       keep_going:
         description: "Go on after compile errors and list them all (1) or stop at the first (0)"
         required: false

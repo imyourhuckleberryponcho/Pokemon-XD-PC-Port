@@ -197,6 +197,37 @@ Saves, settings, mods, logs and bug reports live in one data folder: {p['data']}
 """
 
 
+NEW_077 = """New in 0.7.7
+------------
+- Gen 5-7 abilities: with a Gen 5, 6 or 7 rule set on, the abilities whose effect is in the game now say what they do
+  in the summary (before, they all said "No effect with the XD rules." although they have worked since 0.7.1). The
+  nine that only matter next to an ally say "Works in double battles only."; the ones that still have no battle code
+  say "Its effect isn't in the game yet."
+- Galvanize, Liquid Voice, Aerilate and Refrigerate now change the move's type, for the type chart and for the
+  same-type bonus too.
+- Gen 5-7 moves: the moves the Gen 5-7 pack adds are physical or special by their own category when the physical/special
+  split is on (Struggle Bug is special, Flame Charge is physical), also on XG.
+- Wonder Guard no longer lets a Shadow move hit through it when the Pokemon holding it is a Shadow Pokemon (a Shadow
+  Shedinja; it only comes up with the randomizer or More Shadow Pokemon).
+- Feebas: with a Gen 5, 6 or 7 rule set it evolves into Milotic when it levels up holding a Prism Scale (a new item,
+  sold at the prize desk with those rules; the scale is used up). In the plain game nothing raises its Beauty, so it
+  never evolved.
+- Modern types: Fire against Fairy is neutral now (it was resisted).
+- Purify Chamber: a crash is fixed.
+- A crash on busy scenes with many Ultra Sun / Ultra Moon models (more likely at 4x resolution) is fixed: the game no longer
+  stops when a frame's graphics memory is full.
+- Closing the game after using the music at normal speed in fast-forward no longer ends in a "stopped" report.
+- The start log has one line for the bigger models of the extra-assets layers instead of one line per model.
+- The randomizer is explained on the New Game screen: every option and every choice has a description page (long ones
+  have several pages: turn them with R / L, or X / Y where those are taken). A Randomizer guide button in the launcher
+  (Preset page and Save page) opens "Randomizer guide.txt" from the game folder.
+- Sound: the reverb (the echo in caves and rooms) now runs the game's own code instead of a stand-in, so caves and
+  rooms sound a little different from 0.7.6.
+- Online: 0.7.7 plays with 0.7.7 only (the battles changed). Older versions are turned away with a clear message on
+  both sides.
+"""
+
+
 NEW_076 = """New in 0.7.6
 ------------
 - More Shadow Pokemon is now a percentage: Off, 10%, 25%, 50%, 75% or 100% (it replaces A few / Many / All). It
@@ -550,7 +581,7 @@ The full history is on the GitHub releases page: """ + RELEASES_URL + """
 
 
 def new_in():
-    return NEW_076 + chr(10) + NEW_075 + chr(10) + NEW_074 + chr(10) + NEW_073 + chr(10) + NEW_072 + chr(10) + NEW_071 + chr(10) + NEW_070 + chr(10) + NEW_061 + chr(10) + NEW_060 + chr(10) + NEW_05X
+    return NEW_077 + chr(10) + NEW_076 + chr(10) + NEW_075 + chr(10) + NEW_074 + chr(10) + NEW_073 + chr(10) + NEW_072 + chr(10) + NEW_071 + chr(10) + NEW_070 + chr(10) + NEW_061 + chr(10) + NEW_060 + chr(10) + NEW_05X
 
 
 def known_issues(system):
@@ -606,8 +637,57 @@ def write_mac():
     print('wrote', MAC_README)
 
 
+GUIDE_MD = os.path.join(ROOT, 'docs', 'RANDOMIZER_GUIDE.md')
+GUIDE_TXT = os.path.join(ROOT, 'docs', 'RANDOMIZER_GUIDE.txt')
+
+
+def guide_text():
+    """docs/RANDOMIZER_GUIDE.md as the plain text the players get ("Randomizer guide.txt": next to the Read me and in game/,
+    opened by the launcher's Randomizer guide button). The .txt in docs/ is made by:  python tools/readme_text.py --write-guide"""
+    import textwrap
+    raw = []
+    for line in open(GUIDE_MD, encoding='ascii').read().split('\n'):
+        line = line.rstrip()
+
+        if raw and line.strip() and raw[-1].strip() and not line.startswith('#') and not raw[-1].startswith('#') \
+                and not re.match(r'\s*- ', line):
+            raw[-1] += ' ' + line.strip()
+        else:
+            raw.append(line)
+    out = []
+    for line in raw:
+        line = re.sub(r'`([^`]*)`', r'\1', line)
+        line = re.sub(r'\*\*([^*]+)\*\*', r'\1', line)
+        line = re.sub(r'(?<![\w*])\*([^*\n]+?)\*(?![\w*])', r'\1', line)
+        m = re.match(r'(#+) (.*)', line)
+        if m:
+            title = m.group(2)
+            under = {1: '=', 2: '-', 3: '~'}[min(len(m.group(1)), 3)]
+            out += ['', title, under * len(title), '']
+            continue
+        m = re.match(r'(\s*)(- +)?(.*)', line)
+        indent, bullet, body = m.group(1), m.group(2) or '', m.group(3)
+        if not body:
+            out.append('')
+            continue
+        out += textwrap.wrap(body, 100, initial_indent=indent + bullet, subsequent_indent=indent + ' ' * len(bullet)) or ['']
+    return re.sub(r'\n{3,}', '\n\n', '\n'.join(out)).strip('\n') + '\n'
+
+
+def write_guide():
+    with open(GUIDE_TXT, 'w', encoding='ascii', newline='\n') as f:
+        f.write(guide_text())
+    print('wrote', GUIDE_TXT)
+
+
 if __name__ == '__main__':
-    if '--write-mac' in sys.argv:
+    if '--write-guide' in sys.argv:
+        write_guide()
+    elif '--check-guide' in sys.argv:
+        ok = os.path.isfile(GUIDE_TXT) and open(GUIDE_TXT, encoding='ascii', newline='').read() == guide_text()
+        print('guide: ok' if ok else 'guide: docs/RANDOMIZER_GUIDE.txt is out of date: python tools/readme_text.py --write-guide')
+        sys.exit(0 if ok else 1)
+    elif '--write-mac' in sys.argv:
         write_mac()
     else:
         print(mac_block())

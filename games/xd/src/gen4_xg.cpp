@@ -369,6 +369,7 @@ bool Translator::RunPack(bool gen57, std::vector<engine::mods::DataModFile>& fil
     mine.push_back(name);
   }
   J::Value newRows = Obj();
+  int mKindsSet = 0;
   for (const std::string& name : mine) {
     const std::string key = Key(name);
     if (FindMove(name) >= 0) {
@@ -434,8 +435,16 @@ bool Translator::RunPack(bool gen57, std::vector<engine::mods::DataModFile>& fil
       Set(row, f, src.fields.at(f));
     }
     if (gen57 && mInfo.fairyMoves.count(key) != 0) Set(row, "zokuseiDataId", Num(9));
+    if (gen57) {
+      if (const auto itk = src.fields.find("pad37"); itk != src.fields.end() && itk->second.kind == J::Value::Kind::Number &&
+                                                      (itk->second.number == 1 || itk->second.number == 2)) {
+        Set(row, "darkWazaKind", Num(static_cast<int>(itk->second.number)));
+        mKindsSet++;
+      }
+    }
     Set(newRows, name, std::move(row));
   }
+  if (gen57) std::fprintf(stderr, "[gen57 xg] physical / special kind put into %d new move row(s) (the pack's category; XG reads it from the row)\n", mKindsSet);
   Set(*add, "moves", std::move(newRows));
   moves->text.clear();
   Write(mroot, moves->text);

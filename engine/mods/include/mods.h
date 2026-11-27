@@ -186,6 +186,7 @@ struct LoadResult {
   std::shared_ptr<const DataCatalog> catalog;
   std::vector<uint8_t> program;
   std::vector<ScriptFile> scripts;
+  std::vector<std::string> biggerBuiltIn;
   std::vector<std::string> scriptsSwitchedOff;
 
   bool HasWarnings() const;

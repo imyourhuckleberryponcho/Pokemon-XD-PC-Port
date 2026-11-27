@@ -40,6 +40,7 @@
 #include <set>
 #include <string>
 
+void xd_heap_model_set_bigger_files(const std::vector<std::string>& list);
 namespace {
 using engine::i18n::Tr;
 std::string TrFmt(const char* format, ...) {
@@ -553,6 +554,7 @@ extern "C" bool PortXD_LoadMods(void) {
   }
 
   em::LoadResult result = em::Load(options);
+  xd_heap_model_set_bigger_files(result.biggerBuiltIn);
   MergeLanguageToc(result);
   RepairDuplicateTocIds(result);
   xd::pt::AfterModsLoaded(result, options.modsFolder, options.listFile, options.disc);

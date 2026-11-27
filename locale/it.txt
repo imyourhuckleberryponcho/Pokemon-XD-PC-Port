@@ -9612,3 +9612,291 @@
 = Your friend's Gen 5-7 pack is a different version from yours. Ask them to make it again in the launcher.
 > Il pacchetto Gen 5-7 del tuo amico è di una versione diversa dal tuo. Chiedigli di crearlo di nuovo nel launcher.
 
+# Randomizer explanations (0.7.7)
+
+= Randomizer guide
+> Guida al randomizer
+
+= A text that explains every randomizer option, with examples. It opens in your text viewer.
+> Un testo che spiega ogni opzione del randomizer, con esempi. Si apre nel tuo programma di testo.
+
+= Other wild Pokemon at the three Poke Spots: the ones you find there are not the ones the game had. The two visitors, Munchlax and Bonsly, never change.
+> Altri Pokémon selvatici ai tre Poké Spot: quelli che trovi non sono quelli del gioco. I due visitatori, Munchlax e Bonsly, non cambiano mai.
+
+= Poke Spots. On: a weak Pokemon is replaced by another weak one and a strong one by a strong one (about the same base stats). Off: anything can replace anything.
+> Poké Spot. Attivo: un Pokémon debole è sostituito da un altro debole e uno forte da uno forte (statistiche base simili). Disattivo: qualsiasi Pokémon può sostituirne un altro.
+
+= Other Pokemon in the story trainers' teams. Every team keeps its size. The Shadow Pokemon in a team are not touched here (the Shadow Pokemon row does those). Levels, held items and natures have rows of their own.
+> Altri Pokémon nelle squadre degli Allenatori della storia. Ogni squadra mantiene la sua dimensione. I Pokémon Ombra di una squadra non cambiano qui (ci pensa la riga Pokémon Ombra). Livelli, oggetti e nature hanno righe proprie.
+
+= Trainers. On: each Pokemon is replaced by one about as strong, so early trainers stay easy and late ones stay hard. Off: anything can show up anywhere.
+> Allenatori. Attivo: ogni Pokémon è sostituito da uno circa altrettanto forte, quindi i primi Allenatori restano facili e gli ultimi difficili. Disattivo: tutto può comparire ovunque.
+
+= Which moves a trainer's new Pokemon knows. Kept: the moves the old Pokemon had. By level: the moves the new Pokemon would normally know at that level.
+> Quali mosse conosce il nuovo Pokémon di un Allenatore. Mantenute: quelle del vecchio Pokémon. Per livello: quelle che il nuovo Pokémon conosce normalmente a quel livello.
+
+= Trainers. On: a team never gets the same Pokemon twice. Off: two of the same can happen.
+> Allenatori. Attivo: una squadra non ha mai due volte lo stesso Pokémon. Disattivo: possono capitare doppioni.
+
+= Other species are the Shadow Pokemon you snag: each species is a Shadow only once, and the P*DA's list follows. Where and when you meet them stays. A Shadow Pokemon that is purified knows the moves its new species learns.
+> Altre specie sono i Pokémon Ombra che catturi: ogni specie è Ombra una sola volta e l'elenco del P*DA segue il cambiamento. Dove e quando li incontri non cambia. Un Pokémon Ombra purificato conosce le mosse della sua nuova specie.
+
+= Shadow Pokemon. On: each one is replaced by a Pokemon about as strong. Off: anything can be a Shadow Pokemon.
+> Pokémon Ombra. Attivo: ognuno è sostituito da un Pokémon circa altrettanto forte. Disattivo: qualsiasi Pokémon può essere Ombra.
+
+= On: Shadow Lugia stays Lugia, because the story and its scenes show Lugia. Recommended. Off: Lugia can be any Pokemon, and the scenes still show Lugia.
+> Attivo: Lugia Ombra resta Lugia, perché la storia e le sue scene mostrano Lugia. Consigliato. Disattivo: può essere qualsiasi Pokémon, ma le scene mostrano comunque Lugia.
+
+= The item boxes lying on the maps. Important items (the story's, Battle CDs) never move. Shuffle keeps the same items, so nothing is lost or doubled.
+> Gli oggetti sparsi sulle mappe. Gli oggetti importanti (quelli della storia, i CD Lotta) non si spostano mai. Mescola mantiene gli stessi oggetti: niente va perso né raddoppiato.
+
+= Items on the ground (random): only items that have a name
+> Oggetti per terra (casuale): solo oggetti con un nome
+
+= Only for "Random" ground items. On: only items that have a name (no "????" items). Off: every item number, as codes from before version 0.7.2 did. Leave it On unless you are playing an old code.
+> Solo per gli oggetti per terra «Casuale». Attivo: solo oggetti con un nome (niente oggetti «????»). Disattivo: qualsiasi numero di oggetto, come i codici precedenti alla versione 0.7.2. Lascialo su Attivo, a meno che tu non giochi con un vecchio codice.
+
+= Pokemon get other abilities, so a Pokemon may surprise you in battle. Wonder Guard and Forecast are never handed out.
+> I Pokémon ricevono altre abilità, quindi un Pokémon può sorprenderti in lotta. Barriera Magica e Previsione non vengono mai assegnate.
+
+= Abilities. On: a Pokemon keeps its ability when it evolves. Off: each stage gets its own.
+> Abilità. Attivo: un Pokémon mantiene l'abilità quando si evolve. Disattivo: ogni stadio ha la sua.
+
+= Which Pokemon can learn each TM. Each TM stays about as common as on the disc. Off: as the game.
+> Quali Pokémon possono imparare ogni MT. Ogni MT resta comune più o meno come sul disco. Disattivo: come nel gioco.
+
+= Whether the switches above may hand out legendary Pokemon (Mewtwo, Articuno, Entei...).
+> Se le opzioni sopra possono assegnare Pokémon leggendari (Mewtwo, Articuno, Entei...).
+
+= Each TM teaches another move, all different (never a Shadow move). The bag and the shops show the new move and its description. The TM names (TM01...) stay.
+> Ogni MT insegna una mossa diversa, tutte diverse (mai una mossa Ombra). Lo zaino e i negozi mostrano la nuova mossa e la sua descrizione. I nomi delle MT (MT01...) restano.
+
+= How strong the story trainers' Pokemon are. Shadow Pokemon keep their levels.
+> Quanto sono forti i Pokémon degli Allenatori della storia. I Pokémon Ombra mantengono il loro livello.
+
+= What the story trainers' Pokemon hold. Shadow Pokemon keep theirs.
+> Cosa tengono i Pokémon degli Allenatori della storia. I Pokémon Ombra tengono il loro.
+
+= The nature of the story trainers' Pokemon (it nudges their stats). Shadow Pokemon get theirs from the game, as always.
+> La natura dei Pokémon degli Allenatori della storia (sposta un po' le statistiche). I Pokémon Ombra ricevono la loro dal gioco, come sempre.
+
+= What the Poke Marts sell. Poke Balls and Poke Snacks always stay where they are.
+> Cosa vendono i Poké Market. Le Poké Ball e i Poké Snack restano sempre dove sono.
+
+= The moves the move tutor teaches. All different, and none that a TM teaches. Each is learned by the Pokemon that could learn the move it replaces.
+> Le mosse che insegna il tutor delle mosse. Tutte diverse e nessuna che insegni una MT. Ognuna è imparata dai Pokémon che potevano imparare quella che sostituisce.
+
+= Poke Spots. How the swaps are made: each spot on its own, or one swap list for all of them.
+> Poké Spot. Come avvengono gli scambi: ogni luogo per conto suo oppure un solo elenco di scambi per tutti.
+
+= Poke Spots. Similar types: the new Pokemon shares a type with the one it replaces, so a spot keeps its theme (a Rock Pokemon turns into something Rock or Ground, for instance). Off: any type.
+> Poké Spot. Tipi simili: il nuovo Pokémon condivide un tipo con quello sostituito, così il luogo mantiene il suo tema (un Pokémon Roccia diventa per esempio Roccia o Terra). Disattivo: qualsiasi tipo.
+
+= How high the Poke Spot Pokemon are in level (never above level 100).
+> Il livello dei Pokémon dei Poké Spot (mai oltre il livello 100).
+
+= How your starter is picked (only if "Starter Pokemon" is on).
+> Come viene scelto il tuo Pokémon iniziale (solo se «Pokémon iniziale» è attivo).
+
+= On: the starter's base stats add up to about Eevee's, and it is never a legendary. Off: any Pokemon the Legendaries row allows. Not used for "Eevee family".
+> Attivo: le statistiche base del Pokémon iniziale sommano circa quelle di Eevee e non è mai leggendario. Disattivo: qualsiasi Pokémon consentito dalla riga Leggendari. Non vale per «Famiglia di Eevee».
+
+= Which four moves the starter begins with.
+> Le quattro mosse con cui inizia il Pokémon iniziale.
+
+= Include Gen 4 Pokemon
+> Includi i Pokémon di 4ª generazione
+
+= Adds the 107 Gen 4 Pokemon (Turtwig, Lucario, Garchomp...) to everything above, so they can show up as Poke Spot Pokemon, in trainers' teams and as Shadow Pokemon. Needs the Gen 4 pack (launcher, Extra assets page).
+> Aggiunge i 107 Pokémon di 4ª generazione (Turtwig, Lucario, Garchomp...) a tutto quanto sopra: possono comparire ai Poké Spot, nelle squadre degli Allenatori e come Pokémon Ombra. Serve il pacchetto Gen 4 (launcher, pagina Risorse extra).
+
+= Include Gen 5-7 Pokemon
+> Includi i Pokémon delle gen. 5-7
+
+= Also adds the 314 Gen 5-7 Pokemon. Needs the Gen 4 Pokemon switch on and the Gen 5-7 pack (launcher, Extra assets page).
+> Aggiunge anche i 314 Pokémon delle gen. 5-7. Servono l'opzione Gen 4 e il pacchetto Gen 5-7 (launcher, pagina Risorse extra).
+
+= Kept: the new Pokemon uses the old one's moves, so a trainer's Eevee that replaced a Cacnea may know Poison Sting. Odd moves are normal with this choice, not a bug.
+> Mantenute: il nuovo Pokémon usa le mosse del vecchio, quindi un Eevee di un Allenatore al posto di un Cacnea può conoscere Velenospina. Mosse strane sono normali con questa scelta, non è un bug.
+
+= By level: a trainer's Pokemon knows what its own species learns by that level, like a wild one.
+> Per livello: un Pokémon di un Allenatore conosce ciò che la sua specie impara fino a quel livello, come uno selvatico.
+
+= Off: every item box holds what the game put there.
+> Disattivo: ogni oggetto per terra contiene ciò che ha messo il gioco.
+
+= Random: each box holds any item, so you may find many of one kind and none of another.
+> Casuale: ogni oggetto è uno qualsiasi, quindi potresti trovarne molti di un tipo e nessuno di un altro.
+
+= Shuffle: the boxes swap their items with each other: the same items exist, just in other places.
+> Rimescola: gli oggetti si scambiano il contenuto: esistono gli stessi oggetti, solo in altri posti.
+
+= Never: no legendary Pokemon is handed out. The ones the game had stay where they were.
+> Mai: nessun Pokémon leggendario viene assegnato. Quelli del gioco restano dove erano.
+
+= As on the disc: only a place that had a legendary may get another one (a Shadow legendary turns into another legendary); nobody else gets any.
+> Come sul disco: solo un posto che aveva un leggendario può riceverne un altro (un leggendario Ombra diventa un altro leggendario); gli altri non ne ricevono.
+
+= Any: legendaries can show up as Poke Spot Pokemon, in trainers' teams and as Shadow Pokemon.
+> Qualsiasi: i leggendari possono comparire ai Poké Spot, nelle squadre degli Allenatori e come Pokémon Ombra.
+
+= Off: the TMs teach what they always did.
+> Disattivo: le MT insegnano ciò che hanno sempre insegnato.
+
+= Random: every TM teaches a random move, one-hit-KO moves too (Fissure, Sheer Cold...).
+> Casuale: ogni MT insegna una mossa a caso, anche KO con un colpo (Abisso, Gelo...).
+
+= Random, no one-hit-KO: random moves, but never Fissure, Guillotine, Horn Drill or Sheer Cold.
+> Casuale, senza KO con un colpo: mosse a caso, ma mai Abisso, Ghigliottina, Perforcorno o Gelo.
+
+= Off: the tutor teaches what it always did.
+> Disattivo: il tutor insegna ciò che ha sempre insegnato.
+
+= Random: the tutor's moves are random, one-hit-KO moves too.
+> Casuale: le mosse del tutor sono a caso, anche KO con un colpo.
+
+= Kept: each Pokemon keeps the level the game gave it.
+> Mantenuti: ogni Pokémon mantiene il livello dato dal gioco.
+
+= +10%: every level is about a tenth higher (a level 40 Pokemon is level 44).
+> +10%: ogni livello è circa un decimo più alto (un Pokémon di livello 40 passa al 44).
+
+= +20%: every level is about a fifth higher.
+> +20%: ogni livello è circa un quinto più alto.
+
+= +30%: every level is about a third higher.
+> +30%: ogni livello è circa un terzo più alto.
+
+= +50%: every level is half as high again. Trainers get hard.
+> +50%: ogni livello è una volta e mezza più alto. Gli Allenatori diventano difficili.
+
+= To strength: a new Pokemon that is stronger than the old one gets a lower level, a weaker one a higher level, so the fight stays about as hard.
+> In base alla forza: un nuovo Pokémon più forte del vecchio riceve un livello più basso, uno più debole un livello più alto, così lo scontro resta difficile più o meno uguale.
+
+= Kept: each Pokemon holds what the game gave it.
+> Mantenuti: ogni Pokémon tiene ciò che gli ha dato il gioco.
+
+= Random: each Pokemon holds one of the items trainers' Pokemon hold in the game.
+> Casuale: ogni Pokémon tiene uno degli oggetti che tengono i Pokémon degli Allenatori nel gioco.
+
+= None: nobody holds anything.
+> Nessuno: nessuno tiene niente.
+
+= Kept: natures stay as the game made them.
+> Mantenute: le nature restano come le ha fatte il gioco.
+
+= Random: each Pokemon gets any of the 25 natures.
+> Casuale: ogni Pokémon riceve una delle 25 nature.
+
+= Off: every Poke Mart sells what it always did.
+> Disattivo: ogni Poké Market vende ciò che ha sempre venduto.
+
+= Shuffled: the Marts' own goods turn up in other Marts.
+> Mescolato: le merci dei Market compaiono in altri Market.
+
+= Everyday goods: medicine, status cures, repels, battle items and berries.
+> Merci comuni: medicine, cure per gli stati, repellenti, oggetti da lotta e bacche.
+
+= Anything: also held items, TMs, vitamins, stones and valuables.
+> Qualsiasi cosa: anche strumenti da dare, MT, vitamine, pietre e oggetti di valore.
+
+= Each spot its own: every spot is changed on its own, so a Pokemon that lived in two spots may become two different ones.
+> Ogni luogo per conto suo: ogni luogo viene cambiato separatamente, quindi un Pokémon che viveva in due luoghi può diventare due Pokémon diversi.
+
+= Same swap everywhere: one Pokemon is replaced by the same new one in every spot (a 1 to 1 swap), and no two by the same one.
+> Stesso scambio ovunque: un Pokémon è sostituito dallo stesso nuovo in ogni luogo (uno scambio 1 a 1) e mai due dallo stesso.
+
+= Off: the new Pokemon can be of any type.
+> Disattivo: il nuovo Pokémon può essere di qualsiasi tipo.
+
+= Similar types: the new Pokemon shares a type with the old one.
+> Tipi simili: il nuovo Pokémon condivide un tipo con il vecchio.
+
+= Kept: the levels the game gave them.
+> Mantenuti: i livelli dati dal gioco.
+
+= +10%: about a tenth higher.
+> +10%: circa un decimo più alto.
+
+= +20%: about a fifth higher.
+> +20%: circa un quinto più alto.
+
+= +30%: about a third higher.
+> +30%: circa un terzo più alto.
+
+= +50%: half as high again.
+> +50%: una volta e mezza più alto.
+
+= Random: one Pokemon is picked for you.
+> Casuale: viene scelto un Pokémon per te.
+
+= Pick 1 of 3: you choose from three Pokemon when the game would give you Eevee.
+> 1 su 3: scegli tra tre Pokémon quando il gioco ti darebbe Eevee.
+
+= Eevee family: Eevee or one of its evolutions (Vaporeon, Jolteon, Espeon...).
+> Famiglia di Eevee: Eevee o una sua evoluzione (Vaporeon, Jolteon, Espeon...).
+
+= By level: the last four moves your starter learns up to level 10.
+> Per livello: le ultime quattro mosse che il tuo Pokémon iniziale impara fino al livello 10.
+
+= Kept: Eevee's four moves (Tackle, Tail Whip, Bite, Sand-Attack), whoever your starter is.
+> Mantenute: le quattro mosse di Eevee (Azione, Colpocoda, Morso, Turbosabbia), chiunque sia il tuo Pokémon iniziale.
+
+= Random: a Pokemon that could learn a TM may now be unable to, and the other way round.
+> Casuale: un Pokémon che poteva imparare una MT può non poterlo più, e viceversa.
+
+= Light: only the wild Pokemon at the Poke Spots, which Pokemon are Shadow Pokemon, and the item boxes (shuffled). Everything else stays as on the disc.
+> Leggero: solo i Pokémon selvatici dei Poké Spot, quali Pokémon sono Ombra e gli oggetti per terra (mescolati). Tutto il resto come sul disco.
+
+= Classic: Light, plus the trainers' teams, abilities, TM learners and TM moves, with the fairness options on (similar strength, no repeats).
+> Classico: Leggero, più le squadre degli Allenatori, le abilità, chi impara le MT e le mosse delle MT, con le opzioni di equità attive (forza simile, niente doppioni).
+
+= Chaos: the same as Classic, but with no fairness: strength is ignored, any legendary can show up and ground items are random.
+> Caos: come Classico ma senza equità: la forza è ignorata, può comparire qualsiasi leggendario e gli oggetti per terra sono casuali.
+
+= Custom: you set every switch yourself in the rows below, starting from how they stood. (Every style shows the rows, and you can change any of them.)
+> Personalizzato: imposti tu ogni opzione nelle righe qui sotto, partendo da come erano. (Ogni stile mostra le righe e puoi cambiarle tutte.)
+
+= Off: the game as it is on the disc. Left / right or A picks a style.
+> Disattivo: il gioco com'è sul disco. Sinistra / destra o A sceglie uno stile.
+
+= Makes a new game from your own disc: other Pokemon in the Poke Spots, other Shadow Pokemon, items in other places, and more. It is made when you start and can't be changed in a running game.
+> Crea una nuova partita dal tuo disco: altri Pokémon ai Poké Spot, altri Pokémon Ombra, oggetti in altri posti e altro. Viene creata all'avvio e non si può cambiare in una partita in corso.
+
+= Code: %s. It holds the seed and every switch below, so a friend who uses the same code gets exactly your game: same Pokemon, same teams, same items. Share it from the launcher's Save page. Left / right or A: a new random seed, which makes a different game. A save keeps its code for good.
+> Codice: %s. Contiene il seme e tutte le opzioni qui sotto, quindi un amico che usa lo stesso codice ottiene esattamente la tua partita: stessi Pokémon, stesse squadre, stessi oggetti. Condividilo dalla pagina Salvataggio del launcher. Sinistra / destra o A: un nuovo seme, cioè un'altra partita. Un salvataggio mantiene il suo codice per sempre.
+
+= Copy a code (or a seed number) on the PC, then press A here to use it. It replaces all the switches above with your friend's.
+> Copia un codice (o un numero di seme) sul PC, poi premi A qui per usarlo. Sostituisce tutte le opzioni sopra con quelle del tuo amico.
+
+= Named items only
+> Solo oggetti con nome
+
+# Scope and similar-strength texts with an example (0.7.7)
+
+= Each spot its own: every spot rolls its own Pokemon (Sandshrew may become Larvitar at one spot and Ralts at another).
+> Ogni luogo per conto suo: ogni luogo tira i suoi Pokémon (Sandshrew può diventare Larvitar in un luogo e Ralts in un altro).
+
+= Same swap everywhere: one swap list for the whole game (if Sandshrew becomes Larvitar, it's Larvitar at every spot).
+> Stesso scambio ovunque: un solo elenco di scambi per tutta la partita (se Sandshrew diventa Larvitar, è Larvitar in ogni luogo).
+
+= Poke Spots. Whether a Pokemon is swapped the same way in every spot.
+> Poké Spot. Se un Pokémon viene sostituito allo stesso modo in ogni luogo.
+
+= Poke Spots. On: a weak Pokemon is replaced by another weak one and a strong one by a strong one (Sandshrew will not turn into Dragonite). Off: anything can replace anything.
+> Poké Spot. Attivo: un Pokémon debole è sostituito da un altro debole e uno forte da uno forte (Sandshrew non diventerà Dragonite). Disattivo: qualsiasi Pokémon può sostituirne un altro.
+
+= Its effect isn't in the game yet.
+> Effetto non ancora nel gioco.
+
+= Works in double battles only.
+> Ha effetto solo nei doppi.
+
+= PRISM SCALE
+> SQUAMA PRISMA
+
+= Held by Feebas, it{00}evolves when it{00}levels up.
+> Tenuto da Feebas,{00}evolve salendo{00}di livello.
+
+= %s: %u models are bigger than the disc's (normal for these models); XD_MODS_SIZE_LOG=1 lists them
+> %s: %u modelli sono più grandi di quelli del disco (normale per questi modelli); XD_MODS_SIZE_LOG=1 li elenca

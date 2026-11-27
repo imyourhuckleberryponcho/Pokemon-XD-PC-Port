@@ -1,4 +1,5 @@
 #include "xd_gen57.h"
+#include "xd_gen_rules.h"
 #include "xd_move_targets.h"
 #include "xd_spare.h"
 
@@ -25,7 +26,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <map>
+#include <set>
 #include <sstream>
 
 extern "C" {
@@ -62,9 +65,12 @@ constexpr uint32_t kWaveDisc = 389;
 constexpr uint32_t kGroup = 0x7D0;
 constexpr uint32_t kFirstText = 0x8000;
 constexpr uint32_t kNoEffectText = 0x9100;
+constexpr uint32_t kDoublesText = 0x9102;
+constexpr uint32_t kNotYetText = 0x9101;
 
 bool sLoaded = false;
 bool sSpots = false;
+bool sRowsInstalled = false;
 bool sOwnCries = false;
 uint32_t sReserved = 0, sPadSndFile = 0, sPadSndData = 0, sPadWaves = 0;
 xd::pack::PackTables sTables;
@@ -76,7 +82,10 @@ struct AbilityRow {
 };
 std::vector<AbilityRow> sAbilities;
 
-bool Implemented(uint32_t) { return false; }
+std::set<uint32_t> sEffectIds;
+bool Implemented(uint32_t id) { return sEffectIds.count(id) != 0; }
+
+void ReadEffectIds(const std::filesystem::path& pack);
 
 int LanguageColumn() {
   const char* id = xd::languages::Active() ? xd::languages::Active()->id : "us";
@@ -115,6 +124,15 @@ void ParseAbilities(const std::string& text) {
   }
 }
 
+std::string JsonEscape(const std::string& s) {
+  std::string out;
+  for (char c : s) {
+    if (c == '"' || c == '\\') out += '\\';
+    out += c;
+  }
+  return out;
+}
+
 std::string NormKey(const std::string& s) {
   std::string out;
   for (char c : s) {
@@ -131,6 +149,7 @@ bool NumberKey(const std::string& s, uint32_t& out) {
   out = static_cast<uint32_t>(v);
   return true;
 }
+uint32_t sPrismScale = 0;
 std::vector<uint16_t> sEvoShop;
 
 void ReadEvolutions(const engine::mods::LoadResult& result) {
@@ -360,11 +379,30 @@ void AppendSpotRows(const engine::mods::LoadResult& result) {
   }
 }
 
+void ReadEffectIds(const std::filesystem::path& pack) {
+  namespace J = engine::mods::json;
+  sEffectIds.clear();
+  std::string text;
+  if (!ReadText(pack / L"battle" / L"abilities.json", text)) return;
+  J::Value root;
+  J::Reader rd(text);
+  if (!rd.Document(root) || root.kind != J::Value::Kind::Object) return;
+  const auto list = root.fields.find("abilities");
+  if (list == root.fields.end()) return;
+  for (const std::string& k : list->second.order) {
+    const J::Value& a = list->second.fields.at(k);
+    if (a.kind != J::Value::Kind::Object || a.fields.size() < 2) continue;
+    const auto id = a.fields.find("id");
+    if (id != a.fields.end() && id->second.kind == J::Value::Kind::Number && id->second.number > 0) sEffectIds.insert(static_cast<uint32_t>(id->second.number));
+  }
+}
+
 }
 
 namespace xd::gen57 {
 
 const std::vector<uint16_t>& EvolutionShopItems() { return sEvoShop; }
+uint32_t PrismScaleItem() { return sLoaded ? sPrismScale : 0; }
 
 std::filesystem::path PackFolder() { return xd::SettingsFolder() / L"extra_assets" / L"usum_gen57"; }
 
@@ -533,9 +571,26 @@ void Prepare(bool wanted, bool spots, engine::mods::LoadOptions& options, std::v
     sTables = {};
     return;
   }
+  {
+    bool packHas = false;
+    for (const auto& d : mine) if (d.text.find("\"Prism Scale\"") != std::string::npos) packHas = true;
+    if (!packHas && !xd::xg::On()) {
+      engine::mods::DataModFile d;
+      d.mod = "gen57";
+      d.builtIn = true;
+      d.modName = "Gen 5-7 Pokemon and moves";
+      d.label = "gen57/90_prism_scale.json";
+      d.text = std::string("{\n \"_note\": \"the Prism Scale (Feebas -> Milotic with the Gen 5-7 rules), made by the game, gen57_pack.cpp\",\n") +
+               " \"add\": {\"items\": {\"Prism Scale\": {\"copy\": \"Red Scarf\", \"price\": 100, \"coupon\": 6000,\n" +
+               "  \"text\": {\"name\": \"" + JsonEscape(Tr("PRISM SCALE")) + "\", \"doc\": \"" + JsonEscape(Tr("Held by Feebas, it{00}evolves when it{00}levels up.")) +
+               "\"}}}}\n}\n";
+      mine.push_back(std::move(d));
+    }
+  }
   for (auto& d : mine) dataFiles.push_back(std::move(d));
   std::string abilities;
   if (ReadText(pack / L"abilities.txt", abilities)) ParseAbilities(abilities);
+  ReadEffectIds(pack);
   options.extraLayers.push_back({"usum_gen57", "Gen 5-7 Pokemon", pack});
   options.builtInFolders["gen57"] = pack;
   sRowsAll.clear();
@@ -654,6 +709,17 @@ std::vector<std::string> AbilityNamesForXG() {
   return names;
 }
 
+void AddPrismScale(const engine::mods::LoadResult& result) {
+  sPrismScale = 0;
+  if (xd::xg::On()) return;
+  for (const auto& r : result.addedRows) {
+    if (r.table == "item_data_prime" && r.mod == "gen57" && NormKey(r.key) == "prismscale") sPrismScale = r.id;
+  }
+  if (sPrismScale == 0) return;
+  xd::gen4::AddExtraEvolution({328, 24, static_cast<uint16_t>(sPrismScale), 329});
+  std::fprintf(stderr, "[gen57] Feebas + Prism Scale (item %u) -> Milotic with a Gen 5-7 rule set\n", sPrismScale);
+}
+
 void AfterLoad(const engine::mods::LoadResult& result) {
   if (!sLoaded) return;
   xd::forms::Load(result);
@@ -675,6 +741,7 @@ void AfterLoad(const engine::mods::LoadResult& result) {
       std::fprintf(stderr, "[gen57] Eevee does not evolve into Sylveon here (species %u, Shiny Stone %u: a row is missing)\n", sylveon, shiny);
     }
   }
+  AddPrismScale(result);
   ReadEvolutions(result);
   AppendSpotRows(result);
   for (uint32_t id : all) sRowsAll.push_back({"pdapokemonsortdata", 0xFFFFFFFFu, 1, -1, {0, 2, id}});
@@ -739,6 +806,34 @@ void AppendAbilityTexts(std::vector<std::pair<uint32_t, std::string>>& texts) {
     texts.emplace_back((kGroup << 20) | (kFirstText + a.id * 2), name);
     texts.emplace_back((kGroup << 20) | (kFirstText + a.id * 2 + 1), a.text[col]);
   }
+  texts.emplace_back((kGroup << 20) | kNotYetText, Tr("Its effect isn't in the game yet."));
+  texts.emplace_back((kGroup << 20) | kDoublesText, Tr("Works in double battles only."));
+}
+
+bool AllyOnly(uint32_t id) {
+  static const char* const kNames[] = {"HEALER", "FRIEND GUARD", "TELEPATHY", "AROMA VEIL", "FLOWER VEIL", "SYMBIOSIS", "BATTERY", "RECEIVER", "POWER OF ALCHEMY"};
+  for (const AbilityRow& a : sAbilities) {
+    if (a.id != id) continue;
+    std::string n = a.name[0];
+    for (char& c : n) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    for (const char* k : kNames) if (n == k) return true;
+  }
+  return false;
+}
+
+uint32_t DescriptionText(uint32_t id) {
+  if (xd::xg::On() || Implemented(id)) return kFirstText + id * 2 + 1;
+  if (AllyOnly(id)) return kDoublesText;
+  return xd::rulegen::AtLeast(5) ? kNotYetText : kNoEffectText;
+}
+
+bool AbilityImplemented(uint32_t id) { return Implemented(id); }
+
+void SyncAbilityDescriptions() {
+  if (!sRowsInstalled || xd::xg::On()) return;
+  auto* rows = reinterpret_cast<uint32_t*>(pokemon_tokusei_data);
+  for (const AbilityRow& a : sAbilities) rows[3 * a.id + 2] = (kGroup << 20) | DescriptionText(a.id);
+
 }
 
 void InstallAbilityRows() {
@@ -754,10 +849,11 @@ void InstallAbilityRows() {
   uint32_t top = pokemon_tokusei_data_number;
   for (const AbilityRow& a : sAbilities) {
     xd::xg::SetAbilityRow(pokemon_tokusei_data, a.id, (kGroup << 20) | (kFirstText + a.id * 2),
-                          (kGroup << 20) | (xd::xg::On() || Implemented(a.id) ? kFirstText + a.id * 2 + 1 : kNoEffectText));
+                          (kGroup << 20) | DescriptionText(a.id));
     top = std::max(top, a.id + 1);
   }
   pokemon_tokusei_data_number = top;
+  sRowsInstalled = true;
   std::fprintf(stderr, "[gen57] ability table grown to %u rows (%zu Gen 5-7 abilities named)\n", top, sAbilities.size());
 }
 

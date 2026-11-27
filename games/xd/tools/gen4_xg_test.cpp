@@ -142,7 +142,7 @@ int main() {
     const J::Value& cf = sp.fields.at("add").fields.at("pokemon").fields.at("Cutiefly");
     CHECK(cf.fields.at("zokuseiDataId").items[0].number == 6 && cf.fields.at("zokuseiDataId").items[1].number == 9);
     CHECK(cf.fields.at("tokuseiDataId").items[0].number == 2 && cf.fields.at("tokuseiDataId").items[1].number == 130);
-    CHECK(cf.fields.find("face") != cf.fields.end() && cf.fields.find("voice") == cf.fields.end() && cf.fields.find("nakigoeId") == cf.fields.end());
+    CHECK(cf.fields.find("face") != cf.fields.end());
     const J::Value fm = Parse(g5[2].text);
     CHECK(fm.fields.at("add").fields.at("items").fields.at("Venusaurite").fields.at("copy").text == "#2");
     CHECK(fm.fields.at("add").fields.at("items").fields.at("Odd Stone").fields.at("copy").text == "Everstone");

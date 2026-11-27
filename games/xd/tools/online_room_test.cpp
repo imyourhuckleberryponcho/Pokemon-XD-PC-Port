@@ -147,7 +147,7 @@ int main() {
   c.disc = "GXXP01";
   CHECK(Has(Judge(back.caps, back.rules, c, true).refuse, "GXXP01"));
   c = host.caps;
-  c.protocol = 5;
+  c.protocol = 6;
   v = Judge(back.caps, back.rules, c, true);
   CHECK(v.refuse.size() == 1 && Has(v.refuse, "another version"));
 
@@ -362,15 +362,15 @@ int main() {
       fs::remove_all(root, ec);
     }
     {
-    CHECK(kBattleProtocol == 4);
+    CHECK(kBattleProtocol == 5);
     Fingerprint cur;
     cur.caps.protocol = kBattleProtocol;
     const std::vector<uint8_t> blob = Encode(cur);
-    CHECK(std::string(blob.begin(), blob.end()).find("cap=4\n") != std::string::npos);
+    CHECK(std::string(blob.begin(), blob.end()).find("cap=5\n") != std::string::npos);
     Fingerprint back4;
-    CHECK(Decode(blob, back4) && back4.caps.protocol == 4);
+    CHECK(Decode(blob, back4) && back4.caps.protocol == 5);
     Capabilities now, old3;
-    now.protocol = 4;
+    now.protocol = 5;
     old3.protocol = 3;
     RoomRules classic;
     for (const char* rs : {"classic", "gen4pokemon", "gen4", "gen4mt"}) {
@@ -382,6 +382,9 @@ int main() {
     classic.ruleSet = "classic";
     Capabilities now2 = now;
     CHECK(Judge(now, classic, now2, true).refuse.empty() && Judge(now, classic, now2, false).refuse.empty());
+    Capabilities rev4 = now;
+    rev4.protocol = 4;
+    CHECK(Has(Judge(rev4, classic, now, true).refuse, "same game version") && Has(Judge(now, classic, rev4, false).refuse, "same game version"));
     Capabilities old1 = old3, old2 = old3;
     old1.protocol = 1, old2.protocol = 2;
     CHECK(Has(Judge(old1, classic, now, true).refuse, "same game version") && Has(Judge(old2, classic, now, true).refuse, "same game version"));

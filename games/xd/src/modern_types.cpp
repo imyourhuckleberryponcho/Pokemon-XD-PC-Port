@@ -35,7 +35,7 @@ constexpr uint16_t kNeutral = 0x3F, kSuper = 0x41, kResist = 0x42, kImmune = 0x4
 
 uint16_t VsFairy(uint32_t attack) {
   switch (attack) {
-    case 1: case 6: case 10: case 17: return kResist;
+    case 1: case 6: case 17: return kResist;
     case 3: case 8: return kSuper;
     case 16: return kImmune;
     default: return kNeutral;
@@ -87,7 +87,7 @@ void LogChartOnce() {
       {"Fairy vs Poison", 18, 3, kResist},  {"Fairy vs Steel", 18, 8, kResist},   {"Fairy vs Fire", 18, 10, kResist},
       {"Fairy vs Normal", 18, 0, kNeutral}, {"Fairy vs Fairy", 18, 18, kNeutral}, {"Dragon vs Fairy", 16, 18, kImmune},
       {"Fighting vs Fairy", 1, 18, kResist}, {"Dark vs Fairy", 17, 18, kResist},   {"Bug vs Fairy", 6, 18, kResist},
-      {"Fire vs Fairy", 10, 18, kResist},   {"Poison vs Fairy", 3, 18, kSuper},   {"Steel vs Fairy", 8, 18, kSuper},
+      {"Fire vs Fairy", 10, 18, kNeutral},   {"Poison vs Fairy", 3, 18, kSuper},   {"Steel vs Fairy", 8, 18, kSuper},
       {"Normal vs Fairy", 0, 18, kNeutral}, {"Ghost vs Steel", 7, 8, kNeutral},   {"Dark vs Steel", 17, 8, kNeutral},
       {"Fire vs Steel", 10, 8, kSuper},     {"Steel vs Steel", 8, 8, kResist},    {"Ghost vs Normal", 7, 0, kImmune},
       {"Ghost vs Ghost", 7, 7, kSuper},     {"Dark vs Dark", 17, 17, kResist},

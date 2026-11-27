@@ -393,6 +393,19 @@ void Perform(const std::string& action) {
     xd::hidden::Give(p, false);
     pokemonBiosSetTokuseiFlag(p, which != 0);
     sStatus = "ability: party slot " + std::to_string(slot) + " ability flag " + std::to_string(which);
+  } else if (k == "setmoves") {
+    const long slot = Num(w, 1, 1);
+    void* p = slot >= 1 && slot <= 6 ? reinterpret_cast<void*>(heroGetStatus(nullptr, 3, static_cast<u16>(slot - 1))) : nullptr;
+    if (p == nullptr || w.size() < 3) {
+      sStatus = "setmoves: <party slot 1-6> <move row> [<move row> ...]";
+      return;
+    }
+    for (size_t i = 0; i < 4; i++) {
+      const u16 mv = i + 2 < w.size() ? static_cast<u16>(Num(w, i + 2, 0)) : 0;
+      pokemon_SetPokemonWazaDataId(p, static_cast<u32>(i), mv);
+      pokemon_SetPokemonWazaPp(p, static_cast<u32>(i), mv != 0 ? wazaDB_GetPp(mv) : 0);
+    }
+    sStatus = "setmoves: party slot " + std::to_string(slot);
   } else if (k == "lua") {
     if (w.size() < 2) {
       sStatus = "lua: <function name> [a b c]";

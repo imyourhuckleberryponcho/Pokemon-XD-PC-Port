@@ -8,6 +8,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <iterator>
 #include <map>
@@ -166,6 +167,10 @@ public:
     ApplyData(on);
     Build();
     FinishRows(on);
+    for (const auto& [layerName, count] : mBigCount) {
+      Say(Message::Level::Info, Fmt(Tr("%s: %u models are bigger than the disc's (normal for these models); XD_MODS_SIZE_LOG=1 lists them"), layerName.c_str(),
+                                    static_cast<unsigned>(count)));
+    }
     if (!mResult.active.empty()) {
       Say(Message::Level::Info, Fmt(Tr("Mods on: %s (%d disc file(s) replaced or added)"), mResult.ActiveText().c_str(),
                                     static_cast<int>(mResult.files.size())));
@@ -176,6 +181,7 @@ private:
   const LoadOptions& mOpt;
   LoadResult& mResult;
   std::vector<FoundMod> mFound;
+  std::map<std::string, size_t> mBigCount;
   std::map<std::string, std::string> mDiscFiles;
   std::map<std::string, Layer> mLayers;
   std::map<std::string, std::vector<uint8_t>> mBaseCache;
@@ -965,6 +971,14 @@ private:
         }
       }
       if (!e.generated && Fsys_Entry(&fsys, index, &old) && contents.back().size() > old.size) {
+        const bool builtIn = e.from.compare(0, std::strlen(kLayerPrefix), kLayerPrefix) == 0;
+        const char* listAll = std::getenv("XD_MODS_SIZE_LOG");
+        if (builtIn) {
+          mResult.biggerBuiltIn.push_back(Fmt("%s %s (%u bytes, was %u)", layer.discPath.c_str(), e.name.c_str(), static_cast<unsigned>(contents.back().size()),
+                                              static_cast<unsigned>(old.size)));
+          mBigCount[e.from]++;
+        }
+        if (!builtIn || (listAll != nullptr && listAll[0] == '1'))
         Say(Message::Level::Info, Fmt(Tr("%s: %s in %s is bigger than the original (%u bytes, was %u). If the game runs out of "
                                          "memory there, this may be why."),
                                       NameOf(e.from).c_str(), e.name.c_str(), layer.discPath.c_str(),
