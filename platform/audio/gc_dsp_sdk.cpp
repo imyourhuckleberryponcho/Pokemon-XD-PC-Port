@@ -1,3 +1,7 @@
+#ifdef __ANDROID__
+#include <sys/resource.h>
+#include <unistd.h>
+#endif
 #include <dolphin/dsp.h>
 
 #include <gc_dsp.h>
@@ -43,6 +47,11 @@ uint16_t sCoefTable[0x800];
 bool sHaveCoefTable = false;
 
 uint8_t* dsp_memory(void*, uint32_t address, uint32_t size) {
+#ifdef __ANDROID__
+  if (address >= 0x02000000u && address < 0x80000000u) {
+    return reinterpret_cast<uint8_t*>(static_cast<uintptr_t>(address));
+  }
+#endif
   const uint32_t physical = address & 0x3FFFFFFF;
   if ((address & 0x40000000) == 0 || (address & 0xC0000000) == 0xC0000000) {
     if (physical + static_cast<uint64_t>(size) <= kMem1Size) {
@@ -153,6 +162,8 @@ void worker_main() {
   tlOnWorker = true;
 #ifdef _WIN32
   SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
+#elif defined(__ANDROID__)
+  setpriority(PRIO_PROCESS, static_cast<id_t>(gettid()), -16);
 #endif
   Worker& w = *sWorker;
   std::unique_lock<std::mutex> lock(w.m);
@@ -521,6 +532,40 @@ void* PortDsp_GhostLeave(bool* pendingInterrupt) {
   return chip;
 }
 
+bool PortDsp_StateSave(PortDspState* out) {
+  join_chip();
+  if (sDsp == nullptr || sGhost) return false;
+  out->chip = GcDsp_Clone(sDsp);
+  out->first = sFirstTask;
+  out->current = sCurrentTask;
+  out->interruptQueued = sInterruptQueued;
+  out->booted = sBooted;
+  out->initialised = sInitialised;
+  out->yields = sYields;
+  return out->chip != nullptr;
+}
+
+void PortDsp_StateLoad(const PortDspState* in) {
+  join_chip();
+  if (sGhost) return;
+  GcDsp* copy = GcDsp_Clone(static_cast<GcDsp*>(in->chip));
+  if (sDsp != nullptr) GcDsp_Destroy(sDsp);
+  sDsp = copy;
+  sFirstTask = static_cast<DSPTaskInfo*>(in->first);
+  sCurrentTask = static_cast<DSPTaskInfo*>(in->current);
+  sInterruptQueued = in->interruptQueued;
+  sBooted = in->booted;
+  sInitialised = in->initialised;
+  sYields = in->yields;
+  sPending = sHandlerDone = sHandlerPredicted = sDeferredResume = false;
+  sWorkerRaised.store(false);
+}
+
+void PortDsp_StateFree(PortDspState* s) {
+  if (s->chip != nullptr) GcDsp_Destroy(static_cast<GcDsp*>(s->chip));
+  s->chip = nullptr;
+}
+
 void PortDsp_GhostEnd(void) {
   if (!sGhost) return;
   PortDsp_GhostDestroy(PortDsp_GhostLeave(nullptr));
@@ -536,4 +581,35 @@ void PortAudio_GetDspStats(PortAudioStats* out) {
   out->dspNs = sDspNs.load(std::memory_order_relaxed);
 }
 
+}
+
+#include "../sdk/include/port_savestate.h"
+bool PortDsp_StateToBytes(const PortDspState* s, portstate::Out& out) {
+  if (s->chip == nullptr) return false;
+  std::vector<uint8_t> raw(GcDsp_StateSize());
+  GcDsp_StateGet(static_cast<const GcDsp*>(s->chip), raw.data());
+  out.vec(raw);
+  out.pod(s->first); out.pod(s->current);
+  out.pod(s->interruptQueued); out.pod(s->booted); out.pod(s->initialised); out.pod(s->yields);
+  return true;
+}
+bool PortDsp_StateLoadBytes(portstate::In& in) {
+  std::vector<uint8_t> raw = in.vec<uint8_t>();
+  void* first = in.pod<void*>();
+  void* current = in.pod<void*>();
+  const bool queued = in.pod<bool>();
+  const uint32_t booted = in.pod<uint32_t>(), initialised = in.pod<uint32_t>(), yields = in.pod<uint32_t>();
+  if (!in.ok()) return false;
+  join_chip();
+  if (sDsp == nullptr || sGhost) return false;
+  if (!GcDsp_StateSet(sDsp, raw.data(), raw.size())) return false;
+  sFirstTask = static_cast<DSPTaskInfo*>(first);
+  sCurrentTask = static_cast<DSPTaskInfo*>(current);
+  sInterruptQueued = queued;
+  sBooted = booted;
+  sInitialised = initialised;
+  sYields = yields;
+  sPending = sHandlerDone = sHandlerPredicted = sDeferredResume = false;
+  sWorkerRaised.store(false);
+  return true;
 }

@@ -9,6 +9,7 @@
 #include "xd_user_folder.h"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <condition_variable>
 #include <cstdio>
@@ -90,12 +91,22 @@ at::ReplacementGroup RegisterLoose(const fs::path& folder, const at::Replacement
   return group;
 }
 
-void LoadPacks() {
+void LoadPacks(const std::string& only = {}) {
   const auto start = std::chrono::steady_clock::now();
   std::vector<xd::hd::Pack> packs;
   {
     std::lock_guard lk(sPackMutex);
     packs = sPacks;
+  }
+  if (!only.empty()) {
+    auto lower = [](std::string v) { for (char& c : v) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c))); return v; };
+    const std::string want = lower(only);
+    packs.erase(std::remove_if(packs.begin(), packs.end(),
+                               [&](const xd::hd::Pack& p) {
+                                 return lower(Utf8(p.folder.filename())) != want && lower(p.name) != want &&
+                                        lower(p.name) != "textures: " + want;
+                               }),
+                packs.end());
   }
   int32_t priority = 0;
   for (const xd::hd::Pack& pack : packs) {
@@ -228,8 +239,16 @@ struct WriterJoiner {
 } sJoiner;
 
 uint32_t sSeenChanges = ~0u;
+uint32_t sHdSeenChanges = ~0u;
 bool sFirst = true;
 bool sPacksAllowed = false;
+bool sWant = false;
+std::string sFilter;
+
+void UnloadPacks() {
+  for (at::ReplacementGroup& group : sGroups) at::unregister_replacements(group);
+  sGroups.clear();
+}
 
 }
 
@@ -241,10 +260,9 @@ void SetPacks(std::vector<Pack> packs) {
 
 bool ReloadPacks(std::vector<Pack> packs) {
   if (sFirst || !sPacksAllowed) return false;
-  for (at::ReplacementGroup& group : sGroups) at::unregister_replacements(group);
-  sGroups.clear();
+  UnloadPacks();
   SetPacks(std::move(packs));
-  LoadPacks();
+  if (sWant) LoadPacks(sFilter);
   return true;
 }
 }
@@ -255,22 +273,43 @@ extern "C" void PortXD_InstallTexturePackSource(void) {
 
 extern "C" void PortXD_HdTexturesUpdate(void) {
   engine::settings::Registry& reg = engine::settings::Global();
+  const bool changed = sFirst || reg.Changes() != sHdSeenChanges;
   if (sFirst) {
-    sFirst = false;
     const char* off = std::getenv("XD_HD_TEXTURES");
     const bool disabled = off != nullptr && std::strcmp(off, "0") == 0;
+    const bool original = reg.IsOriginal() || reg.CurrentPreset() == engine::settings::Preset::Original;
+    sPacksAllowed = !disabled && !original;
     bool any;
     {
       std::lock_guard lk(sPackMutex);
       any = !sPacks.empty();
     }
+    if (any && !sPacksAllowed) std::fprintf(stderr, "[hd textures] %s: no texture pack is used\n", disabled ? "XD_HD_TEXTURES=0" : "Original");
+  }
+  if (changed) {
+    sHdSeenChanges = reg.Changes();
     const bool original = reg.IsOriginal() || reg.CurrentPreset() == engine::settings::Preset::Original;
+    const char* off = std::getenv("XD_HD_TEXTURES");
+    const bool disabled = off != nullptr && std::strcmp(off, "0") == 0;
+    bool want = !disabled && !original;
+    if (want && reg.Find("video.hd_textures") != engine::settings::kNoSetting) want = reg.Bool("video.hd_textures").Get();
+    std::string filter;
+    if (reg.Find("video.hd_pack") != engine::settings::kNoSetting) filter = reg.Text("video.hd_pack");
     sPacksAllowed = !disabled && !original;
-    if (any && !disabled && !original) {
-      LoadPacks();
-    } else if (any) {
-      std::fprintf(stderr, "[hd textures] %s: no texture pack is used\n", disabled ? "XD_HD_TEXTURES=0" : "Original");
+    bool any;
+    {
+      std::lock_guard lk(sPackMutex);
+      any = !sPacks.empty();
     }
+    if (want != sWant || (want && filter != sFilter) || sFirst) {
+      const bool wasOn = sWant;
+      sWant = want;
+      sFilter = filter;
+      if (wasOn) UnloadPacks();
+      if (want && any) LoadPacks(filter);
+      else if (wasOn) std::fprintf(stderr, "[hd textures] off: the game's own pictures\n");
+    }
+    sFirst = false;
   }
   if (reg.Find("video.hd_textures_dump") == engine::settings::kNoSetting) return;
   if (reg.Changes() == sSeenChanges) return;

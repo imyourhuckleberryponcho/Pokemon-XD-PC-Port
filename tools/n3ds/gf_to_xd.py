@@ -773,17 +773,23 @@ def convert(gm, texs, mots, xd_bytes, mode='native', log=print, step=0.1, size_f
             return False
         return not is_effect_layer(mt_)
 
+    idle_ext = [0.0, 0.0]
+
     def idle_stats():
         """(frame-0 height, mean height over the idle, frame-0 lowest point, mean lowest point over the idle) of the DRAWN pieces."""
         n_ = max(idle['frames'], 1)
-        hs, ms = [], []
+        hs, ms, ws, ds = [], [], [], []
         for f in (0, n_ * 0.25, n_ * 0.5, n_ * 0.75):
             s_, r_, t_, ax_ = gf_pose.sample_motion(sk, idle, f)
             W_ = sk.world(s_, r_, t_, ax_)
-            y_ = np.concatenate([gf_pose.skin_points(sk, W_, sm['bone_idx'], sm['verts'])[used_of(sm)][:, 1]
+            p_ = np.concatenate([gf_pose.skin_points(sk, W_, sm['bone_idx'], sm['verts'])[used_of(sm)]
                                  for me in gm['meshes'] for sm in me['subs'] if drawn(me, sm)])
+            y_ = p_[:, 1]
             hs.append(float(y_.max() - y_.min()))
             ms.append(float(y_.min()))
+            ws.append(float(p_[:, 0].max() - p_[:, 0].min()))
+            ds.append(float(p_[:, 2].max() - p_[:, 2].min()))
+        idle_ext[:] = [float(np.mean(ws)), float(np.mean(ds))]
         return hs[0], float(np.mean(hs)), ms[0], float(np.mean(ms))
     s0, r0, t0, ax0 = gf_pose.sample_motion(sk, idle, 0)
     W0 = sk.world(s0, r0, t0, ax0)
@@ -809,8 +815,17 @@ def convert(gm, texs, mots, xd_bytes, mode='native', log=print, step=0.1, size_f
             size_factor = 0.1
     if opts.get('size_rule') and opts.get('height_cm') and (xd_h <= 0 or opts.get('size_rule') == 'mainline'):
         size_factor = LOOK.mainline_box_height(opts['height_cm']) / my_h
+    if opts.get('size_flat') and opts.get('height_cm') and opts.get('size_rule') == 'mainline' and idle_ext[0] > 0:
+
+
+        cm_ = float(opts['height_cm'])
+        len_ = max(idle_ext)
+        if my_h < 0.55 * cm_ and 0.8 * cm_ <= len_ <= 1.25 * cm_:
+            size_factor = LOOK.mainline_box_height(cm_) / len_
+            log('INFO: size rule (flat): the Pokedex height %d cm is the length: %.1f, not the height %.1f -> scale %.4f' % (cm_, len_, my_h, size_factor))
     if opts.get('scale'):
         size_factor = opts['scale']
+    log('INFO: idle width %.1f depth %.1f (3DS units)' % tuple(idle_ext))
     log('INFO: height %.1f (3DS units), XD idle box height %.1f -> scale %.4f' % (my_h, xd_h, size_factor))
     if opts.get('size_rule'):
         log('INFO: size rule: frame-0 height %.1f, idle mean %.1f, scale before the rule %.4f' % (my_h0, my_h, (xd_h / my_h0) if xd_h > 0 else size_factor))

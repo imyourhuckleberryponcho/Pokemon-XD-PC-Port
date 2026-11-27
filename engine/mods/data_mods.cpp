@@ -707,6 +707,7 @@ private:
       const Decl* s = AddedAt(t.name, source);
       r.bytes = s->row.bytes;
       r.copyOf = s->row.copyOf;
+      r.copiedAdded = source;
     }
     if (t.addKeySize != 0) {
       for (uint32_t b = 0; b < t.addKeySize && t.addKeyOffset + b < r.bytes.size(); b++) {

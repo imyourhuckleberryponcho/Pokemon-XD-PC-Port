@@ -71,7 +71,7 @@ struct PlanItem {
   std::string name;
   std::string model;
   std::string arch;
-  int idx = 0, nat = 0, group = -1;
+  int idx = 0, nat = 0, group = -1, motion_group = -1;
   double height = 0;
   int ladder = 0;
   uint32_t gid = 0, res = 0;

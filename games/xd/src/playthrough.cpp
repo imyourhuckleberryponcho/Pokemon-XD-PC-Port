@@ -1,11 +1,15 @@
+#include "xd_forms.h"
 #include "xd_playthrough.h"
 #include "i18n.h"
 #include "xd_added_rows.h"
+#include "xd_room_lib.h"
 #include "xd_battles_won.h"
 #include "xd_pokedex.h"
 #include "discord_presence.h"
+#include "stream_overlay.h"
 #include "xd_challenges.h"
 #include "xd_shiny.h"
+#include "xd_exp_share.h"
 #include "xd_starter.h"
 #include "xd_gen4.h"
 #include "xd_gen57.h"
@@ -22,6 +26,7 @@
 #include "xd_save_ext.h"
 #include "xd_memo_overflow.h"
 #include "xd_extra_shadows.h"
+#include "xd_pc_boxes.h"
 #include "xd_user_folder.h"
 #include "xd_xg.h"
 #include "tables_file.h"
@@ -118,6 +123,7 @@ bool WriteSetup(const fs::path& file, const ep::Setup& setup) {
   ep::Setup stamped = setup;
   MergeCheats(stamped);
   xd::rulesets::Stamp(stamped);
+  if (xd::pcboxes::Count() > stamped.pcBoxes && xd::pcboxes::Count() > xd::pcboxes::kGameBoxes) stamped.pcBoxes = xd::pcboxes::Count();
   if (xd::xg::On() && stamped.edition.empty()) stamped.edition = "xg";
   return ep::WriteFile(file, stamped);
 }
@@ -188,6 +194,7 @@ std::vector<ep::AddedRowRef> CurrentAddedRows() {
   for (const em::AddedRow& r : xd::added::Rows()) if (!r.unbound) now.push_back({r.mod, r.table, r.key, r.id, r.label});
   return now;
 }
+std::vector<std::pair<std::string, std::string>> CurrentRoomRecipes() { return xd::rooms::RoomHashes(); }
 ep::Engine sPlayersEngine = ep::Engine::Faithful;
 bool sAsk = false;
 bool sEngineAnswered = false;
@@ -332,6 +339,8 @@ extern "C" void PortXD_PlaythroughBoot(void) {
   PortXD_SetSaveWrittenHook(PortXD_PlaythroughSaveWritten);
   xd::memo::RegisterSaveExt();
   xd::shadowrows::RegisterSaveExt();
+  xd::pcboxes::Install();
+  if (const char* e = std::getenv("XD_PC_BOXES"); e != nullptr && std::atoi(e) > 8) xd::pcboxes::Configure(std::atoi(e));
   PortXD_SetSaveExtHooks(PortXD_SaveExtBeforeWrite, PortXD_SaveExtAfterWrite, PortXD_SaveExtOnRead);
   sCardId = xp::SaveIdOnCard();
   if (sCardId.found) sBootKey = sCardId.key;
@@ -345,6 +354,7 @@ extern "C" void PortXD_PlaythroughBoot(void) {
     } else if (ep::ReadFile(file, sCardSetup, error)) {
       sCardState = CardState::Setup;
       xd::rulesets::Resolve(sCardSetup);
+      xd::pcboxes::Configure(sCardSetup.pcBoxes);
     } else {
       sCardState = CardState::Unreadable;
       std::fprintf(stderr, "[playthrough] the save's setup file %ls %s: treated as a save without one\n", file.wstring().c_str(),
@@ -355,6 +365,7 @@ extern "C" void PortXD_PlaythroughBoot(void) {
                sCardId.found ? ", trainer " : "", sCardId.found ? sCardId.trainer.c_str() : "", CardLabel().c_str());
   if (!xd::challenges::TestSwitch().empty()) xd::challenges::SetActive({}, "XD_CHALLENGES");
   if (!xd::shiny::TestSwitch().empty()) xd::shiny::SetActive(xd::shiny::TestSwitch(), "XD_SHINY");
+  if (!xd::expshare::TestSwitch().empty()) xd::expshare::SetActive(xd::expshare::TestSwitch(), "XD_EXP_SHARE_ALL");
   if (sCardState == CardState::NoSave) {
     xd::battles::Set({}, true, "start-up: no save on the card");
     xd::pokedex::SetLists("", "", true);
@@ -414,7 +425,7 @@ extern "C" void PortXD_PlaythroughBoot(void) {
     const char* no = nullptr;
     if (EnvIs("XD_REQUIRE_ORIGINAL", "1")) {
       no = "XD_REQUIRE_ORIGINAL (comparison run)";
-    } else if (EnvIs("XD_NEWGAME_SCREEN", "1")) {
+    } else if (EnvIs("XD_NEWGAME_SCREEN", "1") || EnvIs("XD_ENGINE_QUESTION", "1")) {
       no = nullptr;
     } else if (EnvIs("XD_NEWGAME_SCREEN", "0")) {
       no = "XD_NEWGAME_SCREEN=0";
@@ -574,6 +585,7 @@ bool RestartForRoom(bool gen4, bool gen4Rules, const std::string& ruleSet) {
 static std::vector<std::string> TestOptions() {
   std::vector<std::string> o = xd::shiny::TestSwitch();
   for (const std::string& s : xd::starter::TestOptions()) o.push_back(s);
+  for (const std::string& s : xd::expshare::TestSwitch()) o.push_back(s);
   return o;
 }
 
@@ -711,10 +723,16 @@ std::string BootMoreShadows() {
     if (xd::randomizer::ParseMoreShadows(env, plan)) {
       text = env;
     } else {
-      std::fprintf(stderr, "[more shadows] XD_MORE_SHADOWS=%s: expected few|many|all|pct:<percent>:<seed number>|own:<percent>:<seed number>; off\n", env);
+      std::fprintf(stderr, "[more shadows] XD_MORE_SHADOWS=%s: expected few|many|all|pct:<percent>:<seed number>|own:<percent>:<seed number>|own2:<percent>:<seed number>; off\n", env);
     }
   }
   return text;
+}
+
+std::vector<std::string> BootEditorShadows() {
+  if (EnvIs("XD_REQUIRE_ORIGINAL", "1") || EnvIs("XD_EDITOR_SHADOWS", "0")) return {};
+  if (xd::xg::Off(xd::xg::Feature::Randomizer) != nullptr || sRestarted || sCardState != CardState::Setup) return {};
+  return sCardSetup.editorShadows;
 }
 
 void MoreShadowsMade(const std::string& text) { sLoadedMoreShadows = text; }
@@ -888,6 +906,7 @@ void Begin(const ep::Setup& setup, const std::string& settingsChanged) {
   sPending = true;
   sPendingSetup = setup;
   sPendingSetup.mods = sLoaded;
+  sPendingSetup.roomRecipes = CurrentRoomRecipes();
   sPendingSetup.addedRows = CurrentAddedRows();
   SetRandomizer(sPendingSetup, sLoadedRandomizer);
   sPendingSetup.moreShadows = sLoadedMoreShadows;
@@ -921,8 +940,16 @@ void Begin(const ep::Setup& setup, const std::string& settingsChanged) {
   AdoptCheats(nullptr);
   xd::challenges::SetActive(sCurrent.challenges, "new game");
   xd::shiny::SetActive(sCurrent.options, "new game");
+  xd::expshare::SetActive(!xd::expshare::TestSwitch().empty() ? xd::expshare::TestSwitch()
+                          : sCurrent.engine == ep::Engine::Enhanced ? sCurrent.options : std::vector<std::string>(), "new game");
   ApplySplit("new game");
   xd::challenges::SetState({}, "new game");
+  if (const char* e = std::getenv("XD_PC_BOXES"); e != nullptr && std::atoi(e) > 8) {
+    sCurrent.pcBoxes = xd::pcboxes::Clamp(std::atoi(e));
+    sPendingSetup.pcBoxes = sCurrent.pcBoxes;
+  }
+  xd::pcboxes::Forget();
+  xd::pcboxes::Configure(sCurrent.pcBoxes);
   xd::battles::Set({}, true, "new game");
   xd::pokedex::SetLookPins(xd::rulesets::ChoiceOf(sCurrent).looks.overrides);
   xd::scriptext::ClearValues("new game");
@@ -941,6 +968,31 @@ void NewGameBack() {
   sNewGameTaken = false;
   Note("new game setup: back to the title menu (nothing chosen)");
 }
+
+void ContinueSetUp(const ep::Setup* setup, const char* why) {
+  AdoptSplit();
+  AdoptCheats(setup);
+  ApplySplitOf(setup, why);
+  xd::challenges::SetActive(setup != nullptr ? setup->challenges : std::vector<std::string>(), why);
+  if (setup != nullptr) xd::pcboxes::Configure(setup->pcBoxes);
+  xd::shiny::SetActive(!xd::shiny::TestSwitch().empty() ? xd::shiny::TestSwitch()
+                       : setup != nullptr ? setup->options : std::vector<std::string>(), why);
+  xd::expshare::SetActive(!xd::expshare::TestSwitch().empty() ? xd::expshare::TestSwitch()
+                          : setup != nullptr && setup->engine == ep::Engine::Enhanced ? setup->options : std::vector<std::string>(), why);
+  xd::challenges::SetState(setup != nullptr ? setup->challengeState : std::vector<std::string>(), why);
+  if (setup != nullptr) {
+    xd::battles::Set(setup->battlesWon, setup->battlesWonKept, why);
+    xd::pokedex::SetLists(setup->dexCaught, setup->dexShiny, setup->dexKept);
+    xd::pokedex::SetLookPins(xd::rulesets::ChoiceOf(*setup).looks.overrides);
+    xd::scriptext::LoadValues(setup->modData, why);
+  } else {
+    xd::battles::Set({}, false, why);
+    xd::pokedex::SetLists("", "", false);
+    xd::scriptext::ClearValues((std::string(why) + ": a save without a setup file").c_str());
+  }
+}
+
+bool ContinueWatch() { return sCardState == CardState::Setup && !sRestarted; }
 
 bool ChallengesPossible() {
   return (sCardState == CardState::Setup && !sCardSetup.challenges.empty()) || (sRestarted && !sRestartSetup.challenges.empty()) ||
@@ -996,7 +1048,7 @@ void EngineAnswer(int answer) {
   AdoptSplit();
   sCurrent = sCardSetup;
   sCurrentUnknown = false;
-  ApplySplit("continue, after the engine question");
+  ContinueSetUp(&sCurrent, "continue, after the engine question");
   sInjectA = 4;
   sInjectFrom = PortVI_GetFlipCount();
   Note("continue: " + ep::Label(sCurrent) +
@@ -1074,14 +1126,15 @@ bool TitleInputImpl(PADStatus* status, int select, u16 newButtons) {
     return false;
   }
   if (!sScreen) {
+    const bool watched = sAsk || TimerWatch() || PickerPossible();
     if (select == 0) {
-      xd::speedrun::NewGame(xd::speedrun::NewGameDefault());
-      AdoptCheats(nullptr);
+      if (watched) {
+        xd::speedrun::NewGame(xd::speedrun::NewGameDefault());
+        AdoptCheats(nullptr);
+      }
     } else if (select == 1 && !(sAsk && !sEngineAnswered)) {
-      xd::speedrun::Continue(sCardState == CardState::Setup ? sCardSetup : ep::Setup{}, sCardId.key, sCardState == CardState::Setup);
-      AdoptCheats(sCardState == CardState::Setup ? &sCardSetup : nullptr);
-      AdoptSplit();
-      ApplySplitOf(sCardState == CardState::Setup ? &sCardSetup : nullptr, "continue");
+      if (watched) xd::speedrun::Continue(sCardState == CardState::Setup ? sCardSetup : ep::Setup{}, sCardId.key, sCardState == CardState::Setup);
+      ContinueSetUp(sCardState == CardState::Setup ? &sCardSetup : nullptr, "continue");
     }
     if (select == 1 && sAsk && !sEngineAnswered) {
       for (int i = 0; i < PAD_MAX_CONTROLLERS; i++) {
@@ -1142,22 +1195,7 @@ bool TitleInputImpl(PADStatus* status, int select, u16 newButtons) {
     sCurrentUnknown = sCardState != CardState::Setup;
     AdoptSplit();
     if (sCardState == CardState::Setup) sCurrent = sCardSetup;
-    AdoptCheats(sCardState == CardState::Setup ? &sCardSetup : nullptr);
-    ApplySplit("continue");
-    xd::challenges::SetActive(sCardState == CardState::Setup ? sCurrent.challenges : std::vector<std::string>(), "continue");
-    xd::shiny::SetActive(!xd::shiny::TestSwitch().empty() ? xd::shiny::TestSwitch()
-                         : sCardState == CardState::Setup ? sCurrent.options : std::vector<std::string>(), "continue");
-    xd::challenges::SetState(sCardState == CardState::Setup ? sCurrent.challengeState : std::vector<std::string>(), "continue");
-    if (sCardState == CardState::Setup) {
-      xd::battles::Set(sCurrent.battlesWon, sCurrent.battlesWonKept, "continue");
-      xd::pokedex::SetLists(sCurrent.dexCaught, sCurrent.dexShiny, sCurrent.dexKept);
-      xd::pokedex::SetLookPins(xd::rulesets::ChoiceOf(sCurrent).looks.overrides);
-      xd::scriptext::LoadValues(sCurrent.modData, "continue");
-    } else {
-      xd::battles::Set({}, false, "continue");
-      xd::pokedex::SetLists("", "", false);
-      xd::scriptext::ClearValues("continue: a save without a setup file");
-    }
+    ContinueSetUp(sCardState == CardState::Setup ? &sCurrent : nullptr, "continue");
     if (sCardState == CardState::Setup && !sContinueProblems.empty() && !sContinueAccepted && sScreen) {
       for (int i = 0; i < PAD_MAX_CONTROLLERS; i++) {
         if (status[i].err == PAD_ERR_NONE) status[i].button &= static_cast<u16>(~PAD_BUTTON_A);
@@ -1230,11 +1268,38 @@ int PortXD_SaveBoundToOtherRows(char* text, size_t size) {
   return 1;
 }
 
+int PortXD_SaveRoomsChanged(char* text, size_t size) {
+  if (sCardState != CardState::Setup || sCardSetup.roomRecipes.empty()) return 0;
+  std::string list;
+  for (const auto& change : ep::RoomRecipeChanges(sCardSetup.roomRecipes, xd::rooms::RoomHashes())) list += (list.empty() ? "" : ", ") + change.room + (change.gone ? Tr(" (no longer there)") : "");
+  if (list.empty()) return 0;
+  const std::string out = Fmt(Tr("A mod changed rooms since this game was saved: %s. If you carry on, your hero may be standing inside something that is "
+                                 "now a wall or is not there any more."),
+                              list.c_str());
+  std::snprintf(text, size, "%s", out.c_str());
+  return 1;
+}
+
+void PortXD_SaveRoomsKept(void) {
+  if (sCardState != CardState::Setup) return;
+  sCardSetup.roomRecipes = CurrentRoomRecipes();
+  if (!WriteSetup(xp::SetupFileFor(sCardId), sCardSetup)) std::fprintf(stderr, "[playthrough] could not write %ls\n", xp::SetupFileFor(sCardId).wstring().c_str());
+}
+
 const char* PortXD_PlaythroughHeader(void) {
   static std::string text;
   text = "playthrough on the memory card: " + CardLabel();
   if (!sLoadedRandomizer.empty()) text += "; randomizer this run: " + sLoadedRandomizer;
   return text.c_str();
+}
+
+extern "C" size_t PortXD_PlaythroughStemCopy(char* out, size_t size) {
+  if (size == 0) return 0;
+  out[0] = 0;
+  if (!sCardId.found) return 0;
+  const std::string stem = xp::SetupFileFor(sCardId).stem().string();
+  std::snprintf(out, size, "%s", stem.c_str());
+  return std::strlen(out);
 }
 
 const char* PortXD_PlaythroughReport(void) {
@@ -1292,10 +1357,12 @@ void PortXD_PlaythroughSaveWritten(const uint8_t* file, size_t size) {
     std::error_code ec;
     if (!fs::exists(f, ec)) {
       std::vector<std::string> runOptions = xd::shiny::Active();
+      for (const std::string& o : xd::expshare::TestSwitch()) runOptions.push_back(o);
       for (const std::string& o : xd::pt::CurrentOptions()) runOptions.push_back(o);
       ep::Setup s = xd::pt::SetupOf(EngineNow(), {}, sLoadedRandomizer, xd::challenges::TestSwitch(), runOptions);
       s.moreShadows = sLoadedMoreShadows;
       s.mods = sLoaded;
+      s.roomRecipes = CurrentRoomRecipes();
       s.addedRows = CurrentAddedRows();
       s.trainer = id.trainer;
       s.trainerId = id.trainerId;
@@ -1432,6 +1499,7 @@ void PortXD_PlaythroughFrame(void) {
   }
   xd::picker::ThumbnailFrame();
   xd::discord::Frame();
+  xd::stream::Frame();
   xd::battles::Frame();
   if (!xd::speedrun::PlaythroughChosen() && xd::speedrun::MapStarted()) {
     if (sCardState == CardState::NoSave) {
@@ -1449,6 +1517,7 @@ void PortXD_PlaythroughFrame(void) {
   }
   xd::speedrun::Frame();
   xd::challenges::Frame();
+  xd::forms::PlateFrame();
   if (sRestartNow) {
     OSResetSystem(0, 0, 0);
   }

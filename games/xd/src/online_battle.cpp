@@ -1,4 +1,5 @@
 #include "online_battle.h"
+#include "xd_mod_assets.h"
 #include "xd_ruleset_texts.h"
 #include "xd_rulesets.h"
 #include "xd_forms.h"
@@ -220,6 +221,7 @@ struct State {
   bool seeded = false;
   std::string code;
   std::string endNotice;
+  uint32_t editedMine = 0, editedFriend = 0;
   std::vector<xd::save::Pokemon> teamMine, teamFriend;
   bool teamsDone = false;
   int created[2] = {0, 0};
@@ -277,9 +279,14 @@ const char* Env(const char* name) {
   return v && v[0] ? v : nullptr;
 }
 
+#ifndef XD_PORT_VERSION
+#define XD_PORT_VERSION ""
+#endif
+
 xd::online::Capabilities MyCapabilities() {
   xd::online::Capabilities c;
   c.disc = "GXXE01";
+  c.version = XD_PORT_VERSION;
   c.edition = xd::xg::Edition();
   c.cheats = PortXD_CheatsUsedHere() != 0;
   for (const engine::rulesets::Format& f : xd::rulesets::Formats()) c.knownFormats += (c.knownFormats.empty() ? "" : ",") + f.id + ":" + xd::rulesets::FormatDigest(f);
@@ -295,6 +302,8 @@ xd::online::Capabilities MyCapabilities() {
   std::vector<std::string> ids = xd::pt::LoadedModIds();
   std::sort(ids.begin(), ids.end());
   for (const std::string& id : ids) c.mods += (c.mods.empty() ? "" : ",") + id;
+  for (const auto& [id, text] : xd::modassets::NeededBy()) c.modAssets[id] = text;
+  for (const auto& b : xd::modassets::Blocked()) c.modsBlocked.insert(b.id);
   c.randomizer = xd::pt::LoadedRandomizer();
   c.tables = xd::modbattle::Digest();
   c.numbers = std::to_string(xd::rulegen::NumbersLoaded()) + (xd::modern::Loaded() && xd::rulegen::NumbersLoaded() >= 6 ? "f" : "");
@@ -780,6 +789,7 @@ bool LoadPicksFromSave(const std::string& path, const std::vector<xd::online::Pi
   }
   sBagItems = save.items;
   sBagBerries = save.berries;
+  const std::vector<std::string> editorOrders = xd::online::EditorOrdersBesideSave(path, file->data);
   team.clear();
   for (const xd::online::Pick& p : picks) {
     if (p.box < 0) {
@@ -791,6 +801,7 @@ bool LoadPicksFromSave(const std::string& path, const std::vector<xd::online::Pi
       team.push_back(save.boxes[static_cast<size_t>(p.box)].slots[static_cast<size_t>(p.slot)]);
     }
   }
+  S.editedMine = xd::online::EditedShadowMask(team, editorOrders);
   return true;
 }
 
@@ -921,6 +932,7 @@ bool ExchangeTeams() {
   S.teamsDone = true;
   S.teamMine.clear();
   S.teamFriend.clear();
+  S.editedMine = S.editedFriend = 0;
   if (S.spectator) {
     for (int sideNo = 0; sideNo < 2; sideNo++) {
       std::vector<xd::save::Pokemon>& team = sideNo == 0 ? S.teamMine : S.teamFriend;
@@ -992,14 +1004,14 @@ bool ExchangeTeams() {
       return false;
     }
     sRules.reset(new xd::legality::DiscRules(rules));
-    const std::vector<std::string> mine = xd::online::CheckTeam(S.teamMine, sRules->rules, S.rules);
+    const std::vector<std::string> mine = xd::online::CheckTeam(S.teamMine, sRules->rules, S.rules, S.editedMine);
     if (!mine.empty()) { EndEarly(Fmt(Tr("Your team is not allowed in this room: %s"), mine.front().c_str())); return false; }
   }
-  Send(xd::online::EncodeTeam(S.teamMine));
+  Send(xd::online::EncodeTeam(S.teamMine, S.editedMine));
   std::string line;
   if (!Pump("T", line, true)) { EndWithError(); return false; }
   std::string why;
-  if (!xd::online::DecodeTeam(line, S.teamFriend, &why)) { EndEarly(Fmt(Tr("Your friend's team message is damaged: %s"), why.c_str())); return false; }
+  if (!xd::online::DecodeTeam(line, S.teamFriend, &why, &S.editedFriend)) { EndEarly(Fmt(Tr("Your friend's team message is damaged: %s"), why.c_str())); return false; }
   {
     std::string mineList;
     for (const xd::save::Pokemon& m : S.teamMine) {
@@ -1057,7 +1069,7 @@ bool ExchangeTeams() {
       if (!MakeRunningRules(rules, error)) { EndEarly(Tr("The rules for the safety check could not be made.")); return false; }
       sRules.reset(new xd::legality::DiscRules(rules));
     }
-    const std::vector<std::string> theirs = xd::online::CheckTeam(S.teamFriend, sRules->rules, S.rules);
+    const std::vector<std::string> theirs = xd::online::CheckTeam(S.teamFriend, sRules->rules, S.rules, S.editedFriend);
     if (!theirs.empty()) {
       for (const std::string& f : theirs) Log("the friend's team is refused: %s", f.c_str());
       EndEarly(Fmt(Tr("Your friend's team is not allowed in this room: %s"), theirs.front().c_str()));

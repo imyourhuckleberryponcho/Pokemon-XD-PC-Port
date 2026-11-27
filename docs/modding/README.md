@@ -27,6 +27,8 @@ Using an AI helper? It has its own guide: [../modding-ai/README.md](../modding-a
 | [lua-names.md](lua-names.md) | Names instead of numbers in scripts |
 | [story-scripts.md](story-scripts.md) | Story and event scripts, new rooms |
 | [story-objects.md](story-objects.md) | People, zones, chests, music and doors |
+| [rooms.md](rooms.md) | Your own rooms: walls, furniture, pieces of other rooms, entrances, camera |
+| [room-format.md](room-format.md) | The room recipe format (for a program that makes rooms) |
 | [characters-and-models.md](characters-and-models.md) | Your own 3D models |
 | [music-and-sound.md](music-and-sound.md) | Your own songs, cries and sounds |
 | [textures.md](textures.md) | HD texture packs |

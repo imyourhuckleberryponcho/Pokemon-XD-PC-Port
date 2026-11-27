@@ -851,7 +851,7 @@ bool EndTickReplay(const std::string& why, bool failed) {
   WriteReport();
   delete sTicks;
   sTicks = nullptr;
-  const int64_t live = PortTime_IsDeterministic() ? PortTime_Now() : OSGetTime();
+  const int64_t live = PortTime_Now();
   sClock->GoLive(live, why + " at game frame " + std::to_string(frame));
   PrintClockNotes();
   return sReplayExit;
@@ -1049,7 +1049,7 @@ static u32 PadReadMain(PADStatus* status) {
       delete sPlayer;
       sPlayer = nullptr;
       StopPacing();
-      const int64_t live = PortTime_IsDeterministic() ? PortTime_Now() : OSGetTime();
+      const int64_t live = PortTime_Now();
       sClock->GoLive(live, std::string(stop) + " at game frame " + std::to_string(frame));
       PrintClockNotes();
     } else {

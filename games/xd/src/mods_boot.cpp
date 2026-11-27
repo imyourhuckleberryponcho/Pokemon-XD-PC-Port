@@ -23,6 +23,7 @@
 #include "battle_replay.h"
 #include "common_script.h"
 #include "xd_mod_battle.h"
+#include "xd_mod_assets.h"
 
 #include <mods.h>
 #include <mod_layout.h>
@@ -41,6 +42,7 @@
 #include <string>
 
 void xd_heap_model_set_bigger_files(const std::vector<std::string>& list);
+void xd_layers_set_big_models(bool on);
 namespace {
 using engine::i18n::Tr;
 std::string TrFmt(const char* format, ...) {
@@ -87,6 +89,7 @@ void LooksLoaded(const std::string& key);
 std::string LooksKeyOfBoot();
 void RandomizerMade(const std::string& code);
 std::string BootMoreShadows();
+std::vector<std::string> BootEditorShadows();
 void MoreShadowsMade(const std::string& text);
 void AfterModsLoaded(const engine::mods::LoadResult& result, const std::filesystem::path& modsFolder,
                      const std::filesystem::path& listFile, const engine::mods::DiscView& disc);
@@ -94,8 +97,11 @@ void AfterModsLoaded(const engine::mods::LoadResult& result, const std::filesyst
 
 namespace {
 bool MakeMoreShadows(const engine::mods::DataCatalog& catalog, const engine::mods::EntryReader& read, const std::string& text, const xd::randomizer::Result* rando,
-                     std::vector<engine::mods::DataModFile>& out, std::string& error) {
-  xd::shadowrows::Clear();
+                     std::vector<engine::mods::DataModFile>& out, std::string& error, std::set<uint32_t>& takenRows) {
+  if (rando != nullptr) {
+    const auto ti = rando->mod.tables.find("darkpokemon_shadow");
+    if (ti != rando->mod.tables.end()) for (const auto& e : ti->second) takenRows.insert(e.first);
+  }
   if (text.empty()) return true;
   namespace xr = xd::randomizer;
   xr::MoreShadowsPlan plan;
@@ -123,7 +129,12 @@ bool MakeMoreShadows(const engine::mods::DataCatalog& catalog, const engine::mod
   }
   engine::randomizer::ModOutput mod;
   if (!xr::GenerateMoreShadows(catalog, read, plan, rando, gen4, mod, error, gen57)) return false;
-  xd::shadowrows::Add(xr::TakeExtraShadowRows(mod));
+  if (const auto ti = mod.tables.find("darkpokemon_shadow"); ti != mod.tables.end()) for (const auto& e : ti->second) takenRows.insert(e.first);
+  {
+    const std::vector<xd::randomizer::ExtraShadowRow> extra = xd::randomizer::TakeExtraShadowRows(mod);
+    for (const auto& r : extra) takenRows.insert(r.row);
+    xd::shadowrows::Add(extra);
+  }
   out.push_back({"more_shadows", "More Shadow Pokemon", "data/more_shadows.json", mod.ToJson("more shadows " + text), true});
   const std::filesystem::path folder = xd::CardRoot() / L"playthroughs" / L"more_shadows" / std::filesystem::path(text);
   std::error_code ec;
@@ -140,6 +151,34 @@ bool MakeMoreShadows(const engine::mods::DataCatalog& catalog, const engine::mod
   std::fprintf(stderr, "[more shadows] %s: %zu number(s) changed (%s)\n", text.c_str(), mod.Count(), mod.spoiler.empty() ? "" : mod.spoiler.front().c_str());
   xd::pt::MoreShadowsMade(text);
   return true;
+}
+
+bool MakeEditorShadows(const engine::mods::DataCatalog& catalog, const engine::mods::EntryReader& read, const std::vector<std::string>& texts, const std::set<uint32_t>& takenRows,
+                       std::vector<engine::mods::DataModFile>& out, std::string& error) {
+  if (texts.empty()) return true;
+  std::vector<xd::save::ShadowOrder> orders;
+  for (const std::string& text : texts) {
+    xd::save::ShadowOrder o;
+    if (xd::save::ParseShadowOrder(text, o)) orders.push_back(o);
+    else std::fprintf(stderr, "[saveedit shadows] \"%s\" is not a Shadow Pokemon order: left out\n", text.c_str());
+  }
+  engine::randomizer::ModOutput mod;
+  std::vector<std::string> skipped;
+  if (!xd::randomizer::GenerateEditorShadows(catalog, read, orders, takenRows, mod, error, &skipped)) return false;
+  for (const std::string& s : skipped) std::fprintf(stderr, "[saveedit shadows] %s: left out\n", s.c_str());
+  xd::shadowrows::Add(xd::randomizer::TakeExtraShadowRows(mod));
+  if (mod.Count() == 0) return true;
+  out.push_back({"saveedit_shadows", "Shadow Pokemon made by the save editor", "data/saveedit_shadows.json", mod.ToJson("save editor shadows"), true});
+  for (const std::string& line : mod.spoiler) std::fprintf(stderr, "[saveedit shadows] %s\n", line.c_str());
+  return true;
+}
+
+bool MakeLater(const engine::mods::DataCatalog& catalog, const engine::mods::EntryReader& read, const std::string& moreShadowsText, const xd::randomizer::Result* rando,
+               const std::vector<std::string>& editorShadows, std::vector<engine::mods::DataModFile>& out, std::string& error) {
+  std::set<uint32_t> taken;
+  xd::shadowrows::Clear();
+  if (!MakeMoreShadows(catalog, read, moreShadowsText, rando, out, error, taken)) return false;
+  return MakeEditorShadows(catalog, read, editorShadows, taken, out, error);
 }
 }
 
@@ -450,8 +489,17 @@ extern "C" bool PortXD_LoadMods(void) {
   };
   options.looksOrSound = xd::playthrough::LooksOrSound;
   options.usePlaythroughMods = xd::pt::BootWorldMods(options.playthroughMods);
+  {
+    xd::modassets::Context assets;
+    assets.assets = user / L"extra_assets";
+    assets.playthrough = true;
+    assets.gen57On = xd::pt::BootGen57();
+    assets.gen4On = xd::pt::BootGen4() || assets.gen57On;
+    options.assetCheck = xd::modassets::Checker(assets);
+  }
   const std::string randomizerCode = xd::pt::BootRandomizer();
   const std::string moreShadowsText = xd::pt::BootMoreShadows();
+  const std::vector<std::string> editorShadows = xd::pt::BootEditorShadows();
   xd::starter::SetPlan({});
   std::vector<em::DataModFile> gen4Files;
   xd::gen4::SetGen57Wanted(xd::pt::BootGen57());
@@ -486,8 +534,8 @@ extern "C" bool PortXD_LoadMods(void) {
     std::fprintf(stderr, "[mods] built-in layers: %s (user mods are applied before them; conflicts are reported only for user mods)\n",
                  layers.c_str());
   }
-  if (!randomizerCode.empty() || !gen4Files.empty() || !moreShadowsText.empty()) {
-    options.generateData = [randomizerCode, gen4Files, moreShadowsText](const em::DataCatalog& catalog, const em::EntryReader& read,
+  if (!randomizerCode.empty() || !gen4Files.empty() || !moreShadowsText.empty() || !editorShadows.empty()) {
+    options.generateData = [randomizerCode, gen4Files, moreShadowsText, editorShadows](const em::DataCatalog& catalog, const em::EntryReader& read,
                                                        std::vector<em::DataModFile>& out, std::string& error) {
       namespace xr = xd::randomizer;
       if (xd::xg::On() && xd::gen4::Loaded()) {
@@ -500,7 +548,7 @@ extern "C" bool PortXD_LoadMods(void) {
       } else {
         for (const em::DataModFile& f : gen4Files) out.push_back(f);
       }
-      if (randomizerCode.empty()) return MakeMoreShadows(catalog, read, moreShadowsText, nullptr, out, error);
+      if (randomizerCode.empty()) return MakeLater(catalog, read, moreShadowsText, nullptr, editorShadows, out, error);
       engine::randomizer::Settings s;
       xr::ApplyStyle(s, xr::Style::Classic);
       bool seedOnly = false;
@@ -545,7 +593,7 @@ extern "C" bool PortXD_LoadMods(void) {
       std::fprintf(stderr, "[randomizer] %s: %zu number(s) changed (spoiler log: %ls)\n", r.code.c_str(), r.mod.Count(),
                    (folder / "spoiler.txt").wstring().c_str());
       xd::pt::RandomizerMade(randomizerCode);
-      return MakeMoreShadows(catalog, read, moreShadowsText, &r, out, error);
+      return MakeLater(catalog, read, moreShadowsText, &r, editorShadows, out, error);
     };
   }
   std::error_code ec;
@@ -554,6 +602,13 @@ extern "C" bool PortXD_LoadMods(void) {
   }
 
   em::LoadResult result = em::Load(options);
+  xd::modassets::Blocked() = result.assetBlocked;
+  xd::modassets::NeededBy().clear();
+  for (const em::Manifest& m : result.active) {
+    if (!m.needsAssets.empty()) xd::modassets::NeededBy()[m.id] = em::AssetNames(m.needsAssets);
+  }
+  for (const em::LoadResult::AssetBlock& b : result.assetBlocked) xd::modassets::NeededBy()[b.id] = em::AssetNames(b.assets);
+  xd_layers_set_big_models(result.biggerAny);
   xd_heap_model_set_bigger_files(result.biggerBuiltIn);
   MergeLanguageToc(result);
   RepairDuplicateTocIds(result);

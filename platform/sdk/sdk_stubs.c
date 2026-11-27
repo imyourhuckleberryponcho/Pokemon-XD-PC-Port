@@ -69,11 +69,26 @@ static void reset_exit(void) {
   exit(0);
 }
 
+#ifdef __ANDROID__
+int PortAndroid_RestartApp(void);
+#endif
 void OSResetSystem(int reset, u32 resetCode, BOOL forceMenu) {
   if (reset == OS_RESET_SHUTDOWN || forceMenu) {
     reset_exit();
   }
-#ifndef _WIN32
+#ifdef __ANDROID__
+  {
+    char code[16];
+    snprintf(code, sizeof(code), "%08lX", (unsigned long)(reset == OS_RESET_RESTART ? (0x80000000u | resetCode) : resetCode));
+    setenv("PORT_RESET_CODE", code, 1);
+    if (!PortAndroid_RestartApp()) {
+      fprintf(stderr, "[platform/sdk] soft reset: couldn't start the game again\n");
+      fflush(stderr);
+      abort();
+    }
+    reset_exit();
+  }
+#elif !defined(_WIN32)
   {
     char code[16];
     static char args[32768];
@@ -205,6 +220,7 @@ void VISetNextFrameBuffer(void* fb) {
 }
 uint32_t PortVI_GetFlipCount(void) { return sFrameBufferFlips; }
 void PortVI_TestAdvanceFlips(uint32_t n) { sFrameBufferFlips += n; }
+void PortVI_SetFlipCount(uint32_t n) { sFrameBufferFlips = n; }
 
 static BOOL sBlack;
 void VISetBlack(BOOL black) { sBlack = black; }

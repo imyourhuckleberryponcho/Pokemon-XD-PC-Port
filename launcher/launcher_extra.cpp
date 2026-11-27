@@ -133,6 +133,15 @@ bool AcceptsGameId(const Source& source, std::string_view gameId) {
                      [&](const std::string& g) { return Lower(g) == Lower(std::string(gameId)); });
 }
 
+bool ConverterFound(const fs::path& converter) {
+#if defined(__ANDROID__)
+  return sys::HasBuiltinProgram(converter);
+#else
+  std::error_code ec;
+  return fs::is_regular_file(converter, ec);
+#endif
+}
+
 fs::path ConverterPath(const Source& source, const fs::path& programFolder) {
   if (!source.converterOverrideEnv.empty()) {
     const fs::path over = sys::EnvPath(source.converterOverrideEnv.c_str());
@@ -332,7 +341,7 @@ SecondStatus ComputeSecondStatus(const fs::path& folder, const std::string& mani
 
 std::string QueryVersion(const fs::path& converter, const fs::path& logFile, int waitMs, const std::string& versionArgument) {
   std::error_code ec;
-  if (!fs::is_regular_file(converter, ec)) return {};
+  if (!ConverterFound(converter)) return {};
   sys::StartRequest request;
   request.program = converter;
   request.arguments = {"--version"};

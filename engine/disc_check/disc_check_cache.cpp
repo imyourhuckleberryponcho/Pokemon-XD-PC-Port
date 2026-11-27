@@ -74,6 +74,21 @@ bool DiscCheck_Stamp(const char* path, char* fullPath, size_t fullPathSize, Disc
   if (path == nullptr || path[0] == '\0') {
     return false;
   }
+#ifdef __ANDROID__
+  {
+    uint64_t contentSize = 0;
+    if (PortDisc_ContentSize(path, &contentSize)) {
+      if (stamp != nullptr) {
+        stamp->size = contentSize;
+        stamp->modified = 0;
+      }
+      if (fullPath != nullptr && fullPathSize > 0) {
+        std::snprintf(fullPath, fullPathSize, "%s", path);
+      }
+      return true;
+    }
+  }
+#endif
   std::error_code ec;
   const fs::path p = fs::absolute(from_utf8(path), ec).lexically_normal();
   if (ec || !fs::is_regular_file(p, ec)) {

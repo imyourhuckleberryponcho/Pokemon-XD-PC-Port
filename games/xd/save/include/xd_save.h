@@ -84,6 +84,7 @@ struct Pokemon {
   bool IsEmpty() const { return species == 0; }
   bool IsEgg() const { return (flags & 0x80) != 0; }
   bool SecondAbility() const { return (flags & 0x40) != 0; }
+  bool HiddenAbility() const { return (raw[0x1A] & 0x80) != 0; }
   uint16_t OtTrainerId() const { return static_cast<uint16_t>(otId & 0xFFFF); }
   uint16_t OtSecretId() const { return static_cast<uint16_t>(otId >> 16); }
   uint8_t Nature() const { return static_cast<uint8_t>(pid % 25); }

@@ -197,6 +197,84 @@ Saves, settings, mods, logs and bug reports live in one data folder: {p['data']}
 """
 
 
+NEW_080 = """New in 0.8.0
+------------
+- Prize desk and Arceus Plates: the prize desk shows its goods on pages (L / R, or Q / W): page 1 is the game's own
+  goods exactly, then Evolution items, Mega Stones, and Memories & Plates (also on XG). The 17 Arceus Plates are sold
+  there (Gen 4 rules or later; the Pixie Plate with Modern types) for 10,000 coupons each. With the Gen 4 / Gen 5-7
+  Pokemon on, an Arceus holding a Plate takes the Plate's coloured form (in battle, and in the party, summary and PC
+  outside battle), its type changes with it, Judgment takes the Plate's type, and any holder of a Plate gets +20%
+  power on the Plate's type. The prize desk's list is no longer cut at 60 goods: the last Gen 4 TMs show now.
+- More forms from your Ultra Sun / Ultra Moon dump: Deoxys, Wormadam, Giratina Origin, Shaymin Sky, the Therian
+  genies, Kyurem Black / White, Keldeo, Meowstic, Pumpkaboo / Gourgeist sizes, Zygarde 10%, Hoopa Unbound, Oricorio,
+  Lycanroc, Necrozma, Floette Eternal and Magearna, plus look-only sets: Unown (28 letters), Vivillon (20 patterns),
+  Furfrou (10 trims), Pikachu's 7 caps, Burmy cloaks, Shellos / Gastrodon, Deerling / Sawsbuck seasons, Genesect
+  drives, Flabebe / Florges colours and Minior colours. A new setting, Random looks (Enhanced), gives a new Pokemon a
+  random look from its set; it does not touch the game's random numbers. IMPORTANT: your Gen 4-7 packs must be made
+  again (Launcher, Extra assets, Make again; the launcher says "Out of date"). Old packs keep working until then;
+  saves made with the old packs keep their Pokemon. Making them again takes a while (about 20 minutes on a busy PC)
+  and adds about 30 MB.
+- The Gen 4 Battle Revolution faces have their own pictures (before, Chimchar, Monferno and Infernape showed Deoxys
+  faces and Piplup showed Bonsly's). Every converted model keeps its full size box, so the PC box previews are
+  complete and centred.
+- HD texture maker: a button in the launcher (Extra assets, Other) makes a sharper copy of the game's 3D pictures from
+  your own disc, without playing it. It asks before it downloads the upscaler (Real-ESRGAN, with its licences), works
+  at 2x or 4x, can be stopped and continued, and keeps the original colours. The settings HD textures and HD texture
+  pack switch the pictures live, in the middle of the game, without changing the game's random numbers. Windows and
+  Linux; it is not in the Mac build yet. A whole game at 2x is about 1 GB and about an hour on a busy PC.
+- Randomizer (code version 9; old codes make exactly the same game as before): it can change the teams of Mt. Battle
+  and the Orre Colosseum (each with its own switch; every team follows the battles' own rules); you can leave whole
+  generations out; a new row "Abilities of every generation" gives the Gen 4-7 Pokemon other abilities too (Gen 4
+  abilities only with the Gen 4 rules, Gen 5-7 abilities only with a Gen 5-7 rule set); Battle CDs, Battle Bingo and
+  Quick Battle are never randomized. Every new row is explained on the New Game screen.
+- More Shadow Pokemon: Mt. Battle's 100 trainers can have Shadow Pokemon too, counted separately from the story's
+  (each place gets the percentage of its own possible Shadow Pokemon; the New Game screen shows the real number, on
+  the plain disc 100% is 201). A Shadow Pokemon you do not snag in Mt. Battle is still a Shadow Pokemon the next time
+  you fight that trainer; one you snagged shows up as a normal Pokemon.
+- Save editor: ability names and a one-line description for every ability (also the Gen 4 and Gen 5-7 ones, with the
+  hidden ability), a Form row (Alolan forms, Rotom's appliances and the other forms of the packs), and Arceus follows
+  its Plate (give it a Plate and its form changes; pick a form and the matching Plate is put in its hand). Make Shadow
+  turns a Pokemon into a Shadow Pokemon, with 256 extra Shadow rows. Anything that changes the game marks the
+  playthrough, as before.
+- More PC boxes: up to 32 boxes.
+- Stream overlay (off by default): your party as files for an OBS page, in three looks (Battle belt, Showcase, Native
+  XD), with 3D pictures, moving pictures, and launcher buttons (Open overlay folder, How to use it in OBS). A guide is
+  in the download (Stream overlay guide).
+- Save states (experimental, off by default, Windows and Linux; the Mac comes later): save the whole game at any
+  moment and put it back, four slots with a picture, place and date (key F1, or SAVE STATES in the field menu). Using
+  it marks the playthrough like a cheat. Not with mods, a speedrun timer or online.
+- Fixed: Poke Spots gave only Munchlax; the spot's normal Pokemon never appeared (in every version since 0.3.5, also
+  with the randomizer or the packs). The spot lists are made from the disc at each start, so your save is fixed at
+  once.
+- Fixed: a freeze in the Purify Chamber ceremony with the Gen 4 or Gen 5-7 Pokemon (the game's drawing buffer was too
+  small for the bigger models; with such models it is 1 MB now, the plain game is unchanged).
+- Fixed: CONTINUE did not switch on the playthrough's rules (Gen 4 Pokemon, Nuzlocke, level cap, and so on) when the
+  New Game setup screen is off (the Original preset, or "New Game setup screen" off in Settings), also after the
+  "Faithful or Enhanced?" question. Now every way into CONTINUE sets them up. Your lists were never emptied, only the
+  rules were not watching in such a session.
+- Gen 5-7 models that are flat or long (Stunfisk and the like) are now sized correctly in the game (converter 0.2.7:
+  make your packs again, as said above).
+- Fixed on XG: the Gen 4 evolution items (Electirizer, Magmarizer and the like) blocked their own Pokemon's evolution.
+- Fixed: the Meganium face in the party list and its small picture in the PC box shown for Plate-form Arceus.
+- Online: a guest who is refused by a room now sees why (both versions named; the host's other reasons shown). The
+  challenge check on the New Game screen under Faithful is back.
+- The New Game screen and the other switch rows: the right button changes the value too. UP from the top of the field
+  menu goes to SETTINGS (it went to EXIT).
+- Mods: a mod can say it needs (or recommends) your own extra assets. Rooms for modders (experimental): your own glTF
+  models as room parts, pieces from other rooms, changing a room of the game, extra entrances, and a plain message at
+  CONTINUE when a save used a changed room. The guides are in docs/modding. No example room yet.
+- Android (BETA, testers wanted): Pokemon XD PC now also runs on Android phones, tablets and BlueStacks, as one .apk file (arm64 and x86_64), in the same releases. It has on-screen touch buttons (three
+  layouts you can move and resize), a pause list, a phone launcher with the same settings, saves, mods and updates as
+  the PC. It is a beta: it can still crash, freeze or stutter, and not every phone has been tried. You need your own
+  disc image on the phone, and Android 9 or newer. The app is not in the Play Store (allow "install unknown apps"
+  once). On the phone you can make the packs yourself (Battle Revolution Gen 4, Colosseum, languages, Ultra Sun models
+  and Gen 4; the Gen 5-7 pack still has to be made on a PC). Want to help test? Join the Discord (link at the top of
+  this page), say which phone you have, and send the bug report (pause list, BUG REPORT) when something goes wrong.
+- Online: 0.8.0 plays with 0.8.0 only (the battles changed). Older versions are turned away with a clear message on
+  both sides.
+"""
+
+
 NEW_077 = """New in 0.7.7
 ------------
 - Gen 5-7 abilities: with a Gen 5, 6 or 7 rule set on, the abilities whose effect is in the game now say what they do
@@ -581,7 +659,7 @@ The full history is on the GitHub releases page: """ + RELEASES_URL + """
 
 
 def new_in():
-    return NEW_077 + chr(10) + NEW_076 + chr(10) + NEW_075 + chr(10) + NEW_074 + chr(10) + NEW_073 + chr(10) + NEW_072 + chr(10) + NEW_071 + chr(10) + NEW_070 + chr(10) + NEW_061 + chr(10) + NEW_060 + chr(10) + NEW_05X
+    return NEW_080 + chr(10) + NEW_077 + chr(10) + NEW_076 + chr(10) + NEW_075 + chr(10) + NEW_074 + chr(10) + NEW_073 + chr(10) + NEW_072 + chr(10) + NEW_071 + chr(10) + NEW_070 + chr(10) + NEW_061 + chr(10) + NEW_060 + chr(10) + NEW_05X
 
 
 def known_issues(system):
@@ -680,6 +758,109 @@ def write_guide():
     print('wrote', GUIDE_TXT)
 
 
+def android_readme(version='0.8.0'):
+    """The Read me for the Android test build (an APK; docs/ANDROID.md). Plain ASCII."""
+    return """Pokemon XD PC """ + version + """ - Android (TEST BUILD)
+=====================================================
+
+This is a first test build of the port for Android phones, tablets and BlueStacks. It plays the same game as
+the PC version, with touch buttons. It may still have problems; your reports help (see the end).
+
+What you need
+-------------
+- Android 9 or newer (64-bit phone or tablet, or BlueStacks 5 with a "Pie 64-bit", Android 11 or Android 13
+  instance). About 3 GB of free memory and 4 GB of free storage. A fairly recent phone is best.
+- Your own disc image of Pokemon XD: Gale of Darkness (USA): an .iso, .gcm or .rvz file. The game is not
+  included and never will be. Copy the file to the phone (any folder, Downloads is fine).
+
+Installing
+----------
+1. Download "Pokemon-XD-PC-""" + version + """-android.apk" from the releases page:
+   """ + RELEASES_URL + """
+2. Open the file. Android says it may not install apps from this source: tap Settings, switch on "Allow from
+   this source", go back, and tap Install. (The words differ a little on each phone: it is Android's own
+   "install unknown apps" permission, which belongs to the app you opened the file with, for example your
+   browser or file manager.)
+3. Google Play Protect may say the app is unknown or ask to scan it. The app is not in the Play Store; tap
+   "More details" and "Install anyway" (or "Scan app" and then install). Nothing is wrong: it only means
+   Google has not seen this app before.
+4. Open "Pokemon XD". Updates later: the launcher asks (once) if it may look for updates, and then offers a new
+   version with its notes; you confirm, Android asks again, and the app is replaced. Your saves and settings stay.
+
+First start
+-----------
+The app asks three things, one at a time: choose your disc image (Android's file window opens: find the file;
+it is read where it is, not copied), the app checks it (about a minute the first time), and a page explains
+the touch controls. Then choose Original (exactly the GameCube game) or Enhanced (the port's improvements).
+Then press Play.
+
+Playing
+-------
+- The GameCube buttons are on the screen. Touch the pause button (two bars) for the game's SETTINGS, and
+  BUTTONS there to move or resize the touch buttons. The Controls page of the launcher has the layouts.
+- A Bluetooth or USB controller works too; the touch buttons then hide.
+- The launcher's pages (Disc, Preset, Settings, Controls, Mods, Save, Reports) are the same as on the PC.
+  Scroll by dragging with a finger.
+- The launcher turns with the phone: held upright it is one column with a menu button for the pages; held sideways it
+  has the page list on the left. The game itself always plays sideways.
+
+Where things are kept
+---------------------
+- Saves, settings and logs live inside the app's own storage, which other apps and file managers cannot see.
+  To take a copy out: launcher, Save page, choose the save, Export...: Android's window asks where to put the
+  file. To bring a save in (from a PC, Dolphin or another phone): Save page, "Import a save...".
+- Uninstalling the app deletes everything inside it: export your saves first.
+- Mods: copy a mod's .zip to the phone, then Mods page, "Add a mod (.zip)...".
+- Extra assets (the Gen 4 / battle-model packs and other made-from-your-disc packs): the converters run only on
+  a PC. On a PC make the pack with the PC launcher (Extra assets page), zip the pack's folder from the data
+  folder's extra_assets, copy the zip to the phone, and on the Extra assets page choose "Use a pack from a PC
+  (.zip)...".
+
+Problems and reports
+--------------------
+If the game stops, crashes or looks wrong, it saves a report by itself. Open the launcher, Reports page: the
+list shows them. "Save my last play session..." (or Export on a report) writes a zip where you choose, hiding
+your user name. Nothing is ever sent anywhere: you send the zip yourself, on the Discord (""" + DISCORD_URL + """) or the
+releases page. Please also tell us: your phone or tablet model, the Android version, how much memory it has,
+which graphics chip if you know, and what you did just before.
+
+On BlueStacks 5 (Windows)
+-------------------------
+1. Make a new instance of type "Pie 64-bit" (or Android 11 / 13): Multi-instance Manager, New instance, Fresh
+   instance. The older "Nougat" instances cannot install this app.
+2. Instance settings: Graphics renderer "Vulkan" (or "Vulkan & OpenGL"; if the game does not start, try
+   "OpenGL"); Performance: at least 4 CPU cores and 4 GB of memory.
+3. Drag the .apk file onto the BlueStacks window (or Ctrl+Shift+B, "Install apk"). It installs like on a phone.
+4. Put the disc image where the instance can see it: BlueStacks side toolbar, "Media Manager", "Import from
+   Windows", choose the .iso. In the app's file window look in the instance's Pictures, Documents or Download
+   folder (BlueStacks puts it in one of them).
+5. Use the mouse as a finger. A keyboard or a controller attached to the PC may work through BlueStacks'
+   own key mapping; the touch buttons are always there.
+
+Not working yet on Android
+--------------------------
+- Making extra packs on the phone itself (use a PC and copy, above).
+- The Colosseum import and the GBA link pages are not tested on phones.
+- Vibration, and a few touch-button details (some screens may not hide the buttons).
+- Only the arm64 and x86_64 builds exist; 32-bit phones are not supported.
+"""
+
+
+def android_release_lines(version='0.8.0'):
+    """The lines about Android for the release text (a TEST build, in a file of its own)."""
+    return """Android (TEST build)
+--------------------
+- New: Pokemon XD PC for Android phones and tablets: one file, "Pokemon-XD-PC-""" + version + """-android.apk"
+  (arm64 and x86_64). The same launcher, touch buttons, a controller, saves, mods and settings as on the PC.
+  This is a first test: please report what you find.
+- You need your own disc image on the phone. The app is not in the Play Store: allow "install unknown apps" for the
+  app you open the file with, and tap "Install anyway" if Play Protect asks.
+- Works with Android 9 and newer, and in BlueStacks 5 on a 64-bit instance (Pie 64-bit, Android 11 or 13).
+- The app updates itself the same way the PC version does: it asks, shows what is new, and Android asks you to
+  confirm.
+"""
+
+
 if __name__ == '__main__':
     if '--write-guide' in sys.argv:
         write_guide()
@@ -687,6 +868,12 @@ if __name__ == '__main__':
         ok = os.path.isfile(GUIDE_TXT) and open(GUIDE_TXT, encoding='ascii', newline='').read() == guide_text()
         print('guide: ok' if ok else 'guide: docs/RANDOMIZER_GUIDE.txt is out of date: python tools/readme_text.py --write-guide')
         sys.exit(0 if ok else 1)
+    elif '--write-android' in sys.argv:
+        out = sys.argv[sys.argv.index('--write-android') + 1]
+        ver = sys.argv[sys.argv.index('--version') + 1] if '--version' in sys.argv else '0.8.0'
+        with open(out, 'w', encoding='ascii', newline=chr(13) + chr(10)) as f:
+            f.write(android_readme(ver))
+        print('wrote', out)
     elif '--write-mac' in sys.argv:
         write_mac()
     else:

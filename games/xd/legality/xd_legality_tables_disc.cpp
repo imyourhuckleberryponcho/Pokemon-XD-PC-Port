@@ -33,6 +33,8 @@ TableNames NamesOf(const DiscRules& game) {
   for (const SpeciesRules& s : r.species) maxAbility = std::max<unsigned>(maxAbility, std::max(s.abilities[0], s.abilities[1]));
   n.abilities.resize(static_cast<size_t>(maxAbility) + 1);
   for (unsigned i = 1; i <= maxAbility; i++) n.abilities[i] = game.names->Ability(static_cast<uint16_t>(i));
+  n.abilityText.resize(n.abilities.size());
+  for (unsigned i = 1; i < n.abilityText.size(); i++) n.abilityText[i] = game.names->AbilityText(static_cast<uint16_t>(i));
   n.natures.resize(25);
   for (unsigned i = 0; i < 25; i++) n.natures[i] = game.names->Nature(static_cast<uint8_t>(i));
   return n;

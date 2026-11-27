@@ -25,6 +25,10 @@ static inline void Sleep(DWORD ms) {
   t.tv_nsec = (long)(ms % 1000) * 1000000L;
   nanosleep(&t, 0);
 }
+#if defined(__aarch64__)
+static inline void YieldProcessor(void) { __asm__ __volatile__("yield"); }
+#else
 static inline void YieldProcessor(void) { __builtin_ia32_pause(); }
+#endif
 #endif
 #endif

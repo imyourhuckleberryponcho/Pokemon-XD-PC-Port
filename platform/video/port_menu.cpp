@@ -10,6 +10,9 @@
 #include <imgui.h>
 #include <settings.h>
 
+#ifdef __ANDROID__
+extern "C" void PortTouchPad_Frame(void);
+#endif
 #include <SDL3/SDL_timer.h>
 
 #include <algorithm>
@@ -233,6 +236,9 @@ void Run(void (*pump)(void)) {
     if (scripted && !RunScriptStep(refresh)) keep = false;
     PortFreeze_DrawPicture();
     if (keep && !page.frame(page.ctx, &in)) keep = false;
+#ifdef __ANDROID__
+    PortTouchPad_Frame();
+#endif
     PortFreeze_Present(pump);
     if (!keep) break;
   }

@@ -1,4 +1,5 @@
 #include "xd_battles_won.h"
+#include "xd_pc_boxes.h"
 #include "xd_challenges.h"
 #include "xd_rulesets.h"
 #include "xd_gen4_abilities.h"
@@ -12,7 +13,10 @@
 
 #include "i18n.h"
 
+#include "savestate_features.h"
+
 #include <algorithm>
+#include <any>
 #include <cstdarg>
 #include <cstdint>
 #include <cstdio>
@@ -41,6 +45,7 @@ u32 pokemon_GetRnd(void* pokemon);
 u32 pokemon_GetCatchTrainerRnd(void* pokemon);
 u8 pokemonIsDarkPokemon(void* pokemon);
 s8 pcboxGetPokemonBoxNbEmptySlot(void* pcbox, s8 box);
+void* pcboxGetPokemonBoxName(void* pcbox, s8 box);
 s32 GSfloorGetCurrent(void);
 extern void* floordata;
 void fightPokemon_SetHokakuFlag(void* fightPokemon, u8 value);
@@ -87,7 +92,12 @@ bool CursorOnUse(const WinWorkLayout* w) {
 }
 bool sLog = false;
 
-constexpr s8 kGraveyardBox = 7;
+int sGraveyard = -1;
+int GraveyardIndex() {
+  if (sGraveyard >= 0) return sGraveyard;
+  return xd::pcboxes::Count() - 1;
+}
+s8 GraveyardBoxNow() { return static_cast<s8>(GraveyardIndex()); }
 constexpr size_t kPokemonBytes = 0xC4;
 constexpr int kCalmFrames = 30;
 constexpr int kPartySweepFrames = 300;
@@ -205,7 +215,7 @@ int PartyCount() {
 }
 int OwnedCount() {
   int n = PartyCount();
-  for (s8 box = 0; box < 8; box++) {
+  for (s8 box = 0; box < xd::pcboxes::Count(); box++) {
     const int empty = pcboxGetPokemonBoxNbEmptySlot(nullptr, box);
     if (empty >= 0 && empty <= 30) n += 30 - empty;
   }
@@ -223,7 +233,7 @@ bool IsLost(void* record) {
 
 bool MoveToPc(int slot) {
   void* p = PartyRecord(slot);
-  if (pcboxAddPokemon(nullptr, p, kGraveyardBox) != 1 && pcboxAddPokemon(nullptr, p, -1) != 1) return false;
+  if (pcboxAddPokemon(nullptr, p, GraveyardBoxNow()) != 1 && pcboxAddPokemon(nullptr, p, -1) != 1) return false;
   const int n = PartyCount();
   for (int s = slot; s + 1 < n; s++) std::memcpy(PartyRecord(s), PartyRecord(s + 1), kPokemonBytes);
   pokemonInit(PartyRecord(n - 1));
@@ -289,6 +299,90 @@ struct Release {
   u32 species, rnd, trainerRnd;
 };
 Release sRelease = {};
+
+struct SavedState {
+  std::vector<Faint> faints;
+  std::vector<std::string> ruleLog, messages;
+  std::vector<Lost> lost;
+  std::vector<u32> areas;
+  bool wasFight, inFight, pushedSeen, partyCheck, battleBag, capWrote, capInStory;
+  int calm, ownedAtStart, caughtInBattle, thrownInBattle, capTold, cap;
+  u32 catchArea, capStory;
+  unsigned capBoss, capWonChanges;
+  Release release;
+};
+const xd::savestate::Feature sStateFeature(
+    "challenges",
+    [] {
+      return std::any(SavedState{sFaints, sRuleLog, sMessages, sLost, sAreas, sWasFight, sInFight, sPushedSeen, sPartyCheck, sBattleBag,
+                                 sCapWrote, sCapInStory, sCalm, sOwnedAtStart, sCaughtInBattle, sThrownInBattle, sCapTold, sCap,
+                                 sCatchArea, sCapStory, sCapBoss, sCapWonChanges, sRelease});
+    },
+    [](const std::any& a) {
+      const SavedState& s = std::any_cast<const SavedState&>(a);
+      sFaints = s.faints;
+      sRuleLog = s.ruleLog;
+      sMessages = s.messages;
+      sLost = s.lost;
+      sAreas = s.areas;
+      sWasFight = s.wasFight;
+      sInFight = s.inFight;
+      sPushedSeen = s.pushedSeen;
+      sPartyCheck = s.partyCheck;
+      sBattleBag = s.battleBag;
+      sCapWrote = s.capWrote;
+      sCapInStory = s.capInStory;
+      sCalm = s.calm;
+      sOwnedAtStart = s.ownedAtStart;
+      sCaughtInBattle = s.caughtInBattle;
+      sThrownInBattle = s.thrownInBattle;
+      sCapTold = s.capTold;
+      sCap = s.cap;
+      sCatchArea = s.catchArea;
+      sCapStory = s.capStory;
+      sCapBoss = s.capBoss;
+      sCapWonChanges = s.capWonChanges;
+      sRelease = s.release;
+      if (sLog) {
+        std::fprintf(stderr, "[challenge] state put back by a save state: %zu fainted in this battle, %zu lost, %zu areas used, in fight %d\n",
+                     sFaints.size(), sLost.size(), sAreas.size(), sInFight ? 1 : 0);
+      }
+    },
+    [](const std::any& a, portstate::Out& out) {
+      const SavedState& s = std::any_cast<const SavedState&>(a);
+      out.vec(s.faints);
+      out.u64(s.ruleLog.size());
+      for (const std::string& t : s.ruleLog) out.str(t);
+      out.u64(s.messages.size());
+      for (const std::string& t : s.messages) out.str(t);
+      out.vec(s.lost);
+      out.vec(s.areas);
+      out.pod(s.wasFight); out.pod(s.inFight); out.pod(s.pushedSeen); out.pod(s.partyCheck); out.pod(s.battleBag); out.pod(s.capWrote); out.pod(s.capInStory);
+      out.pod(s.calm); out.pod(s.ownedAtStart); out.pod(s.caughtInBattle); out.pod(s.thrownInBattle); out.pod(s.capTold); out.pod(s.cap);
+      out.pod(s.catchArea); out.pod(s.capStory); out.pod(s.capBoss); out.pod(s.capWonChanges);
+      out.pod(s.release);
+    },
+    [](portstate::In& in, std::any& a) {
+      SavedState s{};
+      s.faints = in.vec<Faint>();
+      const uint64_t nr = in.u64();
+      if (nr > (1u << 20)) return false;
+      for (uint64_t i = 0; i < nr && in.ok(); i++) s.ruleLog.push_back(in.str());
+      const uint64_t nm = in.u64();
+      if (nm > (1u << 20)) return false;
+      for (uint64_t i = 0; i < nm && in.ok(); i++) s.messages.push_back(in.str());
+      s.lost = in.vec<Lost>();
+      s.areas = in.vec<u32>();
+      s.wasFight = in.pod<bool>(); s.inFight = in.pod<bool>(); s.pushedSeen = in.pod<bool>(); s.partyCheck = in.pod<bool>(); s.battleBag = in.pod<bool>();
+      s.capWrote = in.pod<bool>(); s.capInStory = in.pod<bool>();
+      s.calm = in.pod<int>(); s.ownedAtStart = in.pod<int>(); s.caughtInBattle = in.pod<int>(); s.thrownInBattle = in.pod<int>(); s.capTold = in.pod<int>(); s.cap = in.pod<int>();
+      s.catchArea = in.pod<u32>(); s.capStory = in.pod<u32>(); s.capBoss = in.pod<unsigned>(); s.capWonChanges = in.pod<unsigned>();
+      s.release = in.pod<Release>();
+      if (!in.ok()) return false;
+      a = std::move(s);
+      return true;
+    });
+
 void ReleaseCheck(bool last) {
   if (!sRelease.on) return;
   void* now = sRelease.record;
@@ -339,29 +433,30 @@ int PcAction(u32 msg, int box, int place, void* under, void* held) {
   const bool heldLost = IsLost(held), underLost = IsLost(under);
   if (!heldLost && !underLost) return 0;
   const bool party = place >= kPcFirstPartyPlace && place < kPcFirstBoxPlace;
-  const bool graveyard = place >= kPcFirstBoxPlace && box == kGraveyardBox;
+  const bool graveyard = place >= kPcFirstBoxPlace && box == GraveyardIndex();
   void* current = held != nullptr ? held : under;
   const bool currentLost = held != nullptr ? heldLost : underLost;
   const char* refused = nullptr;
+  std::string boxText;
   switch (msg) {
   case kPcWithdraw:
     if (currentLost) refused = Tr("Nuzlocke: this Pokemon is lost. It can't rejoin your party.");
     break;
   case kPcDeposit:
-    if (heldLost) refused = Tr("Nuzlocke: this Pokemon is lost. It can only be put down in the last PC box.");
+    if (heldLost) refused = (boxText = Fmt(Tr("Nuzlocke: this Pokemon is lost. It can only be put down in PC box %d."), GraveyardIndex() + 1)).c_str();
     break;
   case kPcPutDown:
   case kPcSwap:
     if (heldLost && !graveyard) {
       refused = party ? Tr("Nuzlocke: this Pokemon is lost. It can't rejoin your party.")
-                      : Tr("Nuzlocke: this Pokemon is lost. It can only be put down in the last PC box.");
+                      : (boxText = Fmt(Tr("Nuzlocke: this Pokemon is lost. It can only be put down in PC box %d."), GraveyardIndex() + 1)).c_str();
       break;
     }
     if (msg == kPcPutDown) break;
     [[fallthrough]];
   case kPcMove:
-    if (underLost && !graveyard && pcboxGetPokemonBoxNbEmptySlot(nullptr, kGraveyardBox) <= 0) {
-      refused = Tr("Nuzlocke: this Pokemon is lost, and the last PC box has no room for it. It stays here.");
+    if (underLost && !graveyard && pcboxGetPokemonBoxNbEmptySlot(nullptr, GraveyardBoxNow()) <= 0) {
+      refused = (boxText = Fmt(Tr("Nuzlocke: this Pokemon is lost, and PC box %d has no room for it. It stays here."), GraveyardIndex() + 1)).c_str();
     }
     break;
   default:
@@ -384,8 +479,36 @@ int PcAction(u32 msg, int box, int place, void* under, void* held) {
   return 0;
 }
 
+void GraveyardCheck() {
+  if (!Active("nuzlocke_faint") || GSfloorGetCurrent() == 0 || sGraveyard < 0) return;
+  const int target = xd::pcboxes::Count() - 1;
+  if (sGraveyard == target) return;
+  const int from = sGraveyard;
+  sGraveyard = target;
+  int moved = 0, stayed = 0;
+  for (int b = 0; b < target; b++) {
+    uint8_t* box = static_cast<uint8_t*>(pcboxGetPokemonBoxName(nullptr, static_cast<s8>(b)));
+    if (box == nullptr) continue;
+    for (int i = 0; i < 30; i++) {
+      uint8_t* rec = box + 20 + static_cast<size_t>(i) * kPokemonBytes;
+      if (!IsLost(rec)) continue;
+      if (pcboxAddPokemon(nullptr, rec, static_cast<s8>(target)) == 1) {
+        pokemonInit(rec);
+        moved++;
+      } else {
+        stayed++;
+      }
+    }
+  }
+  sRuleLog.push_back("graveyard moved from box " + std::to_string(from + 1) + " to box " + std::to_string(target + 1) + ": " + std::to_string(moved) + " lost Pokemon moved");
+  std::fprintf(stderr, "[challenge] nuzlocke_faint: the PC has more boxes: the graveyard moves from box %d to box %d, %d lost Pokemon moved, %d stay\n", from + 1, target + 1,
+               moved, stayed);
+  if (moved + stayed > 0) Say(Fmt(Tr("Nuzlocke: the graveyard is now PC box %d. The lost Pokemon were moved there."), target + 1));
+}
+
 void CheckParty(bool announce) {
   ReleaseCheck(true);
+  GraveyardCheck();
   if (!Active("nuzlocke_faint") || sLost.empty() || GSfloorGetCurrent() == 0) return;
   const int count = PartyCount();
   std::vector<int> lost;
@@ -487,8 +610,8 @@ bool BattleOver() {
                  shadow ? " (a Shadow Pokemon)" : "", slot + 1, PartyCount());
   }
   if (moved != 0) {
-    Say(moved == 1 ? std::string(Tr("Nuzlocke: 1 Pokemon fainted and was moved to the last PC box."))
-                   : Fmt(Tr("Nuzlocke: %d Pokemon fainted and were moved to the last PC box."), moved));
+    Say(moved == 1 ? Fmt(Tr("Nuzlocke: 1 Pokemon fainted and was moved to PC box %d."), GraveyardIndex() + 1)
+                   : Fmt(Tr("Nuzlocke: %d Pokemon fainted and were moved to PC box %d."), moved, GraveyardIndex() + 1));
   }
   if (kept != 0) {
     sRuleLog.push_back("failed: the PC boxes were full, a fainted Pokemon could not be put away (Nuzlocke)");
@@ -601,6 +724,7 @@ void SetActive(const std::vector<std::string>& ids, const char* why) {
   sRuleLog.clear();
   sFaints.clear();
   sLost.clear();
+  sGraveyard = -1;
   sAreas.clear();
   sCaughtInBattle = sThrownInBattle = 0;
   sRelease = {};
@@ -626,6 +750,13 @@ void SetActive(const std::vector<std::string>& ids, const char* why) {
 
 bool Active(const char* id) { return std::find(sActive.begin(), sActive.end(), id) != sActive.end(); }
 bool AnyActive() { return !sActive.empty(); }
+std::string ActiveIds() {
+  std::vector<std::string> ids = sActive;
+  std::sort(ids.begin(), ids.end());
+  std::string t;
+  for (const std::string& id : ids) t += (t.empty() ? "" : ",") + id;
+  return t;
+}
 
 bool RefusePress(const void* activeWindow, unsigned newButtons, std::string& message) {
   if (sActive.empty()) return false;
@@ -678,15 +809,21 @@ std::vector<std::string> State() {
     lines.push_back(text);
   }
   for (u32 a : sAreas) lines.push_back("area " + std::to_string(a) + " " + AreaName(a));
+  if (Active("nuzlocke_faint")) {
+    sGraveyard = GraveyardIndex();
+    lines.push_back("graveyard " + std::to_string(sGraveyard + 1));
+  }
   return lines;
 }
 
 void SetState(const std::vector<std::string>& lines, const char* why) {
   sLost.clear();
   sAreas.clear();
+  sGraveyard = lines.empty() ? -1 : 7;
   for (const std::string& line : lines) {
     unsigned a = 0, b = 0, c = 0;
-    if (std::sscanf(line.c_str(), "lost %u %x %x", &a, &b, &c) == 3) sLost.push_back({a, b, c});
+    if (std::sscanf(line.c_str(), "graveyard %u", &a) == 1) sGraveyard = a >= 8 && a <= 32 ? static_cast<int>(a) - 1 : 7;
+    else if (std::sscanf(line.c_str(), "lost %u %x %x", &a, &b, &c) == 3) sLost.push_back({a, b, c});
     else if (std::sscanf(line.c_str(), "area %u", &a) == 1) sAreas.push_back(a);
     else std::fprintf(stderr, "[challenge] the save's challenge state has a line this version doesn't know: \"%s\"\n", line.c_str());
   }

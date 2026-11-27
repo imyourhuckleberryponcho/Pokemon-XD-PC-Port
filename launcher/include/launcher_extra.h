@@ -30,6 +30,7 @@ std::string ParseVersionOutput(std::string_view output);
 const Source* FindSource(const std::vector<Source>& sources, std::string_view id);
 bool AcceptsGameId(const Source& source, std::string_view gameId);
 std::filesystem::path ConverterPath(const Source& source, const std::filesystem::path& programFolder);
+bool ConverterFound(const std::filesystem::path& converter);
 std::vector<std::string> ConverterArguments(const Source& source, const std::string& disc, const std::string& gameDisc,
                                             const std::filesystem::path& out, const std::filesystem::path& out2 = {},
                                             const std::filesystem::path& out3 = {}, const std::string& gameProgram = {},

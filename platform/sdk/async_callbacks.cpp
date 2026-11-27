@@ -17,6 +17,7 @@
 #include <deque>
 #include <mutex>
 #include <unordered_map>
+#include <map>
 #include <vector>
 
 extern "C" void PortOS_RaiseInterrupt(void (*handler)(void*), void* arg);
@@ -50,6 +51,8 @@ bool drive_model() { return disc_mode() == DiscMode::Drive || disc_mode() == Dis
 
 bool (*sFileLocator)(const char* path, uint32_t* offset) = nullptr;
 std::unordered_map<const DVDFileInfo*, uint32_t> sFileStart;
+std::map<uintptr_t, std::pair<std::string, uint32_t>> sOpenFiles;
+std::vector<std::pair<uintptr_t, std::pair<std::string, uint32_t>>> sFilesToReopen;
 uint32_t file_start(const DVDFileInfo* info) {
   auto it = sFileStart.find(info);
   return it != sFileStart.end() ? it->second : 0u;
@@ -587,6 +590,23 @@ extern "C" {
 void PortDVD_SetFileLocator(bool (*locator)(const char* path, uint32_t* offset)) { sFileLocator = locator; }
 void PortDVD_SetFirstCommandTime(int64_t microseconds) { sFirstCommandUs = microseconds; }
 
+BOOL PortDVD_Close(DVDFileInfo* fileInfo) {
+  static const bool keep = [] {
+    const char* v = std::getenv("XD_SAVESTATES");
+    return v != nullptr && v[0] == '1';
+  }();
+  if (fileInfo != nullptr) {
+    std::lock_guard<std::mutex> guard(sLock);
+    sOpenFiles.erase(reinterpret_cast<uintptr_t>(fileInfo));
+  }
+  if (!keep || fileInfo == nullptr) return DVDClose(fileInfo);
+  void* handle = fileInfo->auroraHandle;
+  fileInfo->auroraHandle = nullptr;
+  const BOOL ok = DVDClose(fileInfo);
+  fileInfo->auroraHandle = handle;
+  return ok;
+}
+
 BOOL PortDVD_Open(const char* fileName, DVDFileInfo* fileInfo) {
   const BOOL ok = DVDOpen(fileName, fileInfo);
   if (ok) {
@@ -601,6 +621,7 @@ BOOL PortDVD_Open(const char* fileName, DVDFileInfo* fileInfo) {
     }
     std::lock_guard<std::mutex> guard(sLock);
     sFileStart[fileInfo] = start;
+    sOpenFiles[reinterpret_cast<uintptr_t>(fileInfo)] = {fileName, start};
   }
   return ok;
 }
@@ -912,4 +933,89 @@ void PortCARD_Init(void) {
   }
 }
 
+}
+
+#include "port_savestate.h"
+bool PortState_IoIdle(portstate::Why& why) {
+  std::lock_guard<std::mutex> lock(sLock);
+  if (!sDvdPending.empty()) {
+    why = "a disc read is in flight";
+  } else if (sExecuting != nullptr || !sDriveQueue.empty() || sCompleting) {
+    why = "the disc drive is busy";
+  } else if (sCardOp[0].pending || sCardOp[1].pending) {
+    why = "a memory card operation is in flight";
+  } else if (!sArqPending.empty() || !sArqHi.empty() || !sArqLo.empty() || sArqHiPending || sArqLoPending) {
+    why = "an ARAM transfer is in flight";
+  } else {
+    return true;
+  }
+  return false;
+}
+
+namespace {
+struct IoTiming {
+  uint64_t dvdSeq;
+  uint64_t driveFreeTick;
+  int64_t originTb;
+  int64_t arqDoneTb;
+  bool arqLoLast;
+  port_disc::DriveModel drive;
+};
+}
+std::any PortState_IoSave() {
+  std::lock_guard<std::mutex> lock(sLock);
+  return IoTiming{sDvdSeq, sDriveFreeTick, sOriginTb, sArqDoneTb, sArqLoLast, sDrive};
+}
+static_assert(std::is_trivially_copyable<IoTiming>::value, "IoTiming is written to a file as it is");
+void PortState_IoToBytes(const std::any& state, portstate::Out& out) {
+  out.pod(std::any_cast<const IoTiming&>(state));
+  std::lock_guard<std::mutex> lock(sLock);
+  out.u64(sOpenFiles.size());
+  for (const auto& f : sOpenFiles) {
+    out.u64(f.first);
+    out.str(f.second.first);
+    out.u64(f.second.second);
+  }
+}
+bool PortState_IoFromBytes(portstate::In& in, std::any& state) {
+  IoTiming t = in.pod<IoTiming>();
+  if (!in.ok()) return false;
+  const uint64_t n = in.u64();
+  std::lock_guard<std::mutex> lock(sLock);
+  sFilesToReopen.clear();
+  for (uint64_t i = 0; i < n && in.ok(); i++) {
+    const uint64_t a = in.u64();
+    std::string path = in.str();
+    const uint64_t st = in.u64();
+    sFilesToReopen.push_back({static_cast<uintptr_t>(a), {path, static_cast<uint32_t>(st)}});
+  }
+  if (!in.ok()) return false;
+  state = t;
+  return true;
+}
+void PortState_IoLoad(const std::any& state) {
+  const auto* t = std::any_cast<IoTiming>(&state);
+  if (t == nullptr) return;
+  std::lock_guard<std::mutex> lock(sLock);
+  sDvdSeq = t->dvdSeq;
+  sDriveFreeTick = t->driveFreeTick;
+  sOriginTb = t->originTb;
+  sArqDoneTb = t->arqDoneTb;
+  sArqLoLast = t->arqLoLast;
+  sDrive = t->drive;
+  if (!sFilesToReopen.empty()) {
+    sOpenFiles.clear();
+    for (const auto& f : sFilesToReopen) {
+      DVDFileInfo tmp{};
+      auto* real = reinterpret_cast<DVDFileInfo*>(f.first);
+      if (!DVDOpen(f.second.first.c_str(), &tmp)) {
+        std::fprintf(stderr, "[savestate] a file the game had open could not be opened again: %s\n", f.second.first.c_str());
+        continue;
+      }
+      real->auroraHandle = tmp.auroraHandle;
+      sFileStart[real] = f.second.second;
+      sOpenFiles[f.first] = f.second;
+    }
+    sFilesToReopen.clear();
+  }
 }

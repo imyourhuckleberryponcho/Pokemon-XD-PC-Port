@@ -114,7 +114,18 @@ std::string DescribeChanges(const ModChanges& c) {
   return out.empty() ? "nothing" : out;
 }
 
-Review ReviewList(const ModList::Profile& profile, const std::vector<ModFolder>& found, std::string_view gameId) {
+std::string AssetProblemText(const std::string& modName, const std::vector<std::string>& notReady, const std::vector<std::string>& reasons) {
+  std::string why;
+  for (size_t i = 0; i < notReady.size(); i++) {
+    const AssetInfo* a = FindAsset(notReady[i]);
+    why += (why.empty() ? "" : "; ") + (a != nullptr ? std::string(Tr(a->name)) : notReady[i]) + ": " + (i < reasons.size() ? reasons[i] : std::string());
+  }
+  const AssetInfo* first = notReady.empty() ? nullptr : FindAsset(notReady.front());
+  return Fmt(Tr("The mod \"%s\" needs extra assets of your own that are not ready (%s). %s It is not used."), modName.c_str(), why.c_str(),
+             first != nullptr ? Tr(first->hint) : "");
+}
+
+Review ReviewList(const ModList::Profile& profile, const std::vector<ModFolder>& found, std::string_view gameId, const AssetCheck& assets) {
   Review review;
   const auto findMod = [&](const std::string& id) -> const ModFolder* {
     for (const ModFolder& f : found) {
@@ -175,6 +186,25 @@ Review ReviewList(const ModList::Profile& profile, const std::vector<ModFolder>&
     }
   };
   dropOnlyWith();
+  if (assets) {
+    for (size_t a = 0; a < alive.size();) {
+      const Manifest& m = review.rows[alive[a]].mod->manifest;
+      std::vector<std::string> notReady, reasons;
+      for (const std::string& id : m.needsAssets) {
+        const std::string reason = assets(id);
+        if (!reason.empty()) {
+          notReady.push_back(id);
+          reasons.push_back(reason);
+        }
+      }
+      if (notReady.empty()) {
+        a++;
+      } else {
+        drop(a, AssetProblemText(m.name, notReady, reasons));
+      }
+    }
+    dropOnlyWith();
+  }
   for (bool changed = true; changed;) {
     changed = false;
     for (size_t a = 0; a < alive.size() && !changed; a++) {
@@ -284,6 +314,18 @@ Review ReviewList(const ModList::Profile& profile, const std::vector<ModFolder>&
         const ModFolder* other = findMod(id);
         row.suggestions.push_back(other != nullptr ? Fmt(Tr("Works well with \"%s\" (it is in your mods folder, but not on)."), other->manifest.name.c_str())
                                                    : Fmt(Tr("Works well with \"%s\" (not installed)."), id.c_str()));
+      }
+    }
+  }
+  if (assets) {
+    for (size_t a : alive) {
+      ReviewRow& row = review.rows[a];
+      for (const std::string& id : row.mod->manifest.recommendsAssets) {
+        const std::string reason = assets(id);
+        if (reason.empty()) continue;
+        const AssetInfo* info = FindAsset(id);
+        row.suggestions.push_back(Fmt(Tr("Works best with the %s of your own (%s). It is used without them."),
+                                      info != nullptr ? Tr(info->name) : id.c_str(), reason.c_str()));
       }
     }
   }

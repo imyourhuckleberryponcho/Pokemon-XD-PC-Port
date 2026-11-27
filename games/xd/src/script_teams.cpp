@@ -193,7 +193,35 @@ bool Armed() {
 
 }
 
+extern "C" {
+u8 darkPokemonBiosGetSnatchSuccessFlag(u16 id);
+u8 fightEncountDataBiosGetFightKind(void* data);
+}
+static void ShadowRematch(u16 id, u16 encountId) {
+    const u16 enc = encountId != 0 ? encountId : fightGetFightEncountDataId();
+    void* data = fightEncountDataBiosGetPtr(enc);
+    if (data == nullptr) return;
+    const u8 fightKind = fightEncountDataBiosGetFightKind(data);
+    if (fightKind != 8 && fightKind != 9) return;
+    if (id >= deckGetTrainerSize()) return;
+    uint8_t* row = TrainerRow(id);
+    if (row == nullptr || row[4] == 0) return;
+    for (int j = 0; j < 6; j++) {
+        if ((row[4] & (1u << j)) == 0) continue;
+        const uint16_t shadow = Be16(row + 0x1C + 2 * j);
+        if (darkPokemonBiosGetSnatchSuccessFlag(shadow) == 0) continue;
+        const uint8_t* deckRow = reinterpret_cast<const uint8_t*>(DeckDarkPokemon::getDeckDarkPokemonObj(shadow));
+        if (deckRow == nullptr) continue;
+        const uint32_t entry = Be32(deckRow + 4);
+        if (entry == 0 || entry > 0xFFFF) continue;
+        PutBe16(row + 0x1C + 2 * j, static_cast<uint16_t>(entry));
+        row[4] = static_cast<uint8_t>(row[4] & ~(1u << j));
+        std::fprintf(stderr, "[shadow rematch] Mt. Battle trainer %u slot %d: Shadow %u was snagged, the plain Pokemon (entry %u) is fielded\n", id, j + 1, shadow, entry);
+    }
+}
+
 extern "C" void fightTrainerCreateFightTrainerDataIdToHero(u16 id, s32 allowNoAi, void* hero, u16 encountId) {
+    ShadowRematch(id, encountId);
     if (!xd::teams::Armed()) {
         PortXD_RealCreateTrainerHero(id, allowNoAi, hero, encountId);
         return;

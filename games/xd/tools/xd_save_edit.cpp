@@ -4,6 +4,9 @@
 #include <xd_saveedit_write.h>
 
 #include <gc_memcard.h>
+#include <playthrough.h>
+#include <saveext.h>
+#include <xd_legality_tables.h>
 
 #include <cstdio>
 #include <cstdlib>
@@ -45,12 +48,19 @@ int main(int argc, char** argv) {
   const fs::path gci = argv[1];
   const std::string disc = argv[2];
   std::vector<std::string> sets;
-  fs::path out, commitRoot;
+  fs::path out, commitRoot, ordersIn, ordersOut, tablesFile, extIn, extOut;
+  bool spareRows = false;
   for (int i = 3; i < argc; i++) {
     const std::string a = argv[i];
     if (a == "--set" && i + 1 < argc) sets.push_back(argv[++i]);
     else if (a == "--out" && i + 1 < argc) out = argv[++i];
     else if (a == "--commit" && i + 1 < argc) commitRoot = argv[++i];
+    else if (a == "--tables" && i + 1 < argc) tablesFile = argv[++i];
+    else if (a == "--spare-rows") spareRows = true;
+    else if (a == "--shadow-ext" && i + 1 < argc) extIn = argv[++i];
+    else if (a == "--shadow-ext-out" && i + 1 < argc) extOut = argv[++i];
+    else if (a == "--shadow-orders" && i + 1 < argc) ordersIn = argv[++i];
+    else if (a == "--shadow-orders-out" && i + 1 < argc) ordersOut = argv[++i];
     else {
       std::fprintf(stderr, "unknown argument: %s\n", a.c_str());
       return 2;
@@ -74,16 +84,59 @@ int main(int argc, char** argv) {
     std::fprintf(stderr, "the save can't be read: %s\n", error.c_str());
     return 1;
   }
-  ed.SetSpeciesNames([&](uint16_t id) { return dr.names->Species(id); });
+  xd::legality::TablesFile tf;
+  if (!tablesFile.empty()) {
+    if (!xd::legality::Parse(ReadAll(tablesFile), tf, error)) {
+      std::fprintf(stderr, "the tables file can't be read: %s\n", error.c_str());
+      return 1;
+    }
+  }
+  const xd::legality::Rules& rules = tablesFile.empty() ? dr.rules : tf.rules;
+  const auto speciesName = [&](uint16_t id) { return tablesFile.empty() ? dr.names->Species(id) : tf.Species(id); };
+  ed.SetSpeciesNames(speciesName);
+  {
+    std::vector<std::string> orders;
+    if (!commitRoot.empty()) {
+      engine::playthrough::Setup setup;
+      std::string e2;
+      const fs::path f = engine::playthrough::FileFor(commitRoot / L"playthroughs" / L"Card A", se::PlaythroughKey(ed.save().trainerOtId, ed.save().trainerName));
+      if (fs::exists(f) && engine::playthrough::ReadFile(f, setup, e2)) orders = setup.editorShadows;
+    } else if (!ordersIn.empty()) {
+      const std::vector<uint8_t> text = ReadAll(ordersIn);
+      std::istringstream in(std::string(text.begin(), text.end()));
+      for (std::string line; std::getline(in, line);) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (!line.empty()) orders.push_back(line);
+      }
+    }
+    ed.SetShadowOrders(orders);
+    std::vector<uint8_t> section;
+    if (!commitRoot.empty()) {
+      const fs::path folder = commitRoot / L"playthroughs" / L"Card A";
+      const std::string key = se::PlaythroughKey(ed.save().trainerOtId, ed.save().trainerName);
+      const engine::saveext::Loaded l = engine::saveext::Load(folder, key, engine::saveext::Hash64(data.data(), data.size()));
+      if (l.state == engine::saveext::State::Paired) {
+        if (const engine::saveext::Section* sec = l.file.Find("shadow")) section = sec->data;
+      }
+    } else if (!extIn.empty()) {
+      section = ReadAll(extIn);
+    }
+    ed.SetExtraShadows(section);
+  }
   se::Tables t;
-  t.rules = &dr.rules;
+  t.rules = &rules;
+  t.moreShadows = spareRows;
+  if (!tablesFile.empty()) {
+    t.abilityName = [&tf](uint16_t id) { return tf.Ability(id); };
+    t.formName = [&tf](uint16_t row) { return tf.FormKey(row).empty() ? tf.Species(row) : tf.FormKey(row); };
+  }
   const auto species = [&](const std::string& v, uint16_t& id) {
     if (IsNumber(v)) {
       id = static_cast<uint16_t>(std::atoi(v.c_str()));
       return true;
     }
-    for (size_t i = 1; i < dr.rules.species.size(); i++) {
-      if (dr.names->Species(static_cast<uint16_t>(i)) == v) {
+    for (size_t i = 1; i < rules.species.size(); i++) {
+      if (speciesName(static_cast<uint16_t>(i)) == v) {
         id = static_cast<uint16_t>(i);
         return true;
       }
@@ -138,6 +191,23 @@ int main(int argc, char** argv) {
       if (f == "level") report(key, ed.SetLevel(s, static_cast<int>(n), t));
       else if (f == "species") report(key, species(value, id) ? ed.SetSpecies(s, id, t) : "unknown species");
       else if (f == "nick") report(key, ed.SetNickname(s, W(value)));
+      else if (f == "shadow") {
+        if (value == "off") {
+          report(key, ed.MakeNormal(s));
+        } else {
+          const auto parts = Split(value, ':');
+          se::ShadowWish wish;
+          wish.gauge = parts.empty() ? 4000 : std::atoi(parts[0].c_str());
+          if (parts.size() > 1) {
+            const auto moves = Split(parts[1], ',');
+            for (int i = 0; i < 4; i++) wish.moves[i] = i < static_cast<int>(moves.size()) ? static_cast<uint16_t>(std::atoi(moves[static_cast<size_t>(i)].c_str())) : 0;
+          }
+          if (parts.size() > 2) wish.revers = std::atoi(parts[2].c_str());
+          report(key, ed.MakeShadow(s, wish, t));
+        }
+      }
+      else if (f == "ability") report(key, ed.SetAbilitySlot(s, static_cast<int>(n), t));
+      else if (f == "form") report(key, ed.SetForm(s, static_cast<uint16_t>(n), t));
       else if (f == "item") report(key, ed.SetHeldItem(s, static_cast<uint16_t>(n), t));
       else if (f == "friendship") report(key, ed.SetFriendship(s, static_cast<int>(n)));
       else if (f == "heal") report(key, ed.Heal(s, t));
@@ -161,8 +231,8 @@ int main(int argc, char** argv) {
     for (int i = 0; i < xs::kPartySize; i++) {
       const xs::Pokemon& p = sv.party[static_cast<size_t>(i)];
       if (!p.IsEmpty()) {
-        std::printf("party.%d species %u level %d exp %u hp %u/%u pid %08x\n", i + 1, static_cast<unsigned>(p.species), static_cast<int>(p.level), p.exp,
-                    static_cast<unsigned>(p.hp), static_cast<unsigned>(p.stats[0]), p.pid);
+        std::printf("party.%d species %u level %d exp %u hp %u/%u pid %08x shadow %u\n", i + 1, static_cast<unsigned>(p.species), static_cast<int>(p.level), p.exp,
+                    static_cast<unsigned>(p.hp), static_cast<unsigned>(p.stats[0]), p.pid, static_cast<unsigned>(p.shadowId));
       }
     }
   }
@@ -171,7 +241,17 @@ int main(int argc, char** argv) {
   for (const std::string& p : ed.Problems(t)) std::printf("BLOCKED: %s\n", p.c_str());
   for (const std::string& p : ed.Notes(t)) std::printf("note: %s\n", p.c_str());
   std::printf("%s\n", ed.WillMark() ? "saving would mark the playthrough (cheats used)" : "saving would not mark the playthrough");
+  for (const std::string& o : ed.ShadowOrders()) std::printf("shadow order: %s\n", o.c_str());
   if (failures != 0) return 1;
+  if (!extOut.empty()) {
+    const std::vector<uint8_t> section = ed.ExtraShadowSection();
+    std::ofstream o(extOut, std::ios::binary | std::ios::trunc);
+    o.write(reinterpret_cast<const char*>(section.data()), static_cast<std::streamsize>(section.size()));
+  }
+  if (!ordersOut.empty()) {
+    std::ofstream o(ordersOut, std::ios::trunc);
+    for (const std::string& line : ed.ShadowOrders()) o << line << "\n";
+  }
   if (!commitRoot.empty()) {
     se::CommitRequest req;
     req.cardRoot = commitRoot;

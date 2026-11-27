@@ -9,7 +9,7 @@
 #include <string_view>
 #include <utility>
 #include <vector>
-#if defined(__APPLE__) || defined(PORT_TEST_MAC_HALVES)
+#if defined(__APPLE__) || defined(__ANDROID__) || defined(PORT_TEST_MAC_HALVES)
 #include <port_mac_from_chars.h>
 #endif
 
@@ -172,7 +172,7 @@ private:
       while (end < mText.size() && std::string_view("+-.eE0123456789").find(mText[end]) != std::string_view::npos) {
         end++;
       }
-#if defined(__APPLE__) || defined(PORT_TEST_MAC_HALVES)
+#if defined(__APPLE__) || defined(__ANDROID__) || defined(PORT_TEST_MAC_HALVES)
       const auto r = port_mac::from_chars(mText.data() + mPos, mText.data() + end, out.number);
 #else
       const auto r = std::from_chars(mText.data() + mPos, mText.data() + end, out.number);

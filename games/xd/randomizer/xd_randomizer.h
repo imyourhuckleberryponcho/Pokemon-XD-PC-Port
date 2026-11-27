@@ -3,6 +3,7 @@
 
 #include <data_mods.h>
 #include <randomizer.h>
+#include <xd_shadow_orders.h>
 
 #include <filesystem>
 #include <functional>
@@ -92,6 +93,7 @@ struct MoreShadowsPlan {
 };
 struct MoreShadowsCapacity {
   uint32_t trainers = 0, slots = 0, species = 0, rows = 0, count = 0;
+  uint32_t speciesStory = 0, speciesMt = 0;
 };
 bool ParseMoreShadows(const std::string& text, MoreShadowsPlan& plan);
 std::string MoreShadowsText(int amount, uint64_t seed, int percent = 0);
@@ -107,6 +109,9 @@ struct ExtraShadowRow {
   uint8_t deck[0x18] = {};
 };
 std::vector<ExtraShadowRow> TakeExtraShadowRows(engine::randomizer::ModOutput& mod);
+
+bool GenerateEditorShadows(const engine::mods::DataCatalog& catalog, const engine::mods::EntryReader& read, const std::vector<xd::save::ShadowOrder>& orders,
+                           const std::set<uint32_t>& taken, engine::randomizer::ModOutput& out, std::string& error, std::vector<std::string>* skipped = nullptr);
 
 }
 

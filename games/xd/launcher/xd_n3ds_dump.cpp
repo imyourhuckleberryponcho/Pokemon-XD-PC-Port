@@ -1,5 +1,7 @@
 #include "xd_n3ds_dump.h"
 
+#include <port_android_fd.h>
+
 #include <i18n.h>
 
 #include <algorithm>
@@ -125,7 +127,8 @@ bool OpenCia(std::ifstream& in, uint64_t fileSize, uint64_t& ncchOffset, std::st
 
 }
 
-bool IdentifyN3dsDump(const std::string& path, std::string& gameId, std::string& title, std::string& error) {
+namespace {
+bool IdentifyN3dsDumpFile(const std::string& path, std::string& gameId, std::string& title, std::string& error) {
   namespace fs = std::filesystem;
   std::error_code ec;
   if (fs::is_directory(fs::path(path), ec)) {
@@ -186,6 +189,25 @@ bool IdentifyN3dsDump(const std::string& path, std::string& gameId, std::string&
   gameId = code.substr(0, 9);
   title = TitleOf(gameId);
   return true;
+}
+
+}
+
+bool IdentifyN3dsDump(const std::string& path, std::string& gameId, std::string& title, std::string& error) {
+#ifdef __ANDROID__
+  if (path.compare(0, 10, "content://") == 0) {
+    int fd = -1;
+    const std::string real = PortAndroid_ResolveContent(path, fd);
+    if (real.empty()) {
+      error = Tr("That file can't be opened.");
+      return false;
+    }
+    const bool ok = IdentifyN3dsDumpFile(real, gameId, title, error);
+    PortAndroid_CloseResolved(fd);
+    return ok;
+  }
+#endif
+  return IdentifyN3dsDumpFile(path, gameId, title, error);
 }
 
 }

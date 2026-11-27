@@ -1,9 +1,19 @@
 #include <gsthread_port.h>
+#ifdef _WIN32
+#include <gsthread_coro.h>
+#include <cstdlib>
+#include <windows.h>
+#endif
 
 #include <cstdio>
 #include <cstring>
 #include <string>
 #include <vector>
+
+extern "C" uint32_t PortVI_GetFlipCount(void) { return 0; }
+extern "C" void PortCrash_DescribeAddress(const void*, char* out, size_t outSize) {
+  if (outSize > 0) out[0] = 0;
+}
 
 namespace {
 
@@ -72,9 +82,74 @@ void execute_pass() {
   }
 }
 
+#ifdef _WIN32
+int gTaskSum = 0;
+uintptr_t task_d(uintptr_t id, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t,
+                 uintptr_t, uintptr_t, uintptr_t) {
+  volatile int big[2000];
+  for (int i = 0; i < 2000; i++) big[i] = static_cast<int>(id * 1000 + i);
+  double d = 0.5 * static_cast<double>(id);
+  for (int step = 0; step < 6; step++) {
+    d = d * 1.5 + step;
+    big[step] += step;
+    gTaskSum += static_cast<int>(big[step] + big[1999]) + static_cast<int>(d);
+    sLog += "D" + std::to_string(id) + "." + std::to_string(static_cast<int>(d)) + " ";
+    gsthread_switch();
+  }
+  return 9;
+}
+
+bool roundtrip() {
+  FakeThread d1{"D1"}, d2{"D2"};
+  sList = {&d1, &d2};
+  sLog.clear();
+  gTaskSum = 0;
+  PortGSthread_Create(&d1, reinterpret_cast<void*>(&task_d), exit_func, 0x1000);
+  PortGSthread_SetArg(&d1, 0, 1);
+  PortGSthread_Create(&d2, reinterpret_cast<void*>(&task_d), exit_func, 0x1000);
+  PortGSthread_SetArg(&d2, 0, 2);
+  execute_pass();
+  execute_pass();
+  gscoro::Snapshot snap;
+  static std::string logAtSave, firstRun;
+  static int sumAtSave, tries = 0;
+  volatile int mainLocal = 1234;
+  logAtSave = sLog;
+  sumAtSave = gTaskSum;
+  const int r = gscoro::Take(snap);
+  if (r == 0) {
+    for (int i = 0; i < 5; i++) execute_pass();
+    firstRun = sLog;
+    mainLocal = 99;
+    sLog = logAtSave;
+    gTaskSum = sumAtSave;
+    tries++;
+    gscoro::Restore(snap);
+  }
+  bool ok = true;
+  auto check = [&](bool cond, const char* what) {
+    std::printf("%s %s\n", cond ? "ok  " : "FAIL", what);
+    ok &= cond;
+  };
+  check(r == 1, "Take returned 1 after Restore");
+  check(mainLocal == 1234, "the main stack's local is as it was at the save");
+  check(sLog == logAtSave, "port state put back");
+  for (int i = 0; i < 5; i++) execute_pass();
+  std::printf("first : %s\nsecond: %s\n", firstRun.c_str(), sLog.c_str());
+  check(sLog == firstRun, "the passes after the restore equal the first run's");
+  check(!d1.alive && !d2.alive, "tasks ended");
+  return ok;
+}
+#endif
 }
 
 int main() {
+#ifdef _WIN32
+  if (const char* c = std::getenv("GS_COROUTINES"); c != nullptr && c[0] == '1') {
+    gscoro::UseCoroutines([](size_t n, size_t) -> void* { return VirtualAlloc(nullptr, n, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE); });
+    std::printf("coroutines on%c", 10);
+  }
+#endif
   FakeThread a{"A"}, b{"B"}, c{"C"};
   int counter = 0;
   sList = {&a, &b, &c};
@@ -102,5 +177,8 @@ int main() {
   check(a.result == 105 && b.result == 7 && c.result == 3, "results reached the exit function");
   check(counter == 10, "a pointer start-up value arrived intact (64-bit)");
   check(!a.alive && !b.alive && !c.alive, "all tasks ended");
+#ifdef _WIN32
+  if (gscoro::On()) ok &= roundtrip();
+#endif
   return ok ? 0 : 1;
 }

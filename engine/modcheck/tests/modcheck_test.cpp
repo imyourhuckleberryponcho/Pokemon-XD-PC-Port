@@ -279,6 +279,22 @@ void TestBadManifest(const mc::GameRules& rules) {
   }
 }
 
+void TestAssets() {
+  const fs::path d = Fresh("assets");
+  const auto run = [&](const std::string& extra) {
+    write_file(d / "mod.json", std::string("{ \"id\": \"u\", \"name\": \"U\", \"author\": \"x\", \"description\": \"x\", \"game\": \"GXXE01\"") + extra + " }");
+    write_file(d / "data/a.json", "{ \"text\": { \"#1\": \"x\" } }");
+    return Check(d, nullptr);
+  };
+  const mc::Report ok = run(", \"needs_assets\": [\"gen57_pack\"], \"recommends_assets\": [\"usum_models\"]");
+  check(ok.manifestOk && ok.Has("asset-needed") && !ok.Has("manifest-assets") && ok.manifest.needsAssets.size() == 1,
+        "assets: known ids pass, a needed one is noted");
+  const mc::Report bad = run(", \"needs_assets\": [\"gen9_pack\"]");
+  check(bad.Has("manifest-assets") && !bad.manifestOk, "assets: an unknown id is a problem (manifest-assets)");
+  check(run(", \"recommends_assets\": [\"pbr\"]").Has("manifest-assets"), "assets: an unknown recommended id is a problem too");
+  check(!run(", \"recommends_assets\": [\"br_models\"]").Has("manifest-unknown-field"), "assets: the two fields are known fields");
+}
+
 void TestUpdates() {
   const fs::path d = Fresh("updates");
   const auto run = [&](const std::string& extra) {
@@ -804,6 +820,7 @@ int main() {
   TestPrimitives();
   TestGoodFixtures(rules);
   TestBadManifest(rules);
+  TestAssets();
   TestUpdates();
   TestBadData(rules);
   TestBadLua(rules);

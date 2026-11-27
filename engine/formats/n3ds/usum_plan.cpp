@@ -632,7 +632,7 @@ Plan make_plan(const RomFs& rom, const Detected& det, const Garc& models, const 
       it.pack = "form"; it.name = "n3f_" + std::to_string(nat) + "_" + std::to_string(form); it.nat = nat;
       it.gid = PKX_GROUP_FIRST_FORM + (uint32_t)i; it.res = PKX_RES;
       PersonalRec base = read_personal(pers, nat);
-      int record = base.form_stats_index + form - 1;
+      int record = base.form_stats_index ? base.form_stats_index + form - 1 : nat;
       it.height = read_personal(pers, record).height_cm;
       it.ladder = ladder_of("forms", it.name);
       int sh = standin_g57.count(nat) ? standin_g57[nat] : nat;
@@ -648,8 +648,14 @@ Plan make_plan(const RomFs& rom, const Detected& det, const Garc& models, const 
       int pm = 0;
       try { pm = model_number(nat); } catch (const Fail& e) { it.skip = e.what(); }
       auto g = by.find({pm, code});
-      if (it.skip.empty() && (g == by.end() || g->second.empty())) it.skip = "nogroup";
-      else if (it.skip.empty()) it.group = g->second[0];
+      const JV* nj = f.get("nth");
+      const size_t nth = nj ? (size_t)nj->as_int() : 0;
+      if (it.skip.empty() && (g == by.end() || g->second.size() <= nth)) it.skip = "nogroup";
+      else if (it.skip.empty()) { it.group = g->second[nth]; if (nth > 0) it.motion_group = g->second[0]; }
+      if (const JV* mc = f.get("motions"); mc && !mc->str.empty() && it.skip.empty()) {
+        auto g0 = by.find({pm, mc->str});
+        if (g0 != by.end() && !g0->second.empty() && g0->second[0] != it.group) it.motion_group = g0->second[0];
+      }
       if (xd.species.count(sh)) it.standin_nat = sh;
       else if (xd.species.count(nat)) it.standin_nat = nat;
       else if (it.skip.empty()) it.skip = "noshell";

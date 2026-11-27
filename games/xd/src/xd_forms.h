@@ -10,7 +10,7 @@
 
 namespace xd::forms {
 
-enum class Kind : uint8_t { None, Alola, Mega, Primal, Battle, Cosmetic };
+enum class Kind : uint8_t { None, Alola, Mega, Primal, Battle, Cosmetic, Plate };
 
 struct Form {
   uint32_t row = 0;
@@ -29,6 +29,15 @@ bool IsForm(uint32_t row);
 uint32_t CharmItem();
 uint32_t PatchItem();
 const std::vector<uint32_t>& MemoryItems();
+std::vector<uint32_t> PlateItems();
+uint32_t PlateFormRow(uint32_t base, uint32_t item);
+bool IsPlateRow(uint32_t row);
+bool PlateBoosts(uint32_t item, uint32_t moveType);
+void PlateSyncOne(void* pokemon);
+void PlateFrame();
+void RandomLook(void* pokemon, uint32_t pid);
+uint32_t PickLook(uint32_t row, uint32_t pid, bool force);
+size_t LookSpecies();
 uint32_t ShopSpareRows();
 void AppendTexts(std::vector<std::pair<uint32_t, std::string>>& texts);
 

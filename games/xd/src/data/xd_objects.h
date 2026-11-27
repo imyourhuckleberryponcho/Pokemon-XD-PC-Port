@@ -21,6 +21,7 @@ struct Person {
   bool solid = true, visible = true, lookAtHero = false, talkThroughWalls = false;
   bool blend = true;
   long talkStart = 2, talkEnd = 1;
+  long motion = 3;
   long nameText = 0;
   size_t line = 0;
 };

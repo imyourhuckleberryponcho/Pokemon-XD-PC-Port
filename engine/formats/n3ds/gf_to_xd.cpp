@@ -583,12 +583,16 @@ Built build(const Species& sp, const std::vector<uint8_t>& xd_bytes, const Opts&
     if (skip_fire && gfi::is_fire_material(gm.materials[it->second])) return false;
     return !gfi::is_effect_layer(gm.materials[it->second]);
   };
-  auto drawn_points_y = [&](const std::vector<M4>& W, bool want_all, std::vector<double>* ys) {
+  auto drawn_points_y = [&](const std::vector<M4>& W, bool want_all, std::vector<double>* ys, std::vector<double>* xs = nullptr, std::vector<double>* zs = nullptr) {
     for (auto& me : gm.meshes)
       for (auto& sm : me.subs)
         if (drawn(me, sm)) {
           auto pts = skin_points(sk, W, sm.bone_idx, sm.verts);
-          for (int u : cx.used_of(sm)) ys->push_back(pts[u][1]);
+          for (int u : cx.used_of(sm)) {
+            ys->push_back(pts[u][1]);
+            if (xs) xs->push_back(pts[u][0]);
+            if (zs) zs->push_back(pts[u][2]);
+          }
         }
     (void)want_all;
   };
@@ -596,20 +600,26 @@ Built build(const Species& sp, const std::vector<uint8_t>& xd_bytes, const Opts&
     *mn = *std::min_element(y.begin(), y.end());
     *mx = *std::max_element(y.begin(), y.end());
   };
+  double idle_w = 0, idle_d = 0;
   auto idle_stats = [&](double* h0, double* hmean, double* y0, double* ymean) {
     int n_ = std::max(idle.frames, 1);
-    std::vector<double> hs, ms;
+    std::vector<double> hs, ms, ws, ds;
     double fr[4] = {0, n_ * 0.25, n_ * 0.5, n_ * 0.75};
     for (double f : fr) {
       Pose p = sk.sample_motion(idle, f);
       auto W = sk.world(p.s, p.r, p.t, &p.axis);
-      std::vector<double> ys;
-      drawn_points_y(W, true, &ys);
+      std::vector<double> ys, xs, zs;
+      drawn_points_y(W, true, &ys, &xs, &zs);
       double mn, mx;
       minmax(ys, &mn, &mx);
       hs.push_back(mx - mn);
       ms.push_back(mn);
+      minmax(xs, &mn, &mx);
+      ws.push_back(mx - mn);
+      minmax(zs, &mn, &mx);
+      ds.push_back(mx - mn);
     }
+    idle_w = np_mean(ws); idle_d = np_mean(ds);
     *h0 = hs[0]; *hmean = np_mean(hs); *y0 = ms[0]; *ymean = np_mean(ms);
   };
   Pose p0 = sk.sample_motion(idle, 0);
@@ -633,6 +643,13 @@ Built build(const Species& sp, const std::vector<uint8_t>& xd_bytes, const Opts&
     size_factor = xd_h / my_h;
   }
   if (opts.size_rule && opts.height_cm > 0 && (xd_h <= 0 || opts.size_rule == 2)) size_factor = mainline_box_height(opts.height_cm) / my_h;
+  if (opts.size_flat && opts.size_rule == 2 && opts.height_cm > 0 && idle_w > 0) {
+    double len = std::max(idle_w, idle_d);
+    if (my_h < 0.55 * opts.height_cm && len >= 0.8 * opts.height_cm && len <= 1.25 * opts.height_cm) {
+      size_factor = mainline_box_height(opts.height_cm) / len;
+      log(sf("INFO: size rule (flat): the Pokedex height %d cm is the length: %.1f, not the height %.1f -> scale %.4f", (int)opts.height_cm, len, my_h, size_factor));
+    }
+  }
   log(sf("INFO: height %.1f (3DS units), XD idle box height %.1f -> scale %.4f", my_h, xd_h, size_factor));
   if (opts.size_rule) log(sf("INFO: size rule: frame-0 height %.1f, idle mean %.1f, scale before the rule %.4f", my_h0, my_h, xd_h > 0 ? xd_h / my_h0 : size_factor));
   double xd_ymin = 0.0;
@@ -915,6 +932,7 @@ Built build(const Species& sp, const std::vector<uint8_t>& xd_bytes, const Opts&
     return out;
   };
   if (ratio < 1.0) log(sf("INFO: slimmed %d -> %d triangles", tri_before, tri_total));
+  if (std::getenv("N3DS_SIZE_LOG")) { size_t nv = 0; for (auto& me : m.meshes) nv += me.verts.size(); std::fprintf(stderr, "[n3ds size] decimate target %d ratio %.3f tris %d -> %d meshes %d vertices %zu\n", opts.decimate, ratio, tri_before, tri_total, (int)m.meshes.size(), nv); }
   log(sf("INFO: %d triangles, %d meshes, %d weight combinations", tri_total, (int)m.meshes.size(), (int)combos_s.size()));
   B.tris = tri_total;
   B.scale = size_factor;
@@ -1101,6 +1119,19 @@ Built build(const Species& sp, const std::vector<uint8_t>& xd_bytes, const Opts&
     an.bounds = boxes;
     m.animations.push_back(std::move(an));
   }
+  {
+    int ref = -1;
+    for (size_t i = 0; i < m.animations.size() && ref < 0; i++)
+      if (slot_role[i] == "idle" && m.animations[i].bounds && !m.animations[i].bounds->empty()) ref = (int)i;
+    for (size_t i = 0; i < m.animations.size() && ref < 0; i++)
+      if (m.animations[i].bounds && !m.animations[i].bounds->empty()) ref = (int)i;
+    if (ref >= 0) {
+      const std::array<double, 6> box0 = (*m.animations[ref].bounds)[0];
+      for (size_t i = 0; i < m.animations.size(); i++)
+        if (!m.animations[i].bounds || m.animations[i].bounds->empty())
+          m.animations[i].bounds = std::vector<std::array<double, 6>>((size_t)std::max(xd_frames[i], 1) + 1, box0);
+    }
+  }
   m.bound_head = xd_model.bound_head ? *xd_model.bound_head : std::vector<int>();
   int idle_slot = 0;
   for (size_t i = 0; i < slot_role.size(); i++) if (slot_role[i] == "idle") { idle_slot = (int)i; break; }
@@ -1182,6 +1213,9 @@ std::vector<uint8_t> convert(const Species& sp, const std::vector<uint8_t>& xd_b
       info->report = rep;
     }
     log(sf("written %d bytes (XD original %d)", (int)data.size(), (int)xd_bytes.size()));
+    if (std::getenv("N3DS_SIZE_LOG"))
+      std::fprintf(stderr, "[n3ds size] file %d archive %lld display lists %lld tracks %lld textures %lld pobj %lld envelopes max %lld tris %d weight step %.2f\n", (int)data.size(), rep.archive_bytes,
+                   rep.display_list_bytes, rep.track_bytes, rep.texture_bytes, rep.pobj, rep.most_envelopes, B.tris, st);
     return data;
   }
 }
@@ -1207,7 +1241,9 @@ std::vector<uint8_t> convert_one(const Species& sp, const std::vector<uint8_t>& 
 const std::vector<LadderStep>& ladder() {
   static const std::vector<LadderStep> L = {{256, 2600, 1, 1, 0}, {256, 2600, 3, 2, 0}, {128, 2600, 3, 2, 0}, {128, 2600, 8, 3, 0}, {128, 2600, 16, 3, 32},
                                             {128, 2600, 16, 4, 16}, {128, 2000, 24, 4, 16}, {64, 1600, 24, 5, 12}, {64, 1200, 32, 6, 8}, {64, 900, 32, 6, 8},
-                                            {64, 600, 32, 6, 8}};
+                                            {64, 600, 32, 6, 8},
+                                            {64, 450, 48, 8, 8}, {64, 350, 64, 10, 8},
+                                            {64, 350, 64, 16, 8}};
   return L;
 }
 
@@ -1218,7 +1254,7 @@ std::vector<uint8_t> convert_ladder(const Species& sp, const std::vector<uint8_t
   int step = start;
   for (step = start; step < (int)L.size(); step++) {
     Opts o;
-    o.ground = true; o.fire = true; o.light = 1.0; o.eyes = true; o.size_rule = 2; o.max_side = L[step].side; o.height_cm = height_cm;
+    o.ground = true; o.fire = true; o.light = 1.0; o.eyes = true; o.size_rule = 2; o.size_flat = true; o.max_side = L[step].side; o.height_cm = height_cm;
     o.hover_model = true; o.anim_tol = L[step].atol; o.chan_tol = L[step].ctol; o.quant = L[step].quant; o.decimate = L[step].dec;
     pkx = convert(sp, xd_bytes, o, [](const std::string&) {}, info);
     if (pkx.size() <= FILE_CAP_BYTES) break;
@@ -1232,7 +1268,7 @@ GfModel load_model_only(const Garc& g, int group) {
   return parse_model(pc_split(lz11_maybe(g.read(1 + 9 * (size_t)group)))[0]);
 }
 
-Species load_species(const Garc& g, int group) {
+Species load_species(const Garc& g, int group, int motion_group) {
   Species sp;
   sp.group = group;
   size_t base = 1 + 9 * (size_t)group;
@@ -1263,6 +1299,11 @@ Species load_species(const Garc& g, int group) {
       sp.mots.push_back({"_fx", std::move(mo)});
       break;
     }
+  }
+  if (!has(sp.mots, "idle") && motion_group >= 0 && motion_group != group) {
+    Species other = load_species(g, motion_group);
+    sp.mots = std::move(other.mots);
+    return sp;
   }
   if (!has(sp.mots, "idle")) throw Fail("no idle motion");
   for (int slot : {1, 6, 3, 5, 9, 12}) {

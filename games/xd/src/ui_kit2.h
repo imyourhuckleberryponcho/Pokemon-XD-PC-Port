@@ -27,6 +27,8 @@ bool DrawPiece(ImDrawList* dl, ImVec2 a, ImVec2 b, const Piece& p, bool flipX = 
 
 std::vector<uint8_t> DiscFile(const char* name);
 
+bool DecodeTexture(const uint8_t* texture, size_t size, std::vector<uint8_t>& rgba, int& w, int& h);
+
 void Reset();
 int Count();
 

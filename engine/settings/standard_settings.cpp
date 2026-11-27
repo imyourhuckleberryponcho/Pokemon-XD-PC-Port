@@ -116,6 +116,20 @@ std::vector<Definition> StandardSettings() {
               "carries on as if no time had passed.",
               false, true)
           .Implemented(),
+      D::Bool("video.hd_textures", C::Video, "HD textures",
+              "Uses the HD texture packs that are on in the mod list (the pictures you made with Make HD textures on the "
+              "launcher's Extra assets page, or a pack from elsewhere) instead of the game's own pictures. Applies at "
+              "once, also in the middle of the game: only the pictures change, nothing the game runs. Off: the game's own "
+              "pictures. GameCube: the game's own pictures.",
+              false, true)
+          .OriginalNote("the game's own pictures only.")
+          .Implemented(),
+      D::Text("video.hd_pack", C::Video, "HD texture pack",
+              "The name of the one pack to use (its folder name in textures\GXXE01). Empty: every pack that is on in the mod "
+              "list, later ones winning. Applies at once.",
+              "", "", [](std::string_view text) { return text.size() <= 120; })
+          .Preference()
+          .Implemented(),
       D::Bool("video.hd_textures_dump", C::Video, "Save the game's textures (for pack makers)",
               "Writes every texture the game uses once as a PNG with Dolphin's file name into the texture_dump "
               "folder of the data folder, so a pack can be made from it (and works in Dolphin too). It slows the "
@@ -309,6 +323,28 @@ std::vector<Definition> StandardSettings() {
           .Preference()
           .Implemented(),
 
+      D::Bool("system.stream_overlay", C::System, "Stream overlay",
+              "Shows your party in OBS. Launcher > Settings has the folder and a guide.",
+              false, false)
+          .Preference()
+          .Implemented(),
+      D::Bool("system.stream_overlay_moving", C::System, "Moving pictures",
+              "While the Stream overlay is on, the Pokemon in your stream move (their idle animation). To make those pictures the program "
+              "starts a second copy of the game, hidden and muted, for a few seconds per Pokemon; the game you play is never touched. Off: "
+              "no second copy is started and the overlay shows still pictures. Pictures already made are kept.",
+              true, true)
+          .Preference()
+          .Implemented(),
+      D::Enum("system.stream_overlay_look", C::System, "Stream overlay look",
+              "Which look overlay.html has while the Stream overlay is on. Battle belt: one slim belt of cards while you walk about "
+              "that opens into the battle's name capsules with the 3D picture coming out of the window. Showcase: the Pokemon stand "
+              "on round metal stands above one metal rail. Native XD: the party screen's own cards and the battle's own capsules. "
+              "A page picked by its own name in OBS (overlay_belt.html, overlay_showcase.html, overlay_native.html) keeps its look. "
+              "Only the picture of the overlay changes, never the game.",
+              {{"belt", "Battle belt"}, {"showcase", "Showcase"}, {"native", "Native XD"}}, "belt", "belt")
+          .Preference()
+          .Implemented(),
+
       D::Bool("system.settings_entry", C::System, "SETTINGS in the game's menu",
               "Adds SETTINGS after EXIT in the menu the game opens with START, and left of OPTIONS on the title "
               "screen: picture, sound and the other settings you may change while playing. The game is paused while it is open and never notices it.",
@@ -360,6 +396,13 @@ std::vector<Definition> StandardSettings() {
               "met are only a number.",
               false, true)
           .OriginalNote("the Strategy Memo exactly as the GameCube game has it.")
+          .Implemented(),
+      D::Bool("gameplay.random_forms", C::Gameplay, "Random looks",
+              "A new wild, Poke Spot, gift or trainer Pokemon of a species with look-only forms (Unown's letters, Vivillon's patterns, Furfrou's trims, "
+              "Pikachu's caps) appears in one of them chosen by chance, some rarer than others. Only when the Ultra Sun models are made. It changes how the Pokemon "
+              "looks, never its stats, types, ability or moves, and takes no random number of the game's own.",
+              false, true)
+          .OriginalNote("every Pokemon appears in its plain form.")
           .Implemented(),
       D::Bool("gameplay.pokedex_show_all", C::Gameplay, "Pokédex: show everything",
               "The Pokédex shows every Pokemon, every evolution, every trainer and every shiny colour from the start, "
@@ -425,6 +468,53 @@ std::vector<Definition> StandardSettings() {
                {"playstation", "PlayStation"}, {"nintendo", "Nintendo Switch"}, {"keyboard", "Keyboard"}},
               "gamecube", "auto")
           .Implemented(),
+
+#ifdef __ANDROID__
+      D::Enum("touch.layout", C::Controls, "Touch layout",
+              "Where the on-screen buttons sit. Classic pad: the whole GameCube controller over the picture. Side bars: "
+              "the picture stays 4:3 and every button sits in the black bars beside it (with Widescreen on they sit over "
+              "the picture like the classic pad). Few buttons: the stick, A, B, Y and START; the others (L, R, Z, X) "
+              "appear on the screens that show them, and the ... button shows them all for a moment.",
+              {{"classic", "Classic pad"}, {"sidebars", "Side bars"}, {"few", "Few buttons"}}, "sidebars", "sidebars")
+          .Preference()
+          .Implemented(),
+      D::Enum("touch.show", C::Controls, "Show the touch buttons",
+              "Auto: hidden as soon as a controller or a keyboard is used, shown again when you touch the screen. "
+              "Always / Never.",
+              {{"auto", "Auto"}, {"always", "Always"}, {"never", "Never"}}, "auto", "auto")
+          .Preference()
+          .Implemented(),
+      D::Int("touch.size", C::Controls, "Touch button size", "How big the on-screen buttons are, in percent.", 50, 150,
+             100, 100)
+          .Preference()
+          .Implemented(),
+      D::Int("touch.opacity", C::Controls, "Touch buttons see-through",
+             "How see-through the on-screen buttons are, in percent (0 = solid).", 0, 90, 30, 30)
+          .Preference()
+          .Implemented(),
+      D::Enum("touch.stick", C::Controls, "Touch stick",
+              "Stays put: the stick is where it is drawn. Follows your thumb: its middle is where the thumb lands.",
+              {{"fixed", "Stays put"}, {"floating", "Follows your thumb"}}, "fixed", "fixed")
+          .Preference()
+          .Implemented(),
+      D::Bool("touch.ff_button", C::Controls, "Touch fast-forward button",
+              "Shows the fast-forward button next to the pause button (only while Fast-forward is switched on).", true,
+              true)
+          .Preference()
+          .Implemented(),
+      D::Text("touch.positions_classic", C::Controls, "Touch button places (classic pad)",
+              "Moved and resized buttons of this layout, written by \"Move the buttons\".", "", "")
+          .Preference()
+          .Implemented(),
+      D::Text("touch.positions_sidebars", C::Controls, "Touch button places (side bars)",
+              "Moved and resized buttons of this layout, written by \"Move the buttons\".", "", "")
+          .Preference()
+          .Implemented(),
+      D::Text("touch.positions_few", C::Controls, "Touch button places (few buttons)",
+              "Moved and resized buttons of this layout, written by \"Move the buttons\".", "", "")
+          .Preference()
+          .Implemented(),
+#endif
 
       D::Int("audio.master_volume", C::Audio, "Volume", "Volume of all the game's sound, in percent.", 0, 100, 100,
              100)

@@ -14,11 +14,23 @@ struct FullArgs {
   bool eol_crlf = false;
 };
 
-const int GEN57_MAKE_VERSION = 7;
-const char* kConverterVersion = "0.2.3";
+const int GEN57_MAKE_VERSION = 9;
+const char* kConverterVersion = "0.2.7";
 
 int run_process(const std::string& exe, const std::vector<std::string>& args, const std::map<std::string, std::string>* env, const std::string& logfile,
                 const std::function<void(const std::string&)>& on_line = nullptr) {
+#ifdef __ANDROID__
+  if (g_usum_builtin_run) {
+    std::string text;
+    const int rc = g_usum_builtin_run(fs::path(exe).filename().string(), args, text);
+    if (on_line) {
+      std::stringstream ls(text);
+      std::string ln;
+      while (std::getline(ls, ln)) { if (!ln.empty() && ln.back() == '\r') ln.pop_back(); on_line(ln); }
+    }
+    return rc;
+  }
+#endif
 #ifdef _WIN32
   std::string cmd = "\"" + exe + "\"";
   for (auto& a : args) cmd += " \"" + a + "\"";

@@ -30,6 +30,7 @@ struct Step {
 std::vector<Step> sSteps;
 uint32_t sNow = 0;
 bool sVirtual = false;
+PADStatus sLastStatus{};
 std::vector<uint16_t> sKeysDown;
 bool (*sStickFn)(uint32_t field, int8_t* x, int8_t* y) = nullptr;
 
@@ -177,6 +178,26 @@ void PortInput_ScriptField(uint32_t field) {
     status.substickY = cy;
     status.err = PAD_ERR_NONE;
     PADSetVirtualStatus(0, &status);
+    sLastStatus = status;
+    sVirtual = true;
+  } else if (sVirtual) {
+    PADClearVirtualStatus(0);
+    sVirtual = false;
+  }
+}
+
+struct PortInputScriptState {
+  bool virtualSet;
+  PADStatus status;
+};
+void PortInput_ScriptStateGet(PortInputScriptState* out) {
+  out->virtualSet = sVirtual;
+  out->status = sLastStatus;
+}
+void PortInput_ScriptStateSet(const PortInputScriptState* in) {
+  if (in->virtualSet) {
+    PADSetVirtualStatus(0, &in->status);
+    sLastStatus = in->status;
     sVirtual = true;
   } else if (sVirtual) {
     PADClearVirtualStatus(0);

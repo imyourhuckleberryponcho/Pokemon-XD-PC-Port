@@ -93,7 +93,7 @@ std::string PlayTime(double seconds) {
 int main(int argc, char** argv) {
   const char* savePath = nullptr;
   const char* discPath = nullptr;
-  bool full = false, sections = false, shadows = false;
+  bool full = false, sections = false, shadows = false, raw = false;
   const char* convertedOut = nullptr;
   for (int i = 1; i < argc; i++) {
     if (std::strcmp(argv[i], "--full") == 0) {
@@ -102,6 +102,8 @@ int main(int argc, char** argv) {
       sections = true;
     } else if (std::strcmp(argv[i], "--shadows") == 0) {
       shadows = true;
+    } else if (std::strcmp(argv[i], "--raw") == 0) {
+      raw = true;
     } else if (std::strcmp(argv[i], "--write-converted") == 0 && i + 1 < argc) {
       convertedOut = argv[++i];
     } else if (savePath == nullptr) {
@@ -292,6 +294,28 @@ int main(int argc, char** argv) {
     purified += e.Purified() ? 1 : 0;
   }
   std::printf("\nShadow Pokemon list: %d entries hold a Pokemon, %d snagged, %d purified\n", seen, snagged, purified);
+  if (raw) {
+    const auto hex = [](const uint8_t* p, size_t n) {
+      std::string s;
+      char b[4];
+      for (size_t i = 0; i < n; i++) {
+        std::snprintf(b, sizeof b, "%02X", p[i]);
+        s += b;
+        if (i % 4 == 3 && i + 1 < n) s += ' ';
+      }
+      return s;
+    };
+    const auto pokemon = [&](const char* where, const Pokemon& p) {
+      if (!p.IsEmpty() && p.shadowId != 0) std::printf("raw pokemon %s species %u shadow #%u: %s\n", where, p.species, p.shadowId, hex(p.raw.data(), p.raw.size()).c_str());
+    };
+    for (int i = 0; i < kPartySize; i++) pokemon(("party" + std::to_string(i + 1)).c_str(), save.party[static_cast<size_t>(i)]);
+    for (int b = 0; b < kBoxCount; b++)
+      for (int s = 0; s < kBoxSlots; s++) pokemon(("box" + std::to_string(b + 1) + "." + std::to_string(s + 1)).c_str(), save.boxes[static_cast<size_t>(b)].slots[static_cast<size_t>(s)]);
+    for (int i = 0; i < kShadowEntries; i++) {
+      const ShadowEntry& e = save.shadows[static_cast<size_t>(i)];
+      if (e.status != 0 || e.heartGauge != 0 || (i > 0 && i < 4) || i == 84 || i == 127) std::printf("raw shadow #%d: %s\n", i, hex(e.raw.data(), e.raw.size()).c_str());
+    }
+  }
   if (shadows) {
     static const char* const kStatus[] = {"not met", "status 1", "status 2", "snagged", "purified", "status 5",
                                           "status 6", "status 7"};

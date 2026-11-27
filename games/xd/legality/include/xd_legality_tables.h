@@ -14,6 +14,8 @@ namespace xd::legality {
 struct TableNames {
   std::vector<std::string> species, moves, items, abilities;
   std::vector<std::string> natures;
+  std::vector<std::string> abilityText;
+  std::vector<std::string> formKey;
 };
 
 struct TablesFile {
@@ -25,6 +27,9 @@ struct TablesFile {
   std::string Item(uint16_t id) const { return names && id < names->items.size() ? names->items[id] : std::string(); }
   std::string Ability(uint16_t id) const { return names && id < names->abilities.size() ? names->abilities[id] : std::string(); }
   std::string Nature(uint8_t id) const { return names && id < names->natures.size() ? names->natures[id] : std::string(); }
+  std::string AbilityText(uint16_t id) const { return names && id < names->abilityText.size() ? names->abilityText[id] : std::string(); }
+  std::string FormKey(uint16_t row) const { return names && row < names->formKey.size() ? names->formKey[row] : std::string(); }
+  bool hasExtras = true;
 };
 
 TableNames NamesOf(const DiscRules& game);

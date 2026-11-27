@@ -4,6 +4,7 @@
 
 #include <i18n.h>
 #include <playthrough.h>
+#include <saveext.h>
 #include <xd_legality_disc.h>
 #include <xd_legality_tables.h>
 #include <xd_save_region.h>
@@ -107,6 +108,11 @@ struct Session {
   bool careful = false;
   bool japaneseText = false;
   int keyItem = 0, memoAdd = 0, memoRem = 0;
+  bool makingShadow = false, makeMore = false;
+  int makeGauge = 1;
+  uint16_t makeMoves[4] = {xs::kShadowRush, 0, 0, 0};
+  int makeRevers = 2;
+  std::set<uint32_t> moreShadowRows;
   Choices speciesList, itemList, natureList;
 };
 
@@ -137,6 +143,32 @@ std::shared_ptr<xd::legality::TablesFile> RulesFor(const std::string& disc, std:
 std::string SpeciesName(const Session& s, uint16_t id) {
   const std::string n = s.rules->Species(id);
   return n.empty() ? Fmt(Tr("Pokemon #%d"), id) : n;
+}
+
+std::string AbilityName(const Session& s, uint16_t id) {
+  if (id == 0) return Tr("(none)");
+  const std::string n = s.rules->Ability(id);
+  return n.empty() ? Fmt(Tr("Ability #%d"), static_cast<int>(id)) : n;
+}
+
+std::string FormLabel(const Session& s, uint16_t row) {
+  const std::string key = s.rules->FormKey(row);
+  const size_t a = key.rfind('('), b = key.rfind(')');
+  const std::string word = a != std::string::npos && b != std::string::npos && b > a ? key.substr(a + 1, b - a - 1) : std::string();
+  if (word == "Alola") return Tr("Alolan form");
+  if (word == "Heat") return Tr("Heat");
+  if (word == "Wash") return Tr("Wash");
+  if (word == "Frost") return Tr("Frost");
+  if (word == "Fan") return Tr("Fan");
+  if (word == "Mow") return Tr("Mow");
+  return word.empty() ? SpeciesName(s, row) : word;
+}
+
+bool KeepableForm(const xd::legality::SpeciesRules& sp) { return sp.formOf != 0 && sp.formKind != 2 && sp.formKind != 3 && sp.formKind != 4 && (sp.formKind != 6 || sp.plateItem != 0); }
+
+bool HasFormsInTheGames(uint16_t national) {
+  static const uint16_t kNational[] = {386, 413, 421, 422, 423, 487, 492, 493, 550, 585, 586, 592, 593, 641, 642, 645, 646, 647, 648, 649, 666, 669, 670, 671, 676, 710, 711, 718, 720, 741, 745, 773, 778, 800};
+  return std::find(std::begin(kNational), std::end(kNational), national) != std::end(kNational);
 }
 
 std::string PlayTimeText(double seconds) {
@@ -270,6 +302,32 @@ EditRow Cho(const std::string& id, const std::string& label, const std::string& 
   return r;
 }
 
+constexpr int kGaugeSizes[3] = {2000, 4500, 8000};
+std::string GaugeName(int gauge) {
+  if (gauge == kGaugeSizes[0]) return Tr("Small");
+  if (gauge == kGaugeSizes[1]) return Tr("Medium");
+  if (gauge == kGaugeSizes[2]) return Tr("Large");
+  return "";
+}
+std::string GaugeText(int gauge) {
+  const std::string n = GaugeName(gauge);
+  return n.empty() ? std::to_string(gauge) : n + " (" + std::to_string(gauge) + ")";
+}
+std::string ReverseName(int pattern) {
+  switch (pattern) {
+  case 0: return Tr("0 - very often");
+  case 1: return Tr("1 - often");
+  case 2: return Tr("2 - now and then (the usual)");
+  case 3: return Tr("3 - seldom");
+  default: return Tr("4 - rarely");
+  }
+}
+std::string MoveSlotText(const Session& s, const xs::Pokemon& p, int slot, uint16_t move) {
+  if (move != 0) return s.rules->Move(move);
+  const uint16_t own = p.moves[static_cast<size_t>(slot)].id;
+  return "???? (" + (own == 0 ? Tr("no move") : s.rules->Move(own)) + ")";
+}
+
 std::string MonText(const Session& s, const xs::Pokemon& p) {
   if (p.IsEmpty()) return Tr("(empty)");
   std::string name = xs::DisplayUtf8(p.nickname);
@@ -332,10 +390,79 @@ void BuildPokemon(Session& s, EditTab& tab) {
     tab.sections.push_back(one);
     return;
   }
+  if (s.makingShadow && p->shadowId == 0 && !p->IsEgg()) {
+    int freeRows = 0, totalRows = 0;
+    s.ed.ShadowRowStats(s.tables, freeRows, totalRows);
+    one.title = Fmt(Tr("Make %s a Shadow Pokemon"), Upper(s.rules->Species(p->species)).c_str());
+    one.hint = Tr("It becomes a Shadow Pokemon as if you had snagged it: heart gauge, Shadow moves, Reverse Mode, and you purify it in the game like any other. This changes the game: the save will be marked as cheats used.");
+    {
+      EditRow places = Info(Tr("Shadow places"), Fmt(Tr("%d of %d free"), freeRows, totalRows));
+      if (freeRows == 0) places.note = Tr("All places are taken. Make one of your own Shadow Pokemon normal again to free a place.");
+      one.rows.push_back(places);
+    }
+    {
+      EditRow gauge = Cho("mk.gauge", Tr("Heart gauge"), GaugeText(kGaugeSizes[s.makeGauge]),
+                          {{"0", GaugeText(kGaugeSizes[0])}, {"1", GaugeText(kGaugeSizes[1])}, {"2", GaugeText(kGaugeSizes[2])}});
+      gauge.note = Fmt(Tr("How long its heart takes to open. The story's Shadow Pokemon have %d to %d."), 1500, 12000);
+      one.rows.push_back(gauge);
+    }
+    Choices shadowMoves;
+    shadowMoves.push_back({"0", Tr("???? (keep its own move there, hidden)")});
+    for (uint16_t m = xs::kFirstShadowMove; m <= xs::kLastShadowMove; m++) {
+      const std::string n = s.rules->Move(m);
+      if (!n.empty()) shadowMoves.push_back({std::to_string(m), n});
+    }
+    for (int i = 0; i < 4; i++) {
+      EditRow mv = Cho("mk.move." + std::to_string(i), Fmt(Tr("Shadow move %d"), i + 1), MoveSlotText(s, *p, i, s.makeMoves[i]), shadowMoves);
+      if (i == 3) mv.note = Tr("A slot on ???? keeps the Pokemon's own move there, hidden until its heart opens, as with the story's Shadow Pokemon. At least one Shadow move.");
+      one.rows.push_back(mv);
+    }
+    one.rows.push_back(Tog("mk.more", Tr("More choices"), s.makeMore));
+    if (s.makeMore) {
+      Choices patterns;
+      for (int i = 0; i < 5; i++) patterns.push_back({std::to_string(i), ReverseName(i)});
+      EditRow rv = Cho("mk.revers", Tr("Reverse Mode"), ReverseName(s.makeRevers), patterns);
+      rv.note = Tr("How often it can fall into Reverse Mode in battle while its heart is closed (the story's own patterns 0 to 4).");
+      one.rows.push_back(rv);
+    }
+    EditRow go = Btn("mk.do", "", Tr("Make it a Shadow Pokemon"));
+    if (freeRows == 0) {
+      go.locked = true;
+      go.note = Tr("No free Shadow place.");
+    }
+    one.rows.push_back(go);
+    one.rows.push_back(Btn("mk.cancel", "", Tr("Cancel")));
+    tab.sections.push_back(one);
+    return;
+  }
   const bool shadow = s.ed.IsShadow(sel);
   const bool diffAny = o != nullptr && o->raw != p->raw;
   one.title = Upper(MonText(s, *p));
   one.hint = shadow ? Tr("A Shadow Pokemon: its species, nature, gender and shininess stay as they are until it is purified.") : std::string();
+  if (shadow) {
+    xs::ShadowOrder order;
+    bool before = false;
+    const bool mine = s.ed.ShadowOrderOf(*p, order, &before);
+    const xs::ShadowEntry* en = s.ed.ShadowEntryOf(*p);
+    one.rows.push_back(Info(Tr("Shadow Pokemon"), !mine ? Tr("from the story") : before ? Tr("made with the editor (saved earlier)") : Tr("made with the editor (not saved yet)")));
+    if (en != nullptr) {
+      one.rows.push_back(Info(Tr("Heart gauge"), mine ? Fmt(Tr("%d of %d (%s)"), static_cast<int>(en->heartGauge), order.gauge, GaugeName(order.gauge).empty() ? std::to_string(order.gauge).c_str() : GaugeName(order.gauge).c_str())
+                                                      : Fmt(en->heartGauge > 0 ? Tr("%d (closed)") : Tr("%d (open)"), static_cast<int>(en->heartGauge))));
+    }
+    if (mine) {
+      std::string names;
+      for (int i = 0; i < 4; i++) names += (i > 0 ? ", " : "") + (order.moves[i] != 0 ? s.rules->Move(order.moves[i]) : std::string("????"));
+      one.rows.push_back(Info(Tr("Shadow moves"), names));
+    }
+    EditRow normal = Btn("sel.makenormal", "", Tr("Make it normal again"));
+    if (!mine) {
+      normal.locked = true;
+      normal.note = Tr("A Shadow Pokemon from the story can't be changed here: purify it in the game.");
+    } else {
+      normal.note = Tr("Only for Shadow Pokemon made with the editor. Its Shadow place is free again.");
+    }
+    one.rows.push_back(normal);
+  }
   const auto lockShadow = [&](EditRow r) {
     if (shadow) {
       r.locked = true;
@@ -366,11 +493,31 @@ void BuildPokemon(Session& s, EditTab& tab) {
   }
   {
     const auto& sp = p->species < s.rules->rules.species.size() ? s.rules->rules.species[p->species] : xd::legality::SpeciesRules();
+    if (p->species < s.rules->rules.species.size() && !p->IsEmpty()) {
+      const uint16_t base = sp.formOf != 0 ? sp.formOf : p->species;
+      Choices forms;
+      for (size_t i = 1; i < s.rules->rules.species.size(); i++) {
+        const auto& f = s.rules->rules.species[i];
+        if (f.exists && f.formOf == base && KeepableForm(f)) forms.push_back({std::to_string(i), FormLabel(s, static_cast<uint16_t>(i))});
+      }
+      if (!forms.empty()) {
+        forms.insert(forms.begin(), {std::to_string(base), Tr("Normal form")});
+        one.rows.push_back(lockShadow(Cho("sel.form", Tr("Form"), sp.formOf != 0 ? FormLabel(s, p->species) : Tr("Normal form"), forms, o && o->species != p->species)));
+      } else if (sp.formOf == 0 && sp.national != 0 && HasFormsInTheGames(sp.national)) {
+        one.rows.push_back(Info(Tr("Form"), Tr("Normal form only: this playthrough does not have this Pokemon's other forms.")));
+      }
+    }
     Choices abilities;
-    abilities.push_back({"0", s.rules->Ability(sp.abilities[0])});
-    if (sp.abilities[1] != 0) abilities.push_back({"1", s.rules->Ability(sp.abilities[1])});
-    one.rows.push_back(Cho("sel.ability", Tr("Ability"), s.rules->Ability(sp.abilities[p->SecondAbility() && sp.abilities[1] ? 1 : 0]), abilities,
-                           o && o->SecondAbility() != p->SecondAbility()));
+    abilities.push_back({"0", AbilityName(s, sp.abilities[0])});
+    if (sp.abilities[1] != 0 && sp.abilities[1] != sp.abilities[0]) abilities.push_back({"1", AbilityName(s, sp.abilities[1])});
+    if (sp.hiddenAbility != 0) abilities.push_back({"2", Fmt(Tr("%s (hidden ability)"), AbilityName(s, sp.hiddenAbility).c_str())});
+    const int place = p->HiddenAbility() && sp.hiddenAbility != 0 ? 2 : p->SecondAbility() && sp.abilities[1] != 0 && sp.abilities[1] != sp.abilities[0] ? 1 : 0;
+    const int oldPlace = o == nullptr ? place : o->HiddenAbility() ? 2 : o->SecondAbility() ? 1 : 0;
+    const uint16_t abilityId = place == 2 ? sp.hiddenAbility : sp.abilities[place];
+    one.rows.push_back(Cho("sel.ability", Tr("Ability"), place == 2 ? Fmt(Tr("%s (hidden ability)"), AbilityName(s, abilityId).c_str()) : AbilityName(s, abilityId), abilities,
+                           o && (oldPlace != place || o->species != p->species)));
+    if (const std::string text = s.rules->AbilityText(abilityId); !text.empty()) one.rows.push_back(Info(Tr("What it does"), text));
+    if (!s.rules->hasExtras && abilityId >= 78) one.rows.push_back(Info(Tr("Ability names"), Tr("Start the game once with this save (this version) to see the names of the added abilities.")));
   }
   const char* stats[6] = {Tr("HP"), Tr("Attack"), Tr("Defense"), Tr("Sp. Atk"), Tr("Sp. Def"), Tr("Speed")};
   for (int i = 0; i < 6; i++) {
@@ -410,6 +557,21 @@ void BuildPokemon(Session& s, EditTab& tab) {
       rel.note = Tr("A Shadow Pokemon can't be released.");
     }
     one.rows.push_back(rel);
+  }
+  if (p->shadowId == 0) {
+    EditRow mk = Btn("sel.makeshadow", "", Tr("Make it a Shadow Pokemon..."));
+    if (p->IsEgg()) {
+      mk.locked = true;
+      mk.note = Tr("An egg can't be a Shadow Pokemon.");
+    } else {
+      int freeRows = 0, totalRows = 0;
+      s.ed.ShadowRowStats(s.tables, freeRows, totalRows);
+      if (freeRows == 0) {
+        mk.locked = true;
+        mk.note = Tr("No free Shadow place.");
+      }
+    }
+    one.rows.push_back(mk);
   }
   one.rows.push_back(Info(Tr("Good to know"), Tr("Everything above except nickname and place changes the game: the save is then marked as cheats used.")));
   tab.sections.push_back(one);
@@ -618,6 +780,42 @@ bool Load(Session& s, std::string& error) {
     if (!s.ed.Open(data, opt, error)) return false;
   }
   s.key = se::PlaythroughKey(s.ed.save().trainerOtId, s.ed.save().trainerName);
+  {
+    namespace ep = engine::playthrough;
+    ep::Setup setup;
+    std::string e2;
+    const fs::path file = ep::FileFor(s.setupFolder, s.key);
+    const bool haveSetup = fs::exists(file) && ep::ReadFile(file, setup, e2);
+    s.ed.SetShadowOrders(haveSetup ? setup.editorShadows : std::vector<std::string>());
+    std::vector<uint8_t> section;
+    bool found = false;
+    const engine::saveext::Loaded l = engine::saveext::Load(s.setupFolder, s.key, engine::saveext::Hash64(data.data(), data.size()));
+    if (l.state == engine::saveext::State::Paired) {
+      if (const engine::saveext::Section* sec = l.file.Find("shadow")) {
+        section = sec->data;
+        found = true;
+      }
+    }
+    s.ed.SetExtraShadows(section);
+    const bool needs = haveSetup && std::find(setup.extRequired.begin(), setup.extRequired.end(), "shadow") != setup.extRequired.end();
+    if (needs && !found) {
+      s.readOnly = true;
+      s.readOnlyWhy = Tr("This save's Shadow Pokemon past number 127 (More Shadow Pokemon \"All\", Shadow Pokemon made with the editor) keep their records in a file next to the save, and that file is missing or does not belong to this version of the save. Put back a backup from the Save page, or play once with this save, then edit it here.");
+    }
+    s.tables.moreShadows = haveSetup && !setup.moreShadows.empty();
+    s.moreShadowRows.clear();
+    if (s.tables.moreShadows) {
+      std::ifstream sp(s.cardRoot / L"playthroughs" / L"more_shadows" / fs::path(setup.moreShadows) / "spoiler.txt");
+      for (std::string line; std::getline(sp, line);) {
+        unsigned row = 0;
+        if (line.rfind("Shadow #", 0) == 0 && std::sscanf(line.c_str(), "Shadow #%u", &row) == 1) s.moreShadowRows.insert(row);
+      }
+      const std::set<uint32_t>* rows = &s.moreShadowRows;
+      s.tables.shadowRowFree = [rows](uint32_t row) { return rows->count(row) == 0; };
+    } else {
+      s.tables.shadowRowFree = nullptr;
+    }
+  }
   return true;
 }
 
@@ -660,12 +858,20 @@ bool OpenImpl(const fs::path& cardRoot, const std::string& disc, EditView& out, 
     if (s->japaneseText) {
       auto copy = std::make_shared<xd::legality::TablesFile>(*s->rules);
       copy->names = std::make_shared<xd::legality::TableNames>(*s->rules->names);
-      for (auto* list : {&copy->names->species, &copy->names->moves, &copy->names->items, &copy->names->abilities, &copy->names->natures}) {
+      for (auto* list : {&copy->names->species, &copy->names->moves, &copy->names->items, &copy->names->abilities, &copy->names->natures, &copy->names->abilityText}) {
         for (std::string& n : *list) n = xs::DisplayUtf8(FromUtf8(n));
       }
       s->rules = copy;
     }
     s->tables.rules = &s->rules->rules;
+    {
+      const auto tf = s->rules;
+      s->tables.abilityName = [tf](uint16_t id) { return tf->Ability(id); };
+      s->tables.formName = [tf](uint16_t row) {
+        const std::string key = tf->FormKey(row);
+        return key.empty() ? tf->Species(row) : key;
+      };
+    }
   }
   if (xs::LayoutOf(s->ed.original(), error) == xs::SaveKind::JapaneseLayout) {
     s->readOnly = true;
@@ -673,7 +879,7 @@ bool OpenImpl(const fs::path& cardRoot, const std::string& disc, EditView& out, 
   }
   error.clear();
   for (size_t i = 1; i < s->rules->rules.species.size(); i++) {
-    if (!s->rules->rules.species[i].exists) continue;
+    if (!s->rules->rules.species[i].exists || s->rules->rules.species[i].formOf != 0) continue;
     const std::string n = s->rules->Species(static_cast<uint16_t>(i));
     if (!n.empty()) s->speciesList.push_back({std::to_string(i), n});
   }
@@ -706,6 +912,7 @@ std::string SetImpl(const std::string& id, const std::string& value, EditView& v
   if (id.rfind("pick.", 0) == 0) {
     se::Spot sp;
     if (!ParseSpot(id.substr(5), sp)) return "?";
+    s.makingShadow = false;
     if (s.moving) {
       why = s.ed.Swap(s.moveFrom, sp);
       if (why.empty()) {
@@ -724,6 +931,37 @@ std::string SetImpl(const std::string& id, const std::string& value, EditView& v
     why = s.ed.SetBoxName(s.box, FromUtf8(value));
   } else if (id == "move.cancel") {
     s.moving = false;
+  } else if (id == "sel.makeshadow") {
+    int freeRows = 0, totalRows = 0;
+    s.ed.ShadowRowStats(t, freeRows, totalRows);
+    if (freeRows == 0) return Tr("No free Shadow place.");
+    s.makingShadow = true;
+    s.makeGauge = 1;
+    s.makeRevers = 2;
+    s.makeMore = false;
+    s.makeMoves[0] = xs::kShadowRush;
+    s.makeMoves[1] = s.makeMoves[2] = s.makeMoves[3] = 0;
+  } else if (id == "mk.cancel") {
+    s.makingShadow = false;
+  } else if (id == "mk.gauge") {
+    s.makeGauge = static_cast<int>(std::max(0L, std::min(2L, n)));
+  } else if (id.rfind("mk.move.", 0) == 0) {
+    const int i = std::atoi(id.c_str() + 8);
+    if (i >= 0 && i < 4) s.makeMoves[i] = static_cast<uint16_t>(n);
+  } else if (id == "mk.more") {
+    s.makeMore = n != 0;
+    if (!s.makeMore) s.makeRevers = 2;
+  } else if (id == "mk.revers") {
+    s.makeRevers = static_cast<int>(std::max(0L, std::min(4L, n)));
+  } else if (id == "mk.do") {
+    se::ShadowWish wish;
+    wish.gauge = kGaugeSizes[s.makeGauge];
+    wish.revers = s.makeRevers;
+    for (int i = 0; i < 4; i++) wish.moves[i] = s.makeMoves[i];
+    why = s.ed.MakeShadow(s.sel, wish, t);
+    if (why.empty()) s.makingShadow = false;
+  } else if (id == "sel.makenormal") {
+    why = s.ed.MakeNormal(s.sel);
   } else if (id == "sel.moveto") {
     s.moving = true;
     s.moveFrom = s.sel;
@@ -743,6 +981,8 @@ std::string SetImpl(const std::string& id, const std::string& value, EditView& v
     why = s.ed.SetPid(s.sel, w, t);
   } else if (id == "sel.ability") {
     why = s.ed.SetAbilitySlot(s.sel, static_cast<int>(n), t);
+  } else if (id == "sel.form") {
+    why = s.ed.SetForm(s.sel, static_cast<uint16_t>(n), t);
   } else if (id.rfind("sel.iv.", 0) == 0) {
     why = s.ed.SetIv(s.sel, std::atoi(id.c_str() + 7), static_cast<int>(n), t);
   } else if (id.rfind("sel.ev.", 0) == 0) {

@@ -9,6 +9,7 @@
 #include <fstream>
 #include <iterator>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -787,6 +788,81 @@ int main(int argc, char** argv) {
     list.profiles.push_back({"second", {{"b", true}}});
     check(WriteModListFile(listR, list) && ReadModListFile(listR, back, warn) && back.profiles.size() == 2 && back.profiles[1].mods.size() == 1,
           "order: other profiles in the file survive");
+  }
+
+  {
+    Manifest m;
+    std::string err;
+    check(ParseManifest(manifest("m", "\"needs_assets\": [\"gen57_pack\", \"BR_Models\"], \"recommends_assets\": \"usum_models\""), m, err) &&
+              m.needsAssets == std::vector<std::string>{"gen57_pack", "br_models"} && m.recommendsAssets == std::vector<std::string>{"usum_models"},
+          "assets: needs_assets / recommends_assets are read (a text or a list, written in lower case)");
+    check(ParseManifest(manifest("m"), m, err) && m.needsAssets.empty() && m.recommendsAssets.empty(), "assets: a mod without them has none");
+    check(!ParseManifest(manifest("m", "\"needs_assets\": [\"gen9_pack\"]"), m, err) && err.find("gen9_pack") != std::string::npos &&
+              err.find("gen57_pack") != std::string::npos,
+          "assets: an unknown id is refused, the message names it and the known ones");
+    check(!ParseManifest(manifest("m", "\"recommends_assets\": [3]"), m, err), "assets: a list of numbers is refused");
+    check(KnownAssets().size() == 4 && FindAsset("usum_models") != nullptr && FindAsset("USUM_MODELS") != nullptr && FindAsset("nothing") == nullptr &&
+              AssetNames({"br_models", "gen4_pack"}) == "Battle Revolution models, Gen 4 pack",
+          "assets: the one table of ids and names");
+
+    const fs::path modsA = root / "mods_assets", listA = root / "user_assets" / "mods.ini";
+    write_file(modsA / "plain" / "mod.json", manifest("plain"));
+    write_file(modsA / "needy" / "mod.json", manifest("needy", "\"needs_assets\": [\"gen57_pack\"]"));
+    write_file(modsA / "needy" / "files" / "Title.thp", "needy");
+    write_file(modsA / "needy2" / "mod.json", manifest("needy2", "\"needs_assets\": [\"gen57_pack\", \"br_models\"], \"recommends_assets\": [\"usum_models\"]"));
+    write_file(modsA / "wants" / "mod.json", manifest("wants", "\"recommends_assets\": [\"usum_models\"]"));
+    write_file(modsA / "dependent" / "mod.json", manifest("dependent", "\"requires\": [\"needy\"]"));
+    std::vector<Message> msgs;
+    const std::vector<ModFolder> found = FindMods(modsA, msgs);
+    ModList::Profile p;
+    p.mods = {{"plain", true}, {"needy", true}, {"needy2", true}, {"wants", true}, {"dependent", true}};
+    std::set<std::string> ready;
+    const AssetCheck check_fn = [&](const std::string& id) { return ready.count(id) ? std::string() : std::string("not made yet"); };
+    const auto mentions = [](const std::vector<std::string>& v, const std::string& part) {
+      return std::any_of(v.begin(), v.end(), [&](const std::string& s) { return s.find(part) != std::string::npos; });
+    };
+    {
+      const Review r = ReviewList(p, found, "TEST01", check_fn);
+      check(r.rows[0].Usable() && !r.rows[1].Usable() && !r.rows[2].Usable() && r.rows[3].Usable(),
+            "assets review: a mod whose asset is not made is not used; one that only recommends is");
+      check(mentions(r.rows[1].problems, "Gen 5-7 pack") && mentions(r.rows[1].problems, "not made yet") && mentions(r.rows[1].problems, "Extra assets page") &&
+                mentions(r.rows[1].problems, "It is not used"),
+            "assets review: the problem names the asset, why, and where to make it");
+      check(mentions(r.rows[2].problems, "Gen 5-7 pack") && mentions(r.rows[2].problems, "Battle Revolution models"), "assets review: two missing assets are both named");
+      check(mentions(r.rows[3].suggestions, "Ultra Sun / Ultra Moon models") && !mentions(r.rows[3].problems, "Ultra"), "assets review: a recommended asset is only a note");
+      check(!r.rows[4].Usable() && mentions(r.rows[4].problems, "needy"), "assets review: a mod that requires the dropped mod is dropped too");
+      const Review none = ReviewList(p, found, "TEST01");
+      check(none.rows[1].Usable() && none.rows[2].Usable() && none.rows[3].suggestions.empty(), "assets review: no checker given: assets are not looked at");
+    }
+    ready = {"gen57_pack", "br_models"};
+    {
+      const Review r = ReviewList(p, found, "TEST01", check_fn);
+      check(r.rows[1].Usable() && r.rows[2].Usable() && r.rows[4].Usable() && mentions(r.rows[2].suggestions, "Ultra Sun / Ultra Moon models"),
+            "assets review: with the assets made the mods are used (the recommendation stays a note)");
+    }
+    FakeDisc d;
+    d.files["Title.thp"] = bytes("original movie");
+    LoadOptions o{modsA, listA, d.View()};
+    o.assetCheck = check_fn;
+    write_file(listA, "[profile default]\nneedy = on\nneedy2 = on\nplain = on\n");
+    ready.clear();
+    {
+      const LoadResult r = Load(o);
+      int problems = 0;
+      for (const Message& msg : r.messages) problems += msg.level == Message::Level::Problem && msg.text.find("extra assets") != std::string::npos;
+      check(r.active.size() == 1 && r.active[0].id == "plain" && problems == 2 && r.assetBlocked.size() == 2 && r.assetBlocked[0].id == "needy" &&
+                r.assetBlocked[0].assets == std::vector<std::string>{"gen57_pack"} && r.assetBlocked[1].assets.size() == 2 && find(r, "Title.thp") == nullptr,
+            "assets load: mods whose assets are not ready are left out, one problem message each, named in assetBlocked, their files not used");
+    }
+    ready = {"gen57_pack", "br_models"};
+    {
+      const LoadResult r = Load(o);
+      check(r.active.size() == 3 && r.assetBlocked.empty() && find(r, "Title.thp") != nullptr, "assets load: with the assets ready the mods are used");
+      check(has_message(r, Message::Level::Info, "works best with"), "assets load: a recommended asset that is missing is an info line, not a window");
+    }
+    o.assetCheck = nullptr;
+    ready.clear();
+    check(Load(o).active.size() == 3, "assets load: no checker (a tool): assets are not looked at");
   }
 
   {

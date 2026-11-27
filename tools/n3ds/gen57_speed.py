@@ -59,7 +59,7 @@ def convert_ladder(convert, gm, texs, mots, xd_bytes, height_cm, start=0, record
         side, dec, atol, ctol, quant = LADDER[step]
         pkx, info = convert(gm, texs, mots, xd_bytes, mode='role', log=lambda t: None,
                             opts=dict(ground=True, decimate=dec, fire=True, light=1.0, eyes=True, size_rule='mainline', max_side=side,
-                                      height_cm=height_cm, hover_rule='model', match=False, anim_tol=atol, chan_tol=ctol, quant=quant), hover=None)
+                                      height_cm=height_cm, size_flat=True, hover_rule='model', match=False, anim_tol=atol, chan_tol=ctol, quant=quant), hover=None)
         if len(pkx) <= CAP:
             break
     if record:

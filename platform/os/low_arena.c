@@ -13,6 +13,21 @@
 #endif
 
 typedef struct Window { uintptr_t start, end; } Window;
+#ifdef __ANDROID__
+#include "port_android_layout.h"
+static Window kWindows[16];
+static unsigned sWindowCount;
+#define WINDOW_COUNT sWindowCount
+static void windows_init(void) {
+  uintptr_t w[16][2];
+  unsigned n = PortAndroid_ArenaWindows(w, 16), i;
+  for (i = 0; i < n; ++i) {
+    kWindows[i].start = w[i][0];
+    kWindows[i].end = w[i][1];
+  }
+  sWindowCount = n;
+}
+#else
 static const Window kWindows[] = {
   {0x42000000u, 0x50000000u},
   {0x81800000u, 0xC0000000u},
@@ -20,6 +35,7 @@ static const Window kWindows[] = {
   {0x01000000u, 0x10000000u},
 };
 #define WINDOW_COUNT (sizeof(kWindows) / sizeof(kWindows[0]))
+#endif
 
 #define HDR ((size_t)16)
 #define MIN_BLOCK ((size_t)32)
@@ -49,7 +65,7 @@ static FreeBlock* sBins[BINS];
 static uint64_t sBinMap[4];
 static Segment sSegments[MAX_SEGMENTS];
 static volatile unsigned sSegmentTop;
-static uintptr_t sCursor[WINDOW_COUNT];
+static uintptr_t sCursor[16];
 static PortLowStats sStats;
 static uint64_t sFreeBytes;
 
@@ -203,6 +219,9 @@ static Block* grow(size_t need) {
   void* p = NULL;
   if (len < GROW) len = GROW;
   len = (len + 0xFFFFu) & ~(size_t)0xFFFFu;
+#ifdef __ANDROID__
+  if (sWindowCount == 0) windows_init();
+#endif
   if (port_low_test_limit != 0 && sStats.reserved + len > port_low_test_limit) return NULL;
   for (w = 0; w < WINDOW_COUNT && p == NULL; ++w) p = map_in_window(w, len);
   if (p == NULL) return NULL;

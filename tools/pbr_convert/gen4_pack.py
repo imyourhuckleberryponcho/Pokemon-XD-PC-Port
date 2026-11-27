@@ -398,7 +398,7 @@ def make(a):
             if not f:
                 continue
             data = open(os.path.join(a.faces, f[0]), 'rb').read()
-            fid = 0x2000 + k
+            fid = 0x2800 + k
             ents.append(((fid << 16) | (9 << 9), 9, 'g4face%03d' % dex, data))
             faces.append((dex, fid))
         open(os.path.join(tmp, 'files', pf_name), 'wb').write(build_fsys(be32(pf, 8), ents))

@@ -1,6 +1,8 @@
 #include "online_team.h"
 #include "xd_rulesets.h"
 
+#include <xd_shadow_orders.h>
+
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
@@ -10,7 +12,7 @@
 
 namespace xd::online {
 
-std::string EncodeTeam(const std::vector<xd::save::Pokemon>& team) {
+std::string EncodeTeam(const std::vector<xd::save::Pokemon>& team, uint32_t editedMask) {
   static const char* hex = "0123456789abcdef";
   std::string out = "T " + std::to_string(team.size()) + " ";
   for (const xd::save::Pokemon& p : team) {
@@ -19,10 +21,16 @@ std::string EncodeTeam(const std::vector<xd::save::Pokemon>& team) {
       out += hex[b & 15];
     }
   }
+  if (editedMask != 0) {
+    char tail[16];
+    std::snprintf(tail, sizeof tail, " E%x", static_cast<unsigned>(editedMask));
+    out += tail;
+  }
   return out;
 }
 
-bool DecodeTeam(const std::string& line, std::vector<xd::save::Pokemon>& out, std::string* why) {
+bool DecodeTeam(const std::string& line, std::vector<xd::save::Pokemon>& out, std::string* why, uint32_t* editedMask) {
+  if (editedMask != nullptr) *editedMask = 0;
   auto fail = [&](const char* m) {
     if (why) *why = m;
     return false;
@@ -32,7 +40,14 @@ bool DecodeTeam(const std::string& line, std::vector<xd::save::Pokemon>& out, st
   if (sp == std::string::npos) return fail("not a team message");
   const int count = std::atoi(line.substr(2, sp - 2).c_str());
   if (count < 0 || static_cast<size_t>(count) > kMaxTeam) return fail("a team has 0 to 6 Pokemon");
-  const std::string hex = line.substr(sp + 1);
+  std::string hex = line.substr(sp + 1);
+  uint32_t mask = 0;
+  if (const size_t e = hex.rfind(" E"); e != std::string::npos) {
+    const std::string m = hex.substr(e + 2);
+    if (m.empty() || m.size() > 2 || m.find_first_not_of("0123456789abcdef") != std::string::npos) return fail("the team message is not hexadecimal");
+    mask = static_cast<uint32_t>(std::strtoul(m.c_str(), nullptr, 16));
+    hex.resize(e);
+  }
   if (hex.size() != static_cast<size_t>(count) * xd::save::kPokemonSize * 2) return fail("the team message has the wrong length");
   std::vector<xd::save::Pokemon> team;
   for (int i = 0; i < count; i++) {
@@ -45,11 +60,27 @@ bool DecodeTeam(const std::string& line, std::vector<xd::save::Pokemon>& out, st
     }
     team.push_back(xd::save::ParsePokemon(raw, xd::save::ByteOrder::PC));
   }
+  if (mask >> team.size() != 0) return fail("the team message names a member that is not there");
   out = team;
+  if (editedMask != nullptr) *editedMask = mask;
   return true;
 }
 
-std::vector<std::string> CheckTeam(const std::vector<xd::save::Pokemon>& team, const xd::legality::Rules& rules, const RoomRules& room) {
+uint32_t EditedShadowMask(const std::vector<xd::save::Pokemon>& team, const std::vector<std::string>& orders) {
+  std::vector<uint32_t> rows;
+  for (const std::string& text : orders) {
+    xd::save::ShadowOrder o;
+    if (xd::save::ParseShadowOrder(text, o)) rows.push_back(o.row);
+  }
+  uint32_t mask = 0;
+  for (size_t i = 0; i < team.size() && i < 6; i++) {
+    if (team[i].IsEmpty() || team[i].shadowId == 0) continue;
+    if (std::find(rows.begin(), rows.end(), static_cast<uint32_t>(team[i].shadowId)) != rows.end()) mask |= 1u << i;
+  }
+  return mask;
+}
+
+std::vector<std::string> CheckTeam(const std::vector<xd::save::Pokemon>& team, const xd::legality::Rules& rules, const RoomRules& room, uint32_t editedMask) {
   std::vector<std::string> out;
   size_t members = 0;
   for (const xd::save::Pokemon& p : team) {
@@ -65,8 +96,9 @@ std::vector<std::string> CheckTeam(const std::vector<xd::save::Pokemon>& team, c
     context.shadowStaysInItsSave = true;
     const xd::legality::Result r = xd::legality::Check(p, rules, xd::legality::Level::Safe, context);
     if (!r.Ok()) out.push_back("Pokemon " + std::to_string(slot) + ": " + r.Text());
-    if (p.shadowId >= xd::save::kShadowEntries) out.push_back("Pokemon " + std::to_string(slot) + " is an extra Shadow Pokemon of More Shadow Pokemon (its Shadow row is only on its owner's PC): those can't battle online yet.");
+    if (p.shadowId >= xd::save::kShadowEntries && (editedMask >> (slot - 1) & 1u) == 0) out.push_back("Pokemon " + std::to_string(slot) + " is an extra Shadow Pokemon of More Shadow Pokemon (its Shadow row is only on its owner's PC): those can't battle online yet.");
     else if (p.shadowId != 0 && !room.shadowAllowed) out.push_back("Pokemon " + std::to_string(slot) + " is a Shadow Pokemon; this room does not allow them.");
+    else if (p.shadowId != 0 && (editedMask >> (slot - 1) & 1u) != 0 && !room.editedShadows) out.push_back("Pokemon " + std::to_string(slot) + " is a Shadow Pokemon made with the save editor; this room does not allow those.");
   }
   if (!room.format.empty()) {
     for (const std::string& line : CheckTeamFormat(team, rules, room)) out.push_back(line);

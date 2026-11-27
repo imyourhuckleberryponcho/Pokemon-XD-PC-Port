@@ -3,6 +3,7 @@
 #include "json.h"
 #include "i18n.h"
 
+#include <cstdlib>
 #include <algorithm>
 #include <cstdarg>
 #include <cstdio>
@@ -28,7 +29,7 @@ using engine::i18n::Tr;
 std::string ShadowAmountName(const std::string& text) {
   const size_t c = text.find(':');
   const std::string name = text.substr(0, c);
-  if ((name == "own" || name == "pct") && c != std::string::npos) {
+  if ((name == "own" || name == "own2" || name == "pct") && c != std::string::npos) {
     const size_t c2 = text.find(':', c + 1);
     const std::string pct = text.substr(c + 1, c2 == std::string::npos ? std::string::npos : c2 - c - 1);
     if (!pct.empty() && pct.find_first_not_of("0123456789") == std::string::npos) return pct + "%";
@@ -147,6 +148,7 @@ std::string Label(const Setup& setup) {
     label += (i == 0 ? kDot + std::string("Challenge: ") : std::string(", ")) + name;
   }
   if (!setup.moreShadows.empty()) label += kDot + std::string("More Shadow Pokemon: ") + ShadowAmountName(setup.moreShadows);
+  if (!setup.editorShadows.empty()) label += kDot + std::string("Shadow Pokemon made by the save editor: ") + std::to_string(setup.editorShadows.size());
   std::vector<std::string> starters;
   std::vector<std::string> others;
   for (const std::string& o : setup.options) {
@@ -219,6 +221,7 @@ std::string DisplayLabel(const Setup& setup) {
     }
     label += kDot + Fmt(Tr("Mods: %s"), names.c_str());
   }
+  if (!setup.editorShadows.empty()) label += kDot + Fmt(Tr("Shadow Pokemon made by the save editor: %d"), static_cast<int>(setup.editorShadows.size()));
   if (!setup.moreShadows.empty()) label += kDot + Fmt(Tr("More Shadow Pokemon: %s"), ShadowAmountName(setup.moreShadows).c_str());
   if (!setup.ruleSetChanged.empty() && !setup.ruleSetStarted.empty()) label += kDot + std::string("rules were ") + setup.ruleSetStarted;
   if (setup.Vanilla()) label += kDot + std::string(Tr("Vanilla"));
@@ -259,6 +262,13 @@ std::string ToJson(const Setup& s) {
     }
     out += "\n  ],\n";
   }
+  if (!s.roomRecipes.empty()) {
+    out += "  \"room_recipes\": [";
+    for (size_t i = 0; i < s.roomRecipes.size(); i++) {
+      out += std::string(i > 0 ? "," : "") + "\n    {\"room\": " + Quote(s.roomRecipes[i].first) + ", \"sha1\": " + Quote(s.roomRecipes[i].second) + "}";
+    }
+    out += "\n  ],\n";
+  }
   if (s.randomizer.empty()) {
     out += "  \"randomizer\": null,\n";
   } else {
@@ -285,6 +295,12 @@ std::string ToJson(const Setup& s) {
   }
   if (!s.split.empty()) out += "  \"physical_special_split\": " + Quote(s.split) + ",\n";
   if (!s.moreShadows.empty()) out += "  \"more_shadows\": " + Quote(s.moreShadows) + ",\n";
+  if (s.pcBoxes > 8) out += "  \"pc_boxes\": " + Quote(std::to_string(s.pcBoxes)) + ",\n";
+  if (!s.editorShadows.empty()) {
+    out += "  \"saveedit_shadows\": [";
+    for (size_t i = 0; i < s.editorShadows.size(); i++) out += (i > 0 ? ", " : "") + Quote(s.editorShadows[i]);
+    out += "],\n";
+  }
   out += "  \"started\": " + Quote(s.started) + ",\n";
   out += "  \"port_version\": " + Quote(s.portVersion) + ",\n";
   if (!s.chosenBy.empty()) out += "  \"chosen_by\": " + Quote(s.chosenBy) + ",\n";
@@ -422,6 +438,13 @@ bool FromJson(std::string_view text, Setup& out, std::string& error) {
       if (!a.mod.empty() && !a.table.empty()) out.addedRows.push_back(std::move(a));
     }
   }
+  const auto roomsIt = root.fields.find("room_recipes");
+  if (roomsIt != root.fields.end() && roomsIt->second.kind == Value::Kind::Array) {
+    for (const Value& v : roomsIt->second.items) {
+      if (v.kind != Value::Kind::Object) continue;
+      if (!Text(v, "room").empty()) out.roomRecipes.emplace_back(Text(v, "room"), Text(v, "sha1"));
+    }
+  }
   const auto r = root.fields.find("randomizer");
   if (r != root.fields.end() && r->second.kind == Value::Kind::Object) {
     out.randomizer = Text(r->second, "name");
@@ -436,6 +459,9 @@ bool FromJson(std::string_view text, Setup& out, std::string& error) {
   out.split = Text(root, "physical_special_split");
   if (out.split != "on" && out.split != "off") out.split.clear();
   out.moreShadows = Text(root, "more_shadows");
+  out.pcBoxes = std::atoi(Text(root, "pc_boxes").c_str());
+  if (out.pcBoxes < 9 || out.pcBoxes > 32) out.pcBoxes = 0;
+  out.editorShadows = Texts(root, "saveedit_shadows");
   out.edition = Text(root, "edition");
   out.started = Text(root, "started");
   out.portVersion = Text(root, "port_version");
@@ -748,6 +774,18 @@ Engine DefaultEngine(const settings::Registry& reg) {
 }
 
 bool EngineQuestionDue(const Setup& setup, Engine playersEngine) { return setup.engine != playersEngine; }
+
+std::vector<RoomChange> RoomRecipeChanges(const std::vector<std::pair<std::string, std::string>>& saved, const std::vector<std::pair<std::string, std::string>>& now) {
+  std::vector<RoomChange> out;
+  for (const auto& want : saved) {
+    bool same = false, there = false;
+    for (const auto& have : now) {
+      if (have.first == want.first) there = true, same = have.second == want.second;
+    }
+    if (!same) out.push_back({want.first, !there});
+  }
+  return out;
+}
 
 void SwitchEngine(Setup& setup, Engine to, const std::string& when) {
   if (setup.engine == to) return;

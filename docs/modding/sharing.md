@@ -336,6 +336,7 @@ More optional `mod.json` fields (all work with `requires`, `conflicts`, `after`,
 | `"works_with": ["x"]`, `"recommends": ["x"]` | Suggestions only, shown under the mod. Never forced. |
 | `"only_with": ["a", "b"]` | A compatibility patch: used only when **all** of these are on. Otherwise it is skipped quietly. It also goes after them. |
 | `"links": {"x": "https://.../x.update.json"}` | Where a missing mod named above can be downloaded (through the same asking and checks as an update). |
+| `"needs_assets": ["gen57_pack"]`, `"recommends_assets": ["usum_models"]` | The player's own extra assets the mod needs, or only works best with. See "Mods that need the player's own assets" below. |
 
 When a player turns a mod on, the launcher turns on its requirements too, **puts the whole list in a working order** (a topological
 sort: requirements and `after` first, `before` honoured, `only_with` patches after what they patch, then `priority`, then the
@@ -344,6 +345,39 @@ that is too old, a conflict, another game. "Put in working order" does the sort 
 than whole files: two mods setting the **same table value** (`pokemon / #1 / hp`), touching the **same story room**
 (`rooms/<name>`, `objects/<room>.json`) or hooking the **same script event** (`on("battle.damage")`) get a warning saying which
 wins (the one further down the list). The check is by name; two mods addressing one row by number and by name are not seen.
+
+### Mods that need the player's own assets
+
+Some content only exists on the player's PC, made on the launcher's **Extra assets** page from his own discs and dumps. A mod can say
+that it needs one (or likes to have one) without carrying any of it:
+
+```json
+"needs_assets": ["gen57_pack"],
+"recommends_assets": ["usum_models"]
+```
+
+| Id | What the player must have made |
+|---|---|
+| `br_models` | The Battle Revolution models (from his own Pokemon Battle Revolution disc) |
+| `usum_models` | The Ultra Sun / Ultra Moon models (from his own 3DS dump) |
+| `gen4_pack` | The Gen 4 pack (from the Battle Revolution disc or the 3DS dump) |
+| `gen57_pack` | The Gen 5-7 pack (from the 3DS dump) |
+
+- **`needs_assets`:** while one of them is not ready, the mod is **not used**. The game starts anyway, with one message that names the mod,
+  what is missing and why (not made yet, made by another version of the game, or it does not fit the Gen 4 files that are installed),
+  and where to make it: the launcher's Extra assets page. The Mods page and the in-game MODS page show the same sentence on the mod's
+  row. For `gen4_pack` and `gen57_pack` the playthrough must also have that choice on in its New Game setup (the Gen 5-7 choice brings the
+  Gen 4 pack with it); a playthrough set up without it does not use the mod, and the message says so.
+- **`recommends_assets`:** only a note under the mod ("Works best with the ... of your own"). The mod is used either way.
+- Models made by an older converter still count as ready (they work); a pack made for another version of the game does not.
+- An id this port does not know is a problem in `xd_mod_check` (`manifest-assets`) and the mod is refused. Ids are lower case.
+- **Nothing from those games may ever be inside your mod.** The mod only names the asset; the player makes it from his own copy. If your
+  mod gives new species their own models, say in its description which assets they use.
+- **Online rooms:** a mod that is used in a room is part of the room's list. A friend whose copy of that mod is switched off because the
+  assets are not made is told so ("the mod is on your PC but needs extra assets of your own"), not that he lacks the mod; the host's message
+  names what the mod needs. Nothing changed on the wire.
+- **Battle replays:** a replay file records the mods it was made with; one that needs a pack has the same refusal as a missing mod, and the
+  assets are named there too.
 
 ### Mods for more than one game
 

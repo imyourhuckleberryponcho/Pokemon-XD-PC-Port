@@ -32,7 +32,7 @@ FOLDER_NAME = 'Pokemon XD PC'
 USUM_CPP_DATA = ('usum_gen4_plan.json', 'gen57_forms.json', 'gen57_model_numbers.json', 'gen57_cry_waves.json', 'gen57_speed_numbers.json', 'usum_dex_map.json', 'gen57_tables.json', 'gen4_tables.json')
 
 
-PROGRAMS = ['xd_launcher.exe', 'xd.exe']
+PROGRAMS = ['xd_launcher.exe', 'xd.exe', 'xd_hd_make.exe']
 
 
 PIPELINE_LIST = 'initial_pipeline_cache.db'
@@ -362,6 +362,11 @@ def main():
 
 
     shutil.copy2(os.path.join(ROOT, 'recomplauncher.json'), out)
+
+    sys.path.insert(0, os.path.join(ROOT, 'tools', 'stream_overlay'))
+    import make_guide
+    with open(os.path.join(game, 'Stream overlay guide.txt'), 'w', encoding='ascii', newline='\r\n') as f:
+        f.write(make_guide.guide_text())
     with open(os.path.join(out, 'Read me.txt'), 'w', encoding='utf-8', newline='\r\n') as f:
         f.write(read_me(version))
 
@@ -373,7 +378,7 @@ def main():
 
     allowed_top = {'Pokemon XD Launcher.exe', 'Read me.txt', 'Randomizer guide.txt', 'recomplauncher.json', 'game'}
     allowed_ext = {'.exe', '.dll', '.ttf', '.txt'}
-    allowed_exe = {'Pokemon XD Launcher.exe', 'xd.exe', 'xd_launcher.exe'}
+    allowed_exe = {'Pokemon XD Launcher.exe', 'xd.exe', 'xd_launcher.exe', 'xd_hd_make.exe'}
     bad = [n for n in os.listdir(out) if n not in allowed_top]
     total = 0
     for dirpath, _, files in os.walk(out):

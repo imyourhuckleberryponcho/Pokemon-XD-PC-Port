@@ -37,8 +37,13 @@
 #include <port_win_compat.h>
 #include <malloc.h>
 #include <sys/mman.h>
+#ifdef __ANDROID__
+#include <pthread.h>
+#include <port_android_compat.h>
+#else
 #include <ucontext.h>
-#ifdef __linux__
+#endif
+#if defined(__linux__) && !defined(__ANDROID__)
 #include <sys/personality.h>
 #include <unistd.h>
 #endif
@@ -111,6 +116,8 @@ void PortXD_ReadShadowCapacity(void);
 void PortXD_PlaythroughBoot(void);
 void PortXD_PlaythroughFrame(void);
 const char* PortXD_PlaythroughHeader(void);
+int PortXD_SaveRoomsChanged(char* text, size_t size);
+void PortXD_SaveRoomsKept(void);
 int PortXD_SaveBoundToOtherRows(char* text, size_t size);
 const char* PortXD_ActiveMods(void);
 const char* PortXD_ExtraAssetsText(void);
@@ -156,6 +163,9 @@ void PortXD_ParticleCheckFrame(void);
 void PortXD_SpeedupsFrame(void);
 void PortXD_ReplayPacingInit(void);
 void PortXD_SettingsMenuInit(void);
+void PortXD_SavestateInit(void);
+void PortXD_SavestateFrame(void);
+void PortXD_RunGameMain(void (*fn)(int, char**), int argc, char** argv);
 void PortXD_SettingsMenuOverlay(void);
 bool PortXD_LandingCoverActive(void);
 
@@ -178,6 +188,14 @@ static void reset_shutdown(void) {
   aurora_shutdown();
 }
 extern void PortXD_BattleReplayHandleEvent(const void* sdlEvent);
+#ifdef __ANDROID__
+extern void PortTouchPad_HandleEvent(const void* sdlEvent);
+extern int PortTouchPad_IsOwnKey(const void* sdlEvent);
+extern void PortTouchPad_Pump(void);
+extern void PortTouchPad_Init(void (*saveSettings)(void));
+extern void PortTouchPad_SetContext(uint32_t (*fn)(void));
+extern uint32_t PortXD_TouchContext(void);
+#endif
 static void handle_events(void) {
   if (sBugReportAt != 0 && VIGetRetraceCount() >= sBugReportAt) {
     sBugReportAt = 0;
@@ -194,6 +212,10 @@ static void handle_events(void) {
       PortPhoto_HandleEvent(&event->sdl);
       PortXD_BattleReplayHandleEvent(&event->sdl);
       PortSpeedups_HandleEvent(&event->sdl);
+#ifdef __ANDROID__
+      PortTouchPad_HandleEvent(&event->sdl);
+      if (!PortTouchPad_IsOwnKey(&event->sdl))
+#endif
       PortInput_ControlsHandleEvent(&event->sdl);
     }
     if (event->type == AURORA_SDL_EVENT && event->sdl.type == SDL_EVENT_KEY_DOWN && !event->sdl.key.repeat &&
@@ -219,6 +241,9 @@ static void handle_events(void) {
       PortXD_ModReloadKey();
     }
   }
+#ifdef __ANDROID__
+  PortTouchPad_Pump();
+#endif
   PortXD_BugReportPoll();
   PortXD_TestCrashPoll();
   PortInput_UpdateControls();
@@ -323,6 +348,9 @@ static void frame_hook(void) {
   PortGX_EndOfFrame();
   PortXD_SettingsMenuOverlay();
   PortFps_Frame(PortVI_GetFlipCount(), VIGetRetraceCount());
+#ifdef __ANDROID__
+  { extern void PortTouchPad_Frame(void); PortTouchPad_Frame(); }
+#endif
   PortSpeedrun_Draw();
   const bool overlayHold = overlay_hold_wanted();
   if (overlayHold) aurora_hold_overlay(true);
@@ -354,6 +382,7 @@ static void frame_hook(void) {
   PortXD_PlaythroughFrame();
   PortXD_SpeedupsFrame();
   PortXD_ParticleCheckFrame();
+  PortXD_SavestateFrame();
 }
 
 #ifndef XD_PORT_COMMIT
@@ -457,12 +486,23 @@ void PortXD_ShadersStart(void);
 
 #ifndef _WIN32
 static int xd_main(int argc, char** argv);
+#ifdef __ANDROID__
+#else
 static ucontext_t sLowContext, sStartContext;
+#endif
 static int sLowArgc, sLowResult;
 static char** sLowArgv;
+#ifdef __ANDROID__
+static void* low_thread_entry(void* unused) {
+  (void)unused;
+  sLowResult = xd_main(sLowArgc, sLowArgv);
+  return NULL;
+}
+#else
 static void low_stack_entry(void) { sLowResult = xd_main(sLowArgc, sLowArgv); }
+#endif
 
-#ifdef __linux__
+#if defined(__linux__) && !defined(__ANDROID__)
 static void linux_heap_low_enough(char** argv) {
   extern char end;
   const uintptr_t start = (uintptr_t)sbrk(0);
@@ -483,15 +523,55 @@ static void linux_heap_low_enough(char** argv) {
 }
 #endif
 
+#ifdef __ANDROID__
+void PortAndroid_StdioToLogcat(void);
+static void android_read_env_file(void) {
+  FILE* f = fopen("/data/data/net.pokemonxdpc.port/files/xd_env.txt", "r");
+  char line[1024];
+  if (f == NULL) return;
+  while (fgets(line, sizeof(line), f) != NULL) {
+    char* eq = strchr(line, '=');
+    size_t n = strlen(line);
+    while (n > 0 && (line[n - 1] == '\n' || line[n - 1] == '\r')) line[--n] = 0;
+    if (line[0] == '#' || eq == NULL || eq == line) continue;
+    *eq = 0;
+    setenv(line, eq + 1, 1);
+  }
+  fclose(f);
+}
+static void android_read_restart_file(void) {
+  const char* name = "/data/data/net.pokemonxdpc.port/files/xd_restart_env.txt";
+  FILE* f = fopen(name, "r");
+  char line[1024];
+  if (f == NULL) return;
+  while (fgets(line, sizeof(line), f) != NULL) {
+    char* eq = strchr(line, '=');
+    size_t n = strlen(line);
+    while (n > 0 && (line[n - 1] == '\n' || line[n - 1] == '\r')) line[--n] = 0;
+    if (line[0] == '#' || eq == NULL || eq == line) continue;
+    *eq = 0;
+    setenv(line, eq + 1, 1);
+  }
+  fclose(f);
+  remove(name);
+}
+#endif
+
 int aurora_main(int argc, char** argv) {
-#ifdef __linux__
+#ifdef __ANDROID__
+  PortAndroid_StdioToLogcat();
+  android_read_env_file();
+  android_read_restart_file();
+#endif
+#if defined(__linux__) && !defined(__ANDROID__)
   linux_heap_low_enough(argv);
 #endif
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(__ANDROID__)
   const size_t size = 8u << 20, guard = 0x4000;
 #else
   const size_t size = 8u << 20, guard = 4096;
 #endif
+#ifndef __ANDROID__
   mallopt(M_MMAP_THRESHOLD, 32 << 20);
   mallopt(M_ARENA_MAX, 1);
   mallopt(M_TOP_PAD, 512 << 20);
@@ -499,9 +579,14 @@ int aurora_main(int argc, char** argv) {
     void* volatile grow = malloc(4 << 20);
     free(grow);
   }
-#ifdef __APPLE__
+#endif
+#if defined(__APPLE__) || defined(__ANDROID__)
 #define XD_MALLOC_WHERE_ALWAYS 1
+#ifdef __ANDROID__
+#define XD_MALLOC_WHERE_TAG "android"
+#else
 #define XD_MALLOC_WHERE_TAG "mac"
+#endif
 #else
 #define XD_MALLOC_WHERE_ALWAYS 0
 #define XD_MALLOC_WHERE_TAG "linux"
@@ -519,12 +604,12 @@ int aurora_main(int argc, char** argv) {
     free(middle);
     free(small);
   }
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(__ANDROID__)
   {
     extern int PortLowMalloc_SelfTest(const char* tag, unsigned stressMb);
     extern bool PortXD_TestRun(void);
     const char* stress = getenv("XD_LOW_MALLOC_STRESS");
-    PortLowMalloc_SelfTest("[games/xd] mac", stress != NULL ? (unsigned)atoi(stress) : PortXD_TestRun() ? 200u : 0u);
+    PortLowMalloc_SelfTest("[games/xd] " XD_MALLOC_WHERE_TAG, stress != NULL ? (unsigned)atoi(stress) : PortXD_TestRun() ? 200u : 0u);
     SDL_SetMemoryFunctions(malloc, calloc, realloc, free);
   }
 #endif
@@ -535,14 +620,27 @@ int aurora_main(int argc, char** argv) {
                    "the report made by first_run_report.sh."));
   }
   mprotect(stack, guard, PROT_NONE);
+  sLowArgc = argc;
+  sLowArgv = argv;
+#ifdef __ANDROID__
+  {
+    pthread_attr_t attr;
+    pthread_t thread;
+    pthread_attr_init(&attr);
+    pthread_attr_setstack(&attr, stack + guard, size);
+    if (pthread_create(&thread, &attr, low_thread_entry, NULL) != 0) {
+      return fail(Tr("Could not start the game's main thread on its stack below 4 GB."));
+    }
+    pthread_join(thread, NULL);
+  }
+#else
   getcontext(&sLowContext);
   sLowContext.uc_stack.ss_sp = stack + guard;
   sLowContext.uc_stack.ss_size = size;
   sLowContext.uc_link = &sStartContext;
-  sLowArgc = argc;
-  sLowArgv = argv;
   makecontext(&sLowContext, low_stack_entry, 0);
   swapcontext(&sStartContext, &sLowContext);
+#endif
   return sLowResult;
 }
 #define aurora_main xd_main
@@ -570,6 +668,25 @@ int aurora_main(int argc, char** argv) {
     }
   }
   PortCrash_Install();
+#ifdef __ANDROID__
+  {
+    extern bool PortXD_TestRun(void);
+    extern int XdAndroidLauncherMain(int argc, char** argv);
+    const char* skip = getenv("XD_NO_LAUNCHER");
+    int launcherRan = 0;
+    const char* launcherScript = getenv("XD_LAUNCHER_SCRIPT");
+    if ((launcherScript != NULL && launcherScript[0] != 0) ||
+        ((skip == NULL || strcmp(skip, "1") != 0) && !PortXD_TestRun())) {
+      fprintf(stderr, "[games/xd] android: the launcher\n");
+      if (XdAndroidLauncherMain(argc, argv) != 0) {
+        return 0;
+      }
+      fprintf(stderr, "[games/xd] android: the launcher is done, the game starts\n");
+      launcherRan = 1;
+    }
+    if (launcherRan) setenv("SDL_ORIENTATIONS", "LandscapeLeft LandscapeRight", 1);
+  }
+#endif
   extern int PortXD_BattleReplayPrepare(void);
   if (!PortXD_BattleReplayPrepare()) {
     return 2;
@@ -617,7 +734,18 @@ int aurora_main(int argc, char** argv) {
     }
   }
   if (!PortMem_ReserveMEM1()) {
+#ifdef __ANDROID__
+    extern const char* PortMem_StartFailureNote(void);
+    char detail[700], text[1400];
+    snprintf(detail, sizeof detail, "%.690s", PortMem_StartFailureNote());
+    PortAndroid_WriteStartFailure(PortUser_FolderUtf8("Pokemon XD"), detail);
+    snprintf(text, sizeof text, "%s\n\n%s\n\n%.600s", Tr("Could not place the game's memory at its GameCube addresses (0x80000000, 0xE0000000)"),
+             Tr("Nothing is wrong with your disc. Opening the app again will not change this: the phone's own runtime is using that part of memory. Please open Reports in the launcher, export the newest report and send it with your phone's model name."),
+             detail);
+    return fail(text);
+#else
     return fail(Tr("Could not place the game's memory at its GameCube addresses (0x80000000, 0xE0000000)"));
+#endif
   }
 #ifdef __APPLE__
   {
@@ -632,6 +760,23 @@ int aurora_main(int argc, char** argv) {
     fprintf(stderr, "[games/xd] mac: game memory in place at 0x80000000 (second view at 0xC0000000: %s), "
             "main stack at %p, low data block at %p\n", mirrored ? "same memory" : "NOT the same memory",
             (void*)&before, PortMem_LowAlloc(16, 16));
+  }
+#endif
+
+#ifdef __ANDROID__
+  {
+    void* PortMem_LowAlloc(size_t size, size_t align);
+    volatile unsigned char* cached = (volatile unsigned char*)(uintptr_t)0x80003000u;
+    volatile unsigned char* uncached = (volatile unsigned char*)(uintptr_t)0xC0003000u;
+    const unsigned char before = *cached;
+    int mirrored;
+    *cached = 0x5A;
+    mirrored = *uncached == 0x5A;
+    *cached = before;
+    fprintf(stderr, "[games/xd] android: game memory in place at 0x80000000 (second view at 0xC0000000: %s), main stack at "
+            "%p, low data block at %p; layout: %s; fixed ranges that were not free at load: %s\n", mirrored ? "same memory" : "NOT the same memory",
+            (void*)&before, PortMem_LowAlloc(16, 16), PortAndroid_LayoutReport(),
+            getenv("XD_ANDROID_TAKEOVER") != NULL ? getenv("XD_ANDROID_TAKEOVER") : "none");
   }
 #endif
 
@@ -829,6 +974,25 @@ int aurora_main(int argc, char** argv) {
         PortCARD_SetUnplugged(true);
       }
       fprintf(stderr, "[card] no memory card inserted for this run (the save is bound to mod rows that are not loaded)\n");
+    } else {
+      char changed[1600];
+      if (PortXD_SaveRoomsChanged(changed, sizeof changed)) {
+        const char* stop = getenv("XD_ROOM_CHANGED");
+        fprintf(stderr, "[playthrough] a mod changed a room since the save: %s\n", changed);
+        if (testRun || !interactive) {
+          if (stop != NULL && strcmp(stop, "stop") == 0) {
+            fprintf(stderr, "[playthrough] XD_ROOM_CHANGED=stop: the run stops (exit 5)\n");
+            return 5;
+          }
+          fprintf(stderr, "[playthrough] kept (test run): the setup file now holds today's room recipes\n");
+          PortXD_SaveRoomsKept();
+        } else {
+          if (PortMessage_Ask(PORT_MESSAGE_WARNING, "Pok\xC3\xA9mon XD", changed, Tr("Quit"), Tr("Keep playing"), true)) {
+            return 5;
+          }
+          PortXD_SaveRoomsKept();
+        }
+      }
     }
   }
   {
@@ -956,6 +1120,10 @@ int aurora_main(int argc, char** argv) {
   {
     extern void PortXD_SaveSettings(void);
     PortVideo_SetSettingsSaver(PortXD_SaveSettings);
+#ifdef __ANDROID__
+    PortTouchPad_Init(PortXD_SaveSettings);
+    PortTouchPad_SetContext(PortXD_TouchContext);
+#endif
   }
   {
     char icon[1024];
@@ -1012,6 +1180,7 @@ int aurora_main(int argc, char** argv) {
     sScriptByFrames = clock != NULL && strcmp(clock, "frames") == 0;
   }
   PortVI_SetFieldHook(field_hook);
+  PortXD_SavestateInit();
   PortMem_InitOS(PortXD_ArenaLo());
   if (!aurora_dvd_open(discPath)) {
     aurora_shutdown();
@@ -1033,7 +1202,7 @@ int aurora_main(int argc, char** argv) {
   begin_frame();
 
   static char* gameArgv[] = {"xd", NULL};
-  XDGame_Main(1, gameArgv);
+  PortXD_RunGameMain(XDGame_Main, 1, gameArgv);
 
   aurora_dvd_close();
   aurora_shutdown();

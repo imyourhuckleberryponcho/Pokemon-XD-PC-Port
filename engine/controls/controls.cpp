@@ -98,6 +98,7 @@ constexpr GcInputInfo kActions[] = {
     {"speedrun_break", "Speedrun break"},
     {"replay_bar", "Replay bar"},
     {"cheat_menu", "Cheat menu"},
+    {"save_states", "Save states"},
 };
 static_assert(std::size(kActions) == kActionCount);
 
@@ -243,6 +244,10 @@ ActionMap DefaultActions(int port) {
     m.keys[cheat] = {*ParseKeyToken("f5")};
   }
   m.pad[cheat] = {Input::Button(PadButton::LeftShoulder), Input::Button(PadButton::RightShoulder), Input::Button(PadButton::Start)};
+  const size_t states = static_cast<size_t>(Action::SaveStates);
+  if (port == 0) {
+    m.keys[states] = {*ParseKeyToken("f1")};
+  }
   return m;
 }
 

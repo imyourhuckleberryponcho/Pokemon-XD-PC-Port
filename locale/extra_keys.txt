@@ -27,6 +27,7 @@ Items
 Time per choice
 Shadow Pokemon
 Shadow Pokemon obey
+Edited Shadows
 Classic XD
 Classic XG
 Gen 4
@@ -130,3 +131,10 @@ The mysterious air current blows on regardless!
 {name} became cloaked in a freezing light!
 {name} became cloaked in freezing air!
 {name} is absorbing power!
+# engine/mods/mod_manifest.cpp KnownAssets (drawn with Tr(a->name) / Tr(a->hint))
+Gen 4 pack
+Gen 5-7 pack
+Make them on the launcher's Extra assets page (it needs your own Pokemon Battle Revolution disc).
+Make them on the launcher's Extra assets page (it needs your own Ultra Sun or Ultra Moon dump).
+Make it on the launcher's Extra assets page (it needs your own Pokemon Battle Revolution disc or Ultra Sun / Ultra Moon dump), and pick the Gen 4 Pokemon choice in the New Game setup.
+Make it on the launcher's Extra assets page (it needs your own Ultra Sun or Ultra Moon dump), and pick the Gen 5-7 Pokemon choice in the New Game setup.

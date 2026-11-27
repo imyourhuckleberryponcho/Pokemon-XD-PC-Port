@@ -34,6 +34,21 @@ int main() {
   CHECK(r.ruleSet == "gen4" && r.items == "kit" && r.timerSeconds == 60 && r.shadowAllowed && r.level == "all:50" && r.team == "free14");
   CHECK(!ParseRules("rules=gen9", r, &err));
 
+  CHECK(ParseRules("shadow=on", r, &err) && r.shadowAllowed && !r.editedShadows);
+  CHECK(ParseRules("shadow=on;shadow_edited=on", r, &err) && r.editedShadows && RulesKeyText(r).find("shadow_edited=on") != std::string::npos);
+  RoomRules edited = r;
+  CHECK(ParseRules(RulesKeyText(edited), r, &err) && r.editedShadows);
+  r.editedShadows = false;
+  CHECK(RulesKeyText(r).find("shadow_edited") == std::string::npos && RulesText(edited, "xd").find("save editor") != std::string::npos && RulesText(r, "xd").find("save editor") == std::string::npos);
+  {
+    Fingerprint a, b;
+    a.rules = edited;
+    CHECK(Decode(Encode(a), b) && b.rules.editedShadows);
+    a.rules.editedShadows = false;
+    const std::vector<uint8_t> enc = Encode(a);
+    CHECK(Decode(enc, b) && !b.rules.editedShadows && std::string(enc.begin(), enc.end()).find("r.edsh") == std::string::npos);
+  }
+
   CHECK(ParseRules("rules=gen4pokemon;team=free14", r, &err) && r.ruleSet == "gen4pokemon");
   CHECK(RoomGen4Pokemon("gen4pokemon") && !RoomGen4Rules("gen4pokemon"));
   CHECK(RoomGen4Pokemon("gen4") && RoomGen4Rules("gen4") && RoomGen4Pokemon("gen4mt") && RoomGen4Rules("gen4mt"));
@@ -106,6 +121,23 @@ int main() {
   v = Judge(back.caps, back.rules, mods, true);
   CHECK(v.Ok() && v.NeedsRestart() && Has(v.restart, "gamma"));
 
+  {
+    Capabilities mine = host.caps;
+    mine.mods = "alpha";
+    mine.modsBlocked = {"beta"};
+    mine.modAssets = {{"beta", "Gen 5-7 pack"}};
+    v = Judge(back.caps, back.rules, mine, true);
+    CHECK(!v.Ok() && Has(v.refuse, "needs extra assets") && Has(v.refuse, "Gen 5-7 pack") && Has(v.refuse, "Extra assets page") && !Has(v.refuse, "does not have"));
+    Capabilities guest = host.caps;
+    guest.mods = "alpha";
+    Capabilities hostCaps = back.caps;
+    hostCaps.modAssets = {{"beta", "Gen 5-7 pack"}};
+    v = Judge(hostCaps, back.rules, guest, false);
+    CHECK(!v.Ok() && Has(v.refuse, "beta needs your own Gen 5-7 pack"));
+    v = Judge(back.caps, back.rules, guest, false);
+    CHECK(!v.Ok() && Has(v.refuse, "does not have: beta") && !Has(v.refuse, "needs your own"));
+  }
+
 
   Capabilities c = host.caps;
   c.randomizer = "classic:5";
@@ -147,7 +179,7 @@ int main() {
   c.disc = "GXXP01";
   CHECK(Has(Judge(back.caps, back.rules, c, true).refuse, "GXXP01"));
   c = host.caps;
-  c.protocol = 6;
+  c.protocol = 7;
   v = Judge(back.caps, back.rules, c, true);
   CHECK(v.refuse.size() == 1 && Has(v.refuse, "another version"));
 
@@ -362,15 +394,15 @@ int main() {
       fs::remove_all(root, ec);
     }
     {
-    CHECK(kBattleProtocol == 5);
+    CHECK(kBattleProtocol == 6);
     Fingerprint cur;
     cur.caps.protocol = kBattleProtocol;
     const std::vector<uint8_t> blob = Encode(cur);
-    CHECK(std::string(blob.begin(), blob.end()).find("cap=5\n") != std::string::npos);
+    CHECK(std::string(blob.begin(), blob.end()).find("cap=6\n") != std::string::npos);
     Fingerprint back4;
-    CHECK(Decode(blob, back4) && back4.caps.protocol == 5);
+    CHECK(Decode(blob, back4) && back4.caps.protocol == 6);
     Capabilities now, old3;
-    now.protocol = 5;
+    now.protocol = 6;
     old3.protocol = 3;
     RoomRules classic;
     for (const char* rs : {"classic", "gen4pokemon", "gen4", "gen4mt"}) {
@@ -385,6 +417,25 @@ int main() {
     Capabilities rev4 = now;
     rev4.protocol = 4;
     CHECK(Has(Judge(rev4, classic, now, true).refuse, "same game version") && Has(Judge(now, classic, rev4, false).refuse, "same game version"));
+    Capabilities rev5 = now;
+    rev5.protocol = 5;
+    CHECK(Has(Judge(rev5, classic, now, true).refuse, "same game version") && Has(Judge(now, classic, rev5, false).refuse, "same game version"));
+    {
+      Capabilities me = now, they = now;
+      me.version = "0.8.0";
+      they.protocol = 5;
+      CHECK(Has(Judge(they, classic, me, true).refuse, "This room's game is another version (0.7.7). You have 0.8.0. Both players need the same game version."));
+      CHECK(Has(Judge(me, classic, they, false).refuse, "Your friend's game is another version (0.7.7). You have 0.8.0. Both players need the same game version."));
+      they.protocol = 4;
+      CHECK(Has(Judge(they, classic, me, true).refuse, "(0.7.5 or 0.7.6). You have 0.8.0"));
+      Fingerprint f;
+      f.caps = me;
+      Fingerprint g;
+      CHECK(Decode(Encode(f), g) && g.caps.version == "0.8.0");
+      f.caps.version.clear();
+      const std::vector<uint8_t> noVer = Encode(f);
+      CHECK(std::string(noVer.begin(), noVer.end()).find("ver=") == std::string::npos && Decode(noVer, g) && g.caps.version.empty());
+    }
     Capabilities old1 = old3, old2 = old3;
     old1.protocol = 1, old2.protocol = 2;
     CHECK(Has(Judge(old1, classic, now, true).refuse, "same game version") && Has(Judge(old2, classic, now, true).refuse, "same game version"));

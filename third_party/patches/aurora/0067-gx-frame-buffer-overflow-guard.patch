@@ -247,8 +247,8 @@ index d724747..4dce5e5 100644
 +      sNoMerge = true;
 +    }
      interp_set_draw(0, 0, false); // (in-between pictures: not a draw that can be told apart)
--    if (indexCount != 0 && !view_override_hides_draw()) {
-+    if (indexCount != 0 && !noRoom && !view_override_hides_draw()) {
+-    if (indexCount != 0 && !g_skipDraws.load(std::memory_order_relaxed) && !view_override_hides_draw()) {
++    if (indexCount != 0 && !noRoom && !g_skipDraws.load(std::memory_order_relaxed) && !view_override_hides_draw()) {
        push_gx_draw(prim, fmt, vtxCount, vertRange, idxRange, indexCount);
        interp_draw_done(static_cast<u16>((1u << MaxPnMtx) - 1));
      }

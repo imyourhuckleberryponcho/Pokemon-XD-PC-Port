@@ -73,13 +73,59 @@ bool CopyLimited(const fs::path& from, const fs::path& to, uint64_t limit, const
 fs::path TempFile() {
   static std::atomic<int> counter{0};
   std::error_code ec;
+#if defined(__ANDROID__)
+  fs::path dir = std::getenv("TMPDIR") != nullptr ? fs::path(std::getenv("TMPDIR")) : fs::path("/data/data/net.pokemonxdpc.port/cache");
+  fs::create_directories(dir, ec);
+#else
   fs::path dir = fs::temp_directory_path(ec);
+#endif
   if (ec) {
     dir = "/tmp";
   }
   return dir / ("xd-update-" + std::to_string(::getpid()) + "-" + std::to_string(counter++) + ".tmp");
 }
 
+#if defined(__ANDROID__)
+extern "C" bool PortAndroid_HttpFetch(const char* url, const char* file, unsigned long long maxBytes, int timeoutMs, bool httpsOnly, const char* userAgent,
+                                      char* error, size_t errorSize);
+extern "C" void PortAndroid_HttpCancel(void);
+
+bool Curl(const std::string& url, const fs::path& file, const FetchOptions& options, uint64_t limit, std::string& error) {
+  std::atomic<bool> finished{false};
+  bool ok = false;
+  char why[512] = {};
+  const std::string outFile = detail::Utf8(file);
+  std::thread worker([&] {
+    ok = PortAndroid_HttpFetch(url.c_str(), outFile.c_str(), limit, options.timeoutMs, options.httpsOnly, options.userAgent.c_str(), why, sizeof why);
+    finished = true;
+  });
+  bool stopped = false;
+  while (!finished) {
+    std::error_code ec;
+    const uint64_t have = fs::exists(file, ec) ? fs::file_size(file, ec) : 0;
+    if (!stopped && options.progress && !options.progress(have, 0)) {
+      stopped = true;
+      PortAndroid_HttpCancel();
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(60));
+  }
+  worker.join();
+  std::error_code ec;
+  if (ok && !stopped) {
+    return true;
+  }
+  const std::string reason = why;
+  if (stopped || reason == "stopped") {
+    error = "stopped";
+  } else if (reason == "the download is larger than expected") {
+    error = Tr("the download is larger than expected");
+  } else {
+    error = reason.empty() ? std::string(Tr("the download failed")) : reason;
+  }
+  fs::remove(file, ec);
+  return false;
+}
+#else
 bool Curl(const std::string& url, const fs::path& file, const FetchOptions& options, uint64_t limit,
           std::string& error) {
   const std::string maxSize = std::to_string(limit);
@@ -184,6 +230,8 @@ bool Curl(const std::string& url, const fs::path& file, const FetchOptions& opti
   fs::remove(file, ec);
   return false;
 }
+
+#endif
 
 }
 

@@ -186,13 +186,17 @@ def scenario_editsave(r):
     r.run('|'.join(['size:1280x1000', 'padmode:on', 'update:no', 'disc:' + DISC.replace('\\', '/'), 'wait:disc', 'page:save', 'wait:save'] + to_button +
                    ['padwhere', 'pad:a', 'pad:down', 'padwhere', shot('edit_1'), 'pad:down:2', 'pad:a', 'padwhere', shot('edit_2'),
                     'pad:right', 'padwhere', 'pad:b', 'padwhere', shot('edit_closed'),
-                    'editopen:1', 'editset:sel.level=44', 'pad:down', 'pad:b', 'pad:down', 'padwhere', shot('edit_ask'), 'pad:b', 'pad:down', 'padwhere', shot('edit_kept'), 'quit']),
+                    'editopen:1', 'editset:sel.level=44', 'pad:down', 'pad:b', 'pad:down', 'padwhere', shot('edit_ask'), 'pad:b', 'pad:down', 'padwhere', shot('edit_kept'),
+
+                    'editopen:1', 'editset:sel.makeshadow=1', 'pad:right', 'padwhere', 'pad:down:3', 'padwhere', 'pad:a', 'padwhere', shot('edit_shadow_choice'), 'pad:b', 'padwhere', 'quit']),
           timeout=300)
     where = re.findall(r'pad focus: window "([^"]*)"', r.log)
-    check(r.count(r'edit: opened') == 2, 'A on "Edit save..." opened the page (and the script opened it again)')
+    check(r.count(r'edit: opened') == 3, 'A on "Edit save..." opened the page (and the script opened it twice more)')
     check(any('editbody' in w for w in where), 'the D-pad moves into the editor rows (the body is a NavFlattened child): %s' % where[:6])
     check(r.has(r'edit: asking whether to discard'), 'B with a change waiting asks about discarding (the page stays open)')
     check(not r.has(r'not NavFlattened'), 'no child window the pad cannot reach')
+    check(re.search(r'makeshadow=1.*?pad focus: window "[^"]*editbody', r.log, re.S) is not None, 'the Make Shadow panel rows take the pad focus (the D-pad reaches the heart gauge row, A opens its list, B closes it)')
+    check(r.count(r'edit: opened') >= 3, 'the page was opened again for the Shadow panel')
     check(not r.has(r'Exception|crash'), 'no crash')
 
 
@@ -242,6 +246,23 @@ def scenario_settings(r):
                     shot('set_2'), 'pad:down', 'pad:a', shot('set_3'), 'pad:down:3', 'pad:a', shot('set_4'), 'quit']))
     text = r.settings_text().lower()
     check('custom' in text or 'text_speed' in text, 'a setting was changed with the pad (settings.ini)')
+
+
+def scenario_overlay(r):
+
+
+
+    steps = ['size:1280x1600', 'padmode:on'] + UPD + ['tab:system', 'pad:right', 'pad:down:13', 'padwhere', shot('overlay_focus_folder'), 'pad:a',
+                                                      'pad:right', 'padwhere', shot('overlay_focus_guide'), 'pad:a', shot('overlay_note_guide_pad'), 'quit']
+    r.run('|'.join(steps))
+    check(r.has(r'stream overlay folder: '), 'A on "Open overlay folder" (reached by the D-pad) ran it')
+    check(r.has(r'stream overlay guide: '), 'A on "How to use it in OBS" (right of it) ran it')
+    check(not r.has(r'not NavFlattened'), 'no child window the pad cannot reach')
+    r2 = Run(r.work, 'overlay2', r.exe)
+    r2.run('|'.join(['size:1280x1600', 'padmode:on'] + UPD + ['tab:system', 'overlay:folder', shot('overlay_note_folder'), 'overlay:guide', shot('overlay_note_guide'), 'quit']))
+    check(r2.has(r'stream overlay folder: .*stream_overlay \(not there\)'), 'the folder step names the stream_overlay folder of the data folder (not there yet)')
+    check(r2.has(r'Switch "Stream overlay" on above'), 'a fresh PC is told how to get the folder')
+    check(r2.has(r'stream overlay guide: .*Stream overlay guide.txt \(not there\)'), 'the guide step names the file next to the launcher (the build folder has none)')
 
 
 def scenario_controls(r):
@@ -575,6 +596,7 @@ PAD_DOWN_TO_CHECK = 4
 PAD_DOWN_NEXT_MOD = 2
 
 SCENARIOS = {
+    'overlay': scenario_overlay,
     'defaults': scenario_defaults,
     'extrausum': scenario_extrausum,
     'extragen57': scenario_extragen57,

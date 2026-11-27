@@ -39,6 +39,7 @@ struct Manifest {
   std::vector<std::string> after;
   std::vector<std::string> before;
   std::vector<std::string> worksWith, recommends;
+  std::vector<std::string> needsAssets, recommendsAssets;
   std::vector<std::string> onlyWith;
   std::string updates;
   std::map<std::string, std::string> links;
@@ -53,6 +54,16 @@ struct Manifest {
 constexpr int kScriptApi = 1;
 constexpr size_t kMaxScriptFileBytes = 256 * 1024;
 constexpr size_t kMaxScriptFiles = 32;
+
+struct AssetInfo {
+  const char* id;
+  const char* name;
+  const char* hint;
+};
+const std::vector<AssetInfo>& KnownAssets();
+const AssetInfo* FindAsset(std::string_view id);
+std::string AssetNames(const std::vector<std::string>& ids);
+using AssetCheck = std::function<std::string(const std::string& id)>;
 
 bool ParseManifest(std::string_view json, Manifest& out, std::string& error);
 bool ValidModId(std::string_view id);
@@ -142,6 +153,7 @@ struct LoadOptions {
   DiscView disc;
   CatalogBuilder dataCatalog;
   bool catalogForScripts = false;
+  AssetCheck assetCheck;
   CheckEntry checkEntry;
   LooksOrSound looksOrSound;
   bool usePlaythroughMods = false;
@@ -186,7 +198,14 @@ struct LoadResult {
   std::shared_ptr<const DataCatalog> catalog;
   std::vector<uint8_t> program;
   std::vector<ScriptFile> scripts;
+  struct AssetBlock {
+    std::string id, name;
+    std::vector<std::string> assets;
+    std::string reason;
+  };
+  std::vector<AssetBlock> assetBlocked;
   std::vector<std::string> biggerBuiltIn;
+  bool biggerAny = false;
   std::vector<std::string> scriptsSwitchedOff;
 
   bool HasWarnings() const;
@@ -242,7 +261,9 @@ struct ReviewRow {
 struct Review {
   std::vector<ReviewRow> rows;
 };
-Review ReviewList(const ModList::Profile& profile, const std::vector<ModFolder>& found, std::string_view gameId);
+Review ReviewList(const ModList::Profile& profile, const std::vector<ModFolder>& found, std::string_view gameId,
+                  const AssetCheck& assets = AssetCheck());
+std::string AssetProblemText(const std::string& modName, const std::vector<std::string>& notReady, const std::vector<std::string>& reasons);
 
 struct OrderResult {
   std::vector<std::string> order;

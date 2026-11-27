@@ -1,3 +1,5 @@
+#include <cstdio>
+
 #include <dolphin/types.h>
 #include <game/gsgfxstate.h>
 
@@ -9,3 +11,11 @@ int FrameEnd(void) { return gsgfxState != nullptr && gsgfxState->phase == 1 ? 1 
 }
 
 extern "C" void PortXD_ReplayPacingInit(void) { PortGX_SetFrameEndProbe(FrameEnd); }
+
+extern "C" void PortXD_GfxNote(char* out, unsigned size) {
+  if (gsgfxState == nullptr) {
+    out[0] = '\0';
+    return;
+  }
+  std::snprintf(out, size, "xfb %p phase %d", gsgfxState->xfb, static_cast<int>(gsgfxState->phase));
+}

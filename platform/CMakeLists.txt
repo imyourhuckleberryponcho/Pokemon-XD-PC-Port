@@ -5,7 +5,7 @@ target_compile_options(platform_compat INTERFACE "${XD_FLAG_FORCE_INCLUDE}${CMAK
 
 add_library(platform_sdk STATIC sdk/gx_wgpipe.cpp sdk/gx_fifo.cpp sdk/gx_dump.cpp sdk/sdk_missing.c sdk/sdk_stubs.c sdk/os_threads.cpp sdk/vi_clock.cpp sdk/game_clock.cpp sdk/frame_cost.cpp sdk/cpu_cost.cpp sdk/gc_memory.cpp sdk/async_callbacks.cpp sdk/disc_drive.cpp sdk/card_serial.cpp sdk/card_backup.cpp sdk/card_root.cpp
   sdk/gx_render_modes.c sdk/mtx_ps.c)
-target_include_directories(platform_sdk PRIVATE ${XD_AURORA_DIR}/lib
+target_include_directories(platform_sdk PRIVATE sdk/include ${XD_AURORA_DIR}/lib
   ${XD_AURORA_DIR}/lib/dolphin/os)
 target_include_directories(platform_sdk INTERFACE sdk/include)
 target_link_libraries(platform_sdk PUBLIC aurora::gx aurora::core aurora::pad aurora::os aurora::dvd aurora::card
@@ -23,10 +23,14 @@ target_link_libraries(platform_audio PRIVATE platform_dsp engine_settings ${AURO
 add_library(platform_input STATIC input/keyboard_defaults.cpp input/input_script.cpp input/input_record.cpp
   input/input_record_format.cpp input/input_anchors.cpp input/controls_apply.cpp input/speedups.cpp input/gc_adapter_log.cpp)
 target_include_directories(platform_input PUBLIC input/include)
+if (ANDROID)
+  target_sources(platform_input PRIVATE input/touch_pad_android.cpp)
+  target_link_libraries(platform_input PRIVATE ${AURORA_SDL3_TARGET} aurora::core)
+endif ()
 target_link_libraries(platform_input PUBLIC engine_controls PRIVATE aurora::pad aurora::si platform_os)
 target_link_libraries(platform_input PRIVATE aurora::core platform_video platform_audio)
 
-if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+if ((CMAKE_SYSTEM_NAME STREQUAL "Linux" OR ANDROID))
   set(XD_PLATFORM_OS_SYSTEM_SOURCES os/crash_report_linux.cpp os/log_tee_linux.cpp os/run_status_linux.cpp
     os/os_small_linux.cpp)
 elseif (APPLE)
@@ -37,6 +41,10 @@ elseif (APPLE)
 else ()
   set(XD_PLATFORM_OS_SYSTEM_SOURCES os/crash_report.cpp os/log_tee.cpp os/picture_jpeg.cpp os/run_status.cpp
     os/folder_claim.cpp os/window_icon.cpp)
+endif ()
+if (ANDROID)
+  set_source_files_properties(sdk/os_threads.cpp PROPERTIES COMPILE_OPTIONS
+    "-include${PROJECT_SOURCE_DIR}/platform/os/include/port_android_compat.h")
 endif ()
 add_library(platform_os STATIC os/message.c os/zip_store.cpp os/battle_replay_file.cpp os/user_folder.cpp os/disc_dialog.cpp
   ${XD_PLATFORM_OS_SYSTEM_SOURCES})
@@ -52,7 +60,7 @@ if (WIN32)
   target_link_libraries(platform_disc PRIVATE bcrypt)
 endif ()
 
-if (CMAKE_SYSTEM_NAME STREQUAL "Linux" OR APPLE)
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux" OR ANDROID OR APPLE)
   set(XD_WINDOW_SHOT_SOURCE video/window_shot_linux.cpp) # PNG through libpng (Aurora's copy)
 else ()
   set(XD_WINDOW_SHOT_SOURCE video/window_shot.cpp video/window_shot_linux.cpp)
@@ -60,7 +68,7 @@ endif ()
 add_library(platform_video STATIC video/presentation.cpp video/photo_mode.cpp video/freeze_frame.cpp
   video/port_menu.cpp video/focus_pause.cpp ${XD_WINDOW_SHOT_SOURCE} video/gx_texture_decode.cpp video/button_art.cpp
   video/frame_capture.cpp video/fps_counter.cpp video/speedrun_overlay.cpp video/frame_rate.cpp)
-if (CMAKE_SYSTEM_NAME STREQUAL "Linux" OR APPLE)
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux" OR ANDROID OR APPLE)
   target_link_libraries(platform_video PRIVATE PNG::PNG)
 endif ()
 target_include_directories(platform_video PUBLIC video/include)

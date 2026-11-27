@@ -6,6 +6,7 @@
 #include <save_backups.h>
 #include <saveext.h>
 
+#include <algorithm>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
@@ -152,6 +153,12 @@ CommitResult Commit(const Editor& editor, const Tables& tables, const CommitRequ
     setup.trainerId = now.TrainerId();
     setup.secretId = now.SecretId();
   }
+  if (editor.ExtraShadowsChanged()) {
+    const bool has = !editor.ExtraShadowSection().empty();
+    setup.extRequired.erase(std::remove(setup.extRequired.begin(), setup.extRequired.end(), std::string("shadow")), setup.extRequired.end());
+    if (has) setup.extRequired.push_back("shadow");
+  }
+  if (editor.ShadowOrdersChanged()) setup.editorShadows = editor.ShadowOrders();
   setup.trainer = xs::ToUtf8(now.trainerName);
   setup.trainerId = now.TrainerId();
   setup.secretId = now.SecretId();
@@ -181,10 +188,30 @@ CommitResult Commit(const Editor& editor, const Tables& tables, const CommitRequ
   }
 
   bool staged = false;
-  if (haveExt) {
-    const engine::saveext::Loaded loaded = engine::saveext::Load(folder, res.oldKey, engine::saveext::Hash64(editor.original().data(), xs::kFileSize));
-    if (loaded.state == engine::saveext::State::Paired) {
-      engine::saveext::File file = loaded.file;
+  const bool shadowChanged = editor.ExtraShadowsChanged();
+  if (haveExt || shadowChanged) {
+    engine::saveext::File file;
+    bool have = false;
+    if (haveExt) {
+      const engine::saveext::Loaded loaded = engine::saveext::Load(folder, res.oldKey, engine::saveext::Hash64(editor.original().data(), xs::kFileSize));
+      if (loaded.state == engine::saveext::State::Paired) {
+        file = loaded.file;
+        have = true;
+      }
+    }
+    if (have || shadowChanged) {
+      if (shadowChanged) {
+        const std::vector<uint8_t> section = editor.ExtraShadowSection();
+        file.sections.erase(std::remove_if(file.sections.begin(), file.sections.end(), [](const engine::saveext::Section& x) { return x.name == "shadow"; }), file.sections.end());
+        if (!section.empty()) {
+          engine::saveext::Section sec;
+          sec.name = "shadow";
+          sec.version = 1;
+          sec.required = true;
+          sec.data = section;
+          file.sections.push_back(std::move(sec));
+        }
+      }
       file.saveHash = engine::saveext::Hash64(newData.data(), xs::kFileSize);
       file.writer = req.writer;
       staged = engine::saveext::Stage(folder, res.newKey, file);

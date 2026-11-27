@@ -1,0 +1,107 @@
+diff --git a/lib/gfx/pipeline_cache.cpp b/lib/gfx/pipeline_cache.cpp
+index 5d1e3b9..e58780c 100644
+--- a/lib/gfx/pipeline_cache.cpp
++++ b/lib/gfx/pipeline_cache.cpp
+@@ -19,6 +19,7 @@
+ #include <atomic>
+ #include <chrono>
+ #include <condition_variable>
++#include <cstdlib>
+ #include <deque>
+ #include <filesystem>
+ #include <functional>
+@@ -100,6 +101,25 @@ static std::atomic<uint64_t> g_skippedDraws{0};
+ static std::atomic<uint64_t> g_pipelineWaits{0};
+ static std::atomic<uint64_t> g_pipelineWaitMicros{0};
+ static std::atomic<uint64_t> g_pipelineMaxWaitMicros{0};
++// (patch 0068) A draw never waits for ever for a shader: after the limit (AURORA_PIPELINE_WAIT_LIMIT_MS, default 8000)
++// the wait ends, the key is remembered as "given up" (its later draws do not wait again, they are skipped until it is
++// ready) and a line says so. g_workerBusySinceNs/g_workerBusyKey: the compile the pipeline thread is inside now.
++static std::atomic<int64_t> g_workerBusySinceNs{0};
++static std::atomic<uint64_t> g_workerBusyKey{0};
++static std::atomic<uint64_t> g_pipelineGiveUps{0};
++static absl::flat_hash_set<PipelineRef> g_gaveUpPipelines; // guarded by g_pipelineMutex
++static int64_t steady_now_ns() {
++  return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch())
++      .count();
++}
++static int64_t pipeline_wait_limit_ms() {
++  static const int64_t limit = [] {
++    const char* v = std::getenv("AURORA_PIPELINE_WAIT_LIMIT_MS");
++    const long n = v != nullptr ? std::atol(v) : 0;
++    return static_cast<int64_t>(n > 0 ? n : 8000);
++  }();
++  return limit;
++}
+ 
+ static sqlite3* g_pipelineCacheDb = nullptr;
+ static sqlite3_stmt* g_pipelineCacheLoadStmt = nullptr;
+@@ -478,7 +498,11 @@ static PipelineRef find_pipeline_impl(PipelineRef runtimeKey, NewPipelineCallbac
+   {
+     std::scoped_lock guard{g_pipelineMutex};
+     auto pipelineIt = g_pipelines.find(runtimeKey);
++    if (blocking && g_gaveUpPipelines.contains(runtimeKey) && pipelineIt == g_pipelines.end()) {
++      return runtimeKey; // (patch 0068) given up on earlier: this draw is skipped, no new wait
++    }
+     if (pipelineIt != g_pipelines.end()) {
++      g_gaveUpPipelines.erase(runtimeKey);
+       pipelineReady = true;
+     } else if (g_pendingPipelines.contains(runtimeKey)) {
+       if (blocking && !g_hasPipelineThread) {
+@@ -537,7 +561,32 @@ static PipelineRef find_pipeline_impl(PipelineRef runtimeKey, NewPipelineCallbac
+     const auto start = std::chrono::steady_clock::now();
+     {
+       std::unique_lock lock{g_pipelineMutex};
+-      g_pipelineReadyCv.wait(lock, [=] { return g_pipelines.contains(runtimeKey) || g_pipelineThreadEnd; });
++      const int64_t limitNs = pipeline_wait_limit_ms() * 1000000;
++      auto nextReport = start + std::chrono::seconds{5};
++      while (!g_pipelineReadyCv.wait_for(lock, std::chrono::milliseconds{250},
++                                         [=] { return g_pipelines.contains(runtimeKey) || g_pipelineThreadEnd; })) {
++        const auto now = std::chrono::steady_clock::now();
++        const int64_t waitedNs = std::chrono::duration_cast<std::chrono::nanoseconds>(now - start).count();
++        const int64_t busySince = g_workerBusySinceNs.load();
++        const int64_t workerBusyNs = busySince != 0 ? steady_now_ns() - busySince : 0;
++        if (now >= nextReport) {
++          nextReport = now + std::chrono::seconds{5};
++          Log.warn("Waiting {:.0f} s for a pipeline ({:x}): {} queued, pipeline thread {} (compile {:x} for {:.0f} ms)",
++                   waitedNs / 1e9, runtimeKey, g_pipelineQueue.size() + g_backgroundPipelineQueue.size(),
++                   busySince != 0 ? "inside a compile" : "idle or asleep", g_workerBusyKey.load(),
++                   workerBusyNs / 1e6);
++        }
++        // Over the limit, or the thread has been stuck in one compile that long: stop waiting, skip this draw.
++        if (waitedNs >= limitNs || workerBusyNs >= limitNs) {
++          g_gaveUpPipelines.insert(runtimeKey);
++          ++g_pipelineGiveUps;
++          Log.warn("GAVE UP waiting for pipeline {:x} after {:.1f} s (pipeline thread {} for {:.0f} ms, {} queued): its "
++                   "draws are skipped until it is ready ({} given up so far)",
++                   runtimeKey, waitedNs / 1e9, busySince != 0 ? "in compile" : "not compiling", workerBusyNs / 1e6,
++                   g_pipelineQueue.size() + g_backgroundPipelineQueue.size(), g_pipelineGiveUps.load());
++          break;
++        }
++      }
+     }
+     const auto micros = static_cast<uint64_t>(
+         std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start).count());
+@@ -1037,7 +1086,22 @@ static void pipeline_worker() {
+       pending = std::move(source.front());
+       source.pop_front();
+     }
++    g_workerBusyKey.store(pending.hash);
++    g_workerBusySinceNs.store(steady_now_ns());
++    const int64_t compileStartNs = steady_now_ns();
++    if (const char* hang = std::getenv("AURORA_TEST_COMPILE_HANG_MS")) { // test runs: the Nth compile (AFTER_N) never ends for MS
++      static int compiled = 0;
++      const char* after = std::getenv("AURORA_TEST_COMPILE_HANG_AFTER");
++      if (++compiled == (after != nullptr ? std::atoi(after) : 1)) {
++        Log.warn("TEST: this compile ({:x}) is held for {} ms", pending.hash, hang);
++        std::this_thread::sleep_for(std::chrono::milliseconds(std::atol(hang)));
++      }
++    }
+     auto result = pending.create();
++    g_workerBusySinceNs.store(0);
++    if (const int64_t tookMs = (steady_now_ns() - compileStartNs) / 1000000; tookMs >= 1000) {
++      Log.warn("Pipeline {:x} took {} ms to compile", pending.hash, tookMs); // (patch 0068) slow driver compiles
++    }
+     const auto pipelineCount = result.pipeline_count();
+     {
+       std::lock_guard lock{g_pipelineMutex};

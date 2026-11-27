@@ -73,11 +73,11 @@ extern "C" u32 PortMusyX_GetTick(void) {
   timespec t{};
   clock_gettime(CLOCK_THREAD_CPUTIME_ID, &t);
   const uint64_t cpuNs = static_cast<uint64_t>(t.tv_sec) * 1000000000ull + static_cast<uint64_t>(t.tv_nsec);
-  const int64_t wall = OSGetTime();
+  const int64_t wall = PortTime_Now();
   if (c.thread == thread) {
     c.ticks += static_cast<uint64_t>(static_cast<double>(cpuNs - c.cpuNs) * 40500000.0 / 1e9);
   } else if (c.thread != 0) {
-    c.ticks += static_cast<uint64_t>(wall - c.wall);
+    c.ticks += wall > c.wall ? static_cast<uint64_t>(wall - c.wall) : 0;
   }
   c.thread = thread;
   c.cpuNs = cpuNs;
@@ -124,12 +124,12 @@ extern "C" u32 PortMusyX_GetTick(void) {
   const DWORD thread = GetCurrentThreadId();
   ULONG64 cycles = 0;
   QueryThreadCycleTime(GetCurrentThread(), &cycles);
-  const int64_t wall = OSGetTime();
+  const int64_t wall = PortTime_Now();
   measure_cycle_rate(c);
   if (c.thread == thread) {
     c.ticks += static_cast<uint64_t>(static_cast<double>(cycles - c.cycles) / c.cyclesPerTick);
   } else if (c.thread != 0) {
-    c.ticks += static_cast<uint64_t>(wall - c.wall);
+    c.ticks += wall > c.wall ? static_cast<uint64_t>(wall - c.wall) : 0;
   }
   c.thread = thread;
   c.cycles = cycles;
@@ -382,7 +382,12 @@ void reserve_init() {
 }
 
 constexpr double kHighRateReserveMs = 80.0;
+#ifdef __ANDROID__
+constexpr double kPhoneReserveMs = 100.0;
+double sMinReserveMs = kPhoneReserveMs;
+#else
 double sMinReserveMs = kTargetQueuedMs;
+#endif
 void reserve_refresh_floor() {
   static unsigned counter = 0;
   if (counter++ % 200 != 0) return;
@@ -397,7 +402,11 @@ void reserve_refresh_floor() {
       hz = id == "monitor" ? 1000 : std::atoi(id.c_str());
     }
   }
+#ifdef __ANDROID__
+  const double floorMs = hz > 61 ? kHighRateReserveMs + 20.0 : kPhoneReserveMs;
+#else
   const double floorMs = hz > 61 ? kHighRateReserveMs : static_cast<double>(kTargetQueuedMs);
+#endif
   if (floorMs != sMinReserveMs) {
     sMinReserveMs = floorMs;
     if (sReserve.log) std::fprintf(stderr, "[platform/audio] sound reserve floor %.0f ms (frame rate %s)\n", floorMs, hz > 61 ? "above 60" : "60 or below");
@@ -728,6 +737,19 @@ void PortAI_GhostRestore(void) {
 size_t PortAI_StateSize(void) { return sizeof(SavedAi); }
 
 void PortAI_StateGet(void* out) { *static_cast<SavedAi*>(out) = {sNextAddr, sNextLength, sMusyxClock}; }
+
+void PortAI_FileGet(uint64_t out[4]) {
+  out[0] = sNextAddr;
+  out[1] = sNextLength;
+  out[2] = static_cast<uint64_t>(sMusyxClock.wall);
+  out[3] = sMusyxClock.ticks;
+}
+void PortAI_FileSet(const uint64_t in[4]) {
+  sNextAddr = static_cast<decltype(sNextAddr)>(in[0]);
+  sNextLength = static_cast<decltype(sNextLength)>(in[1]);
+  sMusyxClock.wall = static_cast<int64_t>(in[2]);
+  sMusyxClock.ticks = in[3];
+}
 
 void PortAI_StateSet(const void* in) {
   const SavedAi& a = *static_cast<const SavedAi*>(in);

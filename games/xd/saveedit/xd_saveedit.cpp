@@ -44,7 +44,7 @@ struct PocketDesc {
 constexpr PocketDesc kPockets[] = {{0x4C8, 30}, {0x540, 43}, {0x5EC, 16}, {0x62C, 64}, {0x72C, 46}, {0x7E4, 3}, {0x7F0, 60}};
 
 constexpr size_t kSpecies = 0x00, kHeld = 0x02, kHp = 0x04, kFriend = 0x06, kLevel = 0x11, kMarks = 0x14, kStatus = 0x16,
-                 kFlags = 0x1D, kExp = 0x20, kOtId = 0x24, kPid = 0x28, kOtName = 0x38, kNick = 0x4E, kNickOrg = 0x64,
+                 kFlagAmari = 0x1A, kFlags = 0x1D, kExp = 0x20, kOtId = 0x24, kPid = 0x28, kOtName = 0x38, kNick = 0x4E, kNickOrg = 0x64,
                  kMoves = 0x80, kStats = 0x90, kEvs = 0x9C, kIvs = 0xA8, kContest = 0xAE, kShadowId = 0xBA;
 constexpr size_t kNameChars = 11;
 
@@ -162,12 +162,25 @@ bool Editor::Open(const std::vector<uint8_t>& file, const Options& options, std:
   log_.clear();
   if (!xs::ReadSave(file_, orig_, report_, error)) return false;
   work_ = orig_;
+  extra_.clear();
+  extraOrig_.clear();
+  Refresh();
   return true;
 }
 
 void Editor::Refresh() {
   xs::ReadReport scratch;
   xs::Reparse(work_, scratch);
+  extraEntries_.clear();
+  for (const auto& r : extra_) {
+    xs::ShadowEntry e;
+    e.raw = r;
+    e.status = static_cast<uint8_t>(r[0] >> 5);
+    e.species = xs::Read16(r.data() + 0x1A, xs::ByteOrder::GameCube);
+    e.pid = xs::Read32(r.data() + 0x1C, xs::ByteOrder::GameCube);
+    e.heartGauge = static_cast<int32_t>(xs::Read32(r.data() + 0x24, xs::ByteOrder::GameCube));
+    extraEntries_.push_back(e);
+  }
 }
 
 void Editor::Log(const std::string& text, bool marks, const char* kind) { log_.push_back({text, marks, kind}); }
@@ -216,7 +229,7 @@ const xs::Pokemon* Editor::At(const Spot& s) const {
 
 bool Editor::UnpurifiedShadow(const xs::Pokemon& p) const {
   if (p.IsEmpty() || p.shadowId == 0) return false;
-  const xs::ShadowEntry* e = work_.ShadowOf(p);
+  const xs::ShadowEntry* e = ShadowEntryOf(p);
   return e == nullptr || !e->Purified();
 }
 
@@ -306,6 +319,7 @@ std::string Editor::SetSpecies(const Spot& s, uint16_t species, const Tables& t)
   if (xd::legality::ExpForLevel(*t.rules, t.rules->species[species].growth, p.level, exp)) xs::Write32(r + kExp, exp, o);
   const auto& sp = t.rules->species[species];
   if (sp.abilities[1] == 0) r[kFlags] = static_cast<uint8_t>(r[kFlags] & ~0x40);
+  if (sp.hiddenAbility == 0) r[kFlagAmari] = static_cast<uint8_t>(r[kFlagAmari] & ~0x80);
   if (nickWasDefault) {
     const std::string n = SpeciesText(&t, species);
     const std::u16string name(n.begin(), n.end());
@@ -333,15 +347,45 @@ std::string Editor::SetNickname(const Spot& s, const std::u16string& name) {
   return "";
 }
 
+namespace {
+bool HasPlateForms(const Tables& t, uint16_t base) {
+  if (t.rules == nullptr) return false;
+  for (const auto& f : t.rules->species) if (f.exists && f.formKind == 6 && f.plateItem != 0 && f.formOf == base) return true;
+  return false;
+}
+uint16_t PlateRowFor(const Tables& t, uint16_t base, uint16_t item) {
+  if (t.rules == nullptr || item == 0) return 0;
+  for (size_t i = 0; i < t.rules->species.size(); i++) {
+    const auto& f = t.rules->species[i];
+    if (f.exists && f.formKind == 6 && f.formOf == base && f.plateItem == item) return static_cast<uint16_t>(i);
+  }
+  return 0;
+}
+}
+
 std::string Editor::SetHeldItem(const Spot& s, uint16_t item, const Tables& t) {
   if (auto why = Refuse(s); !why.empty()) return why;
   const xs::Pokemon& p = *At(s);
   if (p.heldItem == item) return "";
   if (item != 0 && (t.rules == nullptr || item >= t.rules->items.size() || !t.rules->items[item].exists)) return Tr("The game's tables don't have that item.");
   const std::string who = Name(s, &t);
+  const uint16_t oldItem = p.heldItem;
   xs::Write16(Rec(s) + kHeld, item, work_.order);
   Refresh();
-  Log(Fmt(Tr("%s: held item %s -> %s"), who.c_str(), ItemText(t, p.heldItem).c_str(), ItemText(t, item).c_str()), true, "held item");
+  Log(Fmt(Tr("%s: held item %s -> %s"), who.c_str(), ItemText(t, oldItem).c_str(), ItemText(t, item).c_str()), true, "held item");
+  if (t.rules != nullptr && !p.IsEgg() && p.shadowId == 0 && p.species < t.rules->species.size()) {
+    const uint16_t base = t.rules->species[p.species].formOf != 0 ? t.rules->species[p.species].formOf : p.species;
+    if (HasPlateForms(t, base)) {
+      const uint16_t row = PlateRowFor(t, base, item);
+      const uint16_t target = row != 0 ? row : base;
+      if (target != p.species) {
+        const uint16_t was = p.species;
+        if (std::string why = SetSpecies(s, target, t); !why.empty()) return why;
+        if (!log_.empty()) log_.pop_back();
+        Log(Fmt(Tr("%s: form %s -> %s (it follows the held Plate)"), who.c_str(), t.formName ? t.formName(was).c_str() : std::to_string(was).c_str(), t.formName ? t.formName(target).c_str() : std::to_string(target).c_str()), true, "form");
+      }
+    }
+  }
   return "";
 }
 
@@ -451,16 +495,49 @@ std::string Editor::SetPpUps(const Spot& s, int index, int ppUps, const Tables& 
 
 std::string Editor::SetAbilitySlot(const Spot& s, int slot, const Tables& t) {
   if (auto why = Refuse(s); !why.empty()) return why;
-  if (slot < 0 || slot > 1) return Tr("A Pokemon has a first and a second ability place.");
+  if (slot < 0 || slot > 2) return Tr("A Pokemon has a first and a second ability place, and sometimes a hidden one.");
   const xs::Pokemon& p = *At(s);
-  if ((p.SecondAbility() ? 1 : 0) == slot) return "";
+  const int now = p.HiddenAbility() ? 2 : p.SecondAbility() ? 1 : 0;
+  if (now == slot) return "";
   if (t.rules == nullptr || p.species >= t.rules->species.size()) return Tr("The game's tables don't have that species.");
-  if (slot == 1 && t.rules->species[p.species].abilities[1] == 0) return Tr("This species has only one ability.");
+  const auto& sp = t.rules->species[p.species];
+  if (slot == 1 && (sp.abilities[1] == 0 || sp.abilities[1] == sp.abilities[0])) return Tr("This species has only one ability.");
+  if (slot == 2 && sp.hiddenAbility == 0) return Tr("This species has no hidden ability in this playthrough.");
   const std::string who = Name(s, &t);
   uint8_t* r = Rec(s);
   r[kFlags] = static_cast<uint8_t>(slot == 1 ? (r[kFlags] | 0x40) : (r[kFlags] & ~0x40));
+  r[kFlagAmari] = static_cast<uint8_t>(slot == 2 ? (r[kFlagAmari] | 0x80) : (r[kFlagAmari] & ~0x80));
   Refresh();
-  Log(Fmt(Tr("%s: ability place %d -> %d"), who.c_str(), slot == 1 ? 1 : 2, slot == 1 ? 2 : 1), true, "ability");
+  const auto name = [&](int place) -> std::string {
+    const int id = place == 2 ? sp.hiddenAbility : sp.abilities[place == 1 ? 1 : 0];
+    const std::string n = t.rules != nullptr && t.abilityName ? t.abilityName(static_cast<uint16_t>(id)) : std::string();
+    return n.empty() ? std::to_string(id) : n;
+  };
+  Log(Fmt(Tr("%s: ability %s -> %s"), who.c_str(), name(now).c_str(), name(slot).c_str()), true, "ability");
+  return "";
+}
+
+std::string Editor::SetForm(const Spot& s, uint16_t row, const Tables& t) {
+  if (auto why = Refuse(s); !why.empty()) return why;
+  const xs::Pokemon& p = *At(s);
+  if (p.species == row) return "";
+  if (t.rules == nullptr || row >= t.rules->species.size() || p.species >= t.rules->species.size()) return Tr("The game's tables don't have that species.");
+  const auto& from = t.rules->species[p.species];
+  const auto& to = t.rules->species[row];
+  const uint16_t base = from.formOf != 0 ? from.formOf : p.species;
+  if (!to.exists || (row != base && (to.formOf != base || to.formKind == 2 || to.formKind == 3 || to.formKind == 4 || (to.formKind == 6 && to.plateItem == 0))))
+    return Tr("This playthrough has no such form of this Pokemon.");
+  const std::string who = Name(s, &t);
+  if (to.formKind == 6 || (HasPlateForms(t, base) && PlateRowFor(t, base, p.heldItem) != 0)) {
+    const uint16_t item = to.formKind == 6 ? to.plateItem : 0;
+    if (p.heldItem != item) {
+      if (std::string why = SetHeldItem(s, item, t); !why.empty()) return why;
+      if (At(s)->species == row) return "";
+    }
+  }
+  if (std::string why = SetSpecies(s, row, t); !why.empty()) return why;
+  if (!log_.empty()) log_.pop_back();
+  Log(Fmt(Tr("%s: form -> %s"), who.c_str(), t.formName ? t.formName(row).c_str() : std::to_string(row).c_str()), true, "form");
   return "";
 }
 
@@ -602,6 +679,11 @@ std::string Editor::Swap(const Spot& a, const Spot& b) {
   std::memcpy(ra, rb, tmp.size());
   std::memcpy(rb, tmp.data(), tmp.size());
   if (a.area == Area::Party || b.area == Area::Party) PackParty();
+  {
+    Refresh();
+    for (int i = 0; i < xs::kPartySize; i++) ShadowWhere(work_.party[static_cast<size_t>(i)], {Area::Party, 0, i});
+    for (int bx = 0; bx < xs::kBoxCount; bx++) for (int i = 0; i < xs::kBoxSlots; i++) ShadowWhere(work_.boxes[static_cast<size_t>(bx)].slots[static_cast<size_t>(i)], {Area::Box, bx, i});
+  }
   Refresh();
   Log(Fmt(Tr("%s <-> %s: moved"), wa.c_str(), wb.c_str()), false, "move place");
   return "";
@@ -891,19 +973,263 @@ std::string Editor::OpenHeart(const Spot& s) {
   if (auto why = Refuse(s); !why.empty()) return why;
   const xs::Pokemon& p = *At(s);
   if (p.shadowId == 0) return Tr("That Pokemon is not a Shadow Pokemon.");
-  if (p.shadowId >= xs::kShadowEntries) return Tr("This Shadow Pokemon's record is kept in the save extension (More Shadow Pokemon): its heart can't be opened here yet.");
-  const xs::ShadowEntry& e = work_.shadows[p.shadowId];
+  const xs::ShadowEntry* ep = ShadowEntryOf(p);
+  if (ep == nullptr) return Tr("This Shadow Pokemon's record is kept in the save extension, which was not read: its heart can't be opened here.");
+  const xs::ShadowEntry e = *ep;
   if (e.Purified()) return Tr("That Pokemon is purified already.");
   if (!e.Snagged()) return Tr("That Shadow Pokemon is not caught yet.");
   if (e.heartGauge == 0) return "";
-  const size_t sh = xs::SectionOffsetInSlot(work_, 15);
-  if (sh == 0) return Tr("This save has no Shadow list.");
+  uint8_t* rec = ShadowRecMut(p.shadowId);
+  if (rec == nullptr) return Tr("This save has no Shadow list.");
   const std::string who = Name(s, nullptr);
   const int before = e.heartGauge;
-  xs::Write32(work_.slotBytes.data() + sh + static_cast<size_t>(p.shadowId) * xs::kShadowEntrySize + 0x24, 0, work_.order);
+  xs::Write32(rec + 0x24, 0, p.shadowId >= xs::kShadowEntries ? xs::ByteOrder::GameCube : work_.order);
   Refresh();
   Log(Fmt(Tr("%s: heart opened (gauge %d -> 0)"), who.c_str(), before), true, "shadow heart");
   return "";
+}
+
+namespace {
+constexpr size_t kDarkStatus = 0x00, kDarkWhere1 = 0x01, kDarkWhere2 = 0x02, kDarkBall = 0x06, kDarkRnd = 0x0B, kDarkBox = 0x11, kDarkFloor = 0x16, kDarkSpecies = 0x1A,
+                 kDarkPid = 0x1C, kDarkGauge = 0x24, kDarkName = 0x28, kDarkOwnRow = 0x3E, kDarkRevers = 0x40;
+constexpr size_t kPokemonBall = 0x0F, kPokemonFloor = 0x08;
+void SetWhere(uint8_t* e, int where, int box) {
+  e[kDarkWhere1] = static_cast<uint8_t>((e[kDarkWhere1] & ~0x03) | ((where >> 1) & 1));
+  e[kDarkWhere2] = static_cast<uint8_t>((e[kDarkWhere2] & 0x7F) | ((where & 1) << 7));
+  e[kDarkBox] = static_cast<uint8_t>(box);
+}
+}
+
+namespace {
+std::array<uint8_t, xs::kShadowEntrySize> InitExtraRecord(uint32_t row) {
+  std::array<uint8_t, xs::kShadowEntrySize> r{};
+  xs::Write16(r.data() + kDarkSpecies, 280, xs::ByteOrder::GameCube);
+  xs::Write16(r.data() + kDarkOwnRow, static_cast<uint16_t>(row), xs::ByteOrder::GameCube);
+  return r;
+}
+}
+
+bool Editor::EnsureExtra(uint32_t row) {
+  if (row < xs::kFirstExtraShadowRow || row > xs::kLastShadowRow) return false;
+  while (extra_.size() < row - xs::kFirstExtraShadowRow + 1) extra_.push_back(InitExtraRecord(xs::kFirstExtraShadowRow + static_cast<uint32_t>(extra_.size())));
+  return true;
+}
+
+uint8_t* Editor::ShadowRecMut(uint32_t row) {
+  if (row >= xs::kFirstExtraShadowRow) return EnsureExtra(row) ? extra_[row - xs::kFirstExtraShadowRow].data() : nullptr;
+  const size_t sh = xs::SectionOffsetInSlot(work_, 15);
+  if (sh == 0 || row >= static_cast<uint32_t>(xs::kShadowEntries)) return nullptr;
+  return work_.slotBytes.data() + sh + static_cast<size_t>(row) * xs::kShadowEntrySize;
+}
+
+const uint8_t* Editor::ShadowRec(uint32_t row) const {
+  if (row >= xs::kFirstExtraShadowRow) return row - xs::kFirstExtraShadowRow < extra_.size() ? extra_[row - xs::kFirstExtraShadowRow].data() : nullptr;
+  const size_t sh = xs::SectionOffsetInSlot(work_, 15);
+  if (sh == 0 || row >= static_cast<uint32_t>(xs::kShadowEntries)) return nullptr;
+  return work_.slotBytes.data() + sh + static_cast<size_t>(row) * xs::kShadowEntrySize;
+}
+
+const xs::ShadowEntry* Editor::ShadowEntryOf(const xs::Pokemon& p) const {
+  if (p.shadowId == 0) return nullptr;
+  if (p.shadowId < xs::kShadowEntries) return &work_.shadows[p.shadowId];
+  const size_t i = p.shadowId - xs::kFirstExtraShadowRow;
+  return p.shadowId >= xs::kFirstExtraShadowRow && i < extraEntries_.size() ? &extraEntries_[i] : nullptr;
+}
+
+void Editor::SetExtraShadows(const std::vector<uint8_t>& section) {
+  extra_.clear();
+  if (section.size() >= 4) {
+    const uint32_t n = static_cast<uint32_t>(section[0]) | static_cast<uint32_t>(section[1]) << 8 | static_cast<uint32_t>(section[2]) << 16 | static_cast<uint32_t>(section[3]) << 24;
+    if (n <= xs::kExtraShadowRows && section.size() == 4 + static_cast<size_t>(n) * xs::kShadowEntrySize) {
+      for (uint32_t i = 0; i < n; i++) {
+        std::array<uint8_t, xs::kShadowEntrySize> r;
+        std::memcpy(r.data(), section.data() + 4 + static_cast<size_t>(i) * xs::kShadowEntrySize, r.size());
+        extra_.push_back(r);
+      }
+    }
+  }
+  extraOrig_ = extra_;
+  Refresh();
+}
+
+std::vector<uint8_t> Editor::ExtraShadowSection() const {
+  std::vector<uint8_t> out;
+  if (extra_.empty()) return out;
+  const uint32_t n = static_cast<uint32_t>(extra_.size());
+  for (int i = 0; i < 4; i++) out.push_back(static_cast<uint8_t>(n >> (8 * i)));
+  for (const auto& r : extra_) out.insert(out.end(), r.begin(), r.end());
+  return out;
+}
+
+bool Editor::EditorMadeShadow(const Spot& s) const {
+  const xs::Pokemon* p = At(s);
+  if (p == nullptr || p->IsEmpty() || p->shadowId == 0) return false;
+  for (const std::string& text : shadowOrders_) {
+    xs::ShadowOrder o;
+    if (xs::ParseShadowOrder(text, o) && o.row == p->shadowId) return true;
+  }
+  return false;
+}
+
+bool Editor::ShadowOrderOf(const xs::Pokemon& p, xs::ShadowOrder& out, bool* savedBefore) const {
+  if (p.IsEmpty() || p.shadowId == 0) return false;
+  for (const std::string& text : shadowOrders_) {
+    xs::ShadowOrder o;
+    if (xs::ParseShadowOrder(text, o) && o.row == p.shadowId) {
+      out = o;
+      if (savedBefore != nullptr) *savedBefore = std::find(shadowOrdersOrig_.begin(), shadowOrdersOrig_.end(), text) != shadowOrdersOrig_.end();
+      return true;
+    }
+  }
+  return false;
+}
+
+namespace {
+std::vector<uint32_t> RowOrder(bool moreShadows) {
+  std::vector<uint32_t> rows;
+  if (!moreShadows) {
+    for (uint32_t r = xs::kLastDiscShadowRow; r >= xs::kFirstFreeShadowRow; r--) rows.push_back(r);
+  }
+  for (uint32_t r = xs::kLastShadowRow; r >= xs::kFirstExtraShadowRow; r--) rows.push_back(r);
+  return rows;
+}
+}
+
+void Editor::ShadowRowStats(const Tables& t, int& free, int& total) const {
+  free = 0;
+  total = 0;
+  for (const uint32_t r : RowOrder(t.moreShadows)) {
+    bool mine = false;
+    for (const std::string& text : shadowOrders_) {
+      xs::ShadowOrder o;
+      mine = mine || (xs::ParseShadowOrder(text, o) && o.row == r);
+    }
+    if (!mine && t.shadowRowFree && !t.shadowRowFree(r)) continue;
+    total++;
+    if (mine) continue;
+    const uint8_t* rec = ShadowRec(r);
+    if (rec != nullptr && (rec[kDarkStatus] >> 5) != 0) continue;
+    bool used = false;
+    for (const xs::Pokemon& q : work_.party) used = used || (!q.IsEmpty() && q.shadowId == r);
+    for (const auto& box : work_.boxes) for (const xs::Pokemon& q : box.slots) used = used || (!q.IsEmpty() && q.shadowId == r);
+    if (!used) free++;
+  }
+}
+
+std::string Editor::MakeShadow(const Spot& s, const ShadowWish& wish, const Tables& t) {
+  if (auto why = Refuse(s); !why.empty()) return why;
+  const xs::Pokemon& p = *At(s);
+  if (p.shadowId != 0) return Tr("That Pokemon is a Shadow Pokemon already (or was one).");
+  if (p.IsEgg()) return Tr("An egg can't be a Shadow Pokemon.");
+  if (xs::SectionOffsetInSlot(work_, 15) == 0) return Tr("This save has no Shadow list.");
+  if (wish.gauge < 1 || wish.gauge > 0xFFFF) return Tr("The heart gauge must be from 1 to 65535.");
+  if (wish.revers < 0 || wish.revers > 4) return Tr("The reverse pattern must be from 0 to 4.");
+  bool anyMove = false;
+  for (uint16_t m : wish.moves) {
+    if (m != 0 && (m < xs::kFirstShadowMove || m > xs::kLastShadowMove)) return Tr("Only a Shadow move can be a Shadow Pokemon's move.");
+    anyMove = anyMove || m != 0;
+  }
+  if (!anyMove) return Tr("A Shadow Pokemon needs at least one Shadow move.");
+  uint32_t row = 0;
+  for (const uint32_t r : RowOrder(t.moreShadows)) {
+    bool mine = false;
+    for (const std::string& text : shadowOrders_) {
+      xs::ShadowOrder o;
+      mine = mine || (xs::ParseShadowOrder(text, o) && o.row == r);
+    }
+    if (mine || (t.shadowRowFree && !t.shadowRowFree(r))) continue;
+    const uint8_t* rec = ShadowRec(r);
+    if (rec != nullptr && (rec[kDarkStatus] >> 5) != 0) continue;
+    bool used = false;
+    for (const xs::Pokemon& q : work_.party) used = used || (!q.IsEmpty() && q.shadowId == r);
+    for (const auto& box : work_.boxes) for (const xs::Pokemon& q : box.slots) used = used || (!q.IsEmpty() && q.shadowId == r);
+    if (!used) {
+      row = r;
+      break;
+    }
+  }
+  if (row == 0) return Tr("There is no free Shadow place left: the game's Shadow list is full (More Shadow Pokemon and the Shadow Pokemon made before use them).");
+
+  const xs::ByteOrder o = work_.order;
+  const xs::ByteOrder eo = row >= xs::kFirstExtraShadowRow ? xs::ByteOrder::GameCube : o;
+  uint8_t* rec = Rec(s);
+  uint8_t* e = ShadowRecMut(row);
+  if (e == nullptr) return Tr("This save has no Shadow list.");
+  const std::string who = Name(s, &t);
+  xs::Write16(rec + kShadowId, static_cast<uint16_t>(row), o);
+  e[kDarkStatus] = static_cast<uint8_t>((e[kDarkStatus] & 0x1F) | (3 << 5));
+  e[kDarkWhere1] = static_cast<uint8_t>(e[kDarkWhere1] | 0x20 | 0x80);
+  SetWhere(e, s.area == Area::Party ? 1 : 2, s.area == Area::Party ? s.slot : s.box);
+  e[kDarkBall] = static_cast<uint8_t>((e[kDarkBall] & 0xF0) | (rec[kPokemonBall] & 0x0F));
+  std::memcpy(e + kDarkRnd, rec + kIvs, 6);
+  xs::Write16(e + kDarkFloor, xs::Read16(rec + kPokemonFloor, o), eo);
+  xs::Write16(e + kDarkSpecies, xs::Read16(rec, o), eo);
+  xs::Write32(e + kDarkPid, xs::Read32(rec + kPid, o), eo);
+  xs::Write32(e + kDarkGauge, static_cast<uint32_t>(wish.gauge), eo);
+  xs::Write16(e + kDarkOwnRow, static_cast<uint16_t>(row), eo);
+  e[kDarkRevers] = static_cast<uint8_t>(wish.revers);
+  xs::ShadowOrder order;
+  order.row = row;
+  order.species = xs::Read16(rec, o);
+  order.level = rec[kLevel] > 0 ? rec[kLevel] : 1;
+  order.gauge = wish.gauge;
+  for (int i = 0; i < 4; i++) order.moves[i] = wish.moves[i];
+  order.revers = wish.revers;
+  shadowOrders_.push_back(xs::FormatShadowOrder(order));
+  Refresh();
+  Log(Fmt(Tr("%s: made a Shadow Pokemon (heart gauge %d, Shadow row %u)"), who.c_str(), wish.gauge, row), true, "Shadow Pokemon");
+  return "";
+}
+
+std::string Editor::MakeNormal(const Spot& s) {
+  if (auto why = Refuse(s); !why.empty()) return why;
+  const xs::Pokemon& p = *At(s);
+  if (p.shadowId == 0) return Tr("That Pokemon is not a Shadow Pokemon.");
+  if (!EditorMadeShadow(s)) return Tr("Only a Shadow Pokemon made by this editor can be made ordinary again: the story's Shadow Pokemon are never touched.");
+  if (xs::SectionOffsetInSlot(work_, 15) == 0) return Tr("This save has no Shadow list.");
+  const uint32_t row = p.shadowId;
+  const xs::ByteOrder o = work_.order;
+  const std::string who = Name(s, nullptr);
+  uint8_t* e = ShadowRecMut(row);
+  if (e == nullptr) return Tr("This save has no Shadow list.");
+  if (row >= xs::kFirstExtraShadowRow) {
+    const auto fresh = InitExtraRecord(row);
+    std::memcpy(e, fresh.data(), fresh.size());
+  } else {
+    const uint8_t* clean = nullptr;
+    for (uint32_t r = xs::kFirstFreeShadowRow; r <= xs::kLastDiscShadowRow && clean == nullptr; r++) {
+      if (r == row || work_.shadows[r].status != 0) continue;
+      bool mine = false;
+      for (const std::string& text : shadowOrders_) {
+        xs::ShadowOrder q;
+        mine = mine || (xs::ParseShadowOrder(text, q) && q.row == r);
+      }
+      if (!mine) clean = ShadowRec(r);
+    }
+    uint8_t fresh[xs::kShadowEntrySize] = {};
+    if (clean != nullptr) std::memcpy(fresh, clean, sizeof fresh);
+    else xs::Write16(fresh + kDarkSpecies, 0x118, o);
+    xs::Write16(fresh + kDarkOwnRow, static_cast<uint16_t>(row), o);
+    std::memcpy(e, fresh, sizeof fresh);
+  }
+  xs::Write16(Rec(s) + kShadowId, 0, o);
+  for (size_t i = 0; i < shadowOrders_.size(); i++) {
+    xs::ShadowOrder q;
+    if (xs::ParseShadowOrder(shadowOrders_[i], q) && q.row == row) {
+      shadowOrders_.erase(shadowOrders_.begin() + static_cast<std::ptrdiff_t>(i));
+      break;
+    }
+  }
+  Refresh();
+  Log(Fmt(Tr("%s: Shadow Pokemon made ordinary again (Shadow row %u is free again)"), who.c_str(), row), true, "Shadow Pokemon");
+  return "";
+}
+
+void Editor::ShadowWhere(const xs::Pokemon& p, const Spot& at) {
+  if (p.shadowId == 0 || p.IsEmpty()) return;
+  uint8_t* e = ShadowRecMut(p.shadowId);
+  if (e == nullptr || (e[kDarkStatus] >> 5) != 3) return;
+  SetWhere(e, at.area == Area::Party ? 1 : 2, at.area == Area::Party ? at.slot : at.box);
 }
 
 std::vector<uint16_t> Editor::MemoSpecies() const {
@@ -984,7 +1310,7 @@ std::vector<std::string> Editor::Problems(const Tables& t) const {
   if (t.rules == nullptr) return {"The playthrough's game tables are not known."};
   for (const auto& [spot, p] : ChangedPokemon()) {
     xd::legality::Context ctx;
-    ctx.shadow = work_.ShadowOf(p);
+    ctx.shadow = ShadowEntryOf(p);
     ctx.shadowStaysInItsSave = true;
     const xd::legality::Result r = xd::legality::Check(p, *t.rules, xd::legality::Level::Safe, ctx);
     for (const xd::legality::Finding& f : r.findings) out.push_back(Name(spot, &t) + ": " + f.text);
@@ -1006,7 +1332,7 @@ std::vector<std::string> Editor::Notes(const Tables& t) const {
   if (t.rules == nullptr) return out;
   for (const auto& [spot, p] : ChangedPokemon()) {
     xd::legality::Context ctx;
-    ctx.shadow = work_.ShadowOf(p);
+    ctx.shadow = ShadowEntryOf(p);
     ctx.shadowStaysInItsSave = true;
     const xd::legality::Result r = xd::legality::Check(p, *t.rules, xd::legality::Level::Legal, ctx);
     for (const xd::legality::Finding& f : r.findings) {

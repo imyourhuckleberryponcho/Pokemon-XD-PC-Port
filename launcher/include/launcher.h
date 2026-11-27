@@ -44,6 +44,9 @@ struct SaveSummary {
   std::filesystem::path setupFile;
   std::string looksStyle;
   std::vector<std::pair<std::string, std::string>> looksStyles;
+  int pcBoxes = 8;
+  bool pcBoxesCanRaise = false;
+  std::filesystem::path pcBoxesFile;
 };
 
 struct GameInfo {
@@ -78,10 +81,12 @@ struct GameInfo {
       checkDisc;
   std::function<SaveSummary(const std::string& discPath)> readSave;
   std::function<bool(const std::filesystem::path& setupFile, const std::string& style, std::string& error)> changeLooks;
+  std::function<bool(const std::filesystem::path& setupFile, int boxes, std::string& error)> raisePcBoxes;
   engine::mods::LooksOrSound modLooks;
   const engine::modcheck::GameRules* modRules = nullptr;
   std::function<bool(const std::string& discPath, engine::mods::LoadOptions& load, std::string& error)> openModDisc;
   std::function<void()> closeModDisc;
+  engine::mods::AssetCheck modAssets;
 
   struct DiscPicture {
     std::string id;
@@ -320,9 +325,14 @@ struct GameInfo {
     std::vector<std::string> requiredFiles;
     bool Active() const { return !feedUrl.empty() && !publicKey.empty() && !product.empty(); }
   } updates;
+#if defined(__ANDROID__)
+  bool playInProcess = false;
+  std::function<bool(const std::filesystem::path& apk, std::string& error)> installApk;
+#endif
 };
 
 int Run(const GameInfo& game);
+bool PlayRequested();
 
 }
 

@@ -58,7 +58,7 @@ std::string Fmt(const char* format, ...) {
   return out;
 }
 
-constexpr int kPackVersion = 1;
+constexpr int kPackVersion = xd::packmatch::kGen57PackVersion;
 constexpr uint32_t kPkxSpare = XD_PC_SPARE_SPECIES;
 constexpr uint32_t kPkxDisc = 419;
 constexpr uint32_t kWaveDisc = 389;

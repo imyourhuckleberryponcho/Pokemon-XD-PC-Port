@@ -1,5 +1,6 @@
 #include "xd_challenges.h"
 #include "xd_gen4.h"
+#include "xd_forms.h"
 #include "xd_gen_rules.h"
 #include "xd_gen4_abilities.h"
 #include "xd_xg.h"
@@ -11,6 +12,7 @@
 #include <cstring>
 #include <initializer_list>
 #include <utility>
+#include "savestate_features.h"
 
 extern "C" {
 void* wazaDataBiosGetPtr(uint16_t index);
@@ -181,6 +183,16 @@ int32_t fightSeqWazaDamageCalc(void* attacker, void* defender, void* attackSide,
   }
   if (Gen4On() && attacker != nullptr && defender != nullptr) {
     if (const uint16_t p = PowerOverride(waza, attacker, defender)) iryoku = p;
+    if (xd::forms::Loaded()) {
+      const uint16_t type = zokusei < 0 ? wazaDB_GetZokuseiDataId(waza) : static_cast<uint16_t>(zokusei);
+      const uint16_t power = iryoku != 0 ? iryoku : wazaDB_GetIryoku(waza);
+      const uint16_t item = fightOutPokemonGetSoubiItemDataId(attacker);
+      if (power > 1 && xd::forms::PlateBoosts(item, type) && fightOutPokemonGetTokuseiDataId(attacker) != 103 && !EmbargoActive(attacker)) {
+        iryoku = static_cast<uint16_t>(power * 6 / 5);
+        static int told = 0;
+        if (told++ < 12) std::fprintf(stderr, "[gen4] Plate %u: move %u (type %u) power %u -> %u\n", item, waza, type, power, iryoku);
+      }
+    }
   }
   int32_t damage = PortXD_RealDamageCalc(attacker, defender, attackSide, waza, iryoku, zokusei);
   if (xd::modbattle::Active() && attacker != nullptr && defender != nullptr && damage > 2) {
@@ -1550,4 +1562,18 @@ uint8_t fightSeqFightOutPokemonTokuseiCheckWazaHit(void* attacker, void* defende
   return PortXD_RealTokuseiWazaHit(attacker, defender, waza);
 }
 
+}
+
+namespace {
+const xd::savestate::BytesFeature sStateFeature(
+    "gen4_moves",
+    [](portstate::Out& o) {
+      o.raw(sScripts, sizeof sScripts); o.pod(sInstalled); o.raw(sSides, sizeof sSides); o.pod(sLastMove); o.raw(sMons, sizeof sMons);
+      o.pod(sGravityTurn); o.pod(sTrickSetTurn); o.pod(sLastTurn); o.pod(sRoostMon); o.pod(sRoostTurn); o.pod(sRockVictim);
+    },
+    [](portstate::In& in) {
+      in.raw(sScripts, sizeof sScripts); sInstalled = in.pod<bool>(); in.raw(sSides, sizeof sSides); sLastMove = in.pod<uint16_t>(); in.raw(sMons, sizeof sMons);
+      sGravityTurn = in.pod<int>(); sTrickSetTurn = in.pod<int>(); sLastTurn = in.pod<int>(); sRoostMon = in.pod<void*>(); sRoostTurn = in.pod<int>(); sRockVictim = in.pod<void*>();
+      return in.ok();
+    });
 }

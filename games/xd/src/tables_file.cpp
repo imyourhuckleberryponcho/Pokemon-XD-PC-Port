@@ -1,7 +1,10 @@
 #include "tables_file.h"
 
 #include "data/common_rel.h"
+#include "xd_forms.h"
+#include "xd_hidden_ability.h"
 #include "xd_pc_trade.h"
+#include "xd_xg.h"
 
 #include <port_disc.h>
 #include <xd_legality_tables.h>
@@ -26,6 +29,8 @@ extern uint32_t* table_res_number;
 extern uint8_t* waza_data;
 extern uint32_t* waza_data_number;
 extern void* wazaoshie_data;
+extern uint8_t pokemon_tokusei_data[];
+extern uint32_t pokemon_tokusei_data_number;
 extern uint8_t* pokemon_seikaku_data;
 extern uint32_t* pokemon_seikaku_data_number;
 extern int32_t* wazaoshie_data_number;
@@ -80,6 +85,37 @@ bool MakeRules(xd::legality::DiscRules& rules, std::string& error) {
   return xd::legality::BuildRulesFromRunningGame(&t, mach, grow, rules, error);
 }
 
+void AddPlaythroughExtras(xd::legality::TablesFile& tables) {
+  auto& names = *tables.names;
+  if (!xd::xg::On() && pokemon_tokusei_data_number > 0 && pokemon_tokusei_data_number <= 1024) {
+    const auto* rows = reinterpret_cast<const uint32_t*>(pokemon_tokusei_data);
+    const uint32_t n = pokemon_tokusei_data_number;
+    if (names.abilities.size() < n) names.abilities.resize(n);
+    names.abilityText.assign(n, std::string());
+    for (uint32_t i = 1; i < n; i++) {
+      const std::string name = PortXD_LiveMessage(rows[3 * i + 1]);
+      if (!name.empty()) names.abilities[i] = name;
+      names.abilityText[i] = PortXD_LiveMessage(rows[3 * i + 2]);
+    }
+  }
+  names.formKey.assign(tables.rules.species.size(), std::string());
+  for (const xd::forms::Form& f : xd::forms::All()) {
+    if (f.row >= tables.rules.species.size() || f.base >= 65536) continue;
+    auto& sp = tables.rules.species[f.row];
+    sp.formOf = static_cast<uint16_t>(f.base);
+    sp.formKind = static_cast<uint8_t>(f.kind);
+    sp.plateItem = f.kind == xd::forms::Kind::Plate && f.stone < 65536 ? static_cast<uint16_t>(f.stone) : 0;
+    names.formKey[f.row] = f.key;
+  }
+  if (xd::hidden::Enabled()) {
+    for (size_t row = 1; row < tables.rules.species.size(); row++) {
+      if (!tables.rules.species[row].exists) continue;
+      const int id = xd::hidden::OfRow(static_cast<uint32_t>(row));
+      if (id > 0 && id < 256) tables.rules.species[row].hiddenAbility = static_cast<uint8_t>(id);
+    }
+  }
+}
+
 }
 
 bool Write(const std::filesystem::path& file, const std::string& stamp) {
@@ -90,7 +126,8 @@ bool Write(const std::filesystem::path& file, const std::string& stamp) {
     return false;
   }
   game.names->SetLiveText(&PortXD_LiveMessage);
-  const xd::legality::TablesFile tables = xd::legality::TablesOf(game, stamp);
+  xd::legality::TablesFile tables = xd::legality::TablesOf(game, stamp);
+  AddPlaythroughExtras(tables);
   const std::vector<uint8_t> bytes = xd::legality::Serialize(tables);
   std::error_code ec;
   std::filesystem::create_directories(file.parent_path(), ec);

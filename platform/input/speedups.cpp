@@ -45,6 +45,8 @@ constexpr size_t kFastForward = static_cast<size_t>(ec::Action::FastForward);
 constexpr size_t kBreakAction = static_cast<size_t>(ec::Action::SpeedrunBreak);
 constexpr size_t kBarAction = static_cast<size_t>(ec::Action::ReplayBar);
 constexpr size_t kCheatAction = static_cast<size_t>(ec::Action::CheatMenu);
+constexpr size_t kStatesAction = static_cast<size_t>(ec::Action::SaveStates);
+uint32_t sStatesKeyPresses = 0;
 std::atomic<bool> sCheatModsHeld{false};
 uint32_t sCheatKeyPresses = 0;
 uint32_t sBarKeyPresses = 0;
@@ -210,6 +212,7 @@ void PortSpeedups_HandleEvent(const void* sdlEvent) {
       if (!e->key.repeat && IsActionKey(code, kBreakAction)) sBreakKeyPresses++;
       if (!e->key.repeat && IsActionKey(code, kBarAction)) sBarKeyPresses++;
       if (!e->key.repeat && IsActionKey(code, kCheatAction)) sCheatKeyPresses++;
+      if (!e->key.repeat && IsActionKey(code, kStatesAction)) sStatesKeyPresses++;
     }
   } else if (e->type == SDL_EVENT_KEY_UP) {
     sKeysDown.erase(std::remove(sKeysDown.begin(), sKeysDown.end(), static_cast<uint16_t>(e->key.scancode)),
@@ -245,6 +248,16 @@ uint32_t PortSpeedups_CheatMenuPresses(void) {
 }
 
 bool PortSpeedups_CheatChordModifiersHeld(void) { return sCheatModsHeld.load(std::memory_order_relaxed); }
+
+uint32_t PortSpeedups_SaveStatesPresses(void) {
+  static bool padWas = false;
+  uint32_t n = sStatesKeyPresses;
+  sStatesKeyPresses = 0;
+  const bool held = PadChordFor(kStatesAction, true);
+  if (held && !padWas) n++;
+  padWas = held;
+  return n;
+}
 
 uint32_t PortSpeedups_BreakPresses(void) {
   static bool padWas = false;

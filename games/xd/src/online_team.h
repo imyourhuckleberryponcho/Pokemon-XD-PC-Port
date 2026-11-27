@@ -7,6 +7,7 @@
 #include <xd_legality.h>
 #include <xd_save.h>
 
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -14,10 +15,13 @@ namespace xd::online {
 
 constexpr size_t kMaxTeam = 6;
 
-std::string EncodeTeam(const std::vector<xd::save::Pokemon>& team);
-bool DecodeTeam(const std::string& line, std::vector<xd::save::Pokemon>& out, std::string* why);
+std::string EncodeTeam(const std::vector<xd::save::Pokemon>& team, uint32_t editedMask = 0);
+bool DecodeTeam(const std::string& line, std::vector<xd::save::Pokemon>& out, std::string* why, uint32_t* editedMask = nullptr);
+uint32_t EditedShadowMask(const std::vector<xd::save::Pokemon>& team, const std::vector<std::string>& orders);
+std::vector<std::string> EditorOrdersOfCardRoot(const std::filesystem::path& cardRoot, const std::vector<uint8_t>& saveFileData);
+std::vector<std::string> EditorOrdersBesideSave(const std::filesystem::path& savePath, const std::vector<uint8_t>& saveFileData);
 
-std::vector<std::string> CheckTeam(const std::vector<xd::save::Pokemon>& team, const xd::legality::Rules& rules, const RoomRules& room);
+std::vector<std::string> CheckTeam(const std::vector<xd::save::Pokemon>& team, const xd::legality::Rules& rules, const RoomRules& room, uint32_t editedMask = 0);
 bool ApplyFormat(RoomRules& room, std::string* error);
 std::vector<std::string> CheckTeamFormat(const std::vector<xd::save::Pokemon>& team, const xd::legality::Rules& rules, const RoomRules& room);
 

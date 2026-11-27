@@ -163,6 +163,20 @@ Result Check(const Pokemon& p, const Rules& rules, Level level, const Context& c
       c.Add(Level::Safe, "item.range", who + " holds item #" + std::to_string(p.heldItem) + ", which this game doesn't have.");
     }
   }
+  {
+    const uint16_t base = sp.formOf != 0 ? sp.formOf : p.species;
+    uint16_t want = 0;
+    bool plates = false;
+    for (size_t i = 0; i < rules.species.size(); i++) {
+      const SpeciesRules& f = rules.species[i];
+      if (!f.exists || f.formKind != 6 || f.plateItem == 0 || f.formOf != base) continue;
+      plates = true;
+      if (f.plateItem == p.heldItem) want = static_cast<uint16_t>(i);
+    }
+    if (plates && p.species != (want != 0 ? want : base) && !p.IsEgg())
+      c.Add(Level::Legal, "form.plate", who + (sp.formKind == 6 ? " is in a Plate form without holding that Plate."
+                                                               : " holds a Plate but is not in its form."));
+  }
   for (int i = 0; i < 6; i++) {
     if (p.ivs[static_cast<size_t>(i)] > 31) {
       c.Add(Level::Safe, "iv.range", who + " has an IV of " + std::to_string(p.ivs[static_cast<size_t>(i)]) + " (31 is the most).");

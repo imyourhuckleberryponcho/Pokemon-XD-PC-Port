@@ -5,6 +5,7 @@
 #include "xd_spare.h"
 
 #include <xd_save.h>
+#include <xd_shadow_orders.h>
 
 #include <algorithm>
 #include <cstdio>
@@ -23,7 +24,7 @@ namespace {
 
 constexpr uint16_t kStandIn = 280;
 constexpr size_t kMaxRows = XD_PC_SPARE_SHADOWS;
-static_assert(XD_PC_SPARE_SHADOWS == 256 && xd::shadowrows::kRecordSize == 0x48, "the editor and the game agree on the spare rows");
+static_assert(XD_PC_SPARE_SHADOWS == xd::save::kExtraShadowRows && xd::shadowrows::kRecordSize == 0x48, "the editor and the game agree on the spare rows");
 
 std::map<uint32_t, xd::randomizer::ExtraShadowRow> sRows;
 uint32_t sCount = 0;
@@ -57,7 +58,7 @@ void* Hook(uint32_t index) { return index < sCount ? xd_extra_shadow_records[ind
 
 std::vector<uint8_t> SaveSection() {
   std::vector<uint8_t> out;
-  if (sCount == 0 && xd::pt::LoadedMoreShadows().rfind("pct:", 0) != 0 && xd::pt::LoadedMoreShadows().rfind("own:", 0) != 0) return out;
+  if (sCount == 0 && xd::pt::LoadedMoreShadows().rfind("pct:", 0) != 0 && xd::pt::LoadedMoreShadows().rfind("own:", 0) != 0 && xd::pt::LoadedMoreShadows().rfind("own2:", 0) != 0) return out;
   for (int i = 0; i < 4; i++) out.push_back(static_cast<uint8_t>(sCount >> (8 * i)));
   for (uint32_t i = 0; i < sCount; i++) {
     uint8_t r[xd::shadowrows::kRecordSize];

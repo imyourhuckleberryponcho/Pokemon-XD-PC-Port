@@ -808,6 +808,30 @@ bundles (docs/PARITY.md).
 `XD_NO_LAUNCHER=1` starts the game directly. docs/MAC.md "Launcher on the Mac": what the workflow checks, what is
 untested.
 
+## On Android (the phone launcher, 0.8.0; docs/ANDROID.md "The phone launcher")
+
+The same launcher, drawn as the first screen of the app, before the game, in the game's own process (`XdAndroidLauncherMain` in
+`games/xd/launcher/xd_launcher.cpp`, called by `games/xd/src/boot.c` at the start of the game's `main`; Play ends the launcher and the game
+starts from the settings and mod list it wrote; there is no second program). Everything Android-only is under `__ANDROID__`: the other
+systems' launcher programs are the ones they were (checked object by object, docs/ANDROID.md).
+- **First start**, one question at a time: the disc (Android's own file window; the file stays where it is), its check (a minute the first
+  time), how to play (the buttons, controllers, where saves live), then the usual "Original or Enhanced?".
+- **Touch**: a finger drag scrolls (ImGui has none; `TouchDrag`), rows and buttons are bigger (`TouchStyle`), the Android back gesture closes the
+  window on top (the Escape key), the system's file window is used for every file (a controller does not switch to the built-in browser).
+- **Files**: Android's file window answers with `content://` addresses. A disc keeps its address (read in place, `platform/disc/disc_open.h`).
+  Everything else (a save to import, a mod zip) is copied into the app's cache first; **Export** writes the file in the app's cache and hands it to
+  the document the player chose when it is complete (`AndroidFlush`).
+- **Mods**: "Add a mod (.zip)..." runs the downloaded-mod safety scan and the mod checker on the zip (`engine/modcheck`), then puts the mod's folder in
+  the mods list, switched off. There is no "Open the mods folder".
+- **Saves**: the Save page's list, Export... / Import..., backups and Restore work as on a PC; "Open folder" buttons, desktop shortcuts, window icons,
+  "Where your data is kept" (user or portable), "Keep this window open", shader preparation and the picture-drawing run are left out.
+- **Controls**: a "Touch buttons" card (layout, show, size, see-through, stick, fast-forward button); moving the buttons is in the game's pause menu.
+- **Extra assets**: the converters are separate programs and a phone app cannot start those; the page says "make it on a PC and copy" and the packs are
+  taken from a folder the same way as on a PC (not built yet: docs/ANDROID.md "What is left").
+- **Updates**: the signed update.json's "android" entry (an APK), downloaded through the phone's own HTTPS client, checked (size, SHA-256) and handed to Android's installer, which asks the player (docs/UPDATER.md "0.8.0: Android").
+- Tests: `XD_LAUNCHER_SCRIPT` runs the usual steps; `XD_LAUNCHER_WIZARD=1` asks the first-start questions in a scripted run;
+  `XD_NO_LAUNCHER=1` skips the launcher (every test run does); `XD_ANDROID_INSTALL_TEST=<apk>` hands that file to Android's installer.
+
 ## How it is built (for developers)
 
 - Everything the launcher asks of the system it runs on is behind `include/launcher_sys.h` (the program's folder,
@@ -855,3 +879,10 @@ The steps are listed at the top of `include/launcher.h`. Reports page: `page:rep
 `exportoption:name=on|off`, `exportoption:dump=on|off`, `export:<file.zip>` (as if chosen in the Save window),
 `deletereport`, `session:<n>` (the play-session window on session n, 1 = newest), `savesession:<file.zip>`. Make test reports with xd.exe's `XD_BUG_REPORT_AT` / `XD_TEST_CRASH` under a test APPDATA. xd.exe started by Play inherits the environment
 (so the same test settings and card, and XD_INPUT_SCRIPT if set).
+
+Stream overlay (Settings > System): under the switches `system.stream_overlay`, `system.stream_overlay_moving` ("Moving pictures") and
+`system.stream_overlay_look` come two buttons (drawn by `App::DrawOverlayHelpRow` through `settings_ui::Options::afterRow`): "Open overlay folder"
+(`<data folder>/stream_overlay`; not there yet = a sentence saying to start the game once with the overlay on) and "How to use it in OBS" (opens
+`Stream overlay guide.txt` from the program's folder; `docs/STREAM_OVERLAY_GUIDE.md` made into text by `tools/stream_overlay/make_guide.py`,
+packed by package_release.py / package_linux.py / package_mac.sh). Script steps `overlay:folder|guide` (a script run opens nothing, it logs the path);
+test: `python tools/test_launcher_pad.py --build <bin> --only overlay`.

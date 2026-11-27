@@ -2,7 +2,9 @@
 #include "xd_speedrun.h"
 
 #include <algorithm>
+#include <any>
 #include <cstdio>
+#include "savestate_features.h"
 #include <cstdlib>
 #include <set>
 #include <string>
@@ -33,6 +35,54 @@ bool Log() {
   static const bool on = std::getenv("XD_CHALLENGE_LOG") != nullptr;
   return on;
 }
+
+struct Saved {
+  std::set<uint32_t> won, sinceStart;
+  bool complete, inFight, sawNoResult, decided, heroWon;
+  unsigned changes, battle, result;
+};
+const xd::savestate::Feature sStateFeature(
+    "battles_won",
+    [] {
+      return std::any(Saved{sWon, sSinceStart, sComplete, sInFight, sSawNoResult, sDecided, sHeroWon, sChanges, sBattle, sResult});
+    },
+    [](const std::any& a) {
+      const Saved& s = std::any_cast<const Saved&>(a);
+      sWon = s.won;
+      sSinceStart = s.sinceStart;
+      sComplete = s.complete;
+      sInFight = s.inFight;
+      sSawNoResult = s.sawNoResult;
+      sDecided = s.decided;
+      sHeroWon = s.heroWon;
+      sChanges = s.changes + 1;
+      sBattle = s.battle;
+      sResult = s.result;
+      if (Log()) std::fprintf(stderr, "[battles won] state put back by a save state: %zu won, battle %u, in fight %d\n", sWon.size(), sBattle, sInFight ? 1 : 0);
+    },
+    [](const std::any& a, portstate::Out& out) {
+      const Saved& s = std::any_cast<const Saved&>(a);
+      out.u64(s.won.size());
+      for (uint32_t v : s.won) out.pod(v);
+      out.u64(s.sinceStart.size());
+      for (uint32_t v : s.sinceStart) out.pod(v);
+      out.pod(s.complete); out.pod(s.inFight); out.pod(s.sawNoResult); out.pod(s.decided); out.pod(s.heroWon);
+      out.pod(s.changes); out.pod(s.battle); out.pod(s.result);
+    },
+    [](portstate::In& in, std::any& a) {
+      Saved s{};
+      const uint64_t nw = in.u64();
+      if (nw > (1u << 20)) return false;
+      for (uint64_t i = 0; i < nw && in.ok(); i++) s.won.insert(in.pod<uint32_t>());
+      const uint64_t ns = in.u64();
+      if (ns > (1u << 20)) return false;
+      for (uint64_t i = 0; i < ns && in.ok(); i++) s.sinceStart.insert(in.pod<uint32_t>());
+      s.complete = in.pod<bool>(); s.inFight = in.pod<bool>(); s.sawNoResult = in.pod<bool>(); s.decided = in.pod<bool>(); s.heroWon = in.pod<bool>();
+      s.changes = in.pod<unsigned>(); s.battle = in.pod<unsigned>(); s.result = in.pod<unsigned>();
+      if (!in.ok()) return false;
+      a = std::move(s);
+      return true;
+    });
 }
 
 void Frame() {

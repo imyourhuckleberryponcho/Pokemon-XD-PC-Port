@@ -1,5 +1,6 @@
 #include "xd_spare.h"
 #include "xd_data_mods.h"
+#include <room_recipe.h>
 #include "xd_flag_scan.h"
 
 #include "dol_tables.h"
@@ -783,6 +784,15 @@ void AddDeckTables(const em::EntryReader& read, em::DataCatalog& out) { add_deck
 
 bool CheckModEntry(int fsysType, const std::string& mod, std::vector<uint8_t>& data, const std::vector<em::AddedRow>& rows,
                    std::string& why) {
+  if (fsysType == 1 || fsysType == 3) {
+    std::vector<std::string> problems;
+    const bool ok = fsysType == 1 ? engine::rooms::HsdValidateMap(data.data(), data.size(), problems) : engine::rooms::CcdValidate(data.data(), data.size(), problems);
+    if (!ok) {
+      why = problems.empty() ? std::string("it is not usable") : problems[0];
+      if (problems.size() > 1) why += " (and " + std::to_string(problems.size() - 1) + " more problem(s))";
+    }
+    return ok;
+  }
   if (fsysType != 7) return true;
   return CheckModScript(mod, data, rows, why);
 }

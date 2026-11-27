@@ -1,3 +1,4 @@
+#include "xd_forms.h"
 #include "xd_shiny.h"
 
 extern "C" int PortXD_CheatShinyDivisor(void);
@@ -155,7 +156,9 @@ uint32_t PortXD_FitMaybeShadow(void* pokemon, int8_t sex, int8_t seikaku, int32_
     rare = -1;
     std::fprintf(stderr, "[shiny] Shadow Pokemon %u: made without the shiny lock\n", pokemonBiosGetDarkpokemonDataId(pokemon));
   }
-  return pokemonCreateRndFit(pokemon, sex, seikaku, static_cast<int8_t>(rare), trainerRnd);
+  const uint32_t rnd = pokemonCreateRndFit(pokemon, sex, seikaku, static_cast<int8_t>(rare), trainerRnd);
+  xd::forms::RandomLook(pokemon, rnd);
+  return rnd;
 }
 
 uint32_t PortXD_HeroFit(void* pokemon, int32_t sex, int32_t seikaku, int32_t rare, uint32_t trainerRnd) {
@@ -163,12 +166,16 @@ uint32_t PortXD_HeroFit(void* pokemon, int32_t sex, int32_t seikaku, int32_t rar
     rare = -1;
     std::fprintf(stderr, "[shiny] a gift Shadow Pokemon: made without the shiny lock\n");
   }
-  return pokemonCreateRndFit(pokemon, static_cast<int8_t>(sex), static_cast<int8_t>(seikaku), static_cast<int8_t>(rare), trainerRnd);
+  const uint32_t rnd = pokemonCreateRndFit(pokemon, static_cast<int8_t>(sex), static_cast<int8_t>(seikaku), static_cast<int8_t>(rare), trainerRnd);
+  xd::forms::RandomLook(pokemon, rnd);
+  return rnd;
 }
 
 uint32_t PortXD_GiftFit(void* pokemon, int32_t sex, int32_t seikaku, int32_t rare, uint32_t trainerRnd) {
   if (Gifts() && rare == 0) rare = -1;
-  return pokemonCreateRndFit(pokemon, static_cast<int8_t>(sex), static_cast<int8_t>(seikaku), static_cast<int8_t>(rare), trainerRnd);
+  const uint32_t rnd = pokemonCreateRndFit(pokemon, static_cast<int8_t>(sex), static_cast<int8_t>(seikaku), static_cast<int8_t>(rare), trainerRnd);
+  xd::forms::RandomLook(pokemon, rnd);
+  return rnd;
 }
 
 uint32_t PortXD_SpotFit(void* pokemon, int8_t sex, int8_t seikaku, int8_t rare, uint32_t trainerRnd) {

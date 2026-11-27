@@ -79,11 +79,13 @@ static uint16_t Gen4EvolutionCheck(void* pokemon, int32_t mode, uint16_t item, u
   uint16_t result = PortXD_RealEvolutionCheck(pokemon, askMode, item, extra, infoPtr);
   if (!(pokemonCheckValid(pokemon) & 0xFF)) return result;
   const uint16_t heldFor = pokemonGetSoubiItemDataId(pokemon);
-  if (heldFor != 0 && itemDataBiosGetItemSoubiDataId(itemDataBiosGetPtr(heldFor)) == kEverstoneEffect) return result;
+  const bool stoneHeld = heldFor != 0 && itemDataBiosGetItemSoubiDataId(itemDataBiosGetPtr(heldFor)) == kEverstoneEffect;
+  if (stoneHeld && result != 0) return result;
   const uint16_t species = pokemonBiosGetPokemonDataId(pokemon);
   auto* info = static_cast<EvolutionInfo*>(infoPtr);
   for (const xd::gen4::ExtraEvolution& e : sList) {
     if (e.species != species) continue;
+    if (stoneHeld && !(e.param == heldFor && (e.kind == 6 || e.kind == kLevelHolding || e.kind == kLevelHoldingRules))) continue;
     bool fits = false;
     uint8_t reportKind = e.kind;
     switch (e.kind) {

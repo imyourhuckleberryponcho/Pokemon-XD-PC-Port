@@ -3,7 +3,9 @@
 
 #include <xd_legality.h>
 #include <xd_save.h>
+#include <xd_shadow_orders.h>
 
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -29,7 +31,17 @@ struct Tables {
   const xd::legality::Rules* rules = nullptr;
   std::function<int(uint16_t species)> sexRatio;
   std::function<int(uint16_t item)> pocketOf;
+  std::function<std::string(uint16_t ability)> abilityName;
+  std::function<std::string(uint16_t row)> formName;
   std::function<int(uint16_t species)> baseFriendship;
+  std::function<bool(uint32_t row)> shadowRowFree;
+  bool moreShadows = false;
+};
+
+struct ShadowWish {
+  uint16_t moves[4] = {xd::save::kShadowRush, 0, 0, 0};
+  int gauge = 4000;
+  int revers = 2;
 };
 
 struct Options {
@@ -74,6 +86,7 @@ public:
   std::string SetMove(const Spot& s, int index, uint16_t move, int ppUps, const Tables& t);
   std::string SetPpUps(const Spot& s, int index, int ppUps, const Tables& t);
   std::string SetAbilitySlot(const Spot& s, int slot, const Tables& t);
+  std::string SetForm(const Spot& s, uint16_t row, const Tables& t);
   std::string SetPid(const Spot& s, const PidWish& wish, const Tables& t);
   std::string Heal(const Spot& s, const Tables& t);
   std::string SetPcMarks(const Spot& s, uint8_t marks);
@@ -96,6 +109,19 @@ public:
   std::vector<uint16_t> MemoSpecies() const;
   std::string AddMemoSpecies(uint16_t species, const Tables& t);
   std::string RemoveMemoSpecies(uint16_t species, const Tables& t);
+
+  void SetShadowOrders(const std::vector<std::string>& fromSetup) { shadowOrders_ = shadowOrdersOrig_ = fromSetup; }
+  const std::vector<std::string>& ShadowOrders() const { return shadowOrders_; }
+  bool ShadowOrdersChanged() const { return shadowOrders_ != shadowOrdersOrig_; }
+  std::string MakeShadow(const Spot& s, const ShadowWish& wish, const Tables& t);
+  std::string MakeNormal(const Spot& s);
+  bool EditorMadeShadow(const Spot& s) const;
+  bool ShadowOrderOf(const xd::save::Pokemon& p, xd::save::ShadowOrder& out, bool* savedBefore = nullptr) const;
+  void ShadowRowStats(const Tables& t, int& free, int& total) const;
+  void SetExtraShadows(const std::vector<uint8_t>& section);
+  std::vector<uint8_t> ExtraShadowSection() const;
+  bool ExtraShadowsChanged() const { return extra_ != extraOrig_; }
+  const xd::save::ShadowEntry* ShadowEntryOf(const xd::save::Pokemon& p) const;
 
   std::vector<std::string> Problems(const Tables& t) const;
   std::vector<std::string> Notes(const Tables& t) const;
@@ -126,6 +152,13 @@ private:
   xd::save::ReadReport report_;
   xd::save::Save orig_, work_;
   std::vector<Change> log_;
+  std::vector<std::string> shadowOrders_, shadowOrdersOrig_;
+  std::vector<std::array<uint8_t, xd::save::kShadowEntrySize>> extra_, extraOrig_;
+  std::vector<xd::save::ShadowEntry> extraEntries_;
+  uint8_t* ShadowRecMut(uint32_t row);
+  const uint8_t* ShadowRec(uint32_t row) const;
+  bool EnsureExtra(uint32_t row);
+  void ShadowWhere(const xd::save::Pokemon& p, const Spot& at);
   uint64_t rng_ = 0x9E3779B97F4A7C15ull;
   std::function<std::string(uint16_t)> speciesNames_;
   uint32_t Rand();

@@ -1,6 +1,8 @@
 {
  "_note": "Forms the builder makes: national number, form number of the dump's own list, kind. Numbers only.",
  "stone_copy": "Moon Stone",
+ "spawn_note": "0.8.0 random look when a Pokemon appears (setting gameplay.random_forms): the chance weights of the look-only sets; a form with no model of its own is never chosen. Numbers only.",
+ "spawn_base": {"25": 96, "201": 10, "666": 10, "676": 10},
  "forms": [
   {
    "nat": 19,
@@ -412,7 +414,14 @@
    "model": "none",
    "tag": "Core"
   },
-    {"nat": 718, "form": 4, "kind": "battle", "label": "Complete", "model": "none", "tag": "Complete"},
+  {
+   "nat": 718,
+   "form": 4,
+   "kind": "battle",
+   "label": "Complete",
+   "model": "none",
+   "tag": "Complete"
+  },
   {
    "nat": 778,
    "form": 1,
@@ -428,6 +437,1253 @@
    "label": "Ash",
    "model": "13",
    "tag": "Ash"
+  },
+  {
+   "nat": 386,
+   "form": 1,
+   "kind": "alt",
+   "label": "Attack",
+   "model": "12"
+  },
+  {
+   "nat": 386,
+   "form": 2,
+   "kind": "alt",
+   "label": "Defense",
+   "model": "13"
+  },
+  {
+   "nat": 386,
+   "form": 3,
+   "kind": "alt",
+   "label": "Speed",
+   "model": "14"
+  },
+  {
+   "nat": 413,
+   "form": 1,
+   "kind": "alt",
+   "label": "Sandy",
+   "model": "11",
+   "nth": 1
+  },
+  {
+   "nat": 413,
+   "form": 2,
+   "kind": "alt",
+   "label": "Trash",
+   "model": "11",
+   "nth": 2
+  },
+  {
+   "nat": 487,
+   "form": 1,
+   "kind": "alt",
+   "label": "Origin",
+   "model": "12"
+  },
+  {
+   "nat": 492,
+   "form": 1,
+   "kind": "alt",
+   "label": "Sky",
+   "model": "12"
+  },
+  {
+   "nat": 550,
+   "form": 1,
+   "kind": "alt",
+   "label": "Blue-Striped",
+   "model": "12"
+  },
+  {
+   "nat": 641,
+   "form": 1,
+   "kind": "alt",
+   "label": "Therian",
+   "model": "12"
+  },
+  {
+   "nat": 642,
+   "form": 1,
+   "kind": "alt",
+   "label": "Therian",
+   "model": "12"
+  },
+  {
+   "nat": 645,
+   "form": 1,
+   "kind": "alt",
+   "label": "Therian",
+   "model": "12"
+  },
+  {
+   "nat": 646,
+   "form": 1,
+   "kind": "alt",
+   "label": "White",
+   "model": "12"
+  },
+  {
+   "nat": 646,
+   "form": 2,
+   "kind": "alt",
+   "label": "Black",
+   "model": "13"
+  },
+  {
+   "nat": 647,
+   "form": 1,
+   "kind": "alt",
+   "label": "Resolute",
+   "model": "12"
+  },
+  {
+   "nat": 678,
+   "form": 1,
+   "kind": "alt",
+   "label": "Female",
+   "model": "01"
+  },
+  {
+   "nat": 710,
+   "form": 1,
+   "kind": "alt",
+   "label": "Small",
+   "model": "11",
+   "nth": 0
+  },
+  {
+   "nat": 710,
+   "form": 2,
+   "kind": "alt",
+   "label": "Large",
+   "model": "11",
+   "nth": 0
+  },
+  {
+   "nat": 710,
+   "form": 3,
+   "kind": "alt",
+   "label": "Super",
+   "model": "11",
+   "nth": 1
+  },
+  {
+   "nat": 711,
+   "form": 1,
+   "kind": "alt",
+   "label": "Small",
+   "model": "11",
+   "nth": 0
+  },
+  {
+   "nat": 711,
+   "form": 2,
+   "kind": "alt",
+   "label": "Large",
+   "model": "11",
+   "nth": 0
+  },
+  {
+   "nat": 711,
+   "form": 3,
+   "kind": "alt",
+   "label": "Super",
+   "model": "11",
+   "nth": 1
+  },
+  {
+   "nat": 718,
+   "form": 1,
+   "kind": "alt",
+   "label": "10 Percent",
+   "model": "12"
+  },
+  {
+   "nat": 720,
+   "form": 1,
+   "kind": "alt",
+   "label": "Unbound",
+   "model": "12"
+  },
+  {
+   "nat": 741,
+   "form": 1,
+   "kind": "alt",
+   "label": "Pom-Pom",
+   "model": "12"
+  },
+  {
+   "nat": 741,
+   "form": 2,
+   "kind": "alt",
+   "label": "Pa'u",
+   "model": "13"
+  },
+  {
+   "nat": 741,
+   "form": 3,
+   "kind": "alt",
+   "label": "Sensu",
+   "model": "14"
+  },
+  {
+   "nat": 745,
+   "form": 1,
+   "kind": "alt",
+   "label": "Midnight",
+   "model": "12"
+  },
+  {
+   "nat": 745,
+   "form": 2,
+   "kind": "alt",
+   "label": "Dusk",
+   "model": "13"
+  },
+  {
+   "nat": 800,
+   "form": 1,
+   "kind": "alt",
+   "label": "Dusk Mane",
+   "model": "12"
+  },
+  {
+   "nat": 800,
+   "form": 2,
+   "kind": "alt",
+   "label": "Dawn Wings",
+   "model": "13"
+  },
+  {
+   "nat": 670,
+   "form": 5,
+   "kind": "alt",
+   "label": "Eternal",
+   "model": "16"
+  },
+  {
+   "nat": 422,
+   "form": 1,
+   "kind": "alt",
+   "label": "East",
+   "model": "12"
+  },
+  {
+   "nat": 423,
+   "form": 1,
+   "kind": "alt",
+   "label": "East",
+   "model": "12"
+  },
+  {
+   "nat": 412,
+   "form": 1,
+   "kind": "alt",
+   "label": "Sandy",
+   "model": "11",
+   "nth": 1
+  },
+  {
+   "nat": 412,
+   "form": 2,
+   "kind": "alt",
+   "label": "Trash",
+   "model": "11",
+   "nth": 2
+  },
+  {
+   "nat": 585,
+   "form": 1,
+   "kind": "alt",
+   "label": "Summer",
+   "model": "11",
+   "nth": 1
+  },
+  {
+   "nat": 585,
+   "form": 2,
+   "kind": "alt",
+   "label": "Autumn",
+   "model": "11",
+   "nth": 2
+  },
+  {
+   "nat": 585,
+   "form": 3,
+   "kind": "alt",
+   "label": "Winter",
+   "model": "11",
+   "nth": 3
+  },
+  {
+   "nat": 586,
+   "form": 1,
+   "kind": "alt",
+   "label": "Summer",
+   "model": "12"
+  },
+  {
+   "nat": 586,
+   "form": 2,
+   "kind": "alt",
+   "label": "Autumn",
+   "model": "13"
+  },
+  {
+   "nat": 586,
+   "form": 3,
+   "kind": "alt",
+   "label": "Winter",
+   "model": "14"
+  },
+  {
+   "nat": 649,
+   "form": 1,
+   "kind": "alt",
+   "label": "Shock",
+   "model": "11",
+   "nth": 1
+  },
+  {
+   "nat": 649,
+   "form": 2,
+   "kind": "alt",
+   "label": "Burn",
+   "model": "11",
+   "nth": 2
+  },
+  {
+   "nat": 649,
+   "form": 3,
+   "kind": "alt",
+   "label": "Chill",
+   "model": "11",
+   "nth": 3
+  },
+  {
+   "nat": 649,
+   "form": 4,
+   "kind": "alt",
+   "label": "Douse",
+   "model": "11",
+   "nth": 4
+  },
+  {
+   "nat": 669,
+   "form": 1,
+   "kind": "alt",
+   "label": "Yellow",
+   "model": "11",
+   "nth": 1
+  },
+  {
+   "nat": 669,
+   "form": 2,
+   "kind": "alt",
+   "label": "Orange",
+   "model": "11",
+   "nth": 2
+  },
+  {
+   "nat": 669,
+   "form": 3,
+   "kind": "alt",
+   "label": "Blue",
+   "model": "11",
+   "nth": 3
+  },
+  {
+   "nat": 669,
+   "form": 4,
+   "kind": "alt",
+   "label": "White",
+   "model": "11",
+   "nth": 4
+  },
+  {
+   "nat": 670,
+   "form": 1,
+   "kind": "alt",
+   "label": "Yellow",
+   "model": "11",
+   "nth": 1
+  },
+  {
+   "nat": 670,
+   "form": 2,
+   "kind": "alt",
+   "label": "Orange",
+   "model": "11",
+   "nth": 2
+  },
+  {
+   "nat": 670,
+   "form": 3,
+   "kind": "alt",
+   "label": "Blue",
+   "model": "11",
+   "nth": 3
+  },
+  {
+   "nat": 670,
+   "form": 4,
+   "kind": "alt",
+   "label": "White",
+   "model": "11",
+   "nth": 4
+  },
+  {
+   "nat": 671,
+   "form": 1,
+   "kind": "alt",
+   "label": "Yellow",
+   "model": "11",
+   "nth": 1
+  },
+  {
+   "nat": 671,
+   "form": 2,
+   "kind": "alt",
+   "label": "Orange",
+   "model": "11",
+   "nth": 2
+  },
+  {
+   "nat": 671,
+   "form": 3,
+   "kind": "alt",
+   "label": "Blue",
+   "model": "11",
+   "nth": 3
+  },
+  {
+   "nat": 671,
+   "form": 4,
+   "kind": "alt",
+   "label": "White",
+   "model": "11",
+   "nth": 4
+  },
+  {
+   "nat": 774,
+   "form": 1,
+   "kind": "alt",
+   "label": "Orange Meteor",
+   "model": "11",
+   "nth": 1
+  },
+  {
+   "nat": 774,
+   "form": 2,
+   "kind": "alt",
+   "label": "Yellow Meteor",
+   "model": "11",
+   "nth": 2
+  },
+  {
+   "nat": 774,
+   "form": 3,
+   "kind": "alt",
+   "label": "Green Meteor",
+   "model": "11",
+   "nth": 3
+  },
+  {
+   "nat": 774,
+   "form": 4,
+   "kind": "alt",
+   "label": "Blue Meteor",
+   "model": "11",
+   "nth": 4
+  },
+  {
+   "nat": 774,
+   "form": 5,
+   "kind": "alt",
+   "label": "Indigo Meteor",
+   "model": "11",
+   "nth": 5
+  },
+  {
+   "nat": 774,
+   "form": 6,
+   "kind": "alt",
+   "label": "Violet Meteor",
+   "model": "11",
+   "nth": 6
+  },
+  {
+   "nat": 801,
+   "form": 1,
+   "kind": "alt",
+   "label": "Original",
+   "model": "12"
+  },
+  {
+   "nat": 493,
+   "form": 1,
+   "kind": "plate",
+   "label": "Fighting",
+   "model": "12",
+   "motions": "11",
+   "type": 1
+  },
+  {
+   "nat": 493,
+   "form": 2,
+   "kind": "plate",
+   "label": "Flying",
+   "model": "13",
+   "motions": "11",
+   "type": 2
+  },
+  {
+   "nat": 493,
+   "form": 3,
+   "kind": "plate",
+   "label": "Poison",
+   "model": "14",
+   "motions": "11",
+   "type": 3
+  },
+  {
+   "nat": 493,
+   "form": 4,
+   "kind": "plate",
+   "label": "Ground",
+   "model": "15",
+   "motions": "11",
+   "type": 4
+  },
+  {
+   "nat": 493,
+   "form": 5,
+   "kind": "plate",
+   "label": "Rock",
+   "model": "16",
+   "motions": "11",
+   "type": 5
+  },
+  {
+   "nat": 493,
+   "form": 6,
+   "kind": "plate",
+   "label": "Bug",
+   "model": "17",
+   "motions": "11",
+   "type": 6
+  },
+  {
+   "nat": 493,
+   "form": 7,
+   "kind": "plate",
+   "label": "Ghost",
+   "model": "18",
+   "motions": "11",
+   "type": 7
+  },
+  {
+   "nat": 493,
+   "form": 8,
+   "kind": "plate",
+   "label": "Steel",
+   "model": "19",
+   "motions": "11",
+   "type": 8
+  },
+  {
+   "nat": 493,
+   "form": 9,
+   "kind": "plate",
+   "label": "Fire",
+   "model": "20",
+   "motions": "11",
+   "type": 9
+  },
+  {
+   "nat": 493,
+   "form": 10,
+   "kind": "plate",
+   "label": "Water",
+   "model": "21",
+   "motions": "11",
+   "type": 10
+  },
+  {
+   "nat": 493,
+   "form": 11,
+   "kind": "plate",
+   "label": "Grass",
+   "model": "22",
+   "motions": "11",
+   "type": 11
+  },
+  {
+   "nat": 493,
+   "form": 12,
+   "kind": "plate",
+   "label": "Electric",
+   "model": "23",
+   "motions": "11",
+   "type": 12
+  },
+  {
+   "nat": 493,
+   "form": 13,
+   "kind": "plate",
+   "label": "Psychic",
+   "model": "24",
+   "motions": "11",
+   "type": 13
+  },
+  {
+   "nat": 493,
+   "form": 14,
+   "kind": "plate",
+   "label": "Ice",
+   "model": "25",
+   "motions": "11",
+   "type": 14
+  },
+  {
+   "nat": 493,
+   "form": 15,
+   "kind": "plate",
+   "label": "Dragon",
+   "model": "26",
+   "motions": "11",
+   "type": 15
+  },
+  {
+   "nat": 493,
+   "form": 16,
+   "kind": "plate",
+   "label": "Dark",
+   "model": "27",
+   "motions": "11",
+   "type": 16
+  },
+  {
+   "nat": 493,
+   "form": 17,
+   "kind": "plate",
+   "label": "Fairy",
+   "model": "28",
+   "motions": "11",
+   "type": 17
+  },
+  {
+   "nat": 201,
+   "form": 1,
+   "kind": "alt",
+   "label": "B",
+   "model": "11",
+   "nth": 1,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 201,
+   "form": 2,
+   "kind": "alt",
+   "label": "C",
+   "model": "11",
+   "nth": 2,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 201,
+   "form": 3,
+   "kind": "alt",
+   "label": "D",
+   "model": "11",
+   "nth": 3,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 201,
+   "form": 4,
+   "kind": "alt",
+   "label": "E",
+   "model": "11",
+   "nth": 4,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 201,
+   "form": 5,
+   "kind": "alt",
+   "label": "F",
+   "model": "11",
+   "nth": 5,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 201,
+   "form": 6,
+   "kind": "alt",
+   "label": "G",
+   "model": "11",
+   "nth": 6,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 201,
+   "form": 7,
+   "kind": "alt",
+   "label": "H",
+   "model": "11",
+   "nth": 7,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 201,
+   "form": 8,
+   "kind": "alt",
+   "label": "I",
+   "model": "11",
+   "nth": 8,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 201,
+   "form": 9,
+   "kind": "alt",
+   "label": "J",
+   "model": "11",
+   "nth": 9,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 201,
+   "form": 10,
+   "kind": "alt",
+   "label": "K",
+   "model": "11",
+   "nth": 10,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 201,
+   "form": 11,
+   "kind": "alt",
+   "label": "L",
+   "model": "11",
+   "nth": 11,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 201,
+   "form": 12,
+   "kind": "alt",
+   "label": "M",
+   "model": "11",
+   "nth": 12,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 201,
+   "form": 13,
+   "kind": "alt",
+   "label": "N",
+   "model": "11",
+   "nth": 13,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 201,
+   "form": 14,
+   "kind": "alt",
+   "label": "O",
+   "model": "11",
+   "nth": 14,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 201,
+   "form": 15,
+   "kind": "alt",
+   "label": "P",
+   "model": "11",
+   "nth": 15,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 201,
+   "form": 16,
+   "kind": "alt",
+   "label": "Q",
+   "model": "11",
+   "nth": 16,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 201,
+   "form": 17,
+   "kind": "alt",
+   "label": "R",
+   "model": "11",
+   "nth": 17,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 201,
+   "form": 18,
+   "kind": "alt",
+   "label": "S",
+   "model": "11",
+   "nth": 18,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 201,
+   "form": 19,
+   "kind": "alt",
+   "label": "T",
+   "model": "11",
+   "nth": 19,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 201,
+   "form": 20,
+   "kind": "alt",
+   "label": "U",
+   "model": "11",
+   "nth": 20,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 201,
+   "form": 21,
+   "kind": "alt",
+   "label": "V",
+   "model": "11",
+   "nth": 21,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 201,
+   "form": 22,
+   "kind": "alt",
+   "label": "W",
+   "model": "11",
+   "nth": 22,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 201,
+   "form": 23,
+   "kind": "alt",
+   "label": "X",
+   "model": "11",
+   "nth": 23,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 201,
+   "form": 24,
+   "kind": "alt",
+   "label": "Y",
+   "model": "11",
+   "nth": 24,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 201,
+   "form": 25,
+   "kind": "alt",
+   "label": "Z",
+   "model": "11",
+   "nth": 25,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 201,
+   "form": 26,
+   "kind": "alt",
+   "label": "Exclamation",
+   "model": "11",
+   "nth": 26,
+   "look": true,
+   "spawn": 1
+  },
+  {
+   "nat": 201,
+   "form": 27,
+   "kind": "alt",
+   "label": "Question",
+   "model": "11",
+   "nth": 27,
+   "look": true,
+   "spawn": 1
+  },
+  {
+   "nat": 666,
+   "form": 1,
+   "kind": "alt",
+   "label": "Polar",
+   "model": "11",
+   "nth": 1,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 666,
+   "form": 2,
+   "kind": "alt",
+   "label": "Tundra",
+   "model": "11",
+   "nth": 2,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 666,
+   "form": 3,
+   "kind": "alt",
+   "label": "Continental",
+   "model": "11",
+   "nth": 3,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 666,
+   "form": 4,
+   "kind": "alt",
+   "label": "Garden",
+   "model": "11",
+   "nth": 4,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 666,
+   "form": 5,
+   "kind": "alt",
+   "label": "Elegant",
+   "model": "11",
+   "nth": 5,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 666,
+   "form": 6,
+   "kind": "alt",
+   "label": "Meadow",
+   "model": "11",
+   "nth": 6,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 666,
+   "form": 7,
+   "kind": "alt",
+   "label": "Modern",
+   "model": "11",
+   "nth": 7,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 666,
+   "form": 8,
+   "kind": "alt",
+   "label": "Marine",
+   "model": "11",
+   "nth": 8,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 666,
+   "form": 9,
+   "kind": "alt",
+   "label": "Archipelago",
+   "model": "11",
+   "nth": 9,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 666,
+   "form": 10,
+   "kind": "alt",
+   "label": "High Plains",
+   "model": "11",
+   "nth": 10,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 666,
+   "form": 11,
+   "kind": "alt",
+   "label": "Sandstorm",
+   "model": "11",
+   "nth": 11,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 666,
+   "form": 12,
+   "kind": "alt",
+   "label": "River",
+   "model": "11",
+   "nth": 12,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 666,
+   "form": 13,
+   "kind": "alt",
+   "label": "Monsoon",
+   "model": "11",
+   "nth": 13,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 666,
+   "form": 14,
+   "kind": "alt",
+   "label": "Savanna",
+   "model": "11",
+   "nth": 14,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 666,
+   "form": 15,
+   "kind": "alt",
+   "label": "Sun",
+   "model": "11",
+   "nth": 15,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 666,
+   "form": 16,
+   "kind": "alt",
+   "label": "Ocean",
+   "model": "11",
+   "nth": 16,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 666,
+   "form": 17,
+   "kind": "alt",
+   "label": "Jungle",
+   "model": "11",
+   "nth": 17,
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 666,
+   "form": 18,
+   "kind": "alt",
+   "label": "Fancy",
+   "model": "11",
+   "nth": 18,
+   "look": true,
+   "spawn": 1
+  },
+  {
+   "nat": 666,
+   "form": 19,
+   "kind": "alt",
+   "label": "Poke Ball",
+   "model": "11",
+   "nth": 19,
+   "look": true,
+   "spawn": 1
+  },
+  {
+   "nat": 676,
+   "form": 1,
+   "kind": "alt",
+   "label": "Heart",
+   "model": "12",
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 676,
+   "form": 2,
+   "kind": "alt",
+   "label": "Star",
+   "model": "13",
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 676,
+   "form": 3,
+   "kind": "alt",
+   "label": "Diamond",
+   "model": "14",
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 676,
+   "form": 4,
+   "kind": "alt",
+   "label": "Debutante",
+   "model": "15",
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 676,
+   "form": 5,
+   "kind": "alt",
+   "label": "Matron",
+   "model": "16",
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 676,
+   "form": 6,
+   "kind": "alt",
+   "label": "Dandy",
+   "model": "17",
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 676,
+   "form": 7,
+   "kind": "alt",
+   "label": "La Reine",
+   "model": "18",
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 676,
+   "form": 8,
+   "kind": "alt",
+   "label": "Kabuki",
+   "model": "19",
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 676,
+   "form": 9,
+   "kind": "alt",
+   "label": "Pharaoh",
+   "model": "20",
+   "look": true,
+   "spawn": 10
+  },
+  {
+   "nat": 25,
+   "form": 1,
+   "kind": "alt",
+   "label": "Original Cap",
+   "model": "18",
+   "nth": 0,
+   "look": true,
+   "spawn": 1
+  },
+  {
+   "nat": 25,
+   "form": 2,
+   "kind": "alt",
+   "label": "Hoenn Cap",
+   "model": "18",
+   "nth": 1,
+   "look": true,
+   "spawn": 1
+  },
+  {
+   "nat": 25,
+   "form": 3,
+   "kind": "alt",
+   "label": "Sinnoh Cap",
+   "model": "18",
+   "nth": 2,
+   "look": true,
+   "spawn": 1
+  },
+  {
+   "nat": 25,
+   "form": 4,
+   "kind": "alt",
+   "label": "Unova Cap",
+   "model": "18",
+   "nth": 3,
+   "look": true,
+   "spawn": 1
+  },
+  {
+   "nat": 25,
+   "form": 5,
+   "kind": "alt",
+   "label": "Kalos Cap",
+   "model": "18",
+   "nth": 4,
+   "look": true,
+   "spawn": 1
+  },
+  {
+   "nat": 25,
+   "form": 6,
+   "kind": "alt",
+   "label": "Alola Cap",
+   "model": "18",
+   "nth": 5,
+   "look": true,
+   "spawn": 1
+  },
+  {
+   "nat": 25,
+   "form": 7,
+   "kind": "alt",
+   "label": "Partner Cap",
+   "model": "18",
+   "nth": 6,
+   "look": true,
+   "spawn": 1
   }
  ]
 }

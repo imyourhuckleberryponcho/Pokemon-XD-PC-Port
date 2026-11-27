@@ -341,6 +341,7 @@ bool Translator::RunPack(bool gen57, std::vector<engine::mods::DataModFile>& fil
     else if (ends("02_species.json")) species = &f;
     else if (gen57 && ends("03_forms.json")) forms = &f;
     else if (gen57 && (ends("04_ability_patch.json") || ends("05_rks_memories.json") || ends("06_evolution_items.json"))) patches.push_back(&f);
+    else if (gen57 && ends("08_arceus_plates.json")) f.text = "{\"_note\": \"XD only (0.8.0): XG has its own Plates; the pack's Arceus Plate rows are left out there\"}";
     else if (gen57 && ends("07_stone_coupons.json")) f.text = "{\"_note\": \"XD only: XG's own prize desk sells the classic stones with its own prices\"}";
   }
   if (!moves || !species) {

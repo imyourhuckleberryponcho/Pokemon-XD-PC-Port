@@ -2,6 +2,7 @@
 
 #include "online_battle.h"
 #include "xd_gen57.h"
+#include "xd_gen4.h"
 #include "xd_challenges.h"
 
 #include <dolphin/pad.h>
@@ -21,6 +22,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include "savestate_features.h"
 
 extern "C" {
 void* fightOutPokemonGetPokemonPtr(void* fop);
@@ -182,7 +184,7 @@ bool SwapTo(void* fop, const xd::forms::Form& form, uint32_t messageId, bool run
     fightSeqFightOutPokemonEffect(0x83, fop, 0, 0);
     Sequence_Free(oldSeq);
   }
-  Say(messageId, fop, GSmsgGetGSchar(static_cast<uint32_t>(reinterpret_cast<uintptr_t>(pokemonDB_GetName(static_cast<uint16_t>(form.row))))));
+  if (messageId != 0) Say(messageId, fop, GSmsgGetGSchar(static_cast<uint32_t>(reinterpret_cast<uintptr_t>(pokemonDB_GetName(static_cast<uint16_t>(form.row))))));
   if (runAppear) fightSeqFightOutPokemonTokuseiCheckAppear(fop);
   std::fprintf(stderr, "[forms] %s: species row %u -> %u, ability %u\n", form.key.c_str(), static_cast<unsigned>(form.base), form.row,
                static_cast<unsigned>(pokemonGetTokuseiDataId(p)));
@@ -276,6 +278,13 @@ void EntryPrimal(void* fop) {
 }
 
 void AppendTexts(std::vector<std::pair<uint32_t, std::string>>& texts) {
+  if (xd::gen4::Loaded() || xd::gen57::Loaded()) {
+    texts.emplace_back((0x7D0u << 20) | 0xBF30, engine::i18n::Tr("< L  Prizes  R >"));
+    texts.emplace_back((0x7D0u << 20) | 0xBF31, engine::i18n::Tr("< L  Evolution items  R >"));
+    texts.emplace_back((0x7D0u << 20) | 0xBF32, engine::i18n::Tr("< L  Mega Stones  R >"));
+    texts.emplace_back((0x7D0u << 20) | 0xBF33, engine::i18n::Tr("< L  Memories & Plates  R >"));
+    texts.emplace_back((0x7D0u << 20) | 0xBF34, engine::i18n::Tr("< L  Gen 4 goods  R >"));
+  }
   if (!xd::gen57::Loaded()) return;
   texts.emplace_back((0x7D0u << 20) | kTextReact, engine::i18n::Tr("{10}'s {0E}{00}is reacting!"));
   texts.emplace_back((0x7D0u << 20) | kTextMega, engine::i18n::Tr("{10} has Mega Evolved{00}into {0E}!"));
@@ -343,6 +352,12 @@ void Evaluate(void* fop, bool afterHit) {
   case 208: tag = "School"; want = pokemon_GetLevel(p) >= 20 && hp * 4 > mx; on = kTextSchoolOn; off = kTextSchoolOff; if (afterHit) return; break;
   case 211: tag = "Complete"; want = hp * 2 <= mx; on = kTextComplete; off = 0; if (afterHit || !want) return; break;
   case 197: tag = "Core"; want = hp * 2 <= mx; on = kTextShellOff; off = kTextShellOn; break;
+  case 121: {
+    const uint32_t target = xd::forms::PlateFormRow(base, fightOutPokemonGetSoubiItemDataId(fop));
+    if (afterHit) return;
+    if (target != 0 ? sp != target : (sp != base && xd::forms::IsPlateRow(sp))) ChangeTo(fop, target != 0 ? target : base, 0);
+    return;
+  }
   default: return;
   }
   const xd::forms::Form* alt = AltForm(base, tag);
@@ -580,4 +595,29 @@ namespace {
 struct Register {
   Register() { PortInput_SetPadObserver(&PadSeen); PortVideo_SetFrameDrawer(&DrawRow); }
 } sRegister;
+}
+
+namespace {
+const xd::savestate::BytesFeature sStateFeature(
+    "forms_battle",
+    [](portstate::Out& o) {
+      o.raw(sFormed, sizeof sFormed); o.pod(sFormedCount); o.pod(sArmed); o.pod(sFriendApplying); o.raw(sUsed, sizeof sUsed);
+      o.raw(sPending, sizeof sPending); o.raw(sChoiceMega, sizeof sChoiceMega); o.raw(sSeen, sizeof sSeen); o.pod(sLastTurn);
+      o.pod(sSeenCount); o.raw(sGiven, sizeof sGiven); o.pod(sGivenCount);
+      std::lock_guard<std::mutex> l(sRowLock);
+      o.pod(sShifted.load()); o.pod(sGrown.load()); o.str(sRowStone); o.pod(sRowFop);
+      o.u64(sSavedY.size());
+      for (const auto& p : sSavedY) { o.pod(p.first); o.pod(p.second); }
+    },
+    [](portstate::In& in) {
+      in.raw(sFormed, sizeof sFormed); sFormedCount = in.pod<int>(); sArmed = in.pod<bool>(); sFriendApplying = in.pod<bool>(); in.raw(sUsed, sizeof sUsed);
+      in.raw(sPending, sizeof sPending); in.raw(sChoiceMega, sizeof sChoiceMega); in.raw(sSeen, sizeof sSeen); sLastTurn = in.pod<int>();
+      sSeenCount = in.pod<int>(); in.raw(sGiven, sizeof sGiven); sGivenCount = in.pod<int>();
+      std::lock_guard<std::mutex> l(sRowLock);
+      sShifted = in.pod<bool>(); sGrown = in.pod<bool>(); sRowStone = in.str(); sRowFop = in.pod<void*>();
+      sSavedY.clear();
+      const uint64_t n = in.u64();
+      for (uint64_t i = 0; i < n && n < 4096 && in.ok(); i++) { const int a = in.pod<int>(); const int16_t b = in.pod<int16_t>(); sSavedY.emplace_back(a, b); }
+      return in.ok();
+    });
 }

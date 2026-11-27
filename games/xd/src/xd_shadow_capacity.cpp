@@ -84,6 +84,15 @@ int RealCount(int pool, int percent) {
 }
 
 int RealCountOf(const xr::MoreShadowsCapacity& c, int percent) {
+  if (c.speciesMt != 0 || c.speciesStory != 0) {
+    const auto share = [&](uint32_t possible) {
+      uint32_t target = static_cast<uint32_t>((static_cast<uint64_t>(percent) * possible + 50) / 100);
+      if (target == 0 && possible != 0) target = 1;
+      return std::min(target, possible);
+    };
+    const uint32_t story = std::min(share(c.speciesStory), c.rows);
+    return static_cast<int>(story + std::min(share(c.speciesMt), c.rows - story));
+  }
   uint32_t target = static_cast<uint32_t>((static_cast<uint64_t>(percent) * c.species + 50) / 100);
   if (target == 0 && c.species != 0) target = 1;
   return static_cast<int>(std::min<uint32_t>({target, c.species, c.rows, c.slots}));
@@ -112,7 +121,7 @@ bool ForCode(const std::string& code, int pool, xr::MoreShadowsCapacity& out) {
     xr::Result r;
     if (!xr::Generate(sCatalog, ReadDisc, s, r, error, nullptr)) break;
     xr::MoreShadowsPlan plan;
-    plan.amount = 6, plan.percent = 100, plan.seed = 1, plan.capacityOnly = true;
+    plan.amount = 7, plan.percent = 100, plan.seed = 1, plan.capacityOnly = true;
     engine::randomizer::ModOutput mod;
     ok = xr::GenerateMoreShadows(sCatalog, ReadDisc, plan, &r, gen4, mod, error, gen57, &cap);
     if (!ok) std::fprintf(stderr, "[shadow capacity] randomizer %s: %s\n", code.c_str(), error.c_str());
@@ -141,7 +150,7 @@ extern "C" void PortXD_ReadShadowCapacity(void) {
     if (gen4 && !xr::LoadGen4Species(xd::gen4::PackFolder() / L"randomizer.txt", error)) break;
     if (gen57 && (!xd::gen57::PackPresent() || !xr::LoadGen57Species(xd::gen57::PackFolder() / L"randomizer.txt", error))) break;
     xr::MoreShadowsPlan plan;
-    plan.amount = 6, plan.percent = 100, plan.seed = 1, plan.capacityOnly = true;
+    plan.amount = 7, plan.percent = 100, plan.seed = 1, plan.capacityOnly = true;
     engine::randomizer::ModOutput out;
     xr::MoreShadowsCapacity cap;
     if (!xr::GenerateMoreShadows(catalog, ReadDisc, plan, nullptr, gen4, out, error, gen57, &cap)) {

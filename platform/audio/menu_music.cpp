@@ -215,6 +215,17 @@ int PortMenuMusic_ModeFromName(const char* name, int fallback) {
 
 void PortFfMusic_Abort(void);
 
+size_t PortMenuMusic_EngineRanges(PortMenuMusicRange* out, size_t max) {
+  if (sEngine == nullptr || max == 0) return 0;
+  void* block = nullptr;
+  size_t blockSize = 0;
+  sEngine->stateBlock(&block, &blockSize);
+  size_t n = 0;
+  out[n++] = {block, blockSize};
+  if (sEngine->extraRanges != nullptr && max > 1) n += sEngine->extraRanges(out + n, max - n);
+  return n;
+}
+
 void PortMenuMusic_Begin(int mode) {
   if (sState != State::Off) return;
   PortFfMusic_Abort();

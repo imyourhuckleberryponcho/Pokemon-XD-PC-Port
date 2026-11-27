@@ -96,6 +96,11 @@ void Register(es::Registry& registry) {
 static void RegisterCheats(es::Registry& registry) {
   using D = es::Definition;
   using C = es::Category;
+  registry.Add(D::Bool("system.save_states", C::System, "Save states",
+                       "Experimental (Windows and Linux only). Lets you save the whole game at any moment and put it back: in the field menu a SAVE STATES entry under SETTINGS opens a small menu with four slots, each showing a picture, when and where, with Save here and Load. The key F1 (changeable on the Controls page) opens it too; in a battle it is the only way for now. The states are files in the save states folder of the data folder, kept for each playthrough. Using it marks the playthrough as one that used a cheat does (it can't join competitive online rooms, and a speedrun with it is invalid). It is refused with mods, while a speedrun timer runs or online. Takes effect the next time the game starts. Never in Original.",
+                       false, false)
+                   .ForGames({kGameId})
+                   .Implemented());
   registry.Add(D::Bool("cheats.enabled", C::System, "Enable cheats",
                        "Turns the cheat menu on: a hot key (F5, or hold L + R and press Start on the controller; both can be changed in the controls) opens "
                        "a menu of cheats over the game. Off: no cheat does anything. A playthrough that used a cheat is marked as such "

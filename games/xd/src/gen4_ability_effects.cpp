@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include "savestate_features.h"
 
 extern "C" {
 uint16_t fightOutPokemonGetTokuseiDataId(void* fop);
@@ -807,4 +808,18 @@ uint8_t fightSeqAttackPokemonJoutaiCheck(void) {
   return result;
 }
 
+}
+
+namespace {
+const xd::savestate::BytesFeature sStateFeature(
+    "gen4_ability_effects",
+    [](portstate::Out& o) {
+      o.raw(sScripts, sizeof sScripts); o.pod(sInstalled); o.raw(sMons, sizeof sMons); o.pod(sLastTurn);
+      o.pod(sInHook); o.pod(sTurnHookSeen); o.pod(sStatusHookSeen);
+    },
+    [](portstate::In& in) {
+      in.raw(sScripts, sizeof sScripts); sInstalled = in.pod<bool>(); in.raw(sMons, sizeof sMons); sLastTurn = in.pod<int>();
+      sInHook = in.pod<bool>(); sTurnHookSeen = in.pod<bool>(); sStatusHookSeen = in.pod<bool>();
+      return in.ok();
+    });
 }

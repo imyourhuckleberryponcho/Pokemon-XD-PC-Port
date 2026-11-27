@@ -39,6 +39,8 @@ int PortMenuMusic_TakeNext(void);
 
 int PortMenuMusic_ModeFromName(const char* name, int fallback);
 
+size_t PortMenuMusic_EngineRanges(PortMenuMusicRange* out, size_t max);
+
 #ifdef __cplusplus
 }
 #endif

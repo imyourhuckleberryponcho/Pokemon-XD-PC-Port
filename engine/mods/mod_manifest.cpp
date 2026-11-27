@@ -5,6 +5,7 @@
 
 #include "i18n.h"
 
+#include <cctype>
 #include <charconv>
 #include <cstdarg>
 #include <cstdio>
@@ -138,6 +139,40 @@ bool ParseApplies(std::string_view text, Applies& out) {
   return false;
 }
 
+const std::vector<AssetInfo>& KnownAssets() {
+  static const std::vector<AssetInfo> assets = {
+      {"br_models", "Battle Revolution models",
+       "Make them on the launcher's Extra assets page (it needs your own Pokemon Battle Revolution disc)."},
+      {"usum_models", "Ultra Sun / Ultra Moon models",
+       "Make them on the launcher's Extra assets page (it needs your own Ultra Sun or Ultra Moon dump)."},
+      {"gen4_pack", "Gen 4 pack",
+       "Make it on the launcher's Extra assets page (it needs your own Pokemon Battle Revolution disc or Ultra Sun / Ultra Moon dump), "
+       "and pick the Gen 4 Pokemon choice in the New Game setup."},
+      {"gen57_pack", "Gen 5-7 pack",
+       "Make it on the launcher's Extra assets page (it needs your own Ultra Sun or Ultra Moon dump), and pick the Gen 5-7 Pokemon "
+       "choice in the New Game setup."},
+  };
+  return assets;
+}
+
+const AssetInfo* FindAsset(std::string_view id) {
+  std::string lower(id);
+  for (char& c : lower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  for (const AssetInfo& a : KnownAssets()) {
+    if (lower == a.id) return &a;
+  }
+  return nullptr;
+}
+
+std::string AssetNames(const std::vector<std::string>& ids) {
+  std::string out;
+  for (const std::string& id : ids) {
+    const AssetInfo* a = FindAsset(id);
+    out += (out.empty() ? "" : ", ") + (a != nullptr ? std::string(Tr(a->name)) : id);
+  }
+  return out;
+}
+
 bool ValidModId(std::string_view id) {
   if (id.empty() || id.size() > 64) {
     return false;
@@ -169,7 +204,8 @@ bool ParseManifest(std::string_view json, Manifest& out, std::string& error) {
       !ListField(root, "requires", out.required, error) || !ListField(root, "conflicts", out.conflicts, error) ||
       !ListField(root, "after", out.after, error) || !ListField(root, "before", out.before, error) ||
       !ListField(root, "works_with", out.worksWith, error) || !ListField(root, "recommends", out.recommends, error) ||
-      !ListField(root, "only_with", out.onlyWith, error) || !TextField(root, "updates", out.updates, error) ||
+      !ListField(root, "only_with", out.onlyWith, error) || !ListField(root, "needs_assets", out.needsAssets, error) ||
+      !ListField(root, "recommends_assets", out.recommendsAssets, error) || !TextField(root, "updates", out.updates, error) ||
       !TextField(root, "author_key", out.authorKey, error) || !TextField(root, "label_namespace", out.labelNamespace, error) ||
       !IntField(root, "priority", out.priority, error) || !IntField(root, "format", format, error)) {
     return false;
@@ -284,6 +320,19 @@ bool ParseManifest(std::string_view json, Manifest& out, std::string& error) {
         error = Fmt(Tr("\"%s\" has \"%s\", which isn't a mod id"), field, other.c_str());
         return false;
       }
+    }
+  }
+  for (const auto& [field, ids] : {std::pair<const char*, std::vector<std::string>*>{"needs_assets", &out.needsAssets},
+                                   {"recommends_assets", &out.recommendsAssets}}) {
+    for (std::string& id : *ids) {
+      const AssetInfo* known = FindAsset(id);
+      if (known == nullptr) {
+        std::string list;
+        for (const AssetInfo& a : KnownAssets()) list += (list.empty() ? "" : ", ") + std::string(a.id);
+        error = Fmt(Tr("\"%s\" has \"%s\", which isn't an extra asset this port knows (use one of: %s)"), field, id.c_str(), list.c_str());
+        return false;
+      }
+      id = known->id;
     }
   }
   for (const std::string& other : out.conflicts) {

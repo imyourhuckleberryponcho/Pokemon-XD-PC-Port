@@ -3,6 +3,9 @@
 
 #include <port_disc_dialog.h>
 #include <settings.h>
+#ifdef __ANDROID__
+#include <SDL3/SDL_iostream.h>
+#endif
 
 #include <cstdio>
 #include <filesystem>
@@ -16,6 +19,20 @@ namespace {
 
 constexpr const char* kSetting = "system.disc_path";
 std::string sChosen;
+#ifdef __ANDROID__
+std::string sChosenUri;
+bool IsContentUri(const std::string& text) { return text.rfind("content://", 0) == 0; }
+bool OpenContent(const std::string& uri) {
+  SDL_IOStream* io = SDL_IOFromFile(uri.c_str(), "rb");
+  if (io == nullptr) {
+    return false;
+  }
+  SDL_CloseIO(io);
+  sChosen = uri;
+  sChosenUri = uri;
+  return true;
+}
+#endif
 
 fs::path FromUtf8(const std::string& text) { return fs::path(std::u8string(text.begin(), text.end())); }
 
@@ -39,6 +56,11 @@ void Store(const std::string& path) {
 
 extern "C" const char* PortXD_ChooseDisc(const char* given, bool interactive) {
   if (given != nullptr && given[0] != '\0') {
+#ifdef __ANDROID__
+    if (IsContentUri(given) && OpenContent(given)) {
+      return sChosen.c_str();
+    }
+#endif
     return given;
   }
   if (!interactive) {
@@ -47,6 +69,16 @@ extern "C" const char* PortXD_ChooseDisc(const char* given, bool interactive) {
 
   const std::string last = Remembered();
   std::error_code ec;
+#ifdef __ANDROID__
+  if (IsContentUri(last)) {
+    if (OpenContent(last)) {
+      std::fprintf(stderr, "[disc] the disc image remembered in settings.ini (a document the player picked): %s\n", last.c_str());
+      return sChosen.c_str();
+    }
+    std::fprintf(stderr, "[disc] the remembered document can't be opened any more; asking for the disc image again\n");
+    Store("");
+  } else
+#endif
   if (!last.empty() && fs::is_regular_file(FromUtf8(last), ec)) {
     std::fprintf(stderr, "[disc] the disc image in settings.ini (%s): %s\n", kSetting, last.c_str());
     sChosen = last;
@@ -76,6 +108,15 @@ extern "C" const char* PortXD_ChooseDisc(const char* given, bool interactive) {
     }
 #endif
     std::fprintf(stderr, "[disc] chosen: %s\n", chosen);
+#ifdef __ANDROID__
+    if (IsContentUri(chosen)) {
+      if (!OpenContent(chosen)) {
+        std::fprintf(stderr, "[disc] the chosen document can't be opened\n");
+        return nullptr;
+      }
+      return sChosen.c_str();
+    }
+#endif
     sChosen = chosen;
     return sChosen.c_str();
   case PORT_DISC_DIALOG_CANCELED:
@@ -94,6 +135,15 @@ extern "C" void PortXD_RememberDisc(const char* path) {
   if (path == nullptr || path[0] == '\0') {
     return;
   }
+#ifdef __ANDROID__
+  if (!sChosenUri.empty() && sChosen == path) {
+    if (sChosenUri != Remembered()) {
+      std::fprintf(stderr, "[disc] remembered for the next start (settings.ini, %s): %s\n", kSetting, sChosenUri.c_str());
+    }
+    Store(sChosenUri);
+    return;
+  }
+#endif
   std::error_code ec;
   const fs::path full = fs::absolute(FromUtf8(path), ec);
   const std::u8string text = (ec ? FromUtf8(path) : full.lexically_normal()).u8string();
@@ -105,6 +155,13 @@ extern "C" void PortXD_RememberDisc(const char* path) {
 }
 
 extern "C" void PortXD_DiscFailed(const char* path) {
+#ifdef __ANDROID__
+  if (!sChosenUri.empty() && path != nullptr && sChosen == path && Remembered() == sChosenUri) {
+    std::fprintf(stderr, "[disc] forgetting the disc image in settings.ini, so the next start asks again\n");
+    Store("");
+    return;
+  }
+#endif
   if (path != nullptr && path[0] != '\0' && Remembered() == path) {
     std::fprintf(stderr, "[disc] forgetting the disc image in settings.ini, so the next start asks again\n");
     Store("");

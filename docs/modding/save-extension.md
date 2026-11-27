@@ -89,7 +89,7 @@ one more section of this file (`dex`), not a second mechanism.
 See the "Bigger lists" section of [add-pokemon-moves-items.md](add-pokemon-moves-items.md) and [roadmap.md](roadmap.md). In short: more
 more bag slots and more TMs than the pocket holds need small changes in the game's own code (the decomp), not
 only a place to keep the data. (Shadow Pokémon past row 127 are built since 0.7.6: the required **`shadow`** section holds the records of rows 128-383, written
-with every save; u32 count, then 0x48-byte records in the card's byte order. The port's More Shadow Pokémon "All" uses it; data mods cannot set those rows yet.)
+with every save; u32 count, then 0x48-byte records in the card's byte order. The port's More Shadow Pokémon "All" and (since 0.8.0) the save editor use it; data mods cannot set those rows yet.)
 
 ## See also
 

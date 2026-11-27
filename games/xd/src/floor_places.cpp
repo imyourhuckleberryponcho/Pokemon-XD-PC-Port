@@ -41,6 +41,10 @@ void Noted(uint32_t pc, uint32_t gc, void* p) {
 }
 
 extern "C" {
+void PortXD_FloorPlacesRange(unsigned char** begin, size_t* size) {
+  *begin = sPlaces;
+  *size = sizeof sPlaces;
+}
 extern void (*PortXD_NotedAlloc)(uint32_t pc, uint32_t gc, void* p);
 void GSfloorInit(uint32_t places, uint32_t b, uint32_t c, uint32_t d);
 uint8_t GSfloorPush(uint32_t id);

@@ -997,6 +997,94 @@ extern "C" bool PortXD_HeapModelPoolStats(uint32_t gc, uint32_t* used, uint32_t*
   return true;
 }
 
+#include <any>
+namespace {
+struct CellRec {
+  int32_t size;
+  uint32_t addr;
+};
+struct HeapRec {
+  Heap h;
+  std::vector<CellRec> freeCells, allocCells;
+  std::vector<std::pair<uintptr_t, std::pair<int, size_t>>> byPtr;
+};
+struct ModelSaved {
+  bool init;
+  uint32_t pcArenaStart, gcArenaStart, pcArenaEnd;
+  std::vector<HeapRec> heaps;
+  std::vector<SysPool> pools;
+  std::vector<std::pair<uintptr_t, size_t>> poolCell;
+  std::unordered_map<uintptr_t, ObjSizes> objSizes;
+};
+void free_lists(Heap& h) {
+  for (Cell* c = h.free; c != nullptr;) { Cell* n = c->next; delete c; c = n; }
+  for (Cell* c = h.allocated; c != nullptr;) { Cell* n = c->next; delete c; c = n; }
+  h.free = h.allocated = nullptr;
+  h.byPtr.clear();
+}
+Cell* build_list(const std::vector<CellRec>& v, std::vector<Cell*>& out) {
+  Cell* head = nullptr;
+  Cell* prev = nullptr;
+  for (const CellRec& r : v) {
+    Cell* c = new Cell;
+    c->size = r.size;
+    c->addr = r.addr;
+    c->prev = prev;
+    if (prev != nullptr) prev->next = c; else head = c;
+    prev = c;
+    out.push_back(c);
+  }
+  return head;
+}
+}
+
+extern "C++" std::any PortXD_HeapModelSave() {
+  std::lock_guard<std::mutex> g(sLock);
+  ModelSaved s;
+  s.init = sInit;
+  s.pcArenaStart = sPcArenaStart; s.gcArenaStart = sGcArenaStart; s.pcArenaEnd = sPcArenaEnd;
+  for (Heap& h : sHeaps) {
+    HeapRec r;
+    r.h = h;
+    r.h.free = r.h.allocated = nullptr;
+    r.h.byPtr.clear();
+    std::unordered_map<const Cell*, std::pair<int, size_t>> where;
+    for (Cell* c = h.free; c != nullptr; c = c->next) { where[c] = {0, r.freeCells.size()}; r.freeCells.push_back({c->size, c->addr}); }
+    for (Cell* c = h.allocated; c != nullptr; c = c->next) { where[c] = {1, r.allocCells.size()}; r.allocCells.push_back({c->size, c->addr}); }
+    for (auto& [p, c] : h.byPtr) {
+      auto it = where.find(c);
+      if (it != where.end()) r.byPtr.push_back({p, it->second});
+    }
+    s.heaps.push_back(std::move(r));
+  }
+  s.pools = sSysPools;
+  for (auto& [p, pool] : sPoolCell) s.poolCell.push_back({p, static_cast<size_t>(pool - sSysPools.data())});
+  s.objSizes = sObjSizes;
+  return s;
+}
+
+extern "C++" void PortXD_HeapModelLoad(const std::any& state) {
+  const auto* s = std::any_cast<ModelSaved>(&state);
+  if (s == nullptr) return;
+  std::lock_guard<std::mutex> g(sLock);
+  for (Heap& h : sHeaps) free_lists(h);
+  sHeaps.clear();
+  sInit = s->init;
+  sPcArenaStart = s->pcArenaStart; sGcArenaStart = s->gcArenaStart; sPcArenaEnd = s->pcArenaEnd;
+  for (const HeapRec& r : s->heaps) {
+    Heap h = r.h;
+    std::vector<Cell*> f, a;
+    h.free = build_list(r.freeCells, f);
+    h.allocated = build_list(r.allocCells, a);
+    for (const auto& [p, w] : r.byPtr) h.byPtr[p] = (w.first == 0 ? f : a)[w.second];
+    sHeaps.push_back(std::move(h));
+  }
+  sSysPools = s->pools;
+  sPoolCell.clear();
+  for (const auto& [p, i] : s->poolCell) sPoolCell[p] = &sSysPools[i];
+  sObjSizes = s->objSizes;
+}
+
 extern "C" void PortXD_HeapModelFlush(void) {
   std::lock_guard<std::mutex> g(sLock);
   if (sLog != nullptr) std::fflush(sLog);
@@ -1017,4 +1105,67 @@ extern "C" void PortXD_HeapModelReport(void) {
                "%lld direct pool cells without a GameCube size\n", sStats.hsdAllocs, sStats.hsdToPool,
                sStats.hsdToHeap, sStats.hsdFrees, sStats.poolQueries, sStats.poolQueryUnknown, sStats.poolShort,
                sStats.poolDirectUnknown);
+}
+
+#include "port_savestate.h"
+extern "C++" bool PortXD_HeapModelToBytes(const std::any& state, portstate::Out& out) {
+  const auto* s = std::any_cast<ModelSaved>(&state);
+  if (s == nullptr) return false;
+  out.pod(uint32_t{0x484D3031});
+  out.pod(s->init);
+  out.pod(s->pcArenaStart); out.pod(s->gcArenaStart); out.pod(s->pcArenaEnd);
+  out.u64(s->heaps.size());
+  for (const HeapRec& r : s->heaps) {
+    out.pod(r.h.size); out.pod(r.h.type); out.pod(r.h.method); out.pod(r.h.spare); out.pod(r.h.lo); out.pod(r.h.hi);
+    out.vec(r.freeCells);
+    out.vec(r.allocCells);
+    out.u64(r.byPtr.size());
+    for (const auto& [p, w] : r.byPtr) { out.pod(p); out.pod(w.first); out.u64(w.second); }
+  }
+  out.vec(s->pools);
+  out.u64(s->poolCell.size());
+  for (const auto& [p, i] : s->poolCell) { out.pod(p); out.u64(i); }
+  out.u64(s->objSizes.size());
+  for (const auto& [p, o] : s->objSizes) { out.pod(p); out.pod(o); }
+  return true;
+}
+
+extern "C++" bool PortXD_HeapModelFromBytes(portstate::In& in, std::any& state) {
+  if (in.pod<uint32_t>() != 0x484D3031) return false;
+  ModelSaved s;
+  s.init = in.pod<bool>();
+  s.pcArenaStart = in.pod<uint32_t>(); s.gcArenaStart = in.pod<uint32_t>(); s.pcArenaEnd = in.pod<uint32_t>();
+  const uint64_t nHeaps = in.u64();
+  if (nHeaps > 4096) return false;
+  for (uint64_t i = 0; i < nHeaps && in.ok(); i++) {
+    HeapRec r;
+    r.h.size = in.pod<int32_t>(); r.h.type = in.pod<int32_t>(); r.h.method = in.pod<int32_t>(); r.h.spare = in.pod<int32_t>();
+    r.h.lo = in.pod<uint32_t>(); r.h.hi = in.pod<uint32_t>();
+    r.freeCells = in.vec<CellRec>();
+    r.allocCells = in.vec<CellRec>();
+    const uint64_t nb = in.u64();
+    if (nb > (1u << 26)) return false;
+    for (uint64_t k = 0; k < nb && in.ok(); k++) {
+      const uintptr_t p = in.pod<uintptr_t>();
+      const int which = in.pod<int>();
+      const size_t idx = static_cast<size_t>(in.u64());
+      r.byPtr.push_back({p, {which, idx}});
+    }
+    s.heaps.push_back(std::move(r));
+  }
+  s.pools = in.vec<SysPool>();
+  const uint64_t nc = in.u64();
+  if (nc > (1u << 26)) return false;
+  for (uint64_t k = 0; k < nc && in.ok(); k++) { const uintptr_t p = in.pod<uintptr_t>(); const size_t i = static_cast<size_t>(in.u64()); s.poolCell.push_back({p, i}); }
+  const uint64_t no = in.u64();
+  if (no > (1u << 26)) return false;
+  for (uint64_t k = 0; k < no && in.ok(); k++) { const uintptr_t p = in.pod<uintptr_t>(); const ObjSizes o = in.pod<ObjSizes>(); s.objSizes[p] = o; }
+  if (!in.ok()) return false;
+  for (const HeapRec& r : s.heaps)
+    for (const auto& [p, w] : r.byPtr)
+      if (w.second >= (w.first == 0 ? r.freeCells.size() : r.allocCells.size())) return false;
+  for (const auto& [p, i] : s.poolCell)
+    if (i >= s.pools.size()) return false;
+  state = std::move(s);
+  return true;
 }

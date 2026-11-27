@@ -121,4 +121,38 @@ Problem CheckGen57(const fs::path& assets) {
   return Problem::None;
 }
 
+AssetState StateOfAsset(const std::string& id, const fs::path& assets) {
+  const auto versionOf = [](const fs::path& file, int& version) {
+    std::string json, v;
+    if (!ReadAll(file, json)) return false;
+    version = JsonText(json, "version", v) ? std::atoi(v.c_str()) : 0;
+    return true;
+  };
+  const auto modelsReady = [&](const char* folder, const char* modId) {
+    std::string json, v;
+    if (!ReadAll(assets / folder / L"mod.json", json)) return AssetState::NotMade;
+    if (!JsonText(json, "id", v) || v != modId) return AssetState::NotMade;
+    std::error_code ec;
+    for (auto it = fs::directory_iterator(assets / folder / L"fsys", ec); !ec && it != fs::directory_iterator(); it.increment(ec)) return AssetState::Ready;
+    return AssetState::NotMade;
+  };
+  if (id == "br_models") return modelsReady("pbr", "battle-revolution-models");
+  if (id == "usum_models") return modelsReady("usum", "ultra-sun-moon-models");
+  if (id == "gen4_pack") {
+    const fs::path folder = Gen4Folder(assets, false);
+    int version = 0;
+    if (!versionOf(folder / L"gen4.json", version)) return AssetState::NotMade;
+    return version == kGen4PackVersion ? AssetState::Ready : AssetState::OtherVersion;
+  }
+  if (id == "gen57_pack") {
+    int version = 0;
+    if (!versionOf(assets / L"usum_gen57" / L"gen57.json", version)) return AssetState::NotMade;
+    if (version != kGen57PackVersion) return AssetState::OtherVersion;
+    int v4 = 0;
+    if (!versionOf(Gen4Folder(assets, true) / L"gen4.json", v4) || v4 != kGen4PackVersion) return AssetState::DoesNotFit;
+    return Works(CheckGen57(assets)) ? AssetState::Ready : AssetState::DoesNotFit;
+  }
+  return AssetState::UnknownId;
+}
+
 }

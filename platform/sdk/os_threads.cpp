@@ -1,6 +1,9 @@
 #include <aurora/time.hpp>
 
+#include "port_savestate.h"
+
 #include <algorithm>
+#include <any>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -93,6 +96,7 @@ struct PThread {
   bool idle = false;
   bool idleEnabled = false;
   uint64_t seq = 0;
+  uint64_t runs = 0;
   void* (*func)(void*) = nullptr;
   void* param = nullptr;
   void* result = nullptr;
@@ -143,6 +147,7 @@ void make_ready(PThread* t) { t->seq = ++gSeq; }
 
 void wait_for_token(std::unique_lock<SchedMutex>& lock, PThread* self) {
   self->cv.wait(lock, [&] { return gRunning == self; });
+  self->runs++;
 }
 
 void hand_over(std::unique_lock<SchedMutex>& lock, PThread* self, PThread* next) {
@@ -479,7 +484,7 @@ void thread_main(PThread* self) {
 void start_game_thread(PThread* t) { std::thread(thread_main, t).detach(); }
 #else
 void start_game_thread(PThread* t) {
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(__ANDROID__)
   constexpr size_t kStack = 0x100000, kGuard = 0x4000;
 #else
   constexpr size_t kStack = 0x100000, kGuard = 0x1000;
@@ -567,9 +572,13 @@ void init_time() {
   }
 }
 
+std::atomic<int64_t> gClockShift{0};
+std::atomic<uint32_t> gClockEpoch{0};
+int64_t real_now() { return OSGetTime() - gClockShift.load(std::memory_order_relaxed); }
+
 int64_t now_locked() {
   init_time();
-  return gDeterministic ? gVTime : OSGetTime();
+  return gDeterministic ? gVTime : real_now();
 }
 
 bool gIdleHandlersRunning = false;
@@ -746,7 +755,7 @@ void timer_main() {
       deterministic_step(lock);
       continue;
     }
-    const int64_t now = OSGetTime();
+    const int64_t now = real_now();
     int64_t next = INT64_MAX;
     void* dueKey = nullptr;
     for (auto& [key, a] : gAlarms) {
@@ -789,8 +798,9 @@ void timer_main() {
     } else if (scale > 1.0f && timer_relaxed_wait_ok()) {
       gTimerCv.wait_for(lock, std::chrono::microseconds(remainingUs > 50 ? remainingUs : 50));
     } else {
+      const uint32_t epoch = gClockEpoch.load();
       lock.unlock();
-      while (!TIMER_QUIT() && OSGetTime() < next) {
+      while (!TIMER_QUIT() && real_now() < next && gClockEpoch.load() == epoch) {
         std::this_thread::yield();
       }
       lock.lock();
@@ -907,10 +917,10 @@ int64_t PortOS_BusyFor(int64_t ticks) {
     return 0;
   }
   if (!gDeterministic) {
-    const int64_t start = OSGetTime();
+    const int64_t start = real_now();
     const int64_t until = start + ticks;
     for (;;) {
-      const int64_t now = OSGetTime();
+      const int64_t now = real_now();
       if (now >= until) {
         break;
       }
@@ -922,7 +932,7 @@ int64_t PortOS_BusyFor(int64_t ticks) {
       gBusyWaiting = false;
       reschedule(lock, 'b');
     }
-    return OSGetTime() - start;
+    return real_now() - start;
   }
   ensure_timer();
   const int64_t start = gVTime;
@@ -1257,7 +1267,7 @@ void OSCancelAlarm(void* alarm) {
 extern "C" int64_t PortTime_Now(void) {
   init_time();
   if (!gDeterministic) {
-    return OSGetTime();
+    return real_now();
   }
   std::lock_guard<SchedMutex> guard(gSched);
   return gVTime;
@@ -1281,4 +1291,326 @@ extern "C" void PortTime_SetSpeed(float speed) {
   }
   aurora::time::set_scale(clamped);
   gTimerCv.notify_all();
+}
+
+namespace {
+struct OsThreadSaved {
+  PThread* t = nullptr;
+  int priority = 0, suspend = 0;
+  bool waiting = false, dead = false, idle = false, idleEnabled = false, started = false;
+  uint64_t seq = 0, runs = 0;
+  std::vector<PThread*> joiners;
+};
+struct OsSaved {
+  PThread* self = nullptr;
+  std::vector<OsThreadSaved> threads;
+  std::vector<std::pair<void*, std::vector<PThread*>>> queues;
+  std::map<void*, Alarm> alarms;
+  PThread* running = nullptr;
+  uint64_t seq = 0;
+  std::deque<PendingIrq> pending;
+  int64_t vtime = 0;
+  int64_t clock = 0;
+  bool deterministic = false;
+  bool interruptsEnabled = true;
+  int64_t busyOwed = 0;
+  bool fromFile = false;
+};
+}
+
+std::any PortState_OsSave(portstate::Why& why) {
+  init_time();
+  if (tSelf == nullptr || tInHandler) {
+    why = "not on the game's main thread";
+    return {};
+  }
+  std::lock_guard<SchedMutex> guard(gSched);
+  if (gSchedOn) {
+    why = "a scheduled replay is running";
+    return {};
+  }
+  if (gYieldWaiting || gBusyWaiting || gIdleHandlersRunning) {
+    why = "the game is busy waiting";
+    return {};
+  }
+  OsSaved s;
+  s.self = tSelf;
+  for (auto& [key, t] : gThreads) {
+    OsThreadSaved o;
+    o.t = t;
+    o.priority = t->priority;
+    o.suspend = t->suspend;
+    o.waiting = t->waiting;
+    o.dead = t->dead;
+    o.idle = t->idle;
+    o.idleEnabled = t->idleEnabled;
+    o.started = t->started;
+    o.seq = t->seq;
+    o.runs = t->runs;
+    o.joiners = t->joiners;
+    s.threads.push_back(std::move(o));
+  }
+  for (auto& [q, v] : gQueues) s.queues.push_back({q, std::vector<PThread*>(v.begin(), v.end())});
+  s.alarms = gAlarms;
+  s.running = gRunning;
+  s.seq = gSeq;
+  s.pending = gPendingInterrupts;
+  s.vtime = gVTime;
+  s.clock = gDeterministic ? 0 : real_now();
+  s.deterministic = gDeterministic;
+  s.interruptsEnabled = tInterruptsEnabled;
+  s.busyOwed = tBusyOwed;
+  return s;
+}
+
+bool PortState_OsCheck(const std::any& state, portstate::Why& why) {
+  const auto* s = std::any_cast<OsSaved>(&state);
+  if (s == nullptr) {
+    why = "no state";
+    return false;
+  }
+  if (tSelf != s->self) {
+    why = "another thread than the one that saved";
+    return false;
+  }
+  std::lock_guard<SchedMutex> guard(gSched);
+  if (gYieldWaiting || gBusyWaiting || gIdleHandlersRunning) {
+    why = "the game is busy waiting";
+    return false;
+  }
+  if (s->deterministic != gDeterministic) {
+    why = "the clock mode changed since the save";
+    return false;
+  }
+  if (s->threads.size() != gThreads.size()) {
+    why = "game threads were created since the save (" + std::to_string(s->threads.size()) + " then, " +
+          std::to_string(gThreads.size()) + " now)";
+    return false;
+  }
+  for (const OsThreadSaved& o : s->threads) {
+    if (o.t == s->self) continue;
+    if (s->fromFile) continue;
+    if (o.t->runs != o.runs || o.t->dead != o.dead) {
+      char key[32];
+      std::snprintf(key, sizeof key, "%p", o.t->key);
+      why = std::string("game thread ") + key + " has run since the save (runs " + std::to_string(o.runs) + " -> " +
+            std::to_string(o.t->runs) + (o.t->dead != o.dead ? ", ended" : "") + ")";
+      return false;
+    }
+  }
+  return true;
+}
+
+void PortState_OsLoad(const std::any& state) {
+  const auto& s = std::any_cast<const OsSaved&>(state);
+  std::lock_guard<SchedMutex> guard(gSched);
+  for (const OsThreadSaved& o : s.threads) {
+    PThread* t = o.t;
+    t->priority = o.priority;
+    t->suspend = o.suspend;
+    t->waiting = o.waiting;
+    t->dead = o.dead;
+    t->idle = o.idle;
+    t->idleEnabled = o.idleEnabled;
+    t->started = o.started;
+    t->seq = o.seq;
+    t->joiners = o.joiners;
+  }
+  gQueues.clear();
+  for (const auto& [q, v] : s.queues) gQueues[q] = std::deque<PThread*>(v.begin(), v.end());
+  gAlarms = s.alarms;
+  gRunning = s.running;
+  gSeq = s.seq;
+  gPendingInterrupts = s.pending;
+  gVTime = s.vtime;
+  if (!gDeterministic) {
+    gClockShift.fetch_add(real_now() - s.clock);
+    gClockEpoch.fetch_add(1);
+  }
+  if (std::getenv("XD_SAVESTATE_OS_LOG") != nullptr) {
+    int64_t first = INT64_MAX;
+    for (auto& [key, al] : gAlarms) if (al.armed && al.when < first) first = al.when;
+    std::fprintf(stderr, "[savestate] os: game clock %lld (saved %lld, shift %lld), earliest alarm in %.2f s, vtime %lld, scale %.2f\n", static_cast<long long>(real_now()),
+                 static_cast<long long>(s.clock), static_cast<long long>(gClockShift.load()), first == INT64_MAX ? -1.0 : (first - real_now()) / 40500000.0,
+                 static_cast<long long>(gVTime), static_cast<double>(aurora::time::scale()));
+  }
+  gVBase = gVTime;
+  gRealBase = std::chrono::steady_clock::now();
+  tInterruptsEnabled = s.interruptsEnabled;
+  tBusyOwed = s.busyOwed;
+  gTimerCv.notify_all();
+}
+
+namespace {
+uint64_t key_of(const PThread* t) { return t == nullptr ? 0 : static_cast<uint64_t>(reinterpret_cast<uintptr_t>(t->key)); }
+constexpr uint32_t kOsMagic = 0x4F533031;
+}
+
+bool PortState_OsToBytes(const std::any& state, portstate::Out& out, portstate::Why& why) {
+  const auto* s = std::any_cast<OsSaved>(&state);
+  if (s == nullptr) {
+    why = "no state";
+    return false;
+  }
+  if (!s->pending.empty()) {
+    why = "an interrupt is waiting to be delivered (" + std::to_string(s->pending.size()) + ")";
+    return false;
+  }
+  out.pod(kOsMagic);
+  out.u64(key_of(s->self));
+  out.u64(s->threads.size());
+  for (const OsThreadSaved& o : s->threads) {
+    out.u64(key_of(o.t));
+    out.pod(o.priority);
+    out.pod(o.suspend);
+    out.pod(o.waiting);
+    out.pod(o.dead);
+    out.pod(o.idle);
+    out.pod(o.idleEnabled);
+    out.pod(o.started);
+    out.u64(o.seq);
+    out.u64(o.runs);
+    out.u64(o.joiners.size());
+    for (const PThread* j : o.joiners) out.u64(key_of(j));
+  }
+  out.u64(s->queues.size());
+  for (const auto& [q, v] : s->queues) {
+    out.u64(static_cast<uint64_t>(reinterpret_cast<uintptr_t>(q)));
+    out.u64(v.size());
+    for (const PThread* t : v) out.u64(key_of(t));
+  }
+  out.u64(s->alarms.size());
+  for (const auto& [k, a] : s->alarms) {
+    out.u64(static_cast<uint64_t>(reinterpret_cast<uintptr_t>(k)));
+    out.pod(a);
+  }
+  out.u64(key_of(s->running));
+  out.u64(s->seq);
+  out.pod(s->vtime);
+  out.pod(s->clock);
+  out.pod(s->deterministic);
+  out.pod(s->interruptsEnabled);
+  out.pod(s->busyOwed);
+  return true;
+}
+
+bool PortState_OsFromBytes(portstate::In& in, std::any& state, portstate::Why& why) {
+  std::lock_guard<SchedMutex> guard(gSched);
+  auto find = [&](uint64_t key, PThread*& out) {
+    if (key == 0) {
+      out = nullptr;
+      return true;
+    }
+    auto it = gThreads.find(reinterpret_cast<void*>(static_cast<uintptr_t>(key)));
+    if (it == gThreads.end()) {
+      char text[64];
+      std::snprintf(text, sizeof text, "the game thread %llx of the state does not exist here", static_cast<unsigned long long>(key));
+      why = text;
+      return false;
+    }
+    out = it->second;
+    return true;
+  };
+  if (in.pod<uint32_t>() != kOsMagic) {
+    why = "the thread part of the file is not in this program's format";
+    return false;
+  }
+  OsSaved s;
+  s.fromFile = true;
+  if (!find(in.u64(), s.self)) return false;
+  const uint64_t nThreads = in.u64();
+  if (nThreads > 4096) {
+    why = "the thread part of the file is damaged";
+    return false;
+  }
+  for (uint64_t i = 0; i < nThreads && in.ok(); i++) {
+    OsThreadSaved o;
+    if (!find(in.u64(), o.t)) return false;
+    o.priority = in.pod<int>();
+    o.suspend = in.pod<int>();
+    o.waiting = in.pod<bool>();
+    o.dead = in.pod<bool>();
+    o.idle = in.pod<bool>();
+    o.idleEnabled = in.pod<bool>();
+    o.started = in.pod<bool>();
+    o.seq = in.u64();
+    o.runs = in.u64();
+    const uint64_t nj = in.u64();
+    if (nj > 4096) { in.bad = true; break; }
+    for (uint64_t j = 0; j < nj && in.ok(); j++) {
+      PThread* t = nullptr;
+      if (!find(in.u64(), t)) return false;
+      o.joiners.push_back(t);
+    }
+    s.threads.push_back(std::move(o));
+  }
+  const uint64_t nQueues = in.u64();
+  if (nQueues > 65536) in.bad = true;
+  for (uint64_t i = 0; i < nQueues && in.ok(); i++) {
+    void* q = reinterpret_cast<void*>(static_cast<uintptr_t>(in.u64()));
+    const uint64_t nt = in.u64();
+    if (nt > 4096) { in.bad = true; break; }
+    std::vector<PThread*> v;
+    for (uint64_t j = 0; j < nt && in.ok(); j++) {
+      PThread* t = nullptr;
+      if (!find(in.u64(), t)) return false;
+      v.push_back(t);
+    }
+    s.queues.push_back({q, std::move(v)});
+  }
+  const uint64_t nAlarms = in.u64();
+  if (nAlarms > 65536) in.bad = true;
+  for (uint64_t i = 0; i < nAlarms && in.ok(); i++) {
+    void* k = reinterpret_cast<void*>(static_cast<uintptr_t>(in.u64()));
+    Alarm a = in.pod<Alarm>();
+    if (a.handler != nullptr) a.site = irq_site(reinterpret_cast<uintptr_t>(a.handler), true);
+    s.alarms[k] = a;
+  }
+  if (!find(in.u64(), s.running)) return false;
+  s.seq = in.u64();
+  s.vtime = in.pod<int64_t>();
+  s.clock = in.pod<int64_t>();
+  s.deterministic = in.pod<bool>();
+  s.interruptsEnabled = in.pod<bool>();
+  s.busyOwed = in.pod<int64_t>();
+  if (!in.ok()) {
+    why = "the thread part of the file ends too early";
+    return false;
+  }
+  state = std::move(s);
+  return true;
+}
+
+extern "C" void PortOS_ThreadReport(void) {
+  std::lock_guard<SchedMutex> guard(gSched);
+  for (auto& [key, t] : gThreads) {
+    std::fprintf(stderr, "[savestate] thread %p prio %d runs %llu%s%s%s%s%s%s\n", key, t->priority,
+                 static_cast<unsigned long long>(t->runs), t->dead ? " dead" : "", t->waiting ? " waiting" : "",
+                 t->suspend > 0 ? " suspended" : "", t->idle ? " idle" : "", t == gRunning ? " RUNNING" : "",
+                 t == tSelf ? " (this)" : "");
+  }
+  size_t armed = 0;
+  for (auto& a : gAlarms) armed += a.second.armed ? 1 : 0;
+  std::fprintf(stderr, "[savestate] %zu alarms (%zu armed), %zu interrupts waiting\n", gAlarms.size(), armed,
+               gPendingInterrupts.size());
+}
+
+extern "C" void PortOS_DebugState(char* buf, size_t n) {
+  std::lock_guard<SchedMutex> guard(gSched);
+  std::string t;
+  char tmp[160];
+  std::snprintf(tmp, sizeof tmp, "vt %lld vbase %lld owed %lld ien %d pend %zu run %p |", static_cast<long long>(gVTime), static_cast<long long>(gVBase),
+                static_cast<long long>(tBusyOwed), tInterruptsEnabled ? 1 : 0, gPendingInterrupts.size(), static_cast<void*>(gRunning));
+  t += tmp;
+  for (auto& [k, a] : gAlarms) {
+    if (!a.armed) continue;
+    std::snprintf(tmp, sizeof tmp, " A%p@%lld/%lld", k, static_cast<long long>(a.when), static_cast<long long>(a.period));
+    t += tmp;
+  }
+  for (auto& [key, th] : gThreads) {
+    std::snprintf(tmp, sizeof tmp, " T%p:%d%s%s%s r%llu", key, th->priority, th->waiting ? "w" : "", th->suspend > 0 ? "s" : "", th == gRunning ? "R" : "",
+                  static_cast<unsigned long long>(th->runs));
+    t += tmp;
+  }
+  std::snprintf(buf, n, "%s", t.c_str());
 }

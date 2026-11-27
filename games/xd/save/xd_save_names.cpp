@@ -39,6 +39,7 @@ size_t CtrlArgBytes(uint8_t ctrl) {
 struct GameNames::Impl {
   XDCommonTables tables{};
   bool littleText = false;
+  std::vector<uint32_t> abilityTextKeys;
   std::vector<uint32_t> abilityKeys;
   std::vector<std::string> abilities;
   std::vector<const uint8_t*> banks;
@@ -160,7 +161,7 @@ bool GameNames::LoadImpl(const std::string& discPath, bool running, std::string&
       constexpr uint32_t kAt = 0x803FFC50, kBytes = 0x3A8;
       if (len != 0 && kAt >= addr && kAt - addr + kBytes <= len && static_cast<size_t>(off) + (kAt - addr) + kBytes <= dolSize) {
         const uint8_t* rows = dol + off + (kAt - addr);
-        for (uint32_t r = 0; r < kBytes / 12; r++) { impl->abilities.push_back(std::to_string(be32(rows + r * 12 + 4))); impl->abilityKeys.push_back(be32(rows + r * 12 + 4)); }
+        for (uint32_t r = 0; r < kBytes / 12; r++) { impl->abilities.push_back(std::to_string(be32(rows + r * 12 + 4))); impl->abilityKeys.push_back(be32(rows + r * 12 + 4)); impl->abilityTextKeys.push_back(be32(rows + r * 12 + 8)); }
         break;
       }
     }
@@ -248,6 +249,13 @@ std::string GameNames::Nature(uint8_t id) const {
     return "";
   }
   return Message(natures[id].name);
+}
+
+std::string GameNames::AbilityText(uint16_t id) const {
+  if (!impl_ || id >= impl_->abilityTextKeys.size()) {
+    return "";
+  }
+  return Message(impl_->abilityTextKeys[id]);
 }
 
 std::string GameNames::Ability(uint16_t id) const {

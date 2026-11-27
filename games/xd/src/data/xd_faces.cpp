@@ -200,6 +200,19 @@ bool DecodeTexture(const std::vector<uint8_t>& file, engine::memcard::thumbnail:
 }
 
 namespace { uint32_t sFaceRowsTaken = 0; }
+static void ShareWithCopies(std::vector<em::AddedRow>& rows, const std::vector<size_t>& wanting, const char* key, const uint32_t at[2], uint32_t width) {
+  for (em::AddedRow& row : rows) {
+    if (row.table != "pokemon_data" || row.copiedAdded == 0 || row.assets.count(key) != 0 || row.bytes.size() < at[1] + width) continue;
+    for (size_t index : wanting) {
+      const em::AddedRow& base = rows[index];
+      if (base.row != row.copiedAdded || base.row == row.row || base.bytes.size() < at[1] + width) continue;
+      for (int k = 0; k < 2; k++)
+        for (uint32_t x = 0; x < width; x++) row.bytes[at[k] + x] = base.bytes[at[k] + x];
+      break;
+    }
+  }
+}
+
 void SetFaceRowsTaken(uint32_t count) { sFaceRowsTaken = count; }
 
 void BuildFaces(em::RowsJob& job) {
@@ -390,7 +403,10 @@ void BuildFaces(em::RowsJob& job) {
     PutBe16(row.bytes.data() + spriteAt[1], shiny);
   }
 
-  if (additions.empty()) return;
+  if (additions.empty()) {
+    ShareWithCopies(rows, wanting, "face", spriteAt, 2);
+    return;
+  }
   for (size_t i = 0; i < additions.size(); i++) {
     additions[i].name = names[i].c_str();
     additions[i].data = contents[i].data();
@@ -415,6 +431,7 @@ void BuildFaces(em::RowsJob& job) {
   std::free(built);
   job.outFiles.push_back(std::move(out));
   for (em::AddedRow& f : newRows) rows.push_back(std::move(f));
+  ShareWithCopies(rows, wanting, "face", spriteAt, 2);
 }
 
 namespace {
@@ -609,6 +626,7 @@ void BuildBoxIcons(em::RowsJob& job) {
     }
     return;
   }
+  ShareWithCopies(rows, wanting, "icon", bodyAt, 4);
   em::RowsJob::OutFile out;
   out.discPath = archiveName;
   out.data.assign(built, built + size);

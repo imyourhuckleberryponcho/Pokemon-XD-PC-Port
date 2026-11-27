@@ -159,6 +159,7 @@ After a switch-off the game carries on with its own numbers. Fix the script and 
 | `The system's virus scanner refused the download` | Windows Security (or your antivirus) objected. | Don't install it. |
 | `only https:// addresses are used for mod updates` | The update link is `http://`. | Authors: use an https address. |
 | `Needs "x", which isn't installed.` / `Needs "x" in version >= 1.2; you have 1.0.` | A requirement is missing or too old. Turning the mod on offers to download it when the mod has a `links` entry. | Install or update it. |
+| `The mod "A" needs extra assets of your own that are not ready (Gen 5-7 pack: not made yet). Make it on the launcher's Extra assets page ... It is not used.` | The mod has `needs_assets` and the asset is missing, made by another version of the game ("make it again"), does not fit the Gen 4 files that are installed, or this playthrough was set up without that Gen 4 / Gen 5-7 choice. The game starts without the mod; the Mods page shows the same sentence. | Make it on the launcher's Extra assets page (it needs your own disc or dump), or for a playthrough: pick the choice at New Game. |
 | `A compatibility patch: it is only used when "x" is on too` | The mod has `only_with`. | Turn x on, or leave the patch off. |
 | `This one and "B" both change the same table value (pokemon / #1 / hp). "B", further down the list, wins.` | A finer clash than a whole file. Not an error. | Move the mod you want to win further down, or turn one off. |
 | `Some mods each want to come after the other` | A cycle in `after` / `before` / `requires`. | The order is yours: use the arrows. Mod authors: remove one of the two. |
@@ -205,6 +206,8 @@ warnings with `--strict`, `3` = the tool could not run.
 | `manifest-game` | The disc ID is not one the port knows for this game. | Use `GXXE01` (USA), `GXXP01` or `GXXJ01`. |
 | `version-format` | `version` is not dotted numbers. | Write `1.2.0`. Other forms compare as plain text. |
 | `manifest-relation` | `before`, `works_with`, `recommends` or `only_with` names something that isn't a mod id, or the mod itself. | Fix the id. |
+| `manifest-assets` | `needs_assets` or `recommends_assets` names an id this port does not know (the message lists the known ones: `br_models`, `usum_models`, `gen4_pack`, `gen57_pack`). The mod is refused. | Use one of those ids, in quotes. |
+| `asset-needed` | Note only: the mod names an asset in `needs_assets`, so it is used only while the player has made it. | None. Say in the description what the mod needs. |
 | `manifest-links`, `manifest-links-not-https` | `links` is not `{"id": "https://..."}`, or an address is not https. | Fix it; the launcher refuses non-https links. |
 | `manifest-author-key` | `author_key` is not 64 lower case hex digits. | Paste your public key (`xd_mod_pack --make-key` prints it). |
 | `updates-no-version`, `updates-not-https`, `updates-url` | `updates` is set without `version`, is not https, or is not a web address. | See "Updates" in [sharing.md](sharing.md). |

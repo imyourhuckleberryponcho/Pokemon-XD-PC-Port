@@ -1,6 +1,10 @@
 #include <algorithm>
+#include <any>
 #include <cstdint>
 #include <cstdio>
+#include <utility>
+
+#include "savestate_features.h"
 
 extern "C" {
 extern void* floordata;
@@ -46,6 +50,25 @@ void pokemon_SetPoolExp(void* poke, uint32_t data);
 namespace {
 int sExpState = 2;
 uint32_t sExpPlain = 0;
+const xd::savestate::Feature sStateFeature(
+    "cheats_hooks", [] { return std::any(std::pair<int, uint32_t>(sExpState, sExpPlain)); },
+    [](const std::any& a) {
+      const auto& p = std::any_cast<const std::pair<int, uint32_t>&>(a);
+      sExpState = p.first;
+      sExpPlain = p.second;
+    },
+    [](const std::any& a, portstate::Out& out) {
+      const auto& p = std::any_cast<const std::pair<int, uint32_t>&>(a);
+      out.pod(p.first);
+      out.pod(p.second);
+    },
+    [](portstate::In& in, std::any& a) {
+      const int first = in.pod<int>();
+      const uint32_t second = in.pod<uint32_t>();
+      if (!in.ok()) return false;
+      a = std::pair<int, uint32_t>(first, second);
+      return true;
+    });
 }
 
 extern "C" {

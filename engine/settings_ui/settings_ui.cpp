@@ -343,7 +343,14 @@ bool DrawSettingRow(es::Registry& registry, size_t index, const Options& options
                        ValueForPeople(registry, index, original).c_str());
   }
 
-  ImGui::TableSetColumnIndex(1);
+#if defined(__ANDROID__)
+  if (options.stacked) {
+    ImGui::Dummy(ImVec2(0, ImGui::GetStyle().ItemSpacing.y * 0.5f));
+  } else
+#endif
+  {
+    ImGui::TableSetColumnIndex(1);
+  }
   if (!d.implemented) {
     ImGui::BeginDisabled();
   }
@@ -436,12 +443,28 @@ bool DrawCategory(es::Registry& registry, es::Category category, const Options& 
     Wrapped(options.colors.dim, Tr("There are no settings here yet."));
     return false;
   }
-  if (ImGui::BeginTable("##settings", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
+#if defined(__ANDROID__)
+  const int columns = options.stacked ? 1 : 2;
+#else
+  const int columns = 2;
+#endif
+  if (ImGui::BeginTable("##settings", columns, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
                                              ImGuiTableFlags_PadOuterX)) {
-    ImGui::TableSetupColumn("what", ImGuiTableColumnFlags_WidthStretch, 3.0f);
-    ImGui::TableSetupColumn("value", ImGuiTableColumnFlags_WidthStretch, 1.4f);
+#if defined(__ANDROID__)
+    if (!options.stacked)
+#endif
+    {
+      ImGui::TableSetupColumn("what", ImGuiTableColumnFlags_WidthStretch, 3.0f);
+      ImGui::TableSetupColumn("value", ImGuiTableColumnFlags_WidthStretch, 1.4f);
+    }
+#if defined(__ANDROID__)
+    else {
+      ImGui::TableSetupColumn("all", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+    }
+#endif
     for (size_t i : rows) {
       changed |= DrawSettingRow(registry, i, options);
+      if (options.afterRow != nullptr) options.afterRow(options.afterRowUser, registry.Get(i).id);
     }
     ImGui::EndTable();
   }

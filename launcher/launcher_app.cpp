@@ -9,6 +9,8 @@
 
 #include <mods.h>
 #include <mod_layout.h>
+#include <modcheck.h>
+#include <modsafety.h>
 #include <save_backups.h>
 #include <save_slots.h>
 #include <i18n.h>
@@ -18,15 +20,21 @@
 #include <gc_adapter_sdl.h>
 #include <pad_sdl.h>
 #include <update.h>
+#include <hd_maker.h>
 
 #include <SDL3/SDL.h>
 #include <backends/imgui_impl_sdl3.h>
 #include <backends/imgui_impl_sdlrenderer3.h>
 #include <imgui.h>
 #include <misc/cpp/imgui_stdlib.h>
+#if defined(__ANDROID__)
+#include <port_android_install.h>
+#include <imgui_internal.h>
+#endif
 
 #include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <cfloat>
 #include <chrono>
 #include <cstdarg>
@@ -47,6 +55,26 @@
 #include <vector>
 
 namespace launcher {
+
+#if defined(__ANDROID__)
+#define NOT_PHONE_AND && !touch_
+#define PHONE_OR || touch_
+#define LAUNCHER_PHONE(x) (x)
+#define SAMELINE_FIT(label) SameLineFit(label)
+#define WP(dp) Wp(dp)
+#define PHONE_HIDE_COLUMN (portrait_ ? ImGuiTableColumnFlags_Disabled : 0)
+#else
+#define NOT_PHONE_AND
+#define PHONE_OR
+#define LAUNCHER_PHONE(x) false
+#define SAMELINE_FIT(label) ImGui::SameLine()
+#define WP(dp) ((dp) * scale_)
+#define PHONE_HIDE_COLUMN 0
+#endif
+
+#if defined(__ANDROID__)
+static bool sPlayRequested = false;
+#endif
 
 namespace {
 
@@ -122,6 +150,44 @@ fs::path PathOf(const std::string& utf8) {
   return fs::path(std::u8string(reinterpret_cast<const char8_t*>(utf8.data()), utf8.size()));
 }
 
+#if defined(__ANDROID__)
+std::string NameOfUri(const std::string& uri) {
+  {
+    static std::mutex mutex;
+    static std::map<std::string, std::string> known;
+    std::lock_guard<std::mutex> lock(mutex);
+    auto it = known.find(uri);
+    if (it == known.end()) {
+      char name[512] = {};
+      PortAndroid_DisplayName(uri.c_str(), name, sizeof name);
+      it = known.emplace(uri, name).first;
+    }
+    if (!it->second.empty()) {
+      return it->second;
+    }
+  }
+  std::string decoded;
+  for (size_t i = 0; i < uri.size(); i++) {
+    if (uri[i] == '%' && i + 2 < uri.size() && std::isxdigit(static_cast<unsigned char>(uri[i + 1])) &&
+        std::isxdigit(static_cast<unsigned char>(uri[i + 2]))) {
+      decoded += static_cast<char>(std::stoi(uri.substr(i + 1, 2), nullptr, 16));
+      i += 2;
+    } else {
+      decoded += uri[i];
+    }
+  }
+  const size_t cut = decoded.find_last_of("/:");
+  std::string name = cut == std::string::npos ? decoded : decoded.substr(cut + 1);
+  if (name.empty()) {
+    name = "picked";
+  }
+  return name;
+}
+
+std::string NameOfUriShown(const std::string& path) { return path.rfind("content://", 0) == 0 ? NameOfUri(path) : Utf8(PathOf(path).filename()); }
+
+#endif
+
 std::string Lower(std::string s) {
   for (char& c : s) {
     c = c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c;
@@ -151,6 +217,7 @@ std::string HexId(unsigned v) {
   return b;
 }
 
+constexpr float kTouchScale = 1.0f;
 constexpr float kControllerScale = 1.2f;
 
 void ApplyStyle(float scale) {
@@ -232,6 +299,18 @@ struct Fonts {
   ImFont* play = nullptr;
   ImFont* caption = nullptr;
 };
+
+#if defined(__ANDROID__)
+void TouchStyle(float scale) {
+  ImGuiStyle& s = ImGui::GetStyle();
+  s.FramePadding.y = std::max(s.FramePadding.y * 1.75f, 15.5f * scale);
+  s.FramePadding.x *= 1.25f;
+  s.ItemSpacing.y *= 1.6f;
+  s.ScrollbarSize = 16 * scale * 1.4f;
+  s.GrabMinSize = 28 * scale;
+  s.TouchExtraPadding = ImVec2(6 * scale, 6 * scale);
+}
+#endif
 
 Fonts LoadFonts(float scale) {
   ImGuiIO& io = ImGui::GetIO();
@@ -624,6 +703,10 @@ class App {
   void InitModTools();
   em::Review review_;
   bool reviewDirty_ = true;
+  std::string assetStamp_;
+  std::string AssetStamp() const;
+  void CheckAssetStamp();
+  std::chrono::steady_clock::time_point assetStampAt_{};
   std::map<std::string, std::string> offHints_;
   std::map<std::string, std::string> worksWith_;
   std::map<std::string, engine::modupdate::PreviousInfo> prevInfo_;
@@ -684,6 +767,13 @@ class App {
   pad::FileBrowser files_;
   bool controller_ = false;
   bool controllerFixed_ = false;
+#if defined(__ANDROID__)
+  void TouchDrag(const SDL_Event& e, bool& toImGui);
+  void AndroidOpen(SDL_DialogFileCallback callback, void* user, SDL_Window* window, const SDL_DialogFileFilter* filters, int count, bool many);
+  void AndroidSave(SDL_DialogFileCallback callback, void* user, SDL_Window* window, const SDL_DialogFileFilter* filters, int count, const char* start);
+  void AndroidFlush();
+  void TouchFling();
+#endif
   float baseScale_ = 1.0f;
   bool rescale_ = false;
   bool askMenu_ = false;
@@ -834,6 +924,10 @@ class App {
   bool closeLooks_ = false;
   std::string pickLooks_;
   std::string looksMessage_;
+  bool exportBoxesAsk_ = false, exportBoxesGo_ = false;
+  bool askBoxes_ = false, closeBoxes_ = false;
+  int pickBoxes_ = 0;
+  std::string boxesMessage_;
   bool askSpoilers_ = false;
   bool closeSpoilers_ = false;
   UpdateWork up_;
@@ -841,6 +935,12 @@ class App {
   bool settingsFileFound_ = false;
   bool presetAsked_ = false;
   bool presetPending_ = false;
+#if defined(__ANDROID__)
+  void DrawFirstStart();
+  void ImportModZip(const std::string& zipFile);
+  void ImportExtraZip(const std::string& zipFile);
+  void DrawExtraPhoneCard();
+#endif
   bool askPreset_ = false;
   bool welcomeFromStart_ = false;
 
@@ -912,12 +1012,20 @@ class App {
   void DrawExtraPage();
   void DrawExtraRow(int i);
   void DrawExtraHdTextures();
+  extra::MakeJob hdJob_;
+  bool hdAsk_ = false, hdWasRunning_ = false, hdFinished_ = false, hdAnswered_ = false;
+  int hdScale_ = 2;
+  std::string hdName_, hdNote_;
+  extra::MakeJob::Snapshot hdLast_;
+  bool HdToolInstalled() const;
+  void HdMake();
+  void DrawHdMaker();
   bool languageChanged_ = false;
   std::string languageApplied_ = "\x01";
   void FollowLanguage();
   bool LanguageRowOn() const {
     return !game_.languages.setting.empty() && game_.languages.offered &&
-           registry_.Find(game_.languages.setting) != es::kNoSetting;
+           registry_.Find(game_.languages.setting) != es::kNoSetting && !LAUNCHER_PHONE(touch_);
   }
   fs::path ExtraFolder(const GameInfo::ExtraSource& s) const { return game_.settingsFolder / "extra_assets" / PathOf(s.id); }
   fs::path ExtraFolder3(const GameInfo::ExtraSource& s) const {
@@ -1004,6 +1112,9 @@ class App {
   void ChoosePreset(es::Preset preset);
   void OpenInSystem(const fs::path& what);
   void DrawNotOpenedWindow();
+  void DrawOverlayHelpRow();
+  bool OverlayOpen(bool folder);
+  std::string overlayNote_;
   void DrawRandomizerGuideButton();
   std::string notOpened_;
 
@@ -1028,6 +1139,9 @@ class App {
   void Frame();
   void DrawHeader();
   void DrawNav(float height);
+#if defined(__ANDROID__)
+  void DrawNavTop();
+#endif
   void DrawBottomBar();
   void DrawDiscPage();
   void DrawPresetPage();
@@ -1091,6 +1205,28 @@ class App {
   void LookAtSessions();
   void SaveSession(const std::string& file);
   void DrawSessionWindow();
+  float Wp(float dp) const {
+    float w = dp * scale_;
+#if defined(__ANDROID__)
+    if (touch_) {
+      w = std::min(w, ImGui::GetMainViewport()->WorkSize.x - 64 * scale_);
+    }
+#endif
+    return w;
+  }
+#if defined(__ANDROID__)
+  void SameLineFit(const char* label) {
+    if (!touch_) {
+      ImGui::SameLine();
+      return;
+    }
+    const ImGuiStyle& st = ImGui::GetStyle();
+    const float w = ImGui::CalcTextSize(label, nullptr, true).x + 2 * st.FramePadding.x;
+    if (ImGui::GetItemRectMax().x + st.ItemSpacing.x + w <= ImGui::GetWindowPos().x + ImGui::GetWindowWidth() - st.WindowPadding.x - ImGui::GetCurrentWindow()->ScrollbarSizes.x) {
+      ImGui::SameLine();
+    }
+  }
+#endif
   void Heading(const char* text);
   void PageTitle(const char* title, const std::string& intro);
   void Dim(const std::string& text);
@@ -1098,17 +1234,51 @@ class App {
   bool BeginCard(const char* id);
   void EndCard();
   void Screenshot(const std::string& file);
+
+#if defined(__ANDROID__)
+  bool portrait_ = false;
+  bool touch_ = false;
+  int backUpFrames_ = 0;
+  struct Drag {
+    bool down = false, scrolling = false;
+    float startX = 0, startY = 0, lastY = 0, velocity = 0;
+    ImGuiID window = 0;
+    Uint64 lastTime = 0;
+    float fling = 0;
+    float pending = 0;
+    ImGuiID flingWindow = 0;
+  } drag_;
+  std::string exportDone_;
+  bool wizard_ = false;
+  int wizardStep_ = 0;
+  bool wizardDone_ = false;
+  void StartApkInstall();
+  std::string modImportMessage_, modImportPicked_, modImportWork_;
+  bool modImportOk_ = false, modImportPickedReady_ = false;
+  std::thread extraZipThread_;
+  std::atomic<bool> extraZipBusy_{false}, extraZipDone_{false};
+  std::string extraZipPicked_, extraZipWork_, extraZipMessage_, extraZipDoneText_, extraZipFailText_;
+  bool extraZipOk_ = false, extraZipPickedReady_ = false;
+#endif
 };
 
 void App::Heading(const char* text) {
   ImGui::PushFont(fonts_.heading);
-  ImGui::TextUnformatted(text);
+  if (LAUNCHER_PHONE(touch_)) {
+    ImGui::TextWrapped("%s", text);
+  } else {
+    ImGui::TextUnformatted(text);
+  }
   ImGui::PopFont();
 }
 
 void App::PageTitle(const char* title, const std::string& intro) {
   ImGui::PushFont(fonts_.title);
-  ImGui::TextUnformatted(title);
+  if (LAUNCHER_PHONE(touch_)) {
+    ImGui::TextWrapped("%s", title);
+  } else {
+    ImGui::TextUnformatted(title);
+  }
   ImGui::PopFont();
   if (!intro.empty()) {
     Dim(intro);
@@ -1118,13 +1288,28 @@ void App::PageTitle(const char* title, const std::string& intro) {
 
 void App::Dim(const std::string& text) {
   ImGui::PushStyleColor(ImGuiCol_Text, kDim);
+#if defined(__ANDROID__)
+  if (touch_) {
+    std::string t = text;
+    static const char* const kWords[][2] = {{"Click ", "Tap "}, {"click ", "tap "}, {"on this PC", "on this phone"}, {"this PC", "this phone"},
+                                            {"your PC", "your phone"}, {"for a PC", "for a phone"}};
+    for (const auto& w : kWords) {
+      for (size_t at = t.find(w[0]); at != std::string::npos; at = t.find(w[0], at + std::strlen(w[1]))) {
+        t.replace(at, std::strlen(w[0]), w[1]);
+      }
+    }
+    ImGui::TextWrapped("%s", t.c_str());
+    ImGui::PopStyleColor();
+    return;
+  }
+#endif
   ImGui::TextWrapped("%s", text.c_str());
   ImGui::PopStyleColor();
 }
 
 bool App::BeginCard(const char* id) {
   ImGui::PushStyleColor(ImGuiCol_ChildBg, kPanelHigh);
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(16 * scale_, 14 * scale_));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, LAUNCHER_PHONE(touch_) ? ImVec2(12 * scale_, 10 * scale_) : ImVec2(16 * scale_, 14 * scale_));
   const bool open = ImGui::BeginChild(id, ImVec2(0, 0),
                                       ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY |
                                           ImGuiChildFlags_AlwaysUseWindowPadding | ImGuiChildFlags_NavFlattened);
@@ -1747,13 +1932,28 @@ void App::InitModUpdater() {
   modUpd_.Init(host);
 }
 
+std::string App::AssetStamp() const {
+  std::string stamp;
+  if (!game_.modAssets) return stamp;
+  for (const engine::mods::AssetInfo& a : em::KnownAssets()) stamp += game_.modAssets(a.id) + "|";
+  return stamp;
+}
+
+void App::CheckAssetStamp() {
+  const auto now = std::chrono::steady_clock::now();
+  if (!game_.modAssets || now - assetStampAt_ < std::chrono::seconds(1)) return;
+  assetStampAt_ = now;
+  if (AssetStamp() != assetStamp_) reviewDirty_ = true;
+}
+
 void App::RebuildReview() {
   std::string game;
   {
     std::lock_guard<std::mutex> lock(bg_.mutex);
     if (bg_.haveVerdict) game = em::MakeTarget(bg_.verdict.gameId, Lower(bg_.verdict.edition));
   }
-  review_ = em::ReviewList(mods_.Active(), found_, game);
+  review_ = em::ReviewList(mods_.Active(), found_, game, game_.modAssets);
+  assetStamp_ = AssetStamp();
   offHints_.clear();
   worksWith_.clear();
   for (const em::ModFolder& f : found_) {
@@ -1903,6 +2103,18 @@ void App::Play(bool confirmed) {
   SaveMods();
   Log("play: " + registry_.Summary());
   playError_.clear();
+#if defined(__ANDROID__)
+  if (game_.playInProcess) {
+    if (ExtraRunning()) {
+      playError_ = Tr("A pack is being made here. Wait until it is done, then press Play.");
+      Log("play: refused, a pack is being made");
+      return;
+    }
+    sPlayRequested = true;
+    quit_ = true;
+    return;
+  }
+#endif
   if (!StartGame(playError_)) {
     Log(playError_);
     return;
@@ -1994,6 +2206,17 @@ std::string MegaBytes(uint64_t bytes) {
 void App::LoadUpdaterState() {
   updatesAsked_ = false;
   skipVersion_.clear();
+#if defined(__ANDROID__)
+  {
+    std::error_code ec;
+    for (const auto& entry : fs::directory_iterator(game_.updates.stagingFolder, ec)) {
+      const std::string name = Utf8(entry.path().filename());
+      if (name.rfind("update-", 0) == 0 && name.size() > 4 && name.compare(name.size() - 4, 4, ".apk") == 0) {
+        fs::remove(entry.path(), ec);
+      }
+    }
+  }
+#endif
   if (std::FILE* f = sys::OpenFile(game_.updates.stagingFolder / L"updater.ini", "rb")) {
     char line[256];
     while (std::fgets(line, sizeof line, f) != nullptr) {
@@ -2108,6 +2331,10 @@ void App::StartUpdateCheck(bool manual) {
 }
 
 void App::StartUpdateInstall(bool freshFolder) {
+#if defined(__ANDROID__)
+  StartApkInstall();
+  return;
+#endif
   freshFolder = freshFolder || (!layout_.valid && !layout_.macApp && !layout_.suggestedRoot.empty());
   eu::Manifest m;
   {
@@ -2189,6 +2416,81 @@ void App::StartUpdateInstall(bool freshFolder) {
     up_.busy = false;
   });
 }
+
+#if defined(__ANDROID__)
+void App::StartApkInstall() {
+  eu::Manifest m;
+  {
+    std::lock_guard<std::mutex> lock(up_.mutex);
+    if (up_.busy || up_.phase != UpdateWork::Phase::Available) {
+      return;
+    }
+    m = up_.manifest;
+    up_.phase = UpdateWork::Phase::Downloading;
+    up_.installing = true;
+    up_.message = Fmt(Tr("Downloading version %s..."), m.version.c_str());
+  }
+  StopUpdate();
+  Log("updates: Update now: downloading " + m.url + " (" + std::to_string(m.size) + " bytes)");
+  up_.done = 0;
+  up_.total = m.size;
+  up_.busy = true;
+  up_.thread = std::thread([this, m] {
+    const GameInfo::Updates& u = game_.updates;
+    const fs::path apk = u.stagingFolder / PathOf("update-" + m.version + ".apk");
+    eu::FetchOptions options;
+    options.maxBytes = m.size;
+    options.userAgent = u.product + "/" + u.version;
+    options.timeoutMs = 60000;
+    options.httpsOnly = u.feedUrl.rfind("https://", 0) == 0;
+    options.progress = [this](uint64_t done, uint64_t) {
+      up_.done = done;
+      return !up_.stop.load();
+    };
+    std::string error;
+    std::error_code ec;
+    fs::create_directories(u.stagingFolder, ec);
+    bool ok = eu::FetchToFile(m.url, apk, options, error);
+    if (ok) {
+      std::lock_guard<std::mutex> lock(up_.mutex);
+      up_.message = Fmt(Tr("Checking version %s..."), m.version.c_str());
+    }
+    if (ok) {
+      std::string hex;
+      if (fs::file_size(apk, ec) != m.size) {
+        ok = false;
+        error = Tr("the download is not the file the update information describes (size)");
+      } else if (!eu::Sha256File(apk, hex, error)) {
+        ok = false;
+      } else if (hex != m.sha256) {
+        ok = false;
+        error = Tr("the download is not the file the update information describes (SHA-256)");
+      }
+    }
+    if (ok && game_.installApk) {
+      ok = game_.installApk(apk, error);
+    }
+    if (!ok) {
+      fs::remove(apk, ec);
+    }
+    std::lock_guard<std::mutex> lock(up_.mutex);
+    if (ok) {
+      up_.phase = UpdateWork::Phase::Installed;
+      up_.message = Fmt(Tr("Version %s was given to Android. Answer Android's question to install it. The app then closes: open it again to use the new version."),
+                        m.version.c_str());
+    } else {
+      up_.phase = UpdateWork::Phase::Failed;
+      up_.message = error == "stopped"
+                        ? Fmt(Tr("The update was cancelled. Nothing was changed: your version (%s) stays as it is."), u.version.c_str())
+                        : Fmt(Tr("The update couldn't be installed: %s. Nothing was changed: your version (%s) stays as it is."), error.c_str(),
+                              u.version.c_str());
+    }
+    Log("updates: " + up_.message);
+    up_.serial++;
+    up_.busy = false;
+  });
+}
+#endif
 
 void App::FollowUpdate() {
   std::lock_guard<std::mutex> lock(up_.mutex);
@@ -2367,7 +2669,7 @@ void App::DrawUpdateCard() {
         ImGui::EndDisabled();
       }
     }
-  } else if (!layout_.why.empty()) {
+  } else if (!layout_.why.empty() NOT_PHONE_AND) {
     ImGui::PushStyleColor(ImGuiCol_Text, kFaint);
     ImGui::TextWrapped("%s", layout_.why.c_str());
     ImGui::PopStyleColor();
@@ -2388,6 +2690,9 @@ void App::LoadLauncherState() {
       presetAsked_ = presetAsked_ || text == "preset_asked=yes";
       presetPending_ = presetPending_ || text == "preset_pending=yes";
       dataAsked_ = dataAsked_ || text == "data_asked=yes";
+#if defined(__ANDROID__)
+      wizardDone_ = wizardDone_ || text == "phone_first=done";
+#endif
     }
     std::fclose(f);
   }
@@ -2401,7 +2706,11 @@ void App::SaveLauncherState() {
   fs::create_directories(game_.settingsFolder, ec);
   const std::string text = std::string("# The launcher's own memory. Delete this file to be asked \"How do you want to play?\" again.\r\n") +
                            (presetAsked_ ? "preset_asked=yes\r\n" : presetPending_ ? "preset_pending=yes\r\n" : "") +
-                           (dataAsked_ ? "data_asked=yes\r\n" : "");
+                           (dataAsked_ ? "data_asked=yes\r\n" : "")
+#if defined(__ANDROID__)
+                           + (wizardDone_ ? "phone_first=done\r\n" : "")
+#endif
+                           ;
   if (!WriteText(game_.settingsFolder / L"launcher.ini", text)) {
     Log("launcher.ini couldn't be saved in " + Utf8(game_.settingsFolder));
   }
@@ -2422,13 +2731,17 @@ void App::ChoosePreset(es::Preset preset) {
 }
 
 void App::DrawWelcomeWindow() {
+#if defined(__ANDROID__)
+  if (askPreset_ && !wizard_ && !askData_ && !ImGui::IsPopupOpen("###datafirst")) {
+#else
   if (askPreset_ && !askData_ && !ImGui::IsPopupOpen("###datafirst")) {
+#endif
     ImGui::OpenPopup("###welcome");
     askPreset_ = false;
   }
   const ImGuiViewport* vp = ImGui::GetMainViewport();
-  const float width = std::min(960 * scale_, vp->WorkSize.x - 40 * scale_);
-  const float height = std::min(680 * scale_, vp->WorkSize.y - 30 * scale_);
+  const float width = std::min(960 * scale_, vp->WorkSize.x - (LAUNCHER_PHONE(touch_) ? 16 : 40) * scale_);
+  const float height = LAUNCHER_PHONE(touch_) ? vp->WorkSize.y - 16 * scale_ : std::min(680 * scale_, vp->WorkSize.y - 30 * scale_);
   ImGui::SetNextWindowPos(vp->GetCenter(), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
   ImGui::SetNextWindowSize(ImVec2(width, height), ImGuiCond_Always);
   if (!ImGui::BeginPopupModal(Lbl(Tr("How do you want to play?"), "welcome").c_str(), nullptr, ImGuiWindowFlags_NoSavedSettings)) {
@@ -2443,7 +2756,14 @@ void App::DrawWelcomeWindow() {
       ImGui::TextWrapped("%s", line.c_str());
     }
   };
-  if (ImGui::BeginTable("##presets", 2, ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_BordersInnerV |
+#if defined(__ANDROID__)
+  const bool phoneScroll = touch_;
+  if (phoneScroll) {
+    ImGui::BeginChild("##welcomescroll", ImVec2(0, -(52 * scale_ + ImGui::GetStyle().ItemSpacing.y * 2 + ImGui::GetStyle().WindowPadding.y * 0.5f)),
+                      ImGuiChildFlags_None, ImGuiWindowFlags_None);
+  }
+#endif
+  if (ImGui::BeginTable("##presets", LAUNCHER_PHONE(portrait_) ? 1 : 2, ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_BordersInnerV |
                                             ImGuiTableFlags_PadOuterX)) {
     ImGui::TableNextRow();
     ImGui::TableNextColumn();
@@ -2483,6 +2803,11 @@ void App::DrawWelcomeWindow() {
          "from your choice, the game asks at Continue whether to keep it or switch."));
   Dim(Tr("If you close this window without choosing, Enhanced is used and you are asked again next time."));
   ImGui::PopTextWrapPos();
+#if defined(__ANDROID__)
+  if (phoneScroll) {
+    ImGui::EndChild();
+  }
+#endif
   ImGui::Spacing();
   const float gap = ImGui::GetStyle().ItemSpacing.x;
   const ImVec2 big((ImGui::GetContentRegionAvail().x - gap) * 0.5f, 52 * scale_);
@@ -2512,8 +2837,12 @@ void App::DrawUpdateWindows() {
   if (!u.Active()) {
     return;
   }
-  const float wrap = 560 * scale_;
+  const float wrap = WP(560);
+#if defined(__ANDROID__)
+  if (askUpdates_ && !askPreset_ && !wizard_ && !askData_ && !ImGui::IsPopupOpen("###welcome") && !ImGui::IsPopupOpen("###datafirst")) {
+#else
   if (askUpdates_ && !askPreset_ && !askData_ && !ImGui::IsPopupOpen("###welcome") && !ImGui::IsPopupOpen("###datafirst")) {
+#endif
     ImGui::OpenPopup("###ask");
     askUpdates_ = false;
   }
@@ -2588,13 +2917,24 @@ void App::DrawUpdateWindows() {
       if (m.version == skipVersion_) {
         Dim(Tr("You chose to skip this version earlier."));
       }
+#if defined(__ANDROID__)
+      Dim(Tr("Android shows its own question before the new version is installed. Your saves, settings and mods are kept. The first time, Android also asks you to allow this app to install apps."));
+#else
       if (layout_.valid || layout_.macApp || layout_.suggestedRoot.empty())
         Dim(layout_.macApp ? Tr("The new app waits beside the one you have and is put in place when you restart; the "
                               "version you have is kept for \"Go back\". Your saves, settings and mods are not touched.")
                          : Tr("Installed next to the version you have, which stays for \"Go back\". Your saves, settings "
                               "and mods are not touched."));
+#endif
+#if defined(__ANDROID__)
+      const bool fresh = false;
+#else
       const bool fresh = !layout_.valid && !layout_.macApp && !layout_.suggestedRoot.empty();
       if (!layout_.valid && !fresh) {
+#endif
+#if defined(__ANDROID__)
+      if (false) {
+#endif
         ImGui::TextColored(kWarn, "%s", layout_.why.c_str());
       }
       if (fresh) {
@@ -2629,13 +2969,21 @@ void App::DrawUpdateWindows() {
         }
       }
       ImGui::Spacing();
+#if defined(__ANDROID__)
+      if (gameRunning_) {
+#else
       if ((!layout_.valid && !fresh) || gameRunning_) {
+#endif
         ImGui::BeginDisabled();
       }
       if (PrimaryButton(Lbl(Tr("Update now"), "Update now").c_str())) {
         StartUpdateInstall(fresh);
       }
+#if defined(__ANDROID__)
+      if (gameRunning_) {
+#else
       if ((!layout_.valid && !fresh) || gameRunning_) {
+#endif
         ImGui::EndDisabled();
       }
       ImGui::SameLine();
@@ -2658,7 +3006,11 @@ void App::DrawUpdateWindows() {
         up_.stop = true;
       }
     } else {
+#if defined(__ANDROID__)
+      Heading(phase == UpdateWork::Phase::Installed ? Tr("Update ready to install") : Tr("The update was not installed"));
+#else
       Heading(phase == UpdateWork::Phase::Installed ? Tr("Update installed") : Tr("The update was not installed"));
+#endif
       ImGui::PushStyleColor(ImGuiCol_Text, phase == UpdateWork::Phase::Failed ? kWarn : kText);
       ImGui::TextWrapped("%s", message.c_str());
       ImGui::PopStyleColor();
@@ -2733,7 +3085,11 @@ bool App::DataLooksFresh() const {
 
 void App::MaybeAskDataFolder() {
   const char* ask = std::getenv("XD_LAUNCHER_ASK_DATA");
+#if defined(__ANDROID__)
+  const bool allowed = (ask != nullptr ? std::string(ask) == "1" : script_.empty()) && !touch_;
+#else
   const bool allowed = ask != nullptr ? std::string(ask) == "1" : script_.empty();
+#endif
   if (dataAsked_ || !allowed || game_.playerFilesReadOnly || !DataLooksFresh()) {
     return;
   }
@@ -3024,7 +3380,7 @@ void App::RemoveAllData() {
 
 void App::DrawDataWindows() {
   FollowDataWork();
-  const float wrap = 600 * scale_;
+  const float wrap = WP(600);
   if (askData_ && !ImGui::IsPopupOpen("###datafirst")) {
     ImGui::OpenPopup("###datafirst");
     askData_ = false;
@@ -3199,6 +3555,30 @@ void App::DrawDataWindows() {
 
 void App::DrawDataCard() {
   ImGui::Dummy(ImVec2(0, 8 * scale_));
+#if defined(__ANDROID__)
+  if (touch_) {
+    Heading(Tr("Where your data is kept"));
+    BeginCard("##datafolder");
+    ImGui::TextWrapped("%s", Tr("Saves, settings and mods are kept inside the app, where no other app can read them. To take a save out of the "
+                                 "app (or to keep a copy before you uninstall it), open the save in the list above and press Export...; "
+                                 "Import... brings a save file back. Mods come in as .zip files on the Mods page."));
+    ImGui::Spacing();
+    std::string why;
+    const bool locked = DataLocked(why);
+    if (locked) {
+      ImGui::BeginDisabled();
+    }
+    if (ImGui::Button(Lbl(Tr("Remove all game data..."), "Remove all game data...").c_str())) {
+      AskRemoveData();
+    }
+    if (locked) {
+      ImGui::EndDisabled();
+      Dim(why);
+    }
+    EndCard();
+    return;
+  }
+#endif
   Heading(Tr("Where your data is kept"));
   const PortUserLocation where = DataLocation();
   BeginCard("##datafolder");
@@ -3298,6 +3678,15 @@ bool App::DoStep(const std::string& step) {
     } else {
       ExtraCancel(index);
     }
+  } else if (verb == "hdmake") {
+    page_ = Page::Extra;
+    wantExtraTab_ = "other";
+    const std::string what = Lower(arg);
+    if (what == "ask") hdAsk_ = true;
+    else if (what == "start") { hdAnswered_ = true; HdMake(); }
+    else if (what == "cancel") hdJob_.Cancel();
+    else if (what.rfind("scale=", 0) == 0) hdScale_ = what == "scale=4" ? 4 : 2;
+    else if (what.rfind("name=", 0) == 0) hdName_ = arg.substr(5);
   } else if (verb == "extratab") {
     page_ = Page::Extra;
     wantExtraTab_ = Lower(arg);
@@ -3721,6 +4110,18 @@ bool App::DoStep(const std::string& step) {
       askLooks_ = true;
       pickLooks_ = Lower(arg);
     }
+  } else if (verb == "pcboxes") {
+    page_ = Page::Save;
+    if (Lower(arg) == "export") {
+      exportBoxesAsk_ = true;
+    } else if (Lower(arg) == "exportgo") {
+      exportBoxesGo_ = true;
+    } else if (Lower(arg) == "close") {
+      closeBoxes_ = true;
+    } else {
+      askBoxes_ = true;
+      pickBoxes_ = std::atoi(arg.c_str());
+    }
   } else if (verb == "spoilers") {
     page_ = Page::Save;
     if (Lower(arg) == "close") {
@@ -3728,6 +4129,14 @@ bool App::DoStep(const std::string& step) {
     } else {
       askSpoilers_ = true;
     }
+  } else if (verb == "overlay") {
+    page_ = Page::Settings;
+    wantTab_ = "system";
+    const bool ok = OverlayOpen(Lower(arg) != "guide");
+    if (!overlayNote_.empty()) {
+      Log(overlayNote_);
+    }
+    return ok;
   } else if (verb == "openfolder") {
     const std::string which = Lower(arg);
     if (which == "close") {
@@ -3872,6 +4281,12 @@ void App::RunScript() {
     if (waitFor_ == "data" && (dataWork_.busy || dataWork_.phase == DataWork::Phase::Finished)) {
       return;
     }
+    if (waitFor_ == "hdmake" && (hdJob_.Running() || hdWasRunning_)) {
+      return;
+    }
+    if (waitFor_ == "hdprogress" && hdJob_.Running() && hdJob_.Get().done < 3) {
+      return;
+    }
     if (waitFor_ == "extra" && ExtraBusy()) {
       return;
     }
@@ -3944,14 +4359,408 @@ void App::SetController(bool on) {
 
 void App::ApplyScale() {
   rescale_ = false;
+#if defined(__ANDROID__)
+  scale_ = baseScale_ * (controller_ ? kControllerScale : 1.0f) * (touch_ ? kTouchScale : 1.0f);
+  ImGuiIO& io = ImGui::GetIO();
+#else
   scale_ = baseScale_ * (controller_ ? kControllerScale : 1.0f);
   ImGuiIO& io = ImGui::GetIO();
+#endif
+
   ImGui_ImplSDLRenderer3_DestroyDeviceObjects();
   io.Fonts->Clear();
   fonts_ = LoadFonts(scale_);
   options_.headingFont = fonts_.heading;
   ApplyStyle(scale_);
+#if defined(__ANDROID__)
+  if (touch_) TouchStyle(scale_);
+#endif
 }
+
+#if defined(__ANDROID__)
+
+void App::TouchDrag(const SDL_Event& e, bool& toImGui) {
+  const SDL_MouseID who = e.type == SDL_EVENT_MOUSE_MOTION ? e.motion.which : e.button.which;
+  if (who != SDL_TOUCH_MOUSEID) {
+    return;
+  }
+  ImGuiIO& io = ImGui::GetIO();
+  if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+    drag_ = Drag();
+    drag_.down = true;
+    drag_.startX = e.button.x;
+    drag_.startY = drag_.lastY = e.button.y;
+    drag_.lastTime = SDL_GetTicks();
+    return;
+  }
+  if (!drag_.down) {
+    return;
+  }
+  if (e.type == SDL_EVENT_MOUSE_BUTTON_UP) {
+    drag_.down = false;
+    if (drag_.scrolling) {
+      toImGui = false;
+      drag_.scrolling = false;
+      drag_.fling = SDL_GetTicks() - drag_.lastTime < 90 ? drag_.velocity : 0.0f;
+      drag_.flingWindow = drag_.window;
+    }
+    return;
+  }
+  const float threshold = std::max(8.0f, 7.0f * baseScale_);
+  if (!drag_.scrolling) {
+    const float dx = e.motion.x - drag_.startX, dy = e.motion.y - drag_.startY;
+    if (std::fabs(dy) < threshold || std::fabs(dy) < 1.3f * std::fabs(dx)) {
+      return;
+    }
+    ImGuiWindow* w = ImGui::GetCurrentContext()->HoveredWindow;
+    while (w != nullptr && w->ScrollMax.y <= 0.0f) {
+      w = w->ParentWindow;
+    }
+    if (w == nullptr) {
+      return;
+    }
+    drag_.window = w->ID;
+    drag_.scrolling = true;
+    drag_.fling = 0;
+    io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
+    io.AddMouseButtonEvent(0, false);
+  }
+  toImGui = false;
+  const Uint64 now = SDL_GetTicks();
+  const float dy = e.motion.y - drag_.lastY;
+  const float dt = static_cast<float>(std::max<Uint64>(1, now - drag_.lastTime));
+  drag_.velocity = 0.6f * drag_.velocity + 0.4f * (dy / dt * 16.0f);
+  drag_.lastY = e.motion.y;
+  drag_.lastTime = now;
+  drag_.pending += dy;
+}
+
+void App::TouchFling() {
+  float move = 0;
+  ImGuiID id = 0;
+  if (drag_.pending != 0.0f && drag_.window != 0) {
+    move = drag_.pending;
+    id = drag_.window;
+    drag_.pending = 0;
+  } else if (!drag_.down && std::fabs(drag_.fling) > 0.4f) {
+    move = drag_.fling;
+    id = drag_.flingWindow;
+    drag_.fling *= 0.92f;
+  } else {
+    drag_.fling = 0;
+  }
+  if (move != 0.0f && id != 0) {
+    if (ImGuiWindow* w = ImGui::FindWindowByID(id)) {
+      ImGui::SetScrollY(w, w->Scroll.y - move);
+    }
+  }
+}
+
+namespace {
+
+struct PendingExport {
+  std::string file, uri;
+  int64_t size = -1;
+  Uint64 changed = 0, started = 0;
+};
+std::mutex sPendingMutex;
+std::vector<PendingExport> sPending;
+
+struct PickContext {
+  SDL_DialogFileCallback callback;
+  void* user;
+  bool keepUri;
+  bool save;
+  std::string name;
+};
+
+fs::path AppFolder(const char* sub) {
+#if defined(__ANDROID__)
+  const char* base = SDL_GetAndroidCachePath();
+#else
+  const char* base = nullptr;
+#endif
+  fs::path folder = fs::path(base != nullptr ? base : "/data/data/net.pokemonxdpc.port/cache") / sub;
+  std::error_code ec;
+  fs::create_directories(folder, ec);
+  return folder;
+}
+
+bool CopyUriToFile(const std::string& uri, const fs::path& target) {
+  SDL_IOStream* in = SDL_IOFromFile(uri.c_str(), "rb");
+  if (in == nullptr) {
+    return false;
+  }
+  std::FILE* out = std::fopen(target.c_str(), "wb");
+  bool ok = out != nullptr;
+  std::vector<char> buffer(1 << 20);
+  while (ok) {
+    const size_t got = SDL_ReadIO(in, buffer.data(), buffer.size());
+    if (got == 0) {
+      break;
+    }
+    ok = std::fwrite(buffer.data(), 1, got, out) == got;
+  }
+  SDL_CloseIO(in);
+  if (out != nullptr) {
+    ok = std::fclose(out) == 0 && ok;
+  }
+  return ok;
+}
+
+void SDLCALL PickTrampoline(void* userdata, const char* const* files, int filter) {
+  std::unique_ptr<PickContext> c(static_cast<PickContext*>(userdata));
+  if (files == nullptr || files[0] == nullptr || std::strncmp(files[0], "content://", 10) != 0) {
+    c->callback(c->user, files, filter);
+    return;
+  }
+  const std::string uri = files[0];
+  std::string path;
+  if (c->save) {
+    const fs::path temp = AppFolder("export") / (c->name.empty() ? "export.bin" : c->name);
+    std::error_code ec;
+    fs::remove(temp, ec);
+    path = temp.string();
+    std::lock_guard<std::mutex> lock(sPendingMutex);
+    sPending.push_back({path, uri, -1, SDL_GetTicks(), SDL_GetTicks()});
+    Log("android: the file will be handed to " + uri + " when it is written (" + path + ")");
+  } else if (c->keepUri) {
+    path = uri;
+  } else {
+    const fs::path temp = AppFolder("picked") / NameOfUri(uri);
+    if (!CopyUriToFile(uri, temp)) {
+      Log("android: could not read " + uri);
+      const char* none[1] = {nullptr};
+      c->callback(c->user, none, filter);
+      return;
+    }
+    path = temp.string();
+    Log("android: " + uri + " copied to " + path);
+  }
+  const char* one[2] = {path.c_str(), nullptr};
+  c->callback(c->user, one, filter);
+}
+
+}
+
+void App::AndroidOpen(SDL_DialogFileCallback callback, void* user, SDL_Window* window, const SDL_DialogFileFilter* filters, int count,
+                      bool many) {
+  const std::string first = count > 0 && filters[0].name != nullptr ? filters[0].name : "";
+  const bool keep = first.rfind("Disc images", 0) == 0 || first.rfind("3DS game dumps", 0) == 0;
+  auto* c = new PickContext{callback, user, keep, false, std::string()};
+  SDL_ShowOpenFileDialog(PickTrampoline, c, window, filters, count, nullptr, many);
+}
+
+void App::AndroidSave(SDL_DialogFileCallback callback, void* user, SDL_Window* window, const SDL_DialogFileFilter* filters, int count,
+                      const char* start) {
+  auto* c = new PickContext{callback, user, false, true, start != nullptr ? PathOf(start).filename().string() : std::string()};
+  if (!c->name.empty()) {
+    std::ofstream file(AppFolder("export") / ".save_name", std::ios::binary | std::ios::trunc);
+    file << c->name;
+  }
+  SDL_ShowSaveFileDialog(PickTrampoline, c, window, filters, count, start);
+}
+
+void App::AndroidFlush() {
+  std::vector<PendingExport> done;
+  {
+    std::lock_guard<std::mutex> lock(sPendingMutex);
+    const Uint64 now = SDL_GetTicks();
+    for (size_t i = 0; i < sPending.size();) {
+      PendingExport& p = sPending[i];
+      std::error_code ec;
+      const int64_t size = fs::exists(p.file, ec) ? static_cast<int64_t>(fs::file_size(p.file, ec)) : -1;
+      if (size != p.size) {
+        p.size = size;
+        p.changed = now;
+      }
+      if (size > 0 && now - p.changed > 700) {
+        done.push_back(p);
+        sPending.erase(sPending.begin() + static_cast<long>(i));
+      } else if (now - p.started > 180000) {
+        sPending.erase(sPending.begin() + static_cast<long>(i));
+      } else {
+        i++;
+      }
+    }
+  }
+  for (const PendingExport& p : done) {
+    SDL_IOStream* out = SDL_IOFromFile(p.uri.c_str(), "wb");
+    bool ok = out != nullptr;
+    if (ok) {
+      std::FILE* in = std::fopen(p.file.c_str(), "rb");
+      std::vector<char> buffer(1 << 20);
+      while (in != nullptr && ok) {
+        const size_t got = std::fread(buffer.data(), 1, buffer.size(), in);
+        if (got == 0) {
+          break;
+        }
+        ok = SDL_WriteIO(out, buffer.data(), got) == got;
+      }
+      if (in != nullptr) {
+        std::fclose(in);
+      }
+      ok = SDL_CloseIO(out) && ok;
+    }
+    Log(std::string("android: export ") + (ok ? "handed to " : "FAILED to ") + p.uri + " (" + std::to_string(p.size) + " bytes)");
+    if (ok) {
+      std::error_code ec;
+      fs::remove(p.file, ec);
+      exportDone_ = Tr("Saved. The file is where you chose.");
+      for (std::string* message : {&slotMessage_, &reportMessage_, &sessionMessage_}) {
+        if (message->find(p.file) != std::string::npos) {
+          *message = exportDone_;
+        }
+      }
+    }
+  }
+}
+
+void App::DrawFirstStart() {
+  if (!wizard_) {
+    return;
+  }
+  const ImGuiViewport* vp = ImGui::GetMainViewport();
+  if (!ImGui::IsPopupOpen("###phonefirst")) {
+    ImGui::OpenPopup("###phonefirst");
+  }
+  ImGui::SetNextWindowPos(vp->WorkPos);
+  ImGui::SetNextWindowSize(vp->WorkSize);
+  ImGui::PushStyleColor(ImGuiCol_PopupBg, kGround);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, (portrait_ ? ImVec2(12 * scale_, 12 * scale_) : ImVec2(30 * scale_, 24 * scale_)));
+  if (!ImGui::BeginPopupModal("###phonefirst", nullptr,
+                              ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+                                  ImGuiWindowFlags_NoSavedSettings)) {
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor();
+    return;
+  }
+  ImGui::PopStyleVar();
+  ImGui::PopStyleColor();
+  const std::string path = DiscPath();
+  bool have = false;
+  DiscVerdict v;
+  if (!path.empty()) {
+    std::lock_guard<std::mutex> lock(bg_.mutex);
+    have = bg_.haveVerdict && bg_.discPath == path;
+    v = bg_.verdict;
+  }
+  if (wizardStep_ == 0 && !path.empty()) {
+    wizardStep_ = 1;
+  }
+  const float cardWidth = portrait_ ? vp->WorkSize.x - 24 * scale_ : std::min(vp->WorkSize.x - 60 * scale_, 1100 * scale_);
+  ImGui::SetCursorPosX((ImGui::GetWindowSize().x - cardWidth) * 0.5f);
+  ImGui::PushStyleColor(ImGuiCol_ChildBg, kPanelHigh);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, (portrait_ ? ImVec2(22 * scale_, 20 * scale_) : ImVec2(28 * scale_, 22 * scale_)));
+  ImGui::BeginChild("##firststart", ImVec2(cardWidth, ImGui::GetContentRegionAvail().y),
+                    ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding);
+  ImGui::PopStyleVar();
+  ImGui::PopStyleColor();
+  ImGui::TextColored(kDim, Tr("First start - step %d of 3"), wizardStep_ + 1);
+  const float buttonH = 58 * scale_;
+  const auto chooseDisc = [&] {
+    static SDL_DialogFileFilter kFilters[2];
+    kFilters[0] = {Tr("Disc images (ISO, RVZ, GCM, WIA, GCZ, CISO, WBFS)"), "iso;gcm;rvz;wia;gcz;ciso;wbfs"};
+    kFilters[1] = {Tr("All files"), "*"};
+    ShowOpenDialog(
+        [](void* user, const char* const* files, int) {
+          App* app = static_cast<App*>(user);
+          if (files != nullptr && files[0] != nullptr) {
+            std::lock_guard<std::mutex> lock(app->pickMutex_);
+            app->picked_ = files[0];
+            app->pickedReady_ = true;
+          }
+        },
+        this, window_, kFilters, 2, nullptr, false);
+  };
+  const auto primary = [&](const char* label, const char* id, float width) {
+    ImGui::PushStyleColor(ImGuiCol_Button, kAccent);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, kAccentHover);
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, kAccentActive);
+    const bool clicked = ImGui::Button(Lbl(label, id).c_str(), ImVec2(width, buttonH));
+    ImGui::PopStyleColor(3);
+    return clicked;
+  };
+  const float bottomY = ImGui::GetWindowHeight() - buttonH - 24 * scale_;
+  const auto buttonWidth = [&](float asked) {
+    const float room = ImGui::GetWindowWidth() - (portrait_ ? 44 : 56) * scale_;
+    return portrait_ ? room : std::min(asked * scale_, room);
+  };
+  if (wizardStep_ == 0) {
+    Heading(Tr("Choose your Pokemon XD disc"));
+    ImGui::PushTextWrapPos();
+    ImGui::TextWrapped("%s", Tr("This game needs your own copy of Pokemon XD: Gale of Darkness (USA) as a disc image file (.iso, .rvz, "
+                                ".gcm...). Put the file on the phone first (USB cable, SD card or a download from your own cloud), then "
+                                "press Choose. Android's own file window opens; the file stays where it is (nothing is copied, no space "
+                                "is used twice)."));
+    ImGui::PopTextWrapPos();
+    ImGui::SetCursorPosY(bottomY);
+    ImGui::SetCursorPosX(ImGui::GetWindowWidth() - buttonWidth(360) - (portrait_ ? 22 : 28) * scale_);
+    if (primary(Tr("Choose the disc file..."), "firstchoose", buttonWidth(360))) {
+      chooseDisc();
+    }
+  } else if (wizardStep_ == 1) {
+    Heading(Tr("Checking your disc"));
+    ImGui::TextWrapped("%s", (path.empty() ? std::string() : NameOfUriShown(path)).c_str());
+    if (!have) {
+      ImGui::TextColored(kBusy, "%s", Tr("Checking your disc image..."));
+      const uint64_t total = bg_.total, done = bg_.done;
+      Dim(Tr("The first time a disc image is used, all of it is read to make sure it is complete and unchanged. On a phone this takes about "
+             "a minute; after that it is remembered."));
+      if (total > 0) {
+        ImGui::ProgressBar(static_cast<float>(static_cast<double>(done) / static_cast<double>(total)), ImVec2(-1, 26 * scale_));
+      }
+    } else {
+      switch (v.kind) {
+      case DiscVerdict::Kind::Good: ImGui::TextColored(kGood, "%s", Tr("Ready to play")); break;
+      case DiscVerdict::Kind::Usable: ImGui::TextColored(kGood, "%s", Tr("Ready to play (content not compared)")); break;
+      case DiscVerdict::Kind::Warning: ImGui::TextColored(kWarn, "%s", Tr("Can be played, but read this first")); break;
+      case DiscVerdict::Kind::Problem: ImGui::TextColored(kBad, "%s", Tr("This disc image can't be used")); break;
+      }
+      ImGui::TextWrapped("%s", Tr(v.text).c_str());
+    }
+    ImGui::SetCursorPosY(bottomY);
+    if (have && v.kind == DiscVerdict::Kind::Problem) {
+      if (ImGui::Button(Lbl(Tr("Choose another file..."), "firstanother").c_str(), ImVec2(buttonWidth(360), buttonH))) {
+        chooseDisc();
+      }
+    } else if (have) {
+      ImGui::SetCursorPosX(ImGui::GetWindowWidth() - buttonWidth(300) - (portrait_ ? 22 : 28) * scale_);
+      if (primary(Tr("Next"), "firstnext1", buttonWidth(300))) {
+        wizardStep_ = 2;
+      }
+    }
+  } else {
+    Heading(Tr("How to play"));
+    ImGui::PushTextWrapPos();
+    const auto line = [&](const std::string& text) {
+      ImGui::Bullet();
+      ImGui::TextWrapped("%s", text.c_str());
+    };
+    line(Tr("The buttons of a GameCube controller are on the screen. Touch the pause button (two bars) for the game's SETTINGS, the "
+            "buttons' layout, photo mode and QUIT. The Android back gesture opens the same menu."));
+    line(Tr("A Bluetooth or USB controller works too: the on-screen buttons hide by themselves while you use it."));
+    line(Tr("Your saves live inside the app. The Save page can export a save as a file and import one back; the Mods page "
+            "adds mods from zip files."));
+    line(Tr("Every game setting is on the Preset, Settings and Controls pages: the game plays like the GameCube by default."));
+    ImGui::PopTextWrapPos();
+    ImGui::SetCursorPosY(bottomY);
+    ImGui::SetCursorPosX(ImGui::GetWindowWidth() - buttonWidth(300) - (portrait_ ? 22 : 28) * scale_);
+    if (primary(Tr("Done"), "firstdone", buttonWidth(300))) {
+      wizard_ = false;
+      wizardDone_ = true;
+      SaveLauncherState();
+      if (!presetAsked_ && presetPending_) {
+        askPreset_ = true;
+      }
+      ImGui::CloseCurrentPopup();
+    }
+  }
+  ImGui::EndChild();
+  ImGui::EndPopup();
+}
+
+#endif
 
 void App::BrowseFor(pad::FileBrowser::Mode mode, SDL_DialogFileCallback callback, void* user,
                     const SDL_DialogFileFilter* filters, int count, const char* start) {
@@ -3988,7 +4797,11 @@ void App::BrowseFor(pad::FileBrowser::Mode mode, SDL_DialogFileCallback callback
 }
 
 void App::ShowFolderDialog(SDL_DialogFileCallback callback, void* user, SDL_Window* window, const char* start) {
+#if defined(__ANDROID__)
+  if (!controller_ || touch_) {
+#else
   if (!controller_) {
+#endif
     SDL_ShowOpenFolderDialog(callback, user, window, start, false);
     return;
   }
@@ -3997,6 +4810,12 @@ void App::ShowFolderDialog(SDL_DialogFileCallback callback, void* user, SDL_Wind
 
 void App::ShowOpenDialog(SDL_DialogFileCallback callback, void* user, SDL_Window* window,
                          const SDL_DialogFileFilter* filters, int count, const char* start, bool many) {
+#if defined(__ANDROID__)
+  if (touch_) {
+    AndroidOpen(callback, user, window, filters, count, many);
+    return;
+  }
+#endif
   if (!controller_) {
     SDL_ShowOpenFileDialog(callback, user, window, filters, count, start, many);
     return;
@@ -4006,6 +4825,12 @@ void App::ShowOpenDialog(SDL_DialogFileCallback callback, void* user, SDL_Window
 
 void App::ShowSaveDialog(SDL_DialogFileCallback callback, void* user, SDL_Window* window,
                          const SDL_DialogFileFilter* filters, int count, const char* start) {
+#if defined(__ANDROID__)
+  if (touch_) {
+    AndroidSave(callback, user, window, filters, count, start);
+    return;
+  }
+#endif
   if (!controller_) {
     SDL_ShowSaveFileDialog(callback, user, window, filters, count, start);
     return;
@@ -4185,7 +5010,12 @@ void App::Screenshot(const std::string& file) {
 
 void App::DrawHeader() {
   const ImGuiViewport* vp = ImGui::GetMainViewport();
-  const float height = 84 * scale_;
+#if defined(__ANDROID__)
+  if (touch_ && !portrait_) {
+    return;
+  }
+#endif
+  const float height = (LAUNCHER_PHONE(touch_) ? 52 : 84) * scale_;
   ImDrawList* dl = ImGui::GetWindowDrawList();
   const ImVec2 a = vp->WorkPos, b(vp->WorkPos.x + vp->WorkSize.x, vp->WorkPos.y + height);
   const float band = GroundIndex() >= 0 && !groundTex_.empty() ? 0.35f : 1.0f;
@@ -4196,7 +5026,7 @@ void App::DrawHeader() {
                               U32(kAccent, 0.9f), U32(kAccent, 0.0f), U32(kAccent, 0.0f), U32(kAccent, 0.9f));
 
   const float pad = ImGui::GetStyle().WindowPadding.x;
-  const float iconSize = 52 * scale_;
+  const float iconSize = (LAUNCHER_PHONE(touch_) ? 36 : 52) * scale_;
   float x = a.x + pad;
   if (ownIcon_ != nullptr) {
     const ImVec2 ip(x, a.y + (height - iconSize) * 0.5f);
@@ -4234,7 +5064,10 @@ void App::DrawNav(float height) {
   ImGui::PopFont();
   ImGui::BeginChild("##nav", ImVec2(navWidth, height), ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding | ImGuiChildFlags_NavFlattened);
   ImDrawList* dl = ImGui::GetWindowDrawList();
-  const float rowH = (controller_ ? 38 : 44) * scale_, glyph = 18 * scale_;
+  const float rowH = (LAUNCHER_PHONE(touch_) ? 40 : controller_ ? 38 : 44) * scale_, glyph = 18 * scale_;
+#if defined(__ANDROID__)
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(ImGui::GetStyle().ItemSpacing.x, 2 * scale_));
+#endif
   bool inNav = false;
   for (int p = 0; p < static_cast<int>(Page::Count); p++) {
     if (static_cast<Page>(p) == Page::Reports && game_.reportsFolder.empty()) {
@@ -4304,9 +5137,63 @@ void App::DrawNav(float height) {
     ImGui::PopID();
   }
   focusInNav_ = inNav;
+#if defined(__ANDROID__)
+  ImGui::PopStyleVar();
+#endif
   ImGui::EndChild();
   ImGui::PopStyleVar();
 }
+
+#if defined(__ANDROID__)
+void App::DrawNavTop() {
+  const float rowH = 52 * scale_, glyph = 20 * scale_;
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  const ImVec2 pos = ImGui::GetCursorScreenPos();
+  const float w = ImGui::GetContentRegionAvail().x;
+  if (ImGui::InvisibleButton("##pagebutton", ImVec2(w, rowH))) {
+    ImGui::OpenPopup("##pagemenu");
+  }
+  const ImVec2 end(pos.x + w, pos.y + rowH);
+  dl->AddRectFilled(pos, end, U32(Hex(0x2E2350)), 10 * scale_);
+  dl->AddRect(pos, end, U32(kLine), 10 * scale_, 0, 1.0f * scale_);
+  DrawGlyph(dl, GlyphOf(static_cast<int>(page_)), ImVec2(pos.x + 16 * scale_, pos.y + (rowH - glyph) * 0.5f), glyph, U32(kAccentHover));
+  dl->AddText(fonts_.nav, fonts_.nav->FontSize, ImVec2(pos.x + 16 * scale_ + glyph + 14 * scale_, pos.y + (rowH - fonts_.nav->FontSize) * 0.5f),
+              U32(kText), PageName(static_cast<int>(page_)));
+  const float cx = end.x - 26 * scale_, cy = pos.y + rowH * 0.5f, r = 7 * scale_;
+  dl->AddTriangleFilled(ImVec2(cx - r, cy - r * 0.5f), ImVec2(cx + r, cy - r * 0.5f), ImVec2(cx, cy + r * 0.7f), U32(kDim));
+  ImGui::SetNextWindowPos(ImVec2(pos.x, end.y + 4 * scale_));
+  ImGui::SetNextWindowSize(ImVec2(w, 0));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8 * scale_, 8 * scale_));
+  if (ImGui::BeginPopup("##pagemenu")) {
+    for (int p = 0; p < static_cast<int>(Page::Count); p++) {
+      if ((static_cast<Page>(p) == Page::Reports && game_.reportsFolder.empty()) ||
+          (static_cast<Page>(p) == Page::Extra && game_.extra.sources.empty())) {
+        continue;
+      }
+      ImGui::PushID(p);
+      const ImVec2 rp = ImGui::GetCursorScreenPos();
+      const float rw = ImGui::GetContentRegionAvail().x;
+      const bool selected = page_ == static_cast<Page>(p);
+      if (ImGui::InvisibleButton("##row", ImVec2(rw, rowH))) {
+        page_ = static_cast<Page>(p);
+        controls_.Cancel();
+        ImGui::CloseCurrentPopup();
+      }
+      ImDrawList* pl = ImGui::GetWindowDrawList();
+      if (selected) {
+        pl->AddRectFilled(rp, ImVec2(rp.x + rw, rp.y + rowH), U32(Hex(0x2E2350)), 8 * scale_);
+      }
+      DrawGlyph(pl, GlyphOf(p), ImVec2(rp.x + 12 * scale_, rp.y + (rowH - glyph) * 0.5f), glyph, U32(selected ? kAccentHover : kFaint));
+      pl->AddText(fonts_.nav, fonts_.nav->FontSize, ImVec2(rp.x + 12 * scale_ + glyph + 14 * scale_, rp.y + (rowH - fonts_.nav->FontSize) * 0.5f),
+                  U32(selected ? kText : kDim), PageName(p));
+      ImGui::PopID();
+    }
+    ImGui::EndPopup();
+  }
+  ImGui::PopStyleVar();
+  ImGui::Dummy(ImVec2(0, 4 * scale_));
+}
+#endif
 
 namespace {
 std::string HumanBytes(uint64_t bytes) {
@@ -4377,7 +5264,7 @@ void App::ExtraLook(int index) {
     const GameInfo::ExtraSource& src = game_.extra.sources[index];
     const fs::path converter = extra::ConverterPath(src, game_.program.parent_path());
     std::error_code ec;
-    const bool found = fs::is_regular_file(converter, ec);
+    const bool found = extra::ConverterFound(converter);
     const std::string version =
         found ? extra::QueryVersion(converter, game_.settingsFolder / "extra_assets" / PathOf(src.id + "_version.txt"), 5000, src.versionArgument)
               : std::string();
@@ -4544,6 +5431,17 @@ void App::ExtraRemove(int index) {
 }
 
 void App::ExtraPoll() {
+#if defined(__ANDROID__)
+  {
+    static bool awake = false;
+    const bool busy = ExtraRunning();
+    if (busy != awake) {
+      awake = busy;
+      if (busy) SDL_DisableScreenSaver();
+      else SDL_EnableScreenSaver();
+    }
+  }
+#endif
   for (int i = 0; i < static_cast<int>(extras_.size()); i++) {
     ExtraState& st = *extras_[i];
     if (st.wasRunning && !st.job.Running()) {
@@ -4564,6 +5462,7 @@ void App::ExtraPoll() {
 }
 
 bool App::ExtraRunning() const {
+  if (hdJob_.Running()) return true;
   for (const auto& st : extras_) {
     if (st->job.Running()) return true;
   }
@@ -4584,6 +5483,7 @@ std::string App::StageText(const std::string& id) const {
 }
 
 bool App::ExtraBusy() const {
+  if (hdJob_.Running() || hdWasRunning_) return true;
   for (const auto& st : extras_) {
     if (st->job.Running() || st->wasRunning || st->looking || st->lookAgain) return true;
   }
@@ -4693,7 +5593,11 @@ void App::DrawExtraRow(int i) {
       if (ImGui::Button(resume ? Lbl(Tr("Continue"), "Continue").c_str() : Lbl(Tr(src.makeLabel).c_str(), src.makeLabel.c_str()).c_str())) ExtraMake(i);
       if (Hot()) ImGui::SetTooltip("%s", src.dump ? Tr("Needs your own game disc (Disc page) and this dump file.") : Tr("Needs your own game disc (Disc page) and this disc."));
     } else {
+#if defined(__ANDROID__)
+      Dim(Tr("This runs inside the app and cannot be stopped. Keep the app open: the screen stays on until it is done."));
+#else
       if (ImGui::Button(Lbl(Tr("Cancel"), "Cancel").c_str())) ExtraCancel(i);
+#endif
     }
     if (running) {
       const extra::MakeJob::Snapshot snap = st.job.Get();
@@ -4716,7 +5620,11 @@ void App::DrawExtraRow(int i) {
       if (!src.thirdFolder.empty()) {
         Dim(Tr("This takes a while. You can keep using the launcher or play meanwhile (the launcher stays open until it is done). Cancel pauses it: what is made so far is kept, and Make continues later."));
       } else {
+#if defined(__ANDROID__)
+        Dim(Tr("This can take a while (the models of a dump: about 15 minutes or more on a phone). Do not close the app."));
+#else
         Dim(Tr("This can take a while. The window stays usable; Cancel stops it and leaves nothing half-made."));
+#endif
       }
     } else if (st.finishedShown) {
       const extra::MakeJob::Snapshot& r = st.last;
@@ -4759,7 +5667,7 @@ void App::DrawExtraRow(int i) {
     }
     if (looked && !running && !game_.playerFilesReadOnly &&
         (status.kind == extra::Status::Kind::Ready || status.kind == extra::Status::Kind::OutOfDate)) {
-      ImGui::SameLine();
+      SAMELINE_FIT(Tr("Remove what was made"));
       if (ImGui::SmallButton(Lbl(Tr("Remove what was made"), "Remove what was made").c_str())) extraAsk_ = i;
     }
     if (extraWarn_ == i) {
@@ -4826,12 +5734,171 @@ void App::DrawExtraHdTextures() {
       fs::create_directories(folder, ec);
       OpenInSystem(folder);
     }
-    ImGui::SameLine();
+    SAMELINE_FIT(Tr("Go to the Mods page"));
     if (ImGui::SmallButton(Lbl(Tr("Go to the Mods page"), "Go to the Mods page").c_str())) page_ = Page::Mods;
     EndCard();
     ImGui::Spacing();
+    DrawHdMaker();
   }
 }
+
+bool App::HdToolInstalled() const { return engine::hdtex::ToolInstalled(game_.settingsFolder / "tools" / "realesrgan"); }
+
+void App::HdMake() {
+  if (hdJob_.Running()) return;
+  const std::string disc = DiscPath();
+  hdNote_.clear();
+  if (disc.empty()) { hdNote_ = Tr("Choose your game disc on the Disc page first."); return; }
+  if (game_.playerFilesReadOnly) { hdNote_ = Tr("This is a test run on the player's own files, which it never changes."); return; }
+  const std::string name = hdName_.empty() ? Fmt("HD %dx", hdScale_) : hdName_;
+  extra::MakeRequest request;
+#ifdef _WIN32
+  request.converter = game_.program.parent_path() / "xd_hd_make.exe";
+#else
+  request.converter = game_.program.parent_path() / "xd_hd_make";
+#endif
+  std::error_code ec;
+  if (!fs::is_regular_file(request.converter, ec)) { hdNote_ = Tr("The maker program isn't next to the game."); return; }
+  const fs::path pack = game_.settingsFolder / "textures" / game_.textureGameId / PathOf(name);
+  request.outFolder = game_.settingsFolder / "extra_assets" / "hd_maker_unused";
+  request.logFile = game_.settingsFolder / "extra_assets" / "hd_maker.log";
+  request.arguments = {disc, "--pack", Utf8(pack), "--tools", Utf8(game_.settingsFolder / "tools" / "realesrgan"), "--scale",
+                       std::to_string(hdScale_), "--work", Utf8(game_.settingsFolder / "extra_assets" / "hd_maker_work")};
+  if (!HdToolInstalled()) request.arguments.push_back("--install");
+  std::string error;
+  if (!hdJob_.Start(request, error)) { hdNote_ = error; Log("hd maker: " + error); return; }
+  hdWasRunning_ = true;
+  hdFinished_ = false;
+  Log("hd maker: started, pack " + Utf8(pack));
+}
+
+void App::DrawHdMaker() {
+  if (hdName_.empty()) hdName_ = "HD textures";
+  BeginCard("##hdmaker");
+  Heading(Tr("Make HD textures"));
+  Dim(Tr("Makes a sharper copy of the game's 3D pictures (ground, walls, buildings, Pokemon) from your own disc, with an upscaler "
+         "program that runs on your graphics card. Menus, text, fades and people's faces and hair are left alone. It takes a "
+         "while; you can stop it and continue later. The result is a texture pack in your data folder (on the Mods page) that "
+         "the HD textures setting switches on and off at any moment, also in the middle of the game."));
+  const bool running = hdJob_.Running();
+  if (hdWasRunning_ && !running) {
+    hdWasRunning_ = false;
+    hdLast_ = hdJob_.Get();
+    hdFinished_ = true;
+  }
+  if (!running) {
+    ImGui::SetNextItemWidth(220 * scale_);
+    ImGui::InputText(Lbl(Tr("Pack name"), "##hdname").c_str(), &hdName_);
+    ImGui::RadioButton(Lbl(Tr("2x (default)"), "##hd2").c_str(), &hdScale_, 2);
+    ImGui::SameLine();
+    ImGui::RadioButton(Lbl(Tr("4x (sharper, much bigger, slower)"), "##hd4").c_str(), &hdScale_, 4);
+    if (ImGui::Button(Lbl(Tr("Make HD textures..."), "Make HD textures...").c_str())) hdAsk_ = true;
+    if (Hot()) ImGui::SetTooltip("%s", Tr("Needs your own game disc (Disc page)."));
+  } else {
+    if (ImGui::Button(Lbl(Tr("Cancel"), "Cancel").c_str())) hdJob_.Cancel();
+    const extra::MakeJob::Snapshot snap = hdJob_.Get();
+    const float fraction = snap.total > 0 ? static_cast<float>(static_cast<double>(snap.done) / static_cast<double>(snap.total)) : 0.0f;
+    char label[200];
+    if (snap.total > 0) std::snprintf(label, sizeof label, "%llu / %llu  %s", static_cast<unsigned long long>(snap.done), static_cast<unsigned long long>(snap.total), snap.current.c_str());
+    else std::snprintf(label, sizeof label, "%s", Tr("starting..."));
+    ImGui::ProgressBar(fraction, ImVec2(-1, 0), label);
+    Dim(Tr("This takes a while. Cancel stops it; what is made so far is kept and Make continues from there."));
+  }
+  if (!hdNote_.empty()) ImGui::TextColored(kBad, "%s", hdNote_.c_str());
+  if (hdFinished_ && !running) {
+    const extra::MakeJob::Snapshot& r = hdLast_;
+    if (r.phase == extra::MakeJob::Phase::Done)
+      ImGui::TextColored(kGood, "%s", Fmt(Tr("Done: %llu pictures made. The pack is on the Mods page; the HD textures setting turns it on."), static_cast<unsigned long long>(r.converted)).c_str());
+    else if (r.phase == extra::MakeJob::Phase::Cancelled)
+      ImGui::TextColored(kWarn, "%s", Tr("Stopped. What is made so far is kept; Make continues from there."));
+    else if (r.phase == extra::MakeJob::Phase::Failed || r.phase == extra::MakeJob::Phase::WrongDisc)
+      ImGui::TextColored(kBad, "%s", r.message.c_str());
+  }
+  if (hdAsk_) {
+    ImGui::OpenPopup("###hdask");
+    hdAsk_ = false;
+    hdAnswered_ = false;
+  }
+  if (ImGui::BeginPopupModal(Lbl(Tr("Make HD textures?"), "hdask").c_str(), nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (hdAnswered_) { hdAnswered_ = false; ImGui::CloseCurrentPopup(); }
+    ImGui::PushTextWrapPos(ImGui::GetFontSize() * 40.0f);
+    if (!HdToolInstalled()) {
+      ImGui::TextWrapped("%s", engine::hdtex::ToolLicenceText().c_str());
+      ImGui::Spacing();
+      ImGui::TextWrapped("%s", Tr("The download is about 45 MB. Continue?"));
+    } else {
+      ImGui::TextWrapped("%s", Tr("The upscaler is already installed. The pictures are made from your disc now; this takes a while."));
+    }
+    ImGui::PopTextWrapPos();
+    ImGui::Spacing();
+    if (ImGui::Button(Lbl(Tr("Accept and start"), "Accept and start").c_str())) {
+      ImGui::CloseCurrentPopup();
+      HdMake();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(Lbl(Tr("Not now"), "Not now").c_str()) || BackPressed()) ImGui::CloseCurrentPopup();
+    ImGui::EndPopup();
+  }
+  EndCard();
+  ImGui::Spacing();
+}
+
+#if defined(__ANDROID__)
+void App::DrawExtraPhoneCard() {
+  if (!BeginCard("##extraphone")) {
+    EndCard();
+    return;
+  }
+  Heading(Tr("Packs from a PC"));
+  Dim(Tr("Most packs below can be made right here (choose the disc or dump, press Make, keep the app open). The Gen 5-7 pack of an Ultra Sun / "
+         "Ultra Moon dump cannot yet: it needs the game to draw its pictures. Make that one on a PC with the normal launcher (Extra assets page), "
+         "zip its folder from the data folder's extra_assets folder, copy the zip to this phone and take it in here. A pack is a few hundred MB."));
+  if (extraZipBusy_) {
+    ImGui::TextColored(kBusy, "%s", Tr("Unpacking the pack..."));
+  } else if (ImGui::Button(Lbl(Tr("Use a pack from a PC (.zip)..."), "Use a pack from a PC").c_str())) {
+    static SDL_DialogFileFilter kZip[2];
+    kZip[0] = {Tr("Zip files"), "zip"};
+    kZip[1] = {Tr("All files"), "*"};
+    extraZipMessage_.clear();
+    ShowOpenDialog(
+        [](void* user, const char* const* files, int) {
+          App* app = static_cast<App*>(user);
+          if (files != nullptr && files[0] != nullptr) {
+            std::lock_guard<std::mutex> lock(app->pickMutex_);
+            app->extraZipPicked_ = files[0];
+            app->extraZipPickedReady_ = true;
+          }
+        },
+        this, window_, kZip, 2, nullptr, false);
+  }
+  if (!extraZipMessage_.empty()) {
+    ImGui::TextColored(extraZipOk_ ? kGood : kBad, "%s", extraZipMessage_.c_str());
+  }
+  EndCard();
+  ImGui::Spacing();
+}
+
+void App::ImportExtraZip(const std::string& zipFile) {
+  if (extraZipThread_.joinable()) {
+    extraZipThread_.join();
+  }
+  extraZipBusy_ = true;
+  extraZipDoneText_ = Tr("The pack is in place.");
+  extraZipFailText_ = Tr("That zip could not be used:");
+  extraZipThread_ = std::thread([this, zipFile] {
+    std::string error;
+    const fs::path dest = game_.settingsFolder / "extra_assets";
+    std::error_code ec;
+    fs::create_directories(dest, ec);
+    const bool ok = eu::ExtractZip(PathOf(zipFile), dest, error);
+    Log(std::string("extra pack: ") + zipFile + (ok ? ": unpacked into " + Utf8(dest) : ": FAILED: " + error));
+    extraZipOk_ = ok;
+    extraZipMessage_ = ok ? extraZipDoneText_ : extraZipFailText_ + " " + error;
+    extraZipDone_ = true;
+    extraZipBusy_ = false;
+  });
+}
+#endif
 
 void App::DrawExtraPage() {
   PageTitle(Tr("Extra assets"),
@@ -4839,6 +5906,9 @@ void App::DrawExtraPage() {
                "them is made on this PC, kept in your own data folder (extra_assets) and never sent anywhere."));
   const auto& sources = game_.extra.sources;
   const int count = std::min(static_cast<int>(sources.size()), static_cast<int>(extras_.size()));
+#if defined(__ANDROID__)
+  DrawExtraPhoneCard();
+#endif
   {
     std::string have;
     for (int i = 0; i < count; i++) {
@@ -4889,9 +5959,18 @@ void App::DrawDiscPage() {
   ImGui::TextColored(kDim, "%s", Tr("Disc image file"));
   const float checkW = ImGui::CalcTextSize(Tr("Check again")).x + ImGui::GetStyle().FramePadding.x * 2;
   const float chooseW = ImGui::CalcTextSize(Tr("Choose...")).x + ImGui::GetStyle().FramePadding.x * 2;
+#if defined(__ANDROID__)
+  ImGui::SetNextItemWidth(portrait_ ? -1.0f : -std::max(250 * scale_, checkW + chooseW + ImGui::GetStyle().ItemSpacing.x * 3 + 12 * scale_));
+#else
   ImGui::SetNextItemWidth(-std::max(250 * scale_, checkW + chooseW + ImGui::GetStyle().ItemSpacing.x * 3 + 12 * scale_));
+#endif
+#if defined(__ANDROID__)
+  std::string shownPath = !path.empty() ? NameOfUriShown(path) : path;
+  ImGui::InputText("##disc", &shownPath, ImGuiInputTextFlags_ReadOnly);
+#else
   ImGui::InputText("##disc", &path, ImGuiInputTextFlags_ReadOnly);
-  ImGui::SameLine();
+#endif
+  SAMELINE_FIT(Tr("Choose..."));
   if (ImGui::Button(Lbl(Tr("Choose..."), "Choose...").c_str())) {
     static SDL_DialogFileFilter kFilters[2];
     kFilters[0] = {Tr("Disc images (ISO, RVZ, GCM, WIA, GCZ, CISO, WBFS)"), "iso;gcm;rvz;wia;gcz;ciso;wbfs"};
@@ -4984,7 +6063,11 @@ void App::DrawDiscPage() {
   EndCard();
   ImGui::Spacing();
   Dim(Tr("The game never changes your disc image: mods and settings are kept separately."));
+#if defined(__ANDROID__)
+  if (!touch_ && (game_.readDiscPictures || !game_.shortcutTarget.empty())) {
+#else
   if (game_.readDiscPictures || !game_.shortcutTarget.empty()) {
+#endif
     ImGui::Dummy(ImVec2(0, 8 * scale_));
     DrawIconSection();
   }
@@ -5117,7 +6200,7 @@ void App::DrawIconSection() {
                           .c_str())) {
       Shortcut(false);
     }
-    ImGui::SameLine();
+    SAMELINE_FIT(Tr("Create desktop shortcut"));
     if (ImGui::Button(Lbl(Tr("Create desktop shortcut"), "Create desktop shortcut").c_str())) {
       Shortcut(true);
     }
@@ -5135,6 +6218,54 @@ void App::OpenInSystem(const fs::path& what) {
     notOpened_ = Utf8(what);
     Log("couldn't be opened by the system: " + notOpened_);
   }
+}
+
+bool App::OverlayOpen(bool folder) {
+  std::error_code ec;
+  fs::path what = folder ? DataLocation().current / "stream_overlay" : sys::ProgramFolder() / L"Stream overlay guide.txt";
+  const bool there = fs::exists(what, ec);
+  Log(std::string(folder ? "stream overlay folder: " : "stream overlay guide: ") + Utf8(what) + (there ? "" : " (not there)"));
+  if (!there) {
+    if (folder) {
+      const size_t i = registry_.Find("system.stream_overlay");
+      const bool on = i != es::kNoSetting && registry_.ValueOf(i).i != 0;
+      overlayNote_ = on ? Tr("The folder is made when you start the game: start it once with the overlay on, then press this again.")
+                        : Tr("Switch \"Stream overlay\" on above and start the game once: the folder with the pages is made then.");
+    } else {
+      overlayNote_ = Fmt(Tr("The guide is not next to the launcher (%s). It comes with the game download."), Utf8(what).c_str());
+    }
+    return false;
+  }
+  overlayNote_.clear();
+  if (script_.empty()) {
+    OpenInSystem(what);
+  }
+  return true;
+}
+
+void App::DrawOverlayHelpRow() {
+  ImGui::TableNextRow();
+  ImGui::TableSetColumnIndex(0);
+  ImGui::PushID("overlayhelp");
+  if (ImGui::Button(Lbl(Tr("Open overlay folder"), "Open overlay folder").c_str())) {
+    OverlayOpen(true);
+  }
+  if (Hot()) {
+    ImGui::SetTooltip("%s", Tr("The folder with the overlay pages you pick in OBS."));
+  }
+  SAMELINE_FIT(Tr("How to use it in OBS"));
+  if (ImGui::Button(Lbl(Tr("How to use it in OBS"), "How to use it in OBS").c_str())) {
+    OverlayOpen(false);
+  }
+  if (Hot()) {
+    ImGui::SetTooltip("%s", Tr("A short text: the steps in OBS, which page to pick, the sizes, and what the overlay never does."));
+  }
+  if (!overlayNote_.empty()) {
+    ImGui::PushStyleColor(ImGuiCol_Text, kBad);
+    ImGui::TextWrapped("%s", overlayNote_.c_str());
+    ImGui::PopStyleColor();
+  }
+  ImGui::PopID();
 }
 
 void App::DrawRandomizerGuideButton() {
@@ -5163,7 +6294,7 @@ void App::DrawNotOpenedWindow() {
   ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
   if (ImGui::BeginPopupModal(Lbl(Tr("Couldn't open it"), "notopened").c_str(), nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
     ImGui::TextUnformatted(Tr("Your system didn't open this by itself. It is here:"));
-    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 560 * scale_);
+    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + WP(560));
     ImGui::TextColored(kText, "%s", notOpened_.c_str());
     ImGui::PopTextWrapPos();
     if (ImGui::Button(Lbl(Tr("Copy the path"), "Copy the path").c_str())) {
@@ -5436,14 +6567,53 @@ void App::DrawControlsPage() {
     return;
   }
   PageTitle(Tr("Controls"), "");
+#if defined(__ANDROID__)
+  if (!touch_) {
+#endif
   Dim(Tr("Which PC controller and which keys play each of the four GameCube controllers. Controls are yours in every "
          "preset, Original too: they change how you press the buttons, never what the game does with them."));
   ImGui::Spacing();
+#if defined(__ANDROID__)
+  }
+#endif
   LookAtAdapter();
   FeedLiveInputs();
+#if defined(__ANDROID__)
+  if (!touch_) {
+    controls_.DrawPortTabs(registry_, options_);
+  }
+#else
   controls_.DrawPortTabs(registry_, options_);
+#endif
   ImGui::BeginChild("##scroll", ImVec2(0, 0), ImGuiChildFlags_NavFlattened);
   const std::string n = std::to_string(controls_.Port() + 1);
+#if defined(__ANDROID__)
+  if (touch_) {
+    std::vector<size_t> rows;
+    for (const char* id : {"touch.layout", "touch.show", "touch.size", "touch.opacity", "touch.stick", "touch.ff_button"}) {
+      const size_t at = registry_.Find(id);
+      if (at != es::kNoSetting) rows.push_back(at);
+    }
+    if (!rows.empty()) {
+      if (BeginCard("##ctl_touch")) {
+        Heading(Tr("Touch buttons"));
+        Dim(Tr("The on-screen GameCube buttons. To move or resize a button, open the game's pause menu (the two bars) and choose BUTTONS."));
+        if (ImGui::BeginTable("##touchrows", portrait_ ? 1 : 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_PadOuterX)) {
+          if (!portrait_) {
+            ImGui::TableSetupColumn("what", ImGuiTableColumnFlags_WidthStretch, 3.0f);
+            ImGui::TableSetupColumn("value", ImGuiTableColumnFlags_WidthStretch, 1.4f);
+          } else {
+            ImGui::TableSetupColumn("all", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+          }
+          for (size_t at : rows) ui::DrawSettingRow(registry_, at, options_);
+          ImGui::EndTable();
+        }
+      }
+      EndCard();
+    }
+    controls_.DrawPortTabs(registry_, options_);
+  }
+#endif
   if (BeginCard("##ctl_pc")) {
     Heading(Fmt(Tr("Controller %s"), n.c_str()).c_str());
     controls_.DrawController(registry_, options_);
@@ -5469,6 +6639,9 @@ void App::DrawControlsPage() {
   EndCard();
   ui::Options generic = options_;
   generic.hiddenPrefixes = {"keyboard", "gamepad"};
+#if defined(__ANDROID__)
+  if (touch_) generic.hiddenPrefixes.push_back("touch.");
+#endif
   if (!ui::VisibleSettings(registry_, es::Category::Controls, generic).empty()) {
     ImGui::Spacing();
     if (BeginCard("##ctl_all")) {
@@ -5926,7 +7099,66 @@ bool App::PadSetupScript(const std::string& step) {
   return true;
 }
 
+#if defined(__ANDROID__)
+void App::ImportModZip(const std::string& zipFile) {
+  namespace mc = engine::modcheck;
+  modImportOk_ = false;
+  modImportMessage_.clear();
+  std::vector<uint8_t> bytes;
+  if (!mc::ReadFileBytes(PathOf(zipFile), bytes, 1ull << 30)) {
+    modImportMessage_ = Tr("That file couldn't be read.");
+    return;
+  }
+  std::error_code ec;
+  const fs::path scratch = game_.settingsFolder / L"mod_import" / L"unpacked";
+  fs::remove_all(scratch.parent_path(), ec);
+  fs::create_directories(scratch.parent_path(), ec);
+  mc::Options check;
+  check.rules = game_.modRules;
+  check.modsFolder = game_.modsFolder;
+  mc::Report report;
+  const bool passed = mc::CheckAndExtractArchive(bytes, scratch, check, mc::SafetyLimits(), report);
+  Log("mod import: " + zipFile + (passed ? ": passed" : ": REFUSED") + "\n" + report.Format());
+  if (!passed || !report.manifestOk) {
+    modImportMessage_ = std::string(Tr("This zip is not a mod the launcher can use, so it was not added.")) + " " +
+                        (report.manifestOk ? std::string() : std::string(Tr("(It has no usable mod.json.)")));
+    fs::remove_all(scratch.parent_path(), ec);
+    return;
+  }
+  const fs::path from = report.folder.empty() ? scratch : report.folder;
+  const fs::path target = game_.modsFolder / PathOf(report.manifest.id);
+  fs::create_directories(game_.modsFolder, ec);
+  bool replaced = false;
+  if (fs::exists(target, ec)) {
+    replaced = true;
+    const fs::path old = game_.settingsFolder / L"mod_import" / (PathOf(report.manifest.id).wstring() + L"_previous");
+    fs::remove_all(old, ec);
+    fs::rename(target, old, ec);
+    if (ec) {
+      modImportMessage_ = Tr("The mod of that name could not be replaced.");
+      return;
+    }
+  }
+  fs::rename(from, target, ec);
+  if (ec) {
+    fs::copy(from, target, fs::copy_options::recursive, ec);
+    if (ec) {
+      modImportMessage_ = Tr("The mod could not be put in the mods folder.");
+      return;
+    }
+  }
+  fs::remove_all(scratch.parent_path() / L"unpacked", ec);
+  ReloadMods();
+  modImportOk_ = true;
+  modImportMessage_ = Fmt(replaced ? Tr("Replaced %s %s. Its tick is where you left it.") : Tr("Added %s %s. Tick it in the list to use it."),
+                          report.manifest.name.empty() ? report.manifest.id.c_str() : report.manifest.name.c_str(), report.manifest.version.c_str());
+  Log("mod import: " + modImportMessage_);
+}
+
+#endif
+
 void App::DrawModsPage() {
+  CheckAssetStamp();
   if (reviewDirty_) RebuildReview();
   PageTitle(Tr("Mods"), "");
   Dim(Tr("Mods change the game's files (on top of your disc; the disc itself is never changed). A mod is only used "
@@ -5946,39 +7178,64 @@ void App::DrawModsPage() {
     }
     ImGui::EndCombo();
   }
-  ImGui::SameLine();
+  SAMELINE_FIT(Tr("New list..."));
   if (ImGui::Button(Lbl(Tr("New list..."), "New list...").c_str())) {
     newProfile_.clear();
     ImGui::OpenPopup("###newmodlist");
   }
   ImGui::SameLine();
+#if defined(__ANDROID__)
+  if (touch_) {
+    if (ImGui::Button(Lbl(Tr("Add a mod (.zip)..."), "Add a mod zip").c_str())) {
+      static SDL_DialogFileFilter kZip[2];
+      kZip[0] = {Tr("Mod zip files (*.zip)"), "zip"};
+      kZip[1] = {Tr("All files"), "*"};
+      modImportMessage_.clear();
+      ShowOpenDialog(
+          [](void* user, const char* const* files, int) {
+            App* app = static_cast<App*>(user);
+            if (files != nullptr && files[0] != nullptr) {
+              std::lock_guard<std::mutex> lock(app->pickMutex_);
+              app->modImportPicked_ = files[0];
+              app->modImportPickedReady_ = true;
+            }
+          },
+          this, window_, kZip, 2, nullptr, false);
+    }
+  } else
+#endif
   if (ImGui::Button(Lbl(Tr("Open the mods folder"), "Open the mods folder").c_str())) {
     std::error_code ec;
     fs::create_directories(game_.modsFolder, ec);
     OpenInSystem(game_.modsFolder);
   }
-  ImGui::SameLine();
+  SAMELINE_FIT(Tr("Look again"));
   if (ImGui::Button(Lbl(Tr("Look again"), "Look again").c_str())) {
     ReloadMods();
   }
+#if defined(__ANDROID__)
+  if (!modImportMessage_.empty()) {
+    ImGui::TextColored(modImportOk_ ? kGood : kBad, "%s", modImportMessage_.c_str());
+  }
+#endif
   if (ImGui::Button(Lbl(Tr("Check for mod updates"), "Check for mod updates").c_str())) {
     modUpd_.RequestCheck(true);
   }
-  ImGui::SameLine();
+  SAMELINE_FIT(Tr("Put in working order"));
   if (ImGui::Button(Lbl(Tr("Put in working order"), "Put in working order").c_str())) {
     modUpd_.SortList(true);
   }
-  ImGui::SameLine();
+  SAMELINE_FIT(Tr("Save this list to a file..."));
   if (ImGui::Button(Lbl(Tr("Save this list to a file..."), "Save this list to a file...").c_str())) {
     modUpd_.StartExport();
   }
-  ImGui::SameLine();
+  SAMELINE_FIT(Tr("Use a list from a file..."));
   if (ImGui::Button(Lbl(Tr("Use a list from a file..."), "Use a list from a file...").c_str())) {
     modUpd_.StartImport();
   }
   if (ImGui::BeginPopupModal(Lbl(Tr("New mod list"), "newmodlist").c_str(), nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
     ImGui::TextUnformatted(Tr("A name for the new list (for example \"randomizer run\"):"));
-    ImGui::SetNextItemWidth(320 * scale_);
+    ImGui::SetNextItemWidth(WP(320));
     pad::InputText("##name", &newProfile_);
     bool usable = !newProfile_.empty() && newProfile_.find_first_of("[]=;#") == std::string::npos &&
                   newProfile_.front() != ' ' && newProfile_.back() != ' ';
@@ -6017,9 +7274,13 @@ void App::DrawModsPage() {
   if (list.empty()) {
     ImGui::BeginChild("##none", ImVec2(0, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_NavFlattened);
     ImGui::TextUnformatted(Tr("No mods yet."));
+#if defined(__ANDROID__)
+    Dim(Tr("To add a mod, press \"Add a mod (.zip)...\" and choose the mod's zip file."));
+#else
     Dim(Fmt(Tr("To add a mod, unpack it into its own folder inside the mods folder (\"Open the mods folder\"), then "
                "click \"Look again\". Mods: %s"),
             Utf8(game_.modsFolder).c_str()));
+#endif
     ImGui::EndChild();
   } else if (ImGui::BeginTable("##mods", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
                                                ImGuiTableFlags_PadOuterX)) {
@@ -6121,7 +7382,7 @@ void App::DrawModsPage() {
           const bool busy = modTools_.Busy();
           if (busy) ImGui::BeginDisabled();
           if (ImGui::SmallButton(Lbl(Tr("Check this mod"), "Check this mod").c_str())) modTools_.StartCheck(mod->manifest.id);
-          ImGui::SameLine();
+          SAMELINE_FIT(Tr("Pack for sharing..."));
           if (ImGui::SmallButton(Lbl(Tr("Pack for sharing..."), "Pack for sharing...").c_str())) modTools_.StartPack(mod->manifest.id);
           if (busy) ImGui::EndDisabled();
         }
@@ -6303,7 +7564,7 @@ void App::DrawBackups(bool inBox) {
       Dim(Tr("None yet: the first one is made the next time the game saves over this save."));
     } else {
       ImGui::Text(Tr("%d kept, newest %s"), static_cast<int>(count), backups_.front().when.c_str());
-      ImGui::SameLine();
+      SAMELINE_FIT(Tr("Hide backups"));
       if (ImGui::Button(backupsShown_ ? Lbl(Tr("Hide backups"), "Hide backups").c_str()
                                       : Lbl(Tr("Show backups"), "Show backups").c_str())) {
         backupsShown_ = !backupsShown_;
@@ -6321,13 +7582,17 @@ void App::DrawBackups(bool inBox) {
   Dim(Fmt(Tr("Each time the game saves, it first keeps a copy of the save as it was (only when it changed). The newest "
              "%d are kept. Restore puts one back on the memory card."),
           static_cast<int>(bk::kKeep)));
+#if defined(__ANDROID__)
+  if (!touch_ && ImGui::Button(Lbl(Tr("Open folder"), "Open folder").c_str())) {
+#else
   if (ImGui::Button(Lbl(Tr("Open folder"), "Open folder").c_str())) {
+#endif
     std::error_code ec;
     fs::create_directories(BackupsFolder(), ec);
     OpenInSystem(BackupsFolder());
   }
   if (!inBox) {
-    ImGui::SameLine();
+    SAMELINE_FIT(Tr("Look again"));
     if (ImGui::Button(Lbl(Tr("Look again"), "Look again").c_str())) {
       LookAtBackups(true);
     }
@@ -6798,6 +8063,11 @@ void App::ImportFind() {
   if (!game_.saves.findImportable || importScan_.busy) {
     return;
   }
+#if defined(__ANDROID__)
+  if (touch_) {
+    return;
+  }
+#endif
   StopImportScan();
   importScan_.busy = true;
   importScan_.logged = false;
@@ -6906,21 +8176,33 @@ void App::DrawImport(bool locked) {
   }
   ImGui::PushID("import");
   ImGui::Spacing();
+#if defined(__ANDROID__)
+  if (touch_) {
+    Heading("Import a save");
+    Dim(Tr("Choose a Pokemon XD save file you copied to this phone (a .gci, a memory card image, a GameCube card dump). The USA game's "
+           "saves are added as they are; a Japanese save is converted to the USA game's layout (names stay in Japanese characters), "
+           "and a European save is added as it is. Look at what is in it, then add it. It is added as a NEW save: your other saves "
+           "are never replaced, and the file is only copied."));
+  } else {
+#endif
   Heading("Import from Dolphin / GameCube");
   Dim(Tr("Pokemon XD saves that this PC already has: in Dolphin's folders, found by themselves below, or in a file you "
          "choose (a .gci, a memory card image, a GameCube card dump). The USA game's saves are added as they are; a Japanese "
          "save is converted to the USA game's layout (names stay in Japanese characters), and a European save is added as "
          "it is. Look at what is in one, then add it. It is added as a NEW save: your other saves are never replaced, and the "
          "file is only copied."));
+#if defined(__ANDROID__)
+  }
+#endif
   if (locked) {
     ImGui::BeginDisabled();
   }
   const bool scanning = importScan_.busy;
-  if (game_.saves.findImportable) {
+  if (game_.saves.findImportable NOT_PHONE_AND) {
     if (ImGui::Button("Look again")) {
       ImportFind();
     }
-    ImGui::SameLine();
+    SAMELINE_FIT(Tr("Choose a file..."));
   }
   if (ImGui::Button(Lbl(Tr("Choose a file..."), "Choose a file...").c_str())) {
     ImportChooseFile();
@@ -6932,7 +8214,7 @@ void App::DrawImport(bool locked) {
   if (locked) {
     ImGui::EndDisabled();
   }
-  if (!game_.saves.findImportable) {
+  if (!game_.saves.findImportable PHONE_OR) {
   } else if (scanning) {
     ImGui::TextColored(kBusy, "Looking in Dolphin's folders...");
   } else {
@@ -7041,8 +8323,13 @@ void App::DrawSlots() {
     slotName_ = sl::NextName(slots_);
     slotAsk_ = SlotAsk::New;
   }
-  ImGui::SameLine();
+  SAMELINE_FIT(Tr("Import a save..."));
+#if defined(__ANDROID__)
+  if (ImGui::Button(touch_ ? Lbl(Tr("Import a save..."), "Import a save...").c_str()
+                           : Lbl(Tr("Import from Dolphin / GameCube..."), "Import from Dolphin / GameCube...").c_str())) {
+#else
   if (ImGui::Button(Lbl(Tr("Import from Dolphin / GameCube..."), "Import from Dolphin / GameCube...").c_str())) {
+#endif
     if (importOpen_) {
       importOpen_ = false;
     } else {
@@ -7050,7 +8337,7 @@ void App::DrawSlots() {
     }
   }
   if (game_.saves.checkImport) {
-    ImGui::SameLine();
+    SAMELINE_FIT(Tr("Import a Japanese save..."));
     if (ImGui::Button(Lbl(Tr("Import a Japanese save..."), "Import a Japanese save...").c_str())) {
       ImportFind();
       ImportChooseFile();
@@ -7079,12 +8366,12 @@ void App::DrawSlots() {
       inTable = ImGui::BeginTable("##saves", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_PadOuterX);
       if (inTable) {
         ImGui::TableSetupColumn(Lbl(Tr("Save"), "Save").c_str(), ImGuiTableColumnFlags_WidthStretch, 1.5f);
-        ImGui::TableSetupColumn(Lbl(Tr("Picture"), "Picture").c_str(), ImGuiTableColumnFlags_WidthFixed, 64 * scale_);
+        ImGui::TableSetupColumn(Lbl(Tr("Picture"), "Picture").c_str(), ImGuiTableColumnFlags_WidthFixed | PHONE_HIDE_COLUMN, 64 * scale_);
         ImGui::TableSetupColumn(Lbl(Tr("Trainer"), "Trainer").c_str(), ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        ImGui::TableSetupColumn(Lbl(Tr("Play time"), "Play time").c_str(), ImGuiTableColumnFlags_WidthFixed,
+        ImGui::TableSetupColumn(Lbl(Tr("Play time"), "Play time").c_str(), ImGuiTableColumnFlags_WidthFixed | PHONE_HIDE_COLUMN,
                                 std::max(132 * scale_, ImGui::CalcTextSize(Tr("Play time")).x +
                                                            ImGui::GetStyle().CellPadding.x * 2 + 8 * scale_));
-        ImGui::TableSetupColumn(Lbl(Tr("Playthrough"), "Playthrough").c_str(), ImGuiTableColumnFlags_WidthStretch, 1.9f);
+        ImGui::TableSetupColumn(Lbl(Tr("Playthrough"), "Playthrough").c_str(), ImGuiTableColumnFlags_WidthStretch | PHONE_HIDE_COLUMN, 1.9f);
         if (headers) {
           ImGui::TableHeadersRow();
         }
@@ -7198,7 +8485,7 @@ void App::DrawSlots() {
     if (ImGui::BeginPopupModal(Lbl(isNew ? Tr("New save") : Tr("Rename this save"), isNew ? "newsave" : "renamesave").c_str(),
                                nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
       ImGui::TextUnformatted(isNew ? Tr("A new, empty save. What should it be called?") : Tr("The save's new name:"));
-      ImGui::SetNextItemWidth(360 * scale_);
+      ImGui::SetNextItemWidth(WP(360));
       if (ImGui::IsWindowAppearing()) {
         ImGui::SetKeyboardFocusHere();
       }
@@ -7603,7 +8890,7 @@ void App::DrawSlotBox(const sl::Slot& slot, bool locked, bool& duplicate) {
     slotAsk_ = SlotAsk::Rename;
   }
   if (found) {
-    ImGui::SameLine();
+    SAMELINE_FIT(Tr("Duplicate"));
     if (ImGui::Button(Lbl(Tr("Duplicate"), "Duplicate").c_str())) {
       duplicate = true;
     }
@@ -7627,7 +8914,7 @@ void App::DrawSlotBox(const sl::Slot& slot, bool locked, bool& duplicate) {
     }
   }
   if (found && game_.saves.editOpen) {
-    ImGui::SameLine();
+    SAMELINE_FIT(Tr("Edit save..."));
     if (ImGui::Button(Lbl(Tr("Edit save..."), "Edit save...").c_str())) {
       EditOpen(slot);
     }
@@ -7648,8 +8935,35 @@ void App::DrawSlotBox(const sl::Slot& slot, bool locked, bool& duplicate) {
     ImGui::EndDisabled();
   }
   if (found) {
-    ImGui::SameLine();
+    SAMELINE_FIT(Tr("Export..."));
+    bool doExport = false;
     if (ImGui::Button(Lbl(Tr("Export..."), "Export...").c_str())) {
+      if (save.pcBoxes > 8) {
+        exportBoxesAsk_ = true;
+      } else {
+        doExport = true;
+      }
+    }
+    if (exportBoxesAsk_) {
+      exportBoxesAsk_ = false;
+      ImGui::OpenPopup("###exportboxes");
+    }
+    if (ImGui::BeginPopupModal(Lbl(Tr("Export this save?"), "exportboxes").c_str(), nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+      ImGui::TextUnformatted(Fmt(Tr("This playthrough has %d PC boxes."), save.pcBoxes).c_str());
+      Dim(Tr("The exported file is a GameCube save, and a GameCube or Dolphin has 8 boxes. Pokemon in boxes 9 and up (Shadow Pokemon too) "
+             "stay only in this game: they are not in the exported file."));
+      if (ImGui::Button(Lbl(Tr("Export anyway"), "exportboxes-go").c_str()) || exportBoxesGo_) {
+        exportBoxesGo_ = false;
+        doExport = true;
+        ImGui::CloseCurrentPopup();
+      }
+      ImGui::SameLine();
+      if (ImGui::Button(Lbl(Tr("Cancel"), "exportboxes-cancel").c_str()) || BackPressed()) {
+        ImGui::CloseCurrentPopup();
+      }
+      ImGui::EndPopup();
+    }
+    if (doExport) {
       static SDL_DialogFileFilter kGci[1];
       kGci[0] = {Tr("GameCube save files"), "gci"};
       const fs::path start = sys::KnownFolder(sys::Folder::Documents, false);
@@ -7670,7 +8984,7 @@ void App::DrawSlotBox(const sl::Slot& slot, bool locked, bool& duplicate) {
   if (locked) {
     ImGui::BeginDisabled();
   }
-  ImGui::SameLine();
+  SAMELINE_FIT(Tr("Delete..."));
   if (ImGui::Button(Lbl(Tr("Delete..."), "Delete...").c_str())) {
     slotAsk_ = SlotAsk::Delete;
   }
@@ -7789,7 +9103,7 @@ void App::DrawEditRow(const GameInfo::Saves::EditRow& row, bool locked) {
       ImGui::OpenPopup("###editchoice");
     }
     if (editChoiceId_ == row.id) {
-      ImGui::SetNextWindowSize(ImVec2(420 * scale_, 420 * scale_), ImGuiCond_Appearing);
+      ImGui::SetNextWindowSize(ImVec2(WP(420), 420 * scale_), ImGuiCond_Appearing);
       if (ImGui::BeginPopup("###editchoice")) {
         if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
         pad::InputText("##filter", &editChoiceFilter_);
@@ -7932,7 +9246,7 @@ void App::DrawEditSave(bool locked) {
   }
   ImGui::EndChild();
   const bool backClicked = ImGui::Button(Lbl(count == 0 ? Tr("Back") : Tr("Discard changes and go back"), "editback").c_str());
-  ImGui::SameLine();
+  SAMELINE_FIT(Tr("Undo all changes"));
   if (count == 0 || locked) ImGui::BeginDisabled();
   if (ImGui::Button(Lbl(Tr("Undo all changes"), "editrevert").c_str())) {
     if (game_.saves.editRevert) game_.saves.editRevert(editView_);
@@ -7940,7 +9254,7 @@ void App::DrawEditSave(bool locked) {
     editBufSeen_.clear();
     editMessage_.clear();
   }
-  ImGui::SameLine();
+  SAMELINE_FIT(Tr("Save changes..."));
   const bool saveClicked = ImGui::Button(Lbl(Tr("Save changes..."), "editsave").c_str());
   if (count == 0 || locked) ImGui::EndDisabled();
   if (backClicked) {
@@ -7965,7 +9279,7 @@ void App::DrawEditSave(bool locked) {
   ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
   if (ImGui::BeginPopupModal(Lbl(Tr("Save changes"), "editconfirm").c_str(), nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
     editConfirm_ = false;
-    ImGui::BeginChild("##changes", ImVec2(560 * scale_, std::min(260 * scale_, ImGui::GetTextLineHeightWithSpacing() * (static_cast<float>(count) + 1))), ImGuiChildFlags_NavFlattened);
+    ImGui::BeginChild("##changes", ImVec2(WP(560), std::min(260 * scale_, ImGui::GetTextLineHeightWithSpacing() * (static_cast<float>(count) + 1))), ImGuiChildFlags_NavFlattened);
     for (size_t i = 0; i < count; i++) {
       const bool marks = i < editView_.changeMarks.size() && editView_.changeMarks[i];
       ImGui::TextColored(marks ? kWarn : kDim, "%s", marks ? Tr("changes the game") : Tr("no effect on the game"));
@@ -7975,7 +9289,7 @@ void App::DrawEditSave(bool locked) {
     ImGui::EndChild();
     ImGui::Separator();
     ImGui::PushStyleColor(ImGuiCol_Text, editView_.willMark ? kWarn : kGood);
-    ImGui::PushTextWrapPos(560 * scale_);
+    ImGui::PushTextWrapPos(WP(560));
     ImGui::TextWrapped("%s", editView_.markText.c_str());
     ImGui::PopTextWrapPos();
     ImGui::PopStyleColor();
@@ -8154,6 +9468,55 @@ void App::DrawSetup(const SaveSummary& save) {
                                                "time the game starts."))
                               : looksMessage_);
   }
+  if (save.pcBoxesCanRaise && game_.raisePcBoxes) {
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("%s", Fmt(Tr("PC boxes: %d"), save.pcBoxes).c_str());
+    if (save.pcBoxes < 32) {
+      SAMELINE_FIT(Tr("Add PC boxes..."));
+      ImGui::BeginDisabled(gameRunning_);
+      if (ImGui::Button(Lbl(Tr("Add PC boxes..."), "Add PC boxes...").c_str())) {
+        askBoxes_ = true;
+      }
+      ImGui::EndDisabled();
+    }
+    Dim(boxesMessage_.empty() ? std::string(Tr("A playthrough can only get more PC boxes, never fewer. Pokemon in boxes 9 and up stay only in this game: "
+                                                "a save taken to a GameCube or Dolphin has the first 8 boxes. Do this while the game is closed."))
+                              : boxesMessage_);
+  }
+  if (askBoxes_) {
+    askBoxes_ = false;
+    ImGui::OpenPopup("###pcboxes");
+  }
+  if (ImGui::BeginPopupModal(Lbl(Tr("Add PC boxes"), "pcboxes").c_str(), nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    ImGui::TextUnformatted(Fmt(Tr("This playthrough has %d PC boxes. How many should it have?"), save.pcBoxes).c_str());
+    Dim(Tr("The new boxes are empty. This can't be undone: a playthrough never gets fewer boxes."));
+    bool done = false;
+    std::vector<int> offered{save.pcBoxes + 1};
+    for (int m = (save.pcBoxes / 4 + 1) * 4; m <= 32; m += 4) {
+      if (m != offered.front()) offered.push_back(m);
+    }
+    for (const int n : offered) {
+      if (ImGui::Button(Lbl(Fmt(Tr("%d boxes"), n).c_str(), ("pcboxes_" + std::to_string(n)).c_str()).c_str()) || (pickBoxes_ != 0 && pickBoxes_ == n)) {
+        std::string error;
+        if (game_.raisePcBoxes(save.pcBoxesFile, n, error)) {
+          boxesMessage_ = Fmt(Tr("This playthrough now has %d PC boxes. They show the next time the game starts."), n);
+          Log("pcboxes: raised to " + std::to_string(n));
+        } else {
+          boxesMessage_ = Fmt(Tr("The PC boxes could not be added: %s"), error.c_str());
+          Log("pcboxes: not raised: " + error);
+        }
+        pickBoxes_ = 0;
+        RereadSave();
+        done = true;
+      }
+    }
+    if (ImGui::Button(Lbl(Tr("Cancel"), "Cancel pcboxes").c_str()) || closeBoxes_ || BackPressed() || done) {
+      closeBoxes_ = false;
+      pickBoxes_ = 0;
+      ImGui::CloseCurrentPopup();
+    }
+    ImGui::EndPopup();
+  }
   if (askLooks_) {
     askLooks_ = false;
     ImGui::OpenPopup("###looks");
@@ -8193,7 +9556,7 @@ void App::DrawSetup(const SaveSummary& save) {
     ImGui::SameLine();
     DrawRandomizerGuideButton();
     if (!save.spoilerFile.empty()) {
-      ImGui::SameLine();
+      SAMELINE_FIT(Tr("Show spoilers..."));
       if (ImGui::Button(Lbl(Tr("Show spoilers..."), "Show spoilers...").c_str())) {
         askSpoilers_ = true;
       }
@@ -8479,17 +9842,28 @@ void App::DrawReportsPage() {
   PageTitle(Tr("Reports"), Tr("Reports help find problems in the game. They stay on this PC, in their folder: nothing is "
                               "ever sent anywhere. To share one, export it and send the file yourself."));
   LookAtReports(false);
+#if defined(__ANDROID__)
+  if (!touch_ && ImGui::Button(Lbl(Tr("Open folder"), "Open folder").c_str())) {
+    std::error_code ec;
+    fs::create_directories(game_.reportsFolder, ec);
+    OpenInSystem(game_.reportsFolder);
+  }
+  if (!touch_) {
+    ImGui::SameLine();
+  }
+#else
   if (ImGui::Button(Lbl(Tr("Open folder"), "Open folder").c_str())) {
     std::error_code ec;
     fs::create_directories(game_.reportsFolder, ec);
     OpenInSystem(game_.reportsFolder);
   }
-  ImGui::SameLine();
+  SAMELINE_FIT(Tr("Look again"));
+#endif
   if (ImGui::Button(Lbl(Tr("Look again"), "Look again").c_str())) {
     LookAtReports(true);
   }
   if (!game_.logsFolder.empty() || !game_.recordingsFolder.empty()) {
-    ImGui::SameLine();
+    SAMELINE_FIT(Tr("Save my last play session..."));
     if (ImGui::Button(Lbl(Tr("Save my last play session..."), "Save my last play session...").c_str())) {
       sessionOpen_ = true;
       sessionSel_ = 0;
@@ -8519,13 +9893,23 @@ void App::DrawReportsPage() {
     return;
   }
 
-  const float height = ImGui::GetContentRegionAvail().y;
-  const float listWidth = std::max(260 * scale_, ImGui::GetContentRegionAvail().x * 0.38f);
+  float height = ImGui::GetContentRegionAvail().y;
+  float listWidth = std::max(260 * scale_, ImGui::GetContentRegionAvail().x * 0.38f);
+  float listHeight = height;
+  float detailHeight = height;
+#if defined(__ANDROID__)
+  const bool stacked = touch_ && portrait_;
+  if (stacked) {
+    listWidth = 0;
+    listHeight = std::min(height * 0.32f, 6 * (ImGui::GetTextLineHeight() * 2 + 12 * scale_));
+    detailHeight = std::max(height - listHeight - ImGui::GetStyle().ItemSpacing.y, 120 * scale_);
+  }
+#endif
   const auto kindColour = [&](reports::Report::Kind k) {
     return k == reports::Report::Kind::Key ? kBusy : k == reports::Report::Kind::Stuck ? kWarn : kBad;
   };
 
-  ImGui::BeginChild("##reportlist", ImVec2(listWidth, height), ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened);
+  ImGui::BeginChild("##reportlist", ImVec2(listWidth, listHeight), ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened);
   for (const reports::Report& r : reports_) {
     ImGui::PushID(r.name.c_str());
     const bool selected = r.name == reportSel_;
@@ -8557,9 +9941,15 @@ void App::DrawReportsPage() {
     ImGui::PopID();
   }
   ImGui::EndChild();
+#if defined(__ANDROID__)
+  if (!stacked) {
+    ImGui::SameLine(0, 12 * scale_);
+  }
+#else
   ImGui::SameLine(0, 12 * scale_);
+#endif
 
-  ImGui::BeginChild("##report", ImVec2(0, height), ImGuiChildFlags_NavFlattened);
+  ImGui::BeginChild("##report", ImVec2(0, detailHeight), ImGuiChildFlags_NavFlattened);
   const reports::Report* r = SelectedReport();
   if (r == nullptr) {
     Dim(Tr("Choose a report on the left."));
@@ -8630,7 +10020,7 @@ void App::DrawReportsPage() {
         },
         this, window_, kZip, 1, where.c_str());
   }
-  ImGui::SameLine();
+  SAMELINE_FIT(Tr("Delete..."));
   if (ImGui::Button(Lbl(Tr("Delete..."), "Delete...").c_str())) {
     ImGui::OpenPopup("###deletereport");
   }
@@ -8721,7 +10111,11 @@ void App::DrawBottomBar() {
     label = std::max(label, ImGui::CalcTextSize(t).x + 14 * scale_);
   }
   ImGui::PopFont();
+#if defined(__ANDROID__)
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, touch_ ? ImVec2(14 * scale_, 8 * scale_) : ImVec2(18 * scale_, 12 * scale_));
+#else
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18 * scale_, 12 * scale_));
+#endif
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10 * scale_, 5 * scale_));
   ImGui::BeginChild("##bottom", ImVec2(0, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding | ImGuiChildFlags_NavFlattened,
                     ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
@@ -8730,7 +10124,13 @@ void App::DrawBottomBar() {
   const auto Label = [&](const char* text) {
     const float x = ImGui::GetCursorPosX();
     ImGui::PushFont(fonts_.caption);
-    ImGui::AlignTextToFramePadding();
+#if defined(__ANDROID__)
+    if (!touch_) {
+#endif
+      ImGui::AlignTextToFramePadding();
+#if defined(__ANDROID__)
+    }
+#endif
     ImGui::TextColored(kFaint, "%s", text);
     ImGui::PopFont();
     ImGui::SameLine(x + label);
@@ -8765,7 +10165,11 @@ void App::DrawBottomBar() {
     if (path.empty()) {
       ImGui::TextColored(kWarn, "%s", Tr("none chosen"));
     } else {
+#if defined(__ANDROID__)
+      const std::string name = NameOfUriShown(path);
+#else
       const std::string name = Utf8(PathOf(path).filename());
+#endif
       const ImVec4 color = !have ? kBusy
                            : bg_.verdict.kind == DiscVerdict::Kind::Problem ? kBad
                            : bg_.verdict.kind == DiscVerdict::Kind::Warning ? kWarn
@@ -8774,11 +10178,27 @@ void App::DrawBottomBar() {
                           : bg_.verdict.kind == DiscVerdict::Kind::Problem ? Tr("can't be used")
                           : bg_.verdict.kind == DiscVerdict::Kind::Warning ? Tr("changed or damaged")
                                                                           : Tr("OK");
+#if defined(__ANDROID__)
+      std::string shownName = name;
+      if (portrait_) {
+        const std::string tail = std::string(" (") + (have && !bg_.verdict.edition.empty() ? bg_.verdict.edition + ", " : std::string()) + state + ")";
+        const float room = ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize(tail.c_str()).x;
+        while (shownName.size() > 8 && ImGui::CalcTextSize((shownName + "...").c_str()).x > room) {
+          shownName.pop_back();
+        }
+        if (shownName != name) {
+          shownName += "...";
+        }
+      }
+      ImGui::TextColored(color, "%s (%s%s%s)", shownName.c_str(), have && !bg_.verdict.edition.empty() ? bg_.verdict.edition.c_str() : "",
+                         have && !bg_.verdict.edition.empty() ? ", " : "", state);
+#else
       ImGui::TextColored(color, "%s (%s%s%s)", name.c_str(), have && !bg_.verdict.edition.empty() ? bg_.verdict.edition.c_str() : "",
                          have && !bg_.verdict.edition.empty() ? ", " : "", state);
+#endif
     }
   }
-  if (!controller_) {
+  if (!controller_ && !LAUNCHER_PHONE(touch_)) {
     Label(Tr("PRESET"));
     if (registry_.IsOriginal()) {
       ImGui::TextUnformatted(Tr("Original: the game exactly as on the GameCube"));
@@ -8789,6 +10209,7 @@ void App::DrawBottomBar() {
                   Tr(ui::PresetName(registry_.CurrentPreset())), n);
     }
   }
+  CheckAssetStamp();
   if (reviewDirty_) RebuildReview();
   int on = 0, notUsed = 0;
   for (const auto& row : review_.rows) {
@@ -8862,6 +10283,11 @@ void App::DrawBottomBar() {
     }
   }
   if (SlotsOn()) {
+#if defined(__ANDROID__)
+    if (touch_ && !portrait_) {
+      ImGui::SameLine(0, 70 * scale_);
+    }
+#endif
     Label(Tr("SAVE"));
     ImGui::TextUnformatted(slots_.Active().name.c_str());
     for (size_t i = 0; i < slots_.slots.size() && i < slotRows_.size(); i++) {
@@ -8884,10 +10310,22 @@ void App::DrawBottomBar() {
                            ImGui::CalcTextSize(Tr("Keep this window open")).x;
   ImGui::SetCursorPos(ImVec2(right - playWidth - 28 * scale_ - checkWidth,
                              playTop + (playHeight - ImGui::GetFrameHeight()) * 0.5f));
+#if defined(__ANDROID__)
+  if (!touch_ && ImGui::Checkbox(Lbl(Tr("Keep this window open"), "Keep this window open").c_str(), &stay)) {
+    registry_.SetBool(kStaySetting, stay);
+  }
+#else
   if (ImGui::Checkbox(Lbl(Tr("Keep this window open"), "Keep this window open").c_str(), &stay)) {
     registry_.SetBool(kStaySetting, stay);
   }
+#endif
   ImGui::SetCursorPos(ImVec2(right - playWidth, playTop));
+#if defined(__ANDROID__)
+  if (portrait_) {
+    playWidth = right - ImGui::GetStyle().WindowPadding.x;
+    ImGui::SetCursorPos(ImVec2(ImGui::GetStyle().WindowPadding.x, groupBottom + 6 * scale_));
+  }
+#endif
   std::string why;
   const bool shadersPreparing = bg_.preparing && bg_.shadersRunning;
   const bool picturesDrawing = bg_.drawing && !bg_.preparing && !bg_.busy && !playWhenDrawn_;
@@ -8900,6 +10338,11 @@ void App::DrawBottomBar() {
   if (!playable && !gameRunning_ && Hot(ImGuiHoveredFlags_AllowWhenDisabled)) {
     ImGui::SetTooltip("%s", why.c_str());
   }
+#if defined(__ANDROID__)
+  if (portrait_) {
+    ImGui::SetCursorPosY(groupBottom + 6 * scale_ + playHeight + 4 * scale_);
+  } else
+#endif
   ImGui::SetCursorPosY(std::max(groupBottom, playTop + playHeight + 4 * scale_));
   if (!playError_.empty()) {
     ImGui::TextColored(kBad, "%s", playError_.c_str());
@@ -8932,7 +10375,7 @@ void App::DrawBottomBar() {
       std::lock_guard<std::mutex> lock(bg_.mutex);
       text = bg_.verdict.text;
     }
-    ImGui::PushTextWrapPos(560 * scale_);
+    ImGui::PushTextWrapPos(WP(560));
     ImGui::TextUnformatted(Tr(text).c_str());
     ImGui::PopTextWrapPos();
     ImGui::Spacing();
@@ -8954,6 +10397,15 @@ void App::Frame() {
   ImGui::SetNextWindowSize(vp->WorkSize);
   DrawGround();
   const bool ground = GroundIndex() >= 0 && !groundTex_.empty();
+#if defined(__ANDROID__)
+  portrait_ = touch_ && vp->WorkSize.x < vp->WorkSize.y;
+  options_.stacked = portrait_;
+  if (touch_) {
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ground ? ImVec4(0, 0, 0, 0) : kGround);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ground ? ImVec4(kPanel.x, kPanel.y, kPanel.z, 0.76f) : kPanel);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12 * scale_, 8 * scale_));
+  } else
+#endif
   if (ground) {
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0, 0, 0, 0));
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(kPanel.x, kPanel.y, kPanel.z, 0.76f));
@@ -8965,10 +10417,26 @@ void App::Frame() {
   DrawHeader();
   promptH_ = controller_ ? 46 * scale_ : 0.0f;
   const bool message = !playError_.empty() || !saveError_.empty() || gameRunning_ || (bg_.preparing && bg_.shadersRunning) || (bg_.drawing && !bg_.preparing && !bg_.busy && !playWhenDrawn_) || (controller_ && !playWhy_.empty());
+#if defined(__ANDROID__)
+  const int rows = (SlotsOn() ? 4 : 3) - ((controller_ || LAUNCHER_PHONE(touch_)) ? 1 : 0) - (touch_ && SlotsOn() ? 1 : 0) + (LanguageRowOn() ? 1 : 0);
+#else
   const int rows = (SlotsOn() ? 4 : 3) - (controller_ ? 1 : 0) + (LanguageRowOn() ? 1 : 0);
+#endif
+#if defined(__ANDROID__)
+  const int phoneRows = touch_ ? 2 + (SlotsOn() ? 1 : 0) : 0;
+  const int textRows = portrait_ ? phoneRows : phoneRows - (SlotsOn() ? 1 : 0);
+  const float textRowsH = textRows * ImGui::GetTextLineHeight() + (textRows - 1) * 5 * scale_;
+  const float bottom = touch_ ? (portrait_ ? textRowsH + (6 + 56) * scale_ : std::max(textRowsH, 56 * scale_)) +
+                                    (2 * 8 + 4 + 6) * scale_ +
+                                    ImGui::GetStyle().ItemSpacing.y + (message ? ImGui::GetTextLineHeightWithSpacing() : 0.0f)
+                              : rows * ImGui::GetFrameHeight() + ((rows - 1) * 5 + 2 * 12 + 4 + 6) * scale_ +
+                                    ImGui::GetStyle().ItemSpacing.y + (message ? ImGui::GetTextLineHeightWithSpacing() : 0.0f) +
+                                    std::max(0.0f, promptH_ - ImGui::GetStyle().WindowPadding.y);
+#else
   const float bottom = rows * ImGui::GetFrameHeight() + ((rows - 1) * 5 + 2 * 12 + 4 + 6) * scale_ +
                        ImGui::GetStyle().ItemSpacing.y + (message ? ImGui::GetTextLineHeightWithSpacing() : 0.0f) +
                        std::max(0.0f, promptH_ - ImGui::GetStyle().WindowPadding.y);
+#endif
   const float height = ImGui::GetContentRegionAvail().y - bottom;
   PadShortcuts();
   if (BackPressed() && !ImGui::IsAnyItemActive() &&
@@ -8982,10 +10450,23 @@ void App::Frame() {
   if (enterDelay_ > 0 && --enterDelay_ == 0) {
     enterPage_ = true;
   }
+#if defined(__ANDROID__)
+  float pageHeight = height;
+  if (portrait_) {
+    DrawNavTop();
+    pageHeight = ImGui::GetContentRegionAvail().y - bottom;
+  } else {
+    DrawNav(height);
+    ImGui::SameLine(0, 14 * scale_);
+  }
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, touch_ ? ImVec2(14 * scale_, 12 * scale_) : ImVec2(26 * scale_, 22 * scale_));
+  ImGui::BeginChild("##page", ImVec2(0, pageHeight),
+#else
   DrawNav(height);
   ImGui::SameLine(0, 14 * scale_);
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(26 * scale_, 22 * scale_));
   ImGui::BeginChild("##page", ImVec2(0, height),
+#endif
                     ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding | ImGuiChildFlags_NavFlattened, 0);
   ImGui::PopStyleVar();
   if (enterPage_) {
@@ -9009,6 +10490,10 @@ void App::Frame() {
   DrawNotOpenedWindow();
   DrawDataWindows();
   DrawWelcomeWindow();
+#if defined(__ANDROID__)
+  DrawFirstStart();
+#else
+#endif
   DrawUpdateWindows();
   modUpd_.Poll();
   DrawModUpdateWindows();
@@ -9019,6 +10504,12 @@ void App::Frame() {
     pad::WarnAboutChildWindows();
   }
   ImGui::End();
+#if defined(__ANDROID__)
+  if (touch_) {
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar();
+  } else
+#endif
   if (ground) {
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar();
@@ -9076,8 +10567,18 @@ int App::Run() {
       controller_ = (deck != nullptr && std::string(deck) == "1") || std::getenv("GAMESCOPE_WAYLAND_DISPLAY") != nullptr ||
                     (desktop != nullptr && Lower(desktop).find("gamescope") != std::string::npos);
     }
+#if defined(__ANDROID__)
+    touch_ = true;
+    SDL_SetHint(SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1");
+#endif
+#if defined(__ANDROID__)
+    scale_ = baseScale_ * (controller_ ? kControllerScale : 1.0f) * (touch_ ? kTouchScale : 1.0f);
+    focusPage_ = controller_;
+#else
     scale_ = baseScale_ * (controller_ ? kControllerScale : 1.0f);
     focusPage_ = controller_;
+#endif
+
   }
   const std::string title = (game_.windowTitle.empty() ? game_.title : game_.windowTitle) +
                             (game_.updates.version.empty() ? std::string() : " " + game_.updates.version) +
@@ -9088,7 +10589,10 @@ int App::Run() {
     Log("no window: " + std::string(SDL_GetError()));
     return 1;
   }
+#if defined(__ANDROID__)
+#else
   SDL_SetWindowMinimumSize(window_, static_cast<int>(820 * baseScale_), static_cast<int>(560 * baseScale_));
+#endif
   renderer_ = SDL_CreateRenderer(window_, nullptr);
   if (renderer_ == nullptr) {
     Log("no renderer: " + std::string(SDL_GetError()));
@@ -9134,9 +10638,16 @@ int App::Run() {
   io.IniFilename = nullptr;
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad;
   ApplyStyle(scale_);
+#if defined(__ANDROID__)
+  if (touch_) TouchStyle(scale_);
+#endif
   fonts_ = LoadFonts(scale_);
   options_.headingFont = fonts_.heading;
   options_.textInput = [](const char* label, std::string* text) { return pad::InputText(label, text); };
+  options_.afterRowUser = this;
+  options_.afterRow = [](void* user, const std::string& id) {
+    if (id == "system.stream_overlay_look") static_cast<App*>(user)->DrawOverlayHelpRow();
+  };
   ImGui_ImplSDL3_InitForSDLRenderer(window_, renderer_);
   ImGui_ImplSDLRenderer3_Init(renderer_);
   ImGui_ImplSDL3_SetGamepadMode(ImGui_ImplSDL3_GamepadMode_Manual, nullptr, 0);
@@ -9184,6 +10695,19 @@ int App::Run() {
       StartUpdateCheck(false);
     }
   }
+#if defined(__ANDROID__)
+  {
+    const char* w = std::getenv("XD_LAUNCHER_WIZARD");
+    const bool want = w != nullptr ? w[0] == '1' : script_.empty();
+    if (touch_ && want && !wizardDone_ && !game_.playerFilesReadOnly && (DiscPath().empty() || !settingsFileFound_)) {
+      wizard_ = true;
+      wizardStep_ = DiscPath().empty() ? 0 : 1;
+      Log("first start: the phone's questions");
+    } else if (touch_ && !wizardDone_) {
+      wizardDone_ = true;
+    }
+  }
+#endif
   Log(script_.empty() ? "ready" : "ready; " + std::to_string(script_.size()) + " script steps");
 
   while (!quit_) {
@@ -9211,18 +10735,57 @@ int App::Run() {
             windowsPadsAt_ = 0;
           }
           break;
+#if defined(__ANDROID__)
+        case SDL_EVENT_WINDOW_FOCUS_LOST:
+        case SDL_EVENT_WINDOW_FOCUS_GAINED:
+        case SDL_EVENT_DID_ENTER_FOREGROUND:
+          if (touch_) {
+            drag_ = Drag();
+            ImGuiIO& io = ImGui::GetIO();
+            io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
+            io.AddMouseButtonEvent(0, false);
+            io.AddFocusEvent(e.type == SDL_EVENT_WINDOW_FOCUS_GAINED || e.type == SDL_EVENT_DID_ENTER_FOREGROUND);
+            ImGui::ClearActiveID();
+          }
+          break;
+#endif
         case SDL_EVENT_MOUSE_MOTION:
+#if defined(__ANDROID__)
+          if (touch_) {
+            TouchDrag(e, toImGui);
+          }
+#endif
           if (!controllerFixed_ && controller_ && std::fabs(e.motion.xrel) + std::fabs(e.motion.yrel) >= 3.0f) {
             SetController(false);
           }
           break;
+#if defined(__ANDROID__)
+        case SDL_EVENT_MOUSE_BUTTON_UP:
+          TouchDrag(e, toImGui);
+          break;
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        case SDL_EVENT_MOUSE_WHEEL:
+          if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+            TouchDrag(e, toImGui);
+          }
+          break;
+#else
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
         case SDL_EVENT_MOUSE_WHEEL:
           if (!controllerFixed_) {
             SetController(false);
           }
           break;
+#endif
         case SDL_EVENT_KEY_DOWN:
+#if defined(__ANDROID__)
+          if (e.key.scancode == SDL_SCANCODE_AC_BACK) {
+            ImGui::GetIO().AddKeyEvent(ImGuiKey_Escape, true);
+            backUpFrames_ = 2;
+            toImGui = false;
+            break;
+          }
+#endif
           if (!e.key.repeat && !controllerFixed_ && !controls_.Listening() && !controls_.Testing()) {
             SetController(false);
           }
@@ -9240,6 +10803,9 @@ int App::Run() {
           break;
         case SDL_EVENT_KEY_UP:
           toImGui = !controls_.Listening() && !controls_.Testing();
+#if defined(__ANDROID__)
+          toImGui = toImGui && e.key.scancode != SDL_SCANCODE_AC_BACK;
+#endif
           break;
         case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
           if (controls_.Listening()) {
@@ -9294,6 +10860,16 @@ int App::Run() {
         modToolPickDone_ = nullptr;
         if (done) done(modToolPicked_);
       }
+#if defined(__ANDROID__)
+      if (extraZipPickedReady_) {
+        extraZipPickedReady_ = false;
+        extraZipWork_ = extraZipPicked_;
+      }
+      if (modImportPickedReady_) {
+        modImportPickedReady_ = false;
+        modImportWork_ = modImportPicked_;
+      }
+#endif
       if (modPickedReady_) {
         modPickedReady_ = false;
         auto done = std::move(modPickDone_);
@@ -9323,6 +10899,26 @@ int App::Run() {
         std::swap(file, slotPicked_);
         std::swap(kind, slotPickedKind_);
       }
+#if defined(__ANDROID__)
+      if (!extraZipWork_.empty()) {
+        const std::string zip = std::move(extraZipWork_);
+        extraZipWork_.clear();
+        ImportExtraZip(zip);
+      }
+      if (extraZipDone_.exchange(false)) {
+        if (extraZipThread_.joinable()) {
+          extraZipThread_.join();
+        }
+        for (int i = 0; i < static_cast<int>(extras_.size()); i++) {
+          ExtraLook(i);
+        }
+      }
+      if (!modImportWork_.empty()) {
+        const std::string zip = std::move(modImportWork_);
+        modImportWork_.clear();
+        ImportModZip(zip);
+      }
+#endif
       {
         std::string dataFolder;
         {
@@ -9365,6 +10961,13 @@ int App::Run() {
     RunScript();
     FollowLanguage();
 
+#if defined(__ANDROID__)
+    if (backUpFrames_ > 0 && --backUpFrames_ == 0) {
+      io.AddKeyEvent(ImGuiKey_Escape, false);
+    }
+    TouchFling();
+    AndroidFlush();
+#endif
     ImGui_ImplSDLRenderer3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
     osk_.Update(padIn_, io, controller_ && io.WantTextInput && !controls_.Listening(), SDL_GetTicks());
@@ -9388,6 +10991,11 @@ int App::Run() {
   }
 
   SaveSettingsIfChanged();
+#if defined(__ANDROID__)
+  if (extraZipThread_.joinable()) {
+    extraZipThread_.join();
+  }
+#endif
   StopWorker();
   StopUpdate();
   if (gameProcess_ != nullptr) {
@@ -9425,7 +11033,11 @@ int App::Run() {
   }
   SDL_DestroyRenderer(renderer_);
   SDL_DestroyWindow(window_);
+#if defined(__ANDROID__)
+  SDL_QuitSubSystem(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD);
+#else
   SDL_Quit();
+#endif
   Log("closed");
   return 0;
 }
@@ -9436,5 +11048,9 @@ int Run(const GameInfo& game) {
   App app(game);
   return app.Run();
 }
+
+#if defined(__ANDROID__)
+bool PlayRequested() { return sPlayRequested; }
+#endif
 
 }

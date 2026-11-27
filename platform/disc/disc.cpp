@@ -1,6 +1,7 @@
 #include "port_disc.h"
 
 #include <nod.h>
+#include "disc_open.h"
 
 #include <cctype>
 #include <cstdio>
@@ -89,7 +90,7 @@ extern "C" {
 bool PortDisc_Open(const char* path, char* error, size_t errorSize) {
   PortDisc_Close();
 
-  if (nod_disc_open(path, nullptr, &sDisc) != NOD_RESULT_OK) {
+  if (PortDisc_NodOpen(path, nullptr, &sDisc) != NOD_RESULT_OK) {
     set_error(error, errorSize, "Could not open the disc image");
     sDisc = nullptr;
     return false;

@@ -67,7 +67,12 @@ int main() {
   CHECK(Cycle(r, "team", 1, pack) && r.team == "offer" && Find(SettingRows(r, pack), "d_offer"));
 
   r = DefaultRoom();
+  CHECK(Find(SettingRows(r, pack), "edited") == nullptr);
   CHECK(Cycle(r, "shadow", 1, pack) && r.shadowAllowed && Find(SettingRows(r, pack), "obey"));
+  {
+    CHECK(Find(SettingRows(r, pack), "edited") == nullptr);
+    CHECK(!Cycle(r, "edited", 1, pack) && !r.editedShadows);
+  }
 
   r = DefaultRoom();
   CHECK(Cycle(r, "style", 1, pack) && r.style == "double");

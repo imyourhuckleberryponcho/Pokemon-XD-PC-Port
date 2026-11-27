@@ -4,19 +4,22 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <map>
+#include <set>
 #include <string>
 #include <vector>
 
 namespace xd::online {
 
 constexpr int kExtrasProtocol = 3;
-constexpr int kBattleProtocol = 5;
+constexpr int kBattleProtocol = 6;
 
 struct RoomRules {
   std::string ruleSet = "classic";
   std::string items = "none";
   int timerSeconds = 0;
   bool shadowAllowed = false;
+  bool editedShadows = false;
   std::string shadowObey = "story";
   std::string level = "asis";
   std::string team = "preset";
@@ -50,6 +53,7 @@ int RoomMaxGen(const RoomRules& r);
 
 struct Capabilities {
   int protocol = kBattleProtocol;
+  std::string version;
   std::string disc = "GXXE01";
   std::string edition = "xd";
   std::string ruleSet = "classic";
@@ -63,6 +67,8 @@ struct Capabilities {
   std::string knownRuleSets = "xd,gen4,gen5,gen6,gen7";
   int knownMaxGen = 4;
   std::string knownFormats;
+  std::map<std::string, std::string> modAssets;
+  std::set<std::string> modsBlocked;
 };
 
 struct Fingerprint {
@@ -86,6 +92,7 @@ struct Verdict {
   bool NeedsRestart() const { return !restart.empty(); }
 };
 Verdict Judge(const Capabilities& room, const RoomRules& rules, const Capabilities& mine, bool joiner);
+std::string VersionLabel(const Capabilities& c);
 
 int ActionNumbers(const std::string& text);
 

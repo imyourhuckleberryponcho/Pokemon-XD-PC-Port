@@ -21,6 +21,7 @@ std::vector<std::string> TestSwitch();
 void SetActive(const std::vector<std::string>& ids, const char* why);
 bool Active(const char* id);
 bool AnyActive();
+std::string ActiveIds();
 
 bool RefusePress(const void* activeWindow, unsigned newButtons, std::string& message);
 

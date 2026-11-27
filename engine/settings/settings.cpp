@@ -2,7 +2,7 @@
 #include "settings_c.h"
 
 #include <charconv>
-#if defined(__APPLE__) || defined(PORT_TEST_MAC_HALVES)
+#if defined(__APPLE__) || defined(__ANDROID__) || defined(PORT_TEST_MAC_HALVES)
 #include <port_mac_from_chars.h>
 #endif
 #include <cstdio>
@@ -543,7 +543,7 @@ bool Registry::ParseValue(const Definition& def, std::string_view text, Value& o
     break;
   }
   case Type::Float: {
-#if defined(__APPLE__) || defined(PORT_TEST_MAC_HALVES)
+#if defined(__APPLE__) || defined(__ANDROID__) || defined(PORT_TEST_MAC_HALVES)
     const auto r = port_mac::from_chars(text.data(), text.data() + text.size(), out.f);
 #else
     const auto r = std::from_chars(text.data(), text.data() + text.size(), out.f);

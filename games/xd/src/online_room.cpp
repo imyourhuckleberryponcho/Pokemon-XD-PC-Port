@@ -172,6 +172,7 @@ bool ParseRules(const std::string& text, RoomRules& out, std::string* error) {
     else if (k == "items") r.items = v;
     else if (k == "timer") r.timerSeconds = std::atoi(v.c_str());
     else if (k == "shadow") r.shadowAllowed = v == "on" || v == "1";
+    else if (k == "shadow_edited") r.editedShadows = v == "on" || v == "1";
     else if (k == "shadow_obey") r.shadowObey = v;
     else if (k == "level") r.level = v;
     else if (k == "team") r.team = v;
@@ -202,6 +203,7 @@ std::string RulesKeyText(const RoomRules& r) {
   std::ostringstream o;
   o << "rules=" << r.ruleSet << ";items=" << r.items << ";timer=" << r.timerSeconds << ";shadow=" << (r.shadowAllowed ? "on" : "off") << ";shadow_obey=" << r.shadowObey
     << ";level=" << r.level << ";team=" << r.team << ";style=" << r.style << ";split=" << (r.split ? "on" : "off");
+  if (r.editedShadows) o << ";shadow_edited=on";
   if (!r.draft.empty()) o << ";draft=" << r.draft;
   o << ExtrasKeyText(r);
   return o.str();
@@ -215,7 +217,7 @@ std::string RulesText(const RoomRules& r, const std::string& edition) {
   if (r.timerSeconds == 0) o << "no limit"; else o << r.timerSeconds << " s";
   o << "; Shadow Pokemon: ";
   if (!r.shadowAllowed) o << "not allowed";
-  else o << "allowed, " << (r.shadowObey == "story" ? "they may refuse orders" : "they obey like purified ones");
+  else o << "allowed, " << (r.shadowObey == "story" ? "they may refuse orders" : "they obey like purified ones") << (r.editedShadows ? ", also the ones made with the save editor" : "");
   o << "; levels: ";
   if (r.level == "asis") o << "as they are";
   else if (r.level.compare(0, 4, "all:") == 0) o << "all set to " << r.level.substr(4);
@@ -239,6 +241,7 @@ std::vector<uint8_t> Encode(const Fingerprint& f) {
     o << "XDB1\n";
     o << "proto=" << (NeedsExtras(f.rules) ? 3 : NeedsNewProtocol(f.rules) ? 2 : 1) << "\n";
     o << "cap=" << f.caps.protocol << "\n";
+    if (!f.caps.version.empty()) o << "ver=" << f.caps.version << "\n";
     o << "disc=" << f.caps.disc << "\n";
     o << "edition=" << f.caps.edition << "\n";
     o << "loaded=" << f.caps.ruleSet << "\n";
@@ -255,6 +258,7 @@ std::vector<uint8_t> Encode(const Fingerprint& f) {
     o << "r.timer=" << f.rules.timerSeconds << "\n";
     o << "r.shadow=" << (f.rules.shadowAllowed ? 1 : 0) << "\n";
     o << "r.obey=" << f.rules.shadowObey << "\n";
+    if (f.rules.editedShadows) o << "r.edsh=1\n";
     o << "r.level=" << f.rules.level << "\n";
     o << "r.team=" << f.rules.team << "\n";
     o << "r.split=" << (f.rules.split ? 1 : 0) << "\n";
@@ -291,6 +295,7 @@ bool Decode(const std::vector<uint8_t>& blob, Fingerprint& out) {
   Fingerprint f;
   f.caps.protocol = kv.count("cap") ? std::atoi(get("cap").c_str()) : std::atoi(get("proto").c_str());
   f.caps.disc = get("disc");
+  f.caps.version = get("ver").substr(0, 16);
   f.caps.edition = kv.count("edition") ? get("edition") : std::string("xd");
   f.caps.ruleSet = get("loaded");
   f.caps.gen4Pack = get("pack");
@@ -305,6 +310,7 @@ bool Decode(const std::vector<uint8_t>& blob, Fingerprint& out) {
   f.rules.timerSeconds = std::atoi(get("r.timer").c_str());
   f.rules.shadowAllowed = get("r.shadow") == "1";
   f.rules.shadowObey = get("r.obey");
+  f.rules.editedShadows = get("r.edsh") == "1";
   f.rules.level = get("r.level");
   f.rules.team = get("r.team");
   f.rules.draft = get("r.draft");
@@ -357,6 +363,14 @@ std::set<std::string> ModSet(const std::string& mods) {
 
 }
 
+std::string VersionLabel(const Capabilities& c) {
+  if (!c.version.empty()) return c.version;
+  if (c.protocol >= 6) return "0.8.0 or newer";
+  if (c.protocol == 5) return "0.7.7";
+  if (c.protocol == 4) return "0.7.5 or 0.7.6";
+  return "0.7.4 or older";
+}
+
 Verdict Judge(const Capabilities& room, const RoomRules& rules, const Capabilities& mine, bool joiner) {
   Verdict v;
   const std::string they = joiner ? "The room" : "Your friend's game";
@@ -371,12 +385,13 @@ Verdict Judge(const Capabilities& room, const RoomRules& rules, const Capabiliti
   }
   const bool newKind = NeedsNewProtocol(rules);
   const int needed = NeedsExtras(rules) ? 3 : newKind ? 2 : 1;
-  const bool known = room.protocol >= 1 && room.protocol <= 5 && mine.protocol >= 1 && mine.protocol <= 5 &&
+  const bool known = room.protocol >= 1 && room.protocol <= kBattleProtocol && mine.protocol >= 1 && mine.protocol <= kBattleProtocol &&
                      (room.protocol >= 4) == (mine.protocol >= 4) && (room.protocol < 4 || room.protocol == mine.protocol);
   const bool compatible = known && mine.protocol >= needed && room.protocol >= needed;
   if (!compatible && room.protocol != mine.protocol && (room.protocol >= 4 || mine.protocol >= 4)) {
-    v.refuse.push_back(joiner ? "The room was made by another version of the game (its battles are not the same as yours). Both players need the same game version: update the game, or ask your friend to."
-                              : "Your friend's game is another version from yours (its battles are not the same as yours). Both players need the same game version: ask them to update the game, or update yours.");
+    const std::string theirV = VersionLabel(joiner ? room : mine), myV = VersionLabel(joiner ? mine : room);
+    v.refuse.push_back(std::string(joiner ? "This room's game is another version (" : "Your friend's game is another version (") + theirV + "). You have " + myV +
+                       ". Both players need the same game version.");
     return v;
   }
   if (!compatible && room.protocol != mine.protocol) {
@@ -464,8 +479,27 @@ Verdict Judge(const Capabilities& room, const RoomRules& rules, const Capabiliti
     std::set<std::string> missing, extra;
     std::set_difference(a.begin(), a.end(), b.begin(), b.end(), std::inserter(missing, missing.end()));
     std::set_difference(b.begin(), b.end(), a.begin(), a.end(), std::inserter(extra, extra.end()));
-    if (!missing.empty()) v.refuse.push_back(they + " uses mods that " + you + " does not have: " + ListText(missing) + ".");
-    else if (!extra.empty()) v.restart.push_back(std::string(joiner ? "The game restarts without the mods the room does not use: " : "Your friend's game restarts without: ") + ListText(extra) + ".");
+    std::set<std::string> blocked;
+    for (const std::string& id : missing) {
+      if (joiner && mine.modsBlocked.count(id)) blocked.insert(id);
+    }
+    for (const std::string& id : blocked) missing.erase(id);
+    for (const std::string& id : blocked) {
+      const auto it = mine.modAssets.find(id);
+      v.refuse.push_back("The room uses the mod " + id + ", which is on your PC but needs extra assets of your own that are not ready" +
+                         (it != mine.modAssets.end() ? " (" + it->second + ")" : std::string()) +
+                         ". Make them on the launcher's Extra assets page, then join again.");
+    }
+    if (!missing.empty()) {
+      std::string needs;
+      if (!joiner) {
+        for (const std::string& id : missing) {
+          const auto it = room.modAssets.find(id);
+          if (it != room.modAssets.end()) needs += (needs.empty() ? " " : " ") + id + " needs your own " + it->second + " (the launcher's Extra assets page makes it).";
+        }
+      }
+      v.refuse.push_back(they + " uses mods that " + you + " does not have: " + ListText(missing) + "." + needs);
+    } else if (!extra.empty()) v.restart.push_back(std::string(joiner ? "The game restarts without the mods the room does not use: " : "Your friend's game restarts without: ") + ListText(extra) + ".");
   }
   if (!mine.randomizer.empty()) {
     v.restart.push_back(std::string(joiner ? "The game restarts without your randomizer" : "Your friend's game restarts without their randomizer") +

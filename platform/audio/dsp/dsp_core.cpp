@@ -1242,6 +1242,78 @@ GcDsp* GcDsp_Create(const GcDspHost* host) {
 }
 void GcDsp_Destroy(GcDsp* dsp) { delete dsp; }
 GcDsp* GcDsp_Clone(const GcDsp* dsp) { return new GcDsp(*dsp); }
+namespace {
+struct DspRaw {
+  uint16_t iram[0x1000], dram[0x1000];
+  GcDsp::RegFile rf;
+  uint16_t stack[4][32];
+  uint8_t stackPtr[4];
+  int64_t ac[2];
+  uint16_t pc;
+  uint16_t hw[256];
+  uint32_t dspMail, cpuMail;
+  uint16_t control;
+  uint8_t pending;
+  uint32_t acsa, acea, acca;
+  bool accStopped;
+  uint32_t iramGen;
+  uint32_t portRomState[16];
+  bool waitingForCpu;
+};
+}
+size_t GcDsp_StateSize(void) { return sizeof(DspRaw); }
+void GcDsp_StateGet(const GcDsp* d, uint8_t* out) {
+  DspRaw r;
+  std::memset(&r, 0, sizeof r);
+  std::memcpy(r.iram, d->iram, sizeof r.iram);
+  std::memcpy(r.dram, d->dram, sizeof r.dram);
+  r.rf = d->rf;
+  std::memcpy(r.stack, d->stack, sizeof r.stack);
+  std::memcpy(r.stackPtr, d->stackPtr, sizeof r.stackPtr);
+  r.ac[0] = d->ac[0];
+  r.ac[1] = d->ac[1];
+  r.pc = d->pc;
+  std::memcpy(r.hw, d->hw, sizeof r.hw);
+  r.dspMail = d->dspMail;
+  r.cpuMail = d->cpuMail;
+  r.control = d->control;
+  r.pending = d->pending;
+  r.acsa = d->acsa;
+  r.acea = d->acea;
+  r.acca = d->acca;
+  r.accStopped = d->accStopped;
+  r.iramGen = d->iramGen;
+  std::memcpy(r.portRomState, d->portRomState, sizeof r.portRomState);
+  r.waitingForCpu = d->waitingForCpu;
+  std::memcpy(out, &r, sizeof r);
+}
+bool GcDsp_StateSet(GcDsp* d, const uint8_t* in, size_t size) {
+  if (size != sizeof(DspRaw)) return false;
+  DspRaw r;
+  std::memcpy(&r, in, sizeof r);
+  std::memcpy(d->iram, r.iram, sizeof r.iram);
+  std::memcpy(d->dram, r.dram, sizeof r.dram);
+  d->rf = r.rf;
+  std::memcpy(d->stack, r.stack, sizeof r.stack);
+  std::memcpy(d->stackPtr, r.stackPtr, sizeof r.stackPtr);
+  d->ac[0] = r.ac[0];
+  d->ac[1] = r.ac[1];
+  d->pc = r.pc;
+  std::memcpy(d->hw, r.hw, sizeof r.hw);
+  d->dspMail = r.dspMail;
+  d->cpuMail = r.cpuMail;
+  d->control = r.control;
+  d->pending = r.pending;
+  d->acsa = r.acsa;
+  d->acea = r.acea;
+  d->acca = r.acca;
+  d->accStopped = r.accStopped;
+  d->iramGen = r.iramGen + 1;
+  std::memcpy(d->portRomState, r.portRomState, sizeof r.portRomState);
+  d->waitingForCpu = r.waitingForCpu;
+  for (auto& k : d->kcache) k = GcDsp::KCache{};
+  return true;
+}
 void GcDsp_SetHost(GcDsp* dsp, const GcDspHost* host) { dsp->host = *host; }
 void GcDsp_SetNative(GcDsp* dsp, bool on) { dsp->native = on; }
 bool GcDsp_NativeOn(const GcDsp* dsp) { return dsp->native; }

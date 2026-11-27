@@ -1,7 +1,14 @@
 #include "gsthread_port.h"
+#include "port_ctx.h"
+#include "gsthread_coro.h"
 
 #include <sys/mman.h>
+#ifndef __ANDROID__
 #include <ucontext.h>
+#endif
+#ifdef __ANDROID__
+#include "port_android_compat.h"
+#endif
 
 #include <cstdio>
 #include <cstdlib>
@@ -9,8 +16,21 @@
 
 namespace {
 
+#ifdef __ANDROID__
+constexpr bool kOnlyPortCtx = true;
+#else
+constexpr bool kOnlyPortCtx = false;
+#endif
+bool use_port_ctx() {
+  static const bool on = kOnlyPortCtx || (std::getenv("XD_PORT_CTX") != nullptr && std::getenv("XD_PORT_CTX")[0] == '1');
+  return on;
+}
+
 struct Task {
+#ifndef __ANDROID__
   ucontext_t context{};
+#endif
+  PortCtx ctx = nullptr;
   void* stack = nullptr;
   size_t stackSize = 0;
   bool made = false;
@@ -20,7 +40,10 @@ struct Task {
 };
 
 std::unordered_map<void*, Task> sTasks;
+#ifndef __ANDROID__
 ucontext_t sSchedulerContext;
+#endif
+PortCtx sSchedulerCtx = nullptr;
 bool sSchedulerRunning = false;
 Task* sStarting = nullptr;
 Task* sCurrent = nullptr;
@@ -56,11 +79,12 @@ void free_stack(Task& t) {
 extern "C" {
 
 void PortGSthread_Create(void* thread, void* entry, PortGSthreadExit exitFunc, uint32_t stackSize) {
+  if (gscoro::On()) return gscoro::Create(thread, entry, exitFunc, stackSize);
   PortGSthread_Destroy(thread);
   Task& t = sTasks[thread];
   t.entry = reinterpret_cast<PortGSthreadEntry>(entry);
   t.exitFunc = exitFunc;
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(__ANDROID__)
   constexpr size_t kReserve = 0x100000, kGuard = 0x4000;
 #else
   constexpr size_t kReserve = 0x100000, kGuard = 0x1000;
@@ -75,17 +99,25 @@ void PortGSthread_Create(void* thread, void* entry, PortGSthreadExit exitFunc, u
   }
   mprotect(stack, kGuard, PROT_NONE);
   t.stack = stack;
-  if (getcontext(&t.context) != 0) {
-    fatal("getcontext failed");
+  if (use_port_ctx()) {
+    t.ctx = PortCtx_Make(static_cast<char*>(t.stack) + kGuard, usable, task_start);
   }
-  t.context.uc_stack.ss_sp = static_cast<char*>(t.stack) + kGuard;
-  t.context.uc_stack.ss_size = usable;
-  t.context.uc_link = nullptr;
-  makecontext(&t.context, task_start, 0);
+#ifndef __ANDROID__
+  else {
+    if (getcontext(&t.context) != 0) {
+      fatal("getcontext failed");
+    }
+    t.context.uc_stack.ss_sp = static_cast<char*>(t.stack) + kGuard;
+    t.context.uc_stack.ss_size = usable;
+    t.context.uc_link = nullptr;
+    makecontext(&t.context, task_start, 0);
+  }
+#endif
   t.made = true;
 }
 
 void PortGSthread_SetArg(void* thread, int index, uintptr_t value) {
+  if (gscoro::On()) return gscoro::SetArg(thread, index, value);
   auto it = sTasks.find(thread);
   if (it == sTasks.end() || index < 0 || index >= PORT_GSTHREAD_MAX_ARGS) {
     fatal("start-up value for an unknown task, or too many");
@@ -94,20 +126,29 @@ void PortGSthread_SetArg(void* thread, int index, uintptr_t value) {
 }
 
 void PortGSthread_Run(void* thread) {
+  if (gscoro::On()) return gscoro::Run(thread);
   auto it = sTasks.find(thread);
   if (it == sTasks.end()) {
     fatal("run of an unknown task");
   }
   sSchedulerRunning = true;
   sStarting = &it->second;
-  ucontext_t* from = sCurrent != nullptr ? &sCurrent->context : &sSchedulerContext;
+  Task* const previous = sCurrent;
   sCurrent = &it->second;
+  if (use_port_ctx()) {
+    PortCtx_Swap(previous != nullptr ? &previous->ctx : &sSchedulerCtx, it->second.ctx);
+    return;
+  }
+#ifndef __ANDROID__
+  ucontext_t* from = previous != nullptr ? &previous->context : &sSchedulerContext;
   swapcontext(from, &it->second.context);
+#endif
 }
 
 void (*PortGSthread_SwitchOutHook)(void) = nullptr;
 
 void PortGSthread_SwitchToScheduler(void) {
+  if (gscoro::On()) return gscoro::SwitchToScheduler(PortGSthread_SwitchOutHook);
   if (!sSchedulerRunning || sCurrent == nullptr) {
     fatal("switch with no scheduler running");
   }
@@ -116,10 +157,17 @@ void PortGSthread_SwitchToScheduler(void) {
   }
   Task* me = sCurrent;
   sCurrent = nullptr;
+  if (use_port_ctx()) {
+    PortCtx_Swap(&me->ctx, sSchedulerCtx);
+    return;
+  }
+#ifndef __ANDROID__
   swapcontext(&me->context, &sSchedulerContext);
+#endif
 }
 
 void PortGSthread_Destroy(void* thread) {
+  if (gscoro::On()) return gscoro::Destroy(thread);
   auto it = sTasks.find(thread);
   if (it == sTasks.end()) {
     return;

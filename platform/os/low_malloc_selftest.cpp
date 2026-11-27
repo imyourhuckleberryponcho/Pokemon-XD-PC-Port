@@ -1,4 +1,4 @@
-#if defined(__APPLE__) || defined(PORT_TEST_MAC_HALVES)
+#if defined(__APPLE__) || defined(__ANDROID__) || defined(PORT_TEST_MAC_HALVES)
 
 #include "port_low_arena.h"
 

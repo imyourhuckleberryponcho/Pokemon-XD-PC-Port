@@ -116,6 +116,10 @@ bool load_back(const em::DataCatalog& cat, const xr::Result& r, size_t& changes,
   bool clean = true;
   for (const em::Message& m : messages) {
     if (m.level == em::Message::Level::Info) continue;
+    if (m.text.rfind("Conflict: the mods \"Gen ", 0) == 0 && m.text.find("\" and \"Randomizer\" both change ") != std::string::npos) {
+      changes++;
+      continue;
+    }
     report += m.text + "\n";
     clean = false;
   }
@@ -361,6 +365,7 @@ int run_selftest(const em::DataCatalog& cat) {
       bool seedOnly = true;
       xr::ApplyStyle(expect, o.style);
       expect.Set(sc, "tm_moves", 0);
+      expect.Set(sc, "items.named", 0);
       const bool decoded = er::DecodeCode(sc, o.code, s, seedOnly, error);
       check(decoded && !seedOnly && s.seed == o.seed && s.values == expect.values && s.Get(sc, "tm_moves") == 0,
             std::string("version-1 code ") + o.code + " still read: the old style's switches, TM moves off");
@@ -371,7 +376,12 @@ int run_selftest(const em::DataCatalog& cat) {
       const bool made = xr::Generate(cat, read_disc_entry, s, r, error);
       check(made && r.code == o.code && r.mod.tables.count("item_waza_machine_no") == 0 && r.mod.tables.count("item_data_prime") == 0,
             "its game has the disc's TM moves");
-      xr::Result now = make(o.style, o.seed);
+      er::Settings nowSettings;
+      xr::ApplyStyle(nowSettings, o.style);
+      nowSettings.Set(sc, "items.named", 0);
+      nowSettings.seed = o.seed;
+      xr::Result now;
+      xr::Generate(cat, read_disc_entry, nowSettings, now, error);
       now.mod.tables.erase("item_waza_machine_no");
       now.mod.tables.erase("item_data_prime");
       check(made && r.mod.ToJson("x") == now.mod.ToJson("x"), "and every other number as this build's style makes it");
@@ -553,9 +563,9 @@ int run_selftest(const em::DataCatalog& cat) {
       bool seedOnly = true;
       const bool decoded = er::DecodeCode(sc, o.code, s, seedOnly, error);
       check(decoded && !seedOnly && s.seed == o.seed && s.Get(sc, "trainer_levels") == 0 && s.Get(sc, "trainer_items") == 0 &&
-                s.Get(sc, "trainer_natures") == 0 && xr::StyleOf(s) == o.style,
+                s.Get(sc, "trainer_natures") == 0 && (o.style == xr::Style::Chaos ? xr::StyleOf(s) == xr::Style::Custom : xr::StyleOf(s) == o.style),
             std::string("version-2 code ") + o.code + " still read: the style, trainer levels / items / natures kept");
-      check(er::EncodeCode(sc, s) == o.code && xr::CodeFor(o.style, o.seed) == o.code && xr::CodeVersionOf(o.code) == 2,
+      check(er::EncodeCode(sc, s) == o.code && (o.style == xr::Style::Chaos || xr::CodeFor(o.style, o.seed) == o.code) && xr::CodeVersionOf(o.code) == 2,
             "and written back the same; the style + seed still gives this code");
     }
   }
@@ -872,7 +882,7 @@ int run_selftest(const em::DataCatalog& cat) {
             }
             size_t changes = 0;
             std::string report;
-            bool ok = load_back(cat, r, changes, report) && changes == r.mod.Count() && r.code.rfind("XDR5-", 0) == 0;
+            bool ok = load_back(cat, r, changes, report) && changes == r.mod.Count() && r.code[3] >= '5';
             auto look = [&](const char* table, const char* field, size_t& counter) {
               const auto tt = r.mod.tables.find(table);
               if (tt == r.mod.tables.end()) return;
@@ -895,7 +905,7 @@ int run_selftest(const em::DataCatalog& cat) {
             look("story_pokemon", "pokemonID", trainerGen4);
             look("darkPokemonList", "pokemonID", shadowGen4);
             if (ok) good++;
-            else if (bad.empty()) bad = report;
+            else if (bad.empty()) bad = report.empty() ? "took " + std::to_string(changes) + " of " + std::to_string(r.mod.Count()) + ", code " + r.code.substr(0, 5) : report;
           }
         }
       }
@@ -919,6 +929,129 @@ int run_selftest(const em::DataCatalog& cat) {
         }
       }
       check(none && sink == 0 && r0b.code.rfind("XDR5-", 0) != 0, "the switch off: no Gen 4 species, not a version-5 code");
+    }
+  }
+  if (!sGen4Pack.empty() && !sGen57Pack.empty()) {
+    uint32_t discTop = 0;
+    if (const em::DataTable* pt = cat.FindTable("pokemon_data")) discTop = pt->count;
+    static const char* const kBannedNames[] = {"MULTITYPE", "FLOWER GIFT", "SCHOOLING", "STANCE CHANGE", "ZEN MODE", "SHIELDS DOWN", "DISGUISE", "POWER CONSTRUCT",
+                                               "BATTLE BOND", "RKS SYSTEM", "COMATOSE", "WONDER GUARD", "FORECAST", "PRIMORDIAL SEA", "DESOLATE LAND", "DELTA STREAM",
+                                               "TANGLED FEET", "HEALER", "FRIEND GUARD", "TELEPATHY", "AROMA VEIL", "FLOWER VEIL", "SYMBIOSIS", "BATTERY", "RECEIVER",
+                                               "POWER OF ALCHEMY"};
+    static const char* const kKeepers[] = {"WISHIWASHI", "AEGISLASH", "HONEDGE", "DOUBLADE", "MIMIKYU", "MINIOR", "SILVALLY", "TYPE: NULL", "ARCEUS", "CHERRIM", "KOMALA"};
+    size_t runs = 0, good = 0, packTouched = 0, bannedSeen = 0, keeperTouched = 0, familyBad = 0, offPackTouched = 0, namedAll = 0, shown = 0;
+    std::string bad;
+    for (xr::Style style : {xr::Style::Classic, xr::Style::Chaos}) {
+      for (uint64_t seed = 1; seed <= 3; seed++) {
+        for (uint32_t all = 0; all < 2; all++) {
+          er::Settings s;
+          xr::ApplyStyle(s, style);
+          s.Set(sc, "gen4", 1);
+          s.Set(sc, "gen57", 1);
+          s.Set(sc, "abilities", 1);
+          s.Set(sc, "abilities.all", all);
+          s.Set(sc, "abilities.rules", 2);
+          s.seed = seed * 104729;
+          xr::Result r;
+          runs++;
+          if (!xr::Generate(cat, read_disc_entry, s, r, error)) {
+            if (bad.empty()) bad = error;
+            continue;
+          }
+          size_t changes = 0;
+          std::string report;
+          bool ok = load_back(cat, r, changes, report) && changes == r.mod.Count() && (all == 0 || r.code.rfind("XDR9-", 0) == 0);
+          if (!ok && bad.empty()) bad = report.empty() ? "the data layer took " + std::to_string(changes) + " of " + std::to_string(r.mod.Count()) : report;
+          size_t touched = 0;
+          if (const auto pd = r.mod.tables.find("pokemon_data"); pd != r.mod.tables.end()) {
+            for (const auto& [entry, fields] : pd->second) {
+              for (const auto& f : fields) {
+                if (f.first.rfind("tokuseiDataId", 0) == 0 && entry >= discTop) touched++;
+              }
+            }
+          }
+          (all != 0 ? packTouched : offPackTouched) += touched;
+          if (all == 0 && touched != 0) ok = false;
+          std::map<std::string, std::string> line;
+          for (const std::string& l : r.mod.spoiler) {
+            if (l.rfind("Abilities ", 0) != 0) continue;
+            const size_t c = l.find(": ");
+            if (c == std::string::npos) continue;
+            const std::string name = l.substr(10, c - 10), what = l.substr(c + 2);
+            line[name] = what;
+            if (all == 0) continue;
+            shown++;
+            if (what.find_first_of("0123456789") == std::string::npos) namedAll++;
+            std::string a = what;
+            for (size_t cut; (cut = a.find(" / ")) != std::string::npos;) {
+              const std::string one = a.substr(0, cut);
+              a = a.substr(cut + 3);
+              for (const char* b : kBannedNames) if (one == b) bannedSeen++;
+            }
+            for (const char* b : kBannedNames) if (a == b) bannedSeen++;
+            for (const char* k : kKeepers) if (name == k) keeperTouched++;
+          }
+          if (all != 0 && s.Get(sc, "abilities.family") != 0) {
+            for (const char* fam : {"TURTWIG|GROTLE|TORTERRA", "OSHAWOTT|DEWOTT|SAMUROTT", "ROWLET|DARTRIX|DECIDUEYE"}) {
+              std::string names = fam, first, prev;
+              bool allSame = true;
+              for (size_t at = 0; at <= names.size();) {
+                const size_t e = names.find('|', at);
+                const std::string n = names.substr(at, e == std::string::npos ? std::string::npos : e - at);
+                const auto it = line.find(n);
+                if (it != line.end()) {
+                  if (!prev.empty() && it->second != prev) allSame = false;
+                  prev = it->second;
+                }
+                if (e == std::string::npos) break;
+                at = e + 1;
+              }
+              if (!allSame) familyBad++;
+            }
+          }
+          if (ok) good++;
+        }
+      }
+    }
+    check(good == runs, "abilities every generation: " + std::to_string(runs) + " runs (on / off), the data layer takes all, an XDR9 code when on" + (bad.empty() ? "" : ": " + bad));
+    check(packTouched > 0 && offPackTouched == 0, "Gen 4-7 species get abilities with the switch on (" + std::to_string(packTouched) + " writes), none with it off");
+    check(bannedSeen == 0 && keeperTouched == 0 && familyBad == 0 && shown > 0 && namedAll > 0,
+          "no banned / placeholder ability handed out (" + std::to_string(bannedSeen) + "), species with a form ability untouched (" + std::to_string(keeperTouched) + "), families share (" +
+              std::to_string(familyBad) + " broken), spoiler names " + std::to_string(namedAll) + " of " + std::to_string(shown));
+    {
+      size_t low[3] = {}, gen4n[3] = {}, gen57n[3] = {};
+      bool made = true;
+      for (uint32_t rules = 0; rules < 3; rules++) {
+        for (uint64_t seed = 1; seed <= 3; seed++) {
+          er::Settings s;
+          xr::ApplyStyle(s, xr::Style::Classic);
+          s.Set(sc, "gen4", 1);
+          s.Set(sc, "gen57", 1);
+          s.Set(sc, "abilities", 1);
+          s.Set(sc, "abilities.all", 1);
+          s.Set(sc, "abilities.rules", rules);
+          s.seed = seed * 104729;
+          xr::Result r;
+          if (!xr::Generate(cat, read_disc_entry, s, r, error)) {
+            made = false;
+            continue;
+          }
+          const auto pd = r.mod.tables.find("pokemon_data");
+          if (pd == r.mod.tables.end()) continue;
+          for (const auto& [entry, fields] : pd->second) {
+            for (const auto& f : fields) {
+              if (f.first.rfind("tokuseiDataId", 0) != 0) continue;
+              if (f.second >= 124) gen57n[rules]++;
+              else if (f.second >= 77) gen4n[rules]++;
+              else low[rules]++;
+            }
+          }
+        }
+      }
+      check(made && low[0] > 0 && gen4n[0] == 0 && gen57n[0] == 0, "rules off: only the original game's abilities handed out (" + std::to_string(low[0]) + "), no Gen 4 (" + std::to_string(gen4n[0]) +
+                                                                       ") or Gen 5-7 (" + std::to_string(gen57n[0]) + ") one");
+      check(gen4n[1] > 0 && gen57n[1] == 0, "Gen 4 rules: Gen 4 abilities appear (" + std::to_string(gen4n[1]) + "), no Gen 5-7 one (" + std::to_string(gen57n[1]) + ")");
+      check(gen4n[2] > 0 && gen57n[2] > 0, "Gen 5-7 rules: both appear (" + std::to_string(gen4n[2]) + " / " + std::to_string(gen57n[2]) + ")");
     }
   }
   {
@@ -984,8 +1117,8 @@ int run_selftest(const em::DataCatalog& cat) {
                      st.Get(sc, "starter.moves") == 0;
       }
       check(stylesOff && xr::CodeFor(xr::Style::Light, 99).rfind("XDR1-", 0) == 0 && xr::CodeFor(xr::Style::Classic, 12345).rfind("XDR2-", 0) == 0 &&
-                xr::CodeFor(xr::Style::Chaos, 777).rfind("XDR2-", 0) == 0,
-            "the starter is off in Light, Classic and Chaos, and their codes are still XDR1 / XDR2 / XDR2");
+                xr::CodeFor(xr::Style::Chaos, 777).rfind("XDR8-", 0) == 0,
+            "the starter is off in Light, Classic and Chaos, and their codes are still XDR1 / XDR2 / XDR8 (Chaos since 0.7.2)");
       const xr::Result noStarter = make(xr::Style::Classic, 12345);
       check(!noStarter.starter.on && noStarter.starter.count == 0, "starter off: an empty plan (the game's own Eevee)");
       er::Settings a;
@@ -1131,6 +1264,280 @@ int run_selftest(const em::DataCatalog& cat) {
       const xr::Result noGen4 = starter(xr::Style::Classic, 5, 0, 1, 0, 0);
       check(noGen4.starter.species[0] < discTop, "Gen 4 off: a disc species");
     }
+  }
+  {
+    const em::DataTable* pd = cat.FindTable("pokemon_data");
+    std::vector<uint8_t> pdBytes;
+    check(pd != nullptr && read_disc_entry(pd->places[0].archive, pd->places[0].entry, pdBytes), "battles: the species table reads");
+    auto national = [&](uint32_t species) {
+      for (const auto& f : pd->fields) {
+        if (f.name == "numPokemon" && species < pd->count) return em::ReadDataField(pdBytes.data() + pd->places[0].offset + species * pd->entrySize, f, 0);
+      }
+      return 0u;
+    };
+    auto genOf = [](uint32_t n) { return n <= 151 ? 1 : n <= 251 ? 2 : n <= 386 ? 3 : 4; };
+    std::set<uint32_t> legendary;
+    {
+      const em::DataTable* lt = cat.FindTable("legendPokemonData");
+      std::vector<uint8_t> lb;
+      if (lt != nullptr && read_disc_entry(lt->places[0].archive, lt->places[0].entry, lb)) {
+        for (uint32_t i = 0; i < lt->count; i++) legendary.insert(em::ReadDataField(lb.data() + lt->places[0].offset + i * lt->entrySize, lt->fields[0], 0));
+      }
+    }
+    auto discValue = [&](const std::string& table, uint32_t row, const char* name, uint32_t el = 0) {
+      const em::DataTable* t = cat.FindTable(table);
+      std::vector<uint8_t> bytes;
+      if (t == nullptr || t->places.empty() || !read_disc_entry(t->places[0].archive, t->places[0].entry, bytes)) return 0u;
+      for (const auto& f : t->fields) {
+        if (f.name == name) return em::ReadDataField(bytes.data() + t->places[0].offset + row * t->entrySize, f, el);
+      }
+      return 0u;
+    };
+    auto modValue = [&](const xr::Result& r, const std::string& table, uint32_t row, const char* name) {
+      const auto ti = r.mod.tables.find(table);
+      if (ti != r.mod.tables.end()) {
+        if (const auto ei = ti->second.find(row); ei != ti->second.end() && ei->second.count(name)) return ei->second.at(name);
+      }
+      return discValue(table, row, name);
+    };
+    struct Deck {
+      const char* sw;
+      const char* prefix;
+    };
+    const Deck decks[] = {{"battles_mt", "hundred"}, {"battles_colosseum", "colosseum"}};
+    using SetList = std::vector<std::pair<const char*, uint32_t>>;
+    auto build = [&](xr::Style style, uint64_t seed, const SetList& set, xr::Result& r) {
+      er::Settings s;
+      xr::ApplyStyle(s, style);
+      s.seed = seed;
+      for (const auto& [id, v] : set) s.Set(sc, id, v);
+      return xr::Generate(cat, read_disc_entry, s, r, error);
+    };
+    check(xr::CodeFor(xr::Style::Light, 99).rfind("XDR1-", 0) == 0 && xr::CodeFor(xr::Style::Classic, 12345).rfind("XDR2-", 0) == 0 &&
+              xr::CodeFor(xr::Style::Chaos, 777).rfind("XDR8-", 0) == 0,
+          "the styles' codes are as before (XDR1 / XDR2 / XDR8): the new switches are off in every style");
+    xr::Result alone, none;
+    build(xr::Style::Classic, 31, {{"gens_4", 1}}, none);
+    for (const Deck& d : decks) {
+      const bool made = build(xr::Style::Classic, 31, {{d.sw, 1}}, alone);
+      const std::string label = std::string("battles ") + d.prefix + ": ";
+      check(made && alone.code.rfind("XDR9-", 0) == 0 && xr::CodeVersionOf(alone.code) == 9, label + "a version-9 code" + (made ? "" : ": " + error));
+      bool onlyDeck = true, others = true;
+      for (const auto& [table, entries] : alone.mod.tables) {
+        const bool deckTable = table.rfind(d.prefix, 0) == 0;
+        if (!deckTable) others &= none.mod.tables.count(table) != 0 && none.mod.tables.at(table) == entries;
+        if (none.mod.tables.count(table) == 0 && !deckTable) onlyDeck = false;
+      }
+      check(onlyDeck && others && alone.mod.Count() > none.mod.Count() + 20,
+            label + "only that deck's tables are added, every other table is Classic's (" + std::to_string(alone.mod.Count() - none.mod.Count()) + " numbers)");
+      xr::Result again;
+      build(xr::Style::Classic, 31, {{d.sw, 1}}, again);
+      check(again.mod.ToJson("x") == alone.mod.ToJson("x") && again.mod.spoiler == alone.mod.spoiler, label + "same code twice: the same teams");
+      size_t changes = 0;
+      std::string report;
+      check(load_back(cat, alone, changes, report) && changes == alone.mod.Count(), label + "the data-mod layer takes all " + std::to_string(alone.mod.Count()) + report);
+    }
+    {
+      xr::Result all;
+      build(xr::Style::Classic, 31, {{"battles_mt", 1}, {"battles_colosseum", 1}}, all);
+      bool same = true;
+      for (const Deck& d : decks) {
+        xr::Result one;
+        build(xr::Style::Classic, 31, {{d.sw, 1}}, one);
+        for (const auto& [table, entries] : one.mod.tables) {
+          if (table.rfind(d.prefix, 0) == 0) same &= all.mod.tables.count(table) != 0 && all.mod.tables.at(table) == entries;
+        }
+      }
+      check(same, "battles: each deck's picks don't depend on the other switches (own random streams)");
+      bool fixedOk = sc.Find("battles_cds") < 0 && sc.Find("battles_bingo") < 0 && sc.Find("battles_quick") < 0;
+      xr::Result chaos;
+      er::Settings cs;
+      xr::ApplyStyle(cs, xr::Style::Chaos);
+      cs.seed = 5;
+      for (const char* sw : {"battles_mt", "battles_colosseum", "trainer_items", "trainer_levels"}) cs.Set(sc, sw, 1);
+      fixedOk &= xr::Generate(cat, read_disc_entry, cs, chaos, error);
+      for (const auto& [table, entries] : chaos.mod.tables) {
+        if (table.rfind("virtual", 0) == 0 || table.rfind("bingo", 0) == 0 || table.rfind("imasugu", 0) == 0) fixedOk = false;
+      }
+      for (const auto& [table, entries] : all.mod.tables) {
+        if (table.rfind("virtual", 0) == 0 || table.rfind("bingo", 0) == 0 || table.rfind("imasugu", 0) == 0) fixedOk = false;
+      }
+      check(fixedOk, "Battle CDs, Battle Bingo and Quick Battle: no switch, and no table of theirs changed (all battle switches on, Chaos)");
+    }
+    {
+      int runs = 0, good = 0;
+      std::string firstError;
+      bool flatLevels = true, noLegend = true, legendWhereDisc = true, itemsOk = true, levelsOk = true;
+      for (uint64_t seed = 1; seed <= 4; seed++) {
+        for (uint32_t legend : {0u, 1u, 2u}) {
+          for (uint32_t lv : {0u, 2u, 4u, 5u}) {
+            const uint32_t items = (seed + legend + lv) % 3, natures = (seed + lv) % 2;
+            xr::Result r;
+            runs++;
+            const bool ok = build(xr::Style::Light, seed,
+                                  {{"battles_mt", 1}, {"battles_colosseum", 1}, {"legendaries", legend},
+                                   {"trainer_levels", lv}, {"trainer_items", items}, {"trainer_natures", natures}, {"battle_similar", (seed & 1) ? 1u : 0u},
+                                   {"battle_moves", seed % 3 == 0 ? 1u : 0u}},
+                                  r);
+            if (ok) good++;
+            else if (firstError.empty()) firstError = error;
+            if (!ok) continue;
+            for (const Deck& d : decks) {
+              const std::string pokemon = std::string(d.prefix) + "_pokemon";
+              const auto ti = r.mod.tables.find(pokemon);
+              if (ti == r.mod.tables.end()) continue;
+              for (const auto& [row, fields] : ti->second) {
+                for (const auto& [field, v] : fields) {
+                  if (field == "pokemonID") {
+                    if (legend == 0 && legendary.count(v)) noLegend = false;
+                    if (legend == 1 && legendary.count(v) && !legendary.count(discValue(pokemon, row, "pokemonID"))) legendWhereDisc = false;
+                  }
+                  if (field == "level") {
+                    if (std::string(d.prefix) != "hundred") flatLevels = false;
+                    if (v < 1 || v > 100 || discValue(pokemon, row, "level") == 0) levelsOk = false;
+                  }
+                  if (field == "holdItem" && (v == 0xAF || v == 0xBF)) itemsOk = false;
+                }
+              }
+            }
+          }
+        }
+      }
+      check(good == runs, "battles: the generator's own checks pass on " + std::to_string(runs) + " runs of every legendary / level / item / nature choice" +
+                              (firstError.empty() ? "" : ": " + firstError));
+      check(noLegend && legendWhereDisc, "battles: legendaries never = none; as on the disc = only where the disc's slot had one");
+      check(flatLevels && levelsOk, "battles: levels change only in Mt. Battle (every other deck has one level for a battle), within 1-100");
+      check(itemsOk, "battles: no refused item (#175, #191)");
+    }
+    {
+      xr::Result up;
+      build(xr::Style::Light, 4, {{"battles_mt", 1}, {"trainer_levels", 4}}, up);
+      uint32_t areaTop[10] = {}, raised = 0;
+      bool inside = true;
+      for (uint32_t tr = 1; tr <= 100; tr++) {
+        for (uint32_t k = 0; k < 6; k++) {
+          const uint32_t e = discValue("hundred_trainers", tr, "pokemonDataID", k);
+          if (e != 0) areaTop[(tr - 1) / 10] = std::max(areaTop[(tr - 1) / 10], discValue("hundred_pokemon", e, "level"));
+        }
+      }
+      for (uint32_t tr = 1; tr <= 100; tr++) {
+        for (uint32_t k = 0; k < 6; k++) {
+          const uint32_t e = discValue("hundred_trainers", tr, "pokemonDataID", k);
+          if (e == 0) continue;
+          const uint32_t old = discValue("hundred_pokemon", e, "level"), now = modValue(up, "hundred_pokemon", e, "level");
+          inside &= now >= old && now <= areaTop[(tr - 1) / 10];
+          raised += now > old ? 1 : 0;
+        }
+      }
+      check(inside && raised > 100, "Mt. Battle levels +50%: " + std::to_string(raised) + " Pokemon raised, none above their area's top level, none lowered");
+    }
+    {
+      xr::Result r;
+      build(xr::Style::Chaos, 77, {{"battles_mt", 1}, {"battles_colosseum", 1}, {"trainer_items", 1}}, r);
+      bool teamsOk = true;
+      for (const Deck& d : decks) {
+        const std::string trainers = std::string(d.prefix) + "_trainers", pokemon = std::string(d.prefix) + "_pokemon";
+        const uint32_t rows = cat.FindTable(trainers)->count;
+        for (uint32_t tr = 1; tr < rows; tr++) {
+          std::set<uint32_t> sp, it;
+          for (uint32_t k = 0; k < 6; k++) {
+            const uint32_t e = discValue(trainers, tr, "pokemonDataID", k);
+            if (e == 0) continue;
+            teamsOk &= sp.insert(modValue(r, pokemon, e, "pokemonID")).second;
+            if (modValue(r, pokemon, e, "holdItem") != 0) teamsOk &= it.insert(modValue(r, pokemon, e, "holdItem")).second;
+          }
+        }
+      }
+      check(teamsOk, "battles: Chaos (no fairness) + random items: every team has one of each species and one of each item");
+    }
+    {
+      struct Case {
+        const char* name;
+        SetList set;
+        std::set<int> allowed;
+      };
+      const Case cases[] = {{"Gen 1 only", {{"gens_2", 1}, {"gens_3", 1}}, {1}},
+                            {"Gen 2 + Gen 3", {{"gens_1", 1}}, {2, 3}},
+                            {"Gen 3 only", {{"gens_1", 1}, {"gens_2", 1}}, {3}},
+                            {"Gen 1 + Gen 3", {{"gens_2", 1}}, {1, 3}}};
+      for (const Case& c : cases) {
+        for (uint64_t seed : {3ull, 8ull}) {
+          xr::Result r;
+          er::Settings s;
+          xr::ApplyStyle(s, xr::Style::Chaos);
+          s.seed = seed;
+          for (const auto& [id, v] : c.set) s.Set(sc, id, v);
+          for (const char* sw : {"battles_mt", "battles_colosseum", "starter", "tm_compat"}) s.Set(sc, sw, 1);
+          s.Set(sc, "starter.choice", 1);
+          s.Set(sc, "starter.similar", 1);
+          const bool ok = xr::Generate(cat, read_disc_entry, s, r, error);
+          check(ok, std::string("generations ") + c.name + " seed " + std::to_string(seed) + ": made" + (ok ? "" : ": " + error));
+          if (!ok) continue;
+          std::set<uint32_t> bad;
+          size_t seen = 0;
+          for (const auto& [table, entries] : r.mod.tables) {
+            for (const auto& [entry, fields] : entries) {
+              for (const auto& [field, v] : fields) {
+                const bool species = field == "pokemonID" || field == "id" || field.rfind("panel.no", 0) == 0;
+                if (!species || table == "pokemon_data") continue;
+                if (table.rfind("esabapokemondata", 0) == 0 && field != "id") continue;
+                seen++;
+                if (!c.allowed.count(genOf(national(v)))) bad.insert(v);
+              }
+            }
+          }
+          for (uint32_t k = 0; k < r.starter.count; k++) {
+            seen++;
+            if (!c.allowed.count(genOf(national(r.starter.species[k])))) bad.insert(r.starter.species[k]);
+          }
+          check(seen > 1000 && bad.empty(), std::string("generations ") + c.name + " seed " + std::to_string(seed) + ": " + std::to_string(seen) +
+                                                " Pokemon handed out, " + std::to_string(bad.size()) + " from a generation left out");
+        }
+      }
+      xr::Result r;
+      er::Settings s;
+      xr::ApplyStyle(s, xr::Style::Classic);
+      s.Set(sc, "gens_1", 1);
+      s.Set(sc, "gens_2", 1);
+      s.Set(sc, "starter", 1);
+      s.Set(sc, "starter.choice", 2);
+      error.clear();
+      check(!xr::Generate(cat, read_disc_entry, s, r, error) && error.find("Eevee") != std::string::npos, "generations: Gen 3 only + \"Eevee family\" starter is refused with a plain reason: " + error);
+      er::Settings all;
+      xr::ApplyStyle(all, xr::Style::Classic);
+      for (const char* g : {"gens_1", "gens_2", "gens_3", "gens_4", "gens_5", "gens_6", "gens_7"}) all.Set(sc, g, 1);
+      error.clear();
+      check(!xr::Generate(cat, read_disc_entry, all, r, error) && error.find("at least one") != std::string::npos, "generations: every one left out is refused: " + error);
+      xr::Result plain, with47;
+      build(xr::Style::Classic, 12, {{"gens_4", 1}}, plain);
+      build(xr::Style::Classic, 12, {{"gens_4", 1}, {"gens_5", 1}, {"gens_6", 1}, {"gens_7", 1}}, with47);
+      check(plain.mod.ToJson("x") == with47.mod.ToJson("x") && plain.mod.spoiler.size() == with47.mod.spoiler.size(), "generations: Gen 4-7 left out without those packs changes nothing");
+      er::Settings back;
+      bool seedOnly = false;
+      xr::Result gens;
+      build(xr::Style::Classic, 5, {{"gens_2", 1}}, gens);
+      check(er::DecodeCode(sc, gens.code, back, seedOnly, error) && back.Get(sc, "gens_2") == 1 && back.Get(sc, "gens_1") == 0 && er::EncodeCode(sc, back) == gens.code,
+            "generations: a version-9 code reads back and writes back the same");
+    }
+  }
+  {
+    auto lugiaLine = [&](const xr::Result& r) {
+      for (const std::string& l : r.mod.spoiler) {
+        if (l.find("LUGIA") != std::string::npos && l.rfind("Shadow #", 0) == 0) return l;
+      }
+      return std::string();
+    };
+    er::Settings v9, v8;
+    xr::ApplyStyle(v9, xr::Style::Classic);
+    v8 = v9;
+    v9.seed = v8.seed = 12345;
+    v9.Set(sc, "gens_3", 0);
+    v9.Set(sc, "battles_mt", 1);
+    xr::Result r9, r8;
+    const bool made9 = xr::Generate(cat, read_disc_entry, v9, r9, error), made8 = xr::Generate(cat, read_disc_entry, v8, r8, error);
+    check(made9 && made8 && sc.CodeVersion(v9) == 9 && sc.CodeVersion(v8) == 2, "Lugia: the version-9 code is version 9, the plain Classic code stays version 2");
+    check(made9 && lugiaLine(r9).empty() && v9.Get(sc, "shadow.keep_lugia") == 1, "Lugia: a version-9 Classic code with \"Keep Shadow Lugia\" on leaves Shadow Lugia as Lugia (no Shadow line for it)");
+    check(made8 && !lugiaLine(r8).empty(), "Lugia: the version-2 code still makes what it made (Shadow Lugia changed): " + lugiaLine(r8));
   }
   std::printf(sOk ? "ALL OK\n" : "FAILED\n");
   return sOk ? 0 : 1;

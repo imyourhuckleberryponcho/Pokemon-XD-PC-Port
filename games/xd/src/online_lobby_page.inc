@@ -207,6 +207,14 @@ void Follow() {
       if (!L.verdict.Ok()) {
         L.message = Fmt(Tr("Your friend can't play in this room: %s"), L.verdict.refuse.front().c_str());
         Note(L.message);
+        {
+          const xd::online::Verdict forGuest = xd::online::Judge(L.mine, L.rules, peer.caps, true);
+          int sent = 0;
+          for (const std::string& r : forGuest.refuse) {
+            if (sent++ >= 3) break;
+            Send(xd::online::Msg("REFUSE", r));
+          }
+        }
         L.step = Step::Message;
         return;
       }
@@ -226,6 +234,11 @@ void Follow() {
       if (!xd::online::Apply(L.peer, line) && line.compare(0, 2, "K ") == 0) { L.friendCardLine = line; L.haveFriendCard = true; }
     }
   }
+  if (!L.host && L.judged && L.step == Step::JoinView && L.verdict.refuse.empty() && !L.peer.refusals.empty()) {
+    L.verdict.refuse = L.peer.refusals;
+    Note("the host refuses this game: " + L.peer.refusals.front());
+  }
+  const bool refusalShown = !L.host && L.step == Step::JoinView && !L.verdict.Ok();
   if (L.host && L.judged && L.step == Step::HostView && (L.peer.left || L.peer.declined || st.phase == xdnet::Phase::Closed || st.phase == xdnet::Phase::Failed)) {
     Note("the friend left before accepting: the room " + xdnet::formatRoomCode(L.code) + " opens again");
     const std::string code = L.code;
@@ -233,9 +246,9 @@ void Follow() {
     L.peer = Peer();
     L.judged = false;
     StartHosting(code);
-  } else if (L.judged && (st.phase == xdnet::Phase::Closed || st.phase == xdnet::Phase::Failed) && L.step != Step::Message) {
+  } else if (L.judged && (st.phase == xdnet::Phase::Closed || st.phase == xdnet::Phase::Failed) && L.step != Step::Message && !refusalShown) {
     Fail(Tr("The connection to your friend ended."));
-  } else if (L.judged && L.peer.left && L.step != Step::Message) {
+  } else if (L.judged && L.peer.left && L.step != Step::Message && !refusalShown) {
     Fail(Tr("Your friend left the room."));
   }
 }
@@ -351,6 +364,11 @@ bool StepSettings(ImDrawList* dl, const Screen& sc, const PortMenuInput* in) {
   if (!onButton && rows[static_cast<size_t>(L.row)].id == "format" && !L.rules.format.empty()) {
     kit::Window(dl, sc, 40.f, 394.f, 600.f, 440.f);
     kit::Para(dl, sc, 64.f, 403.f, 512.f, xd::rulesets::text::FormatInfo(L.rules.format), kit::kText, 0.62f, 14.f, 3);
+  }
+  if (!onButton && rows[static_cast<size_t>(L.row)].id == "edited") {
+    kit::Window(dl, sc, 40.f, 394.f, 600.f, 440.f);
+    kit::Para(dl, sc, 64.f, 403.f, 512.f, L.rules.editedShadows ? Tr("Allowed: Shadow Pokemon made with the save editor can come in too.") : Tr("Shadow Pokemon made with the save editor. Not allowed: a team with one can't come in."),
+              kit::kText, 0.66f, 15.f, 2);
   }
   if (!onButton) {
     const xd::online::Row& row = rows[static_cast<size_t>(L.row)];
@@ -487,6 +505,7 @@ std::vector<std::string> RoomLinesTr(const RoomRules& r) {
   l.push_back(Fmt(Tr("Items: %s"), r.items == "none" ? Tr("none") : r.items == "bag" ? Tr("your own bag items (not used up in your save)") : Tr("standard kit (Max Potion, Full Heal, Revive)")));
   l.push_back(Fmt(Tr("Time per choice: %s"), (r.timerSeconds == 0 ? std::string(Tr("no limit")) : Fmt(Tr("%d seconds"), r.timerSeconds)).c_str()));
   l.push_back(Fmt(Tr("Shadow Pokemon: %s"), !r.shadowAllowed ? Tr("not allowed") : r.shadowObey == "story" ? Tr("allowed, they may refuse orders as in the story") : Tr("allowed, they obey like purified ones")));
+  if (r.shadowAllowed) l.push_back(Fmt(Tr("Edited Shadows: %s"), r.editedShadows ? Tr("allowed") : Tr("not allowed")));
   return l;
 }
 
@@ -505,6 +524,17 @@ std::string TrVerdictLine(const std::string& s) {
     return Tr("The room was made by another version of the game (its battles are not the same as yours). Both players need the same game version: update the game, or ask your friend to.");
   if (s == "Your friend's game is another version from yours (its battles are not the same as yours). Both players need the same game version: ask them to update the game, or update yours.")
     return Tr("Your friend's game is another version from yours (its battles are not the same as yours). Both players need the same game version: ask them to update the game, or update yours.");
+  for (const bool room : {true, false}) {
+    const std::string head = room ? "This room's game is another version (" : "Your friend's game is another version (";
+    const std::string mid = "). You have ", tail = ". Both players need the same game version.";
+    if (s.compare(0, head.size(), head) != 0 || s.size() < tail.size() || s.compare(s.size() - tail.size(), tail.size(), tail) != 0) continue;
+    const size_t m = s.find(mid, head.size());
+    if (m == std::string::npos) continue;
+    const std::string theirs = s.substr(head.size(), m - head.size()), mine = s.substr(m + mid.size(), s.size() - tail.size() - (m + mid.size()));
+    return Fmt(room ? Tr("This room's game is another version (%s). You have %s. Both players need the same game version.")
+                    : Tr("Your friend's game is another version (%s). You have %s. Both players need the same game version."),
+               theirs.c_str(), mine.c_str());
+  }
   return s;
 }
 
@@ -780,8 +810,9 @@ void OpenSlot(int i) {
   if (!L.trader->Load(L.card.data, e3)) { L.message = Fmt(Tr("This save can't be read: %s"), e3.c_str()); L.step = Step::Message; return; }
   L.entries = L.trader->List();
   L.entryWhy.assign(L.entries.size(), "");
+  const std::vector<std::string> editorOrders = xd::online::EditorOrdersOfCardRoot(L.slots[static_cast<size_t>(i)].root, L.card.data);
   for (size_t k = 0; k < L.entries.size(); k++) {
-    const std::vector<std::string> why = xd::online::CheckTeam({L.entries[k].pokemon}, L.rulesData->rules, L.rules);
+    const std::vector<std::string> why = xd::online::CheckTeam({L.entries[k].pokemon}, L.rulesData->rules, L.rules, xd::online::EditedShadowMask({L.entries[k].pokemon}, editorOrders));
     L.entryWhy[k] = why.empty() ? "" : why.front();
   }
   L.step = Step::Choose;

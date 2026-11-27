@@ -945,6 +945,20 @@ bool apply_floor_chars(XDCommonTables* out, std::string& problem) {
         ownInfo = reinterpret_cast<const uint8_t*>(static_cast<uintptr_t>(infoAt));
       }
     }
+    if (std::getenv("XD_ROOMS_LOG") != nullptr) {
+      for (uint32_t q = 0; q < ownCount && q < 60; q++) {
+        std::string hex;
+        char h[4];
+        for (int k = 0; k < 0x24; k++) { std::snprintf(h, sizeof h, "%02x", ownInfo[q * 0x24 + k]); hex += h; }
+        std::fprintf(stderr, "[mods] floor %u own person %u: %s\n", row->floorID, q, hex.c_str());
+      }
+      for (size_t at = 0; at + 0x24 <= r.bytes.size(); at += 0x24) {
+        std::string hex;
+        char h[4];
+        for (int k = 0; k < 0x24; k++) { std::snprintf(h, sizeof h, "%02x", r.bytes[at + k]); hex += h; }
+        std::fprintf(stderr, "[mods] floor %u mod person: %s\n", row->floorID, hex.c_str());
+      }
+    }
     std::vector<uint8_t> entries = xd::objects::MergePeople(ownInfo, ownCount, r.bytes, r.id, r.copyOf != 0, problem);
     if (entries.empty()) return false;
     const uint32_t count = static_cast<uint32_t>(entries.size() / kEntry);
@@ -971,6 +985,34 @@ bool apply_floor_chars(XDCommonTables* out, std::string& problem) {
                      row->floorID, loadInit, chests, loadInit + chests);
       }
     }
+  }
+  return true;
+}
+
+bool RoomsAppendEntrances(XDCommonTables* out);
+bool apply_floor_lists(XDCommonTables* out, std::string& problem) {
+  XDRelGlobalValue* table = global_named(out, "floordata");
+  XDRelGlobalValue* number = global_named(out, "floordata_number");
+  if (table == nullptr || number == nullptr) return true;
+  for (const AddedRowCopy& r : sAddedRows) {
+    const bool positions = r.table == "floor_positions";
+    if (!positions && r.table != "floor_camera") continue;
+    const size_t entry = positions ? 16 : 0x34;
+    if (r.row >= *static_cast<uint32_t*>(number->value) || r.bytes.empty() || r.bytes.size() % entry != 0) {
+      problem = std::string("a mod's ") + (positions ? "entrances" : "camera zones") + " for a room do not fit the room table";
+      return false;
+    }
+    auto* row = reinterpret_cast<FloorData*>(static_cast<uint8_t*>(table->value) + static_cast<size_t>(r.row) * sizeof(FloorData));
+    auto* mem = static_cast<uint8_t*>(PortMem_LowAlloc(0x20 + r.bytes.size(), 16));
+    std::memset(mem, 0, 0x20);
+    put_be32(mem, static_cast<uint32_t>(reinterpret_cast<uintptr_t>(mem + 4)));
+    put_be32(mem + 4, static_cast<uint32_t>(reinterpret_cast<uintptr_t>(mem + 0x10)));
+    put_be32(mem + 8, static_cast<uint32_t>(reinterpret_cast<uintptr_t>(mem + 0x20)));
+    put_be32(mem + 0x10, static_cast<uint32_t>(r.bytes.size() / entry));
+    std::memcpy(mem + 0x20, r.bytes.data(), r.bytes.size());
+    if (positions) row->positions = reinterpret_cast<decltype(row->positions)>(mem);
+    else row->fieldCamera = reinterpret_cast<decltype(row->fieldCamera)>(mem);
+    std::fprintf(stderr, "[mods] floor %u: %zu %s of the room recipe in place\n", row->floorID, r.bytes.size() / entry, positions ? "entrance(s)" : "camera zone(s)");
   }
   return true;
 }
@@ -1031,7 +1073,7 @@ bool apply_added_rows(Loaded* l, XDCommonTables* out, const RelPrologStore* stor
     else if (r.table == "floor_event_list") eventRows = std::max(eventRows, r.row + 1);
     else if (r.table == "floorsoundTbl") soundRows = std::max(soundRows, r.row + 1);
     else if (r.table == "fight_encount_data") battleRows = std::max(battleRows, r.row + 1);
-    else if (r.table == "floor_chars" || r.table == "floor_zone") continue;
+    else if (r.table == "floor_chars" || r.table == "floor_zone" || r.table == "floor_positions_append" || r.table == "floor_positions" || r.table == "floor_camera") continue;
     else if (r.table == "pokemon_pkx_data" || r.table == "pokemon_nakigoe_data" || r.table == "waza_wzx_data") continue;
     else if (r.table == "snd_file") sndFileRows = std::max(sndFileRows, r.row + 1);
     else if (r.table == "snd_data") sndDataRows = std::max(sndDataRows, r.row + 1);
@@ -1200,6 +1242,82 @@ bool apply_extra_rows(Loaded* l, XDCommonTables* out, const RelPrologStore* stor
 
 static const XDCommonTables* sLiveTables = nullptr;
 extern "C" const XDCommonTables* PortXD_LiveCommonTables(void) { return sLiveTables; }
+
+namespace {
+bool RoomsAppendEntrances(XDCommonTables* out) {
+  if (out == nullptr || sPristine) return true;
+  XDRelGlobalValue* table = global_named(out, "floordata");
+  XDRelGlobalValue* number = global_named(out, "floordata_number");
+  XDRelGlobalValue* events = global_named(out, "floor_event_list");
+  XDRelGlobalValue* eventNumber = global_named(out, "floor_event_list_number");
+  if (table == nullptr || number == nullptr) return true;
+  static std::vector<uint32_t> done;
+  bool pending = false;
+  for (const AddedRowCopy& first : sAddedRows) {
+    if (first.table != "floor_positions_append" || std::find(done.begin(), done.end(), first.id) != done.end()) continue;
+    FloorData* row = nullptr;
+    for (uint32_t i = 0; i < *static_cast<uint32_t*>(number->value); i++) {
+      auto* f = reinterpret_cast<FloorData*>(static_cast<uint8_t*>(table->value) + static_cast<size_t>(i) * sizeof(FloorData));
+      if (f->floorID == first.id) {
+        row = f;
+        break;
+      }
+    }
+    if (row == nullptr) {
+      std::fprintf(stderr, "[mods] room entrances: floor %u is not in the room table; nothing added\n", first.id);
+      continue;
+    }
+    std::vector<uint8_t> entries;
+    uint32_t oldCount = 0;
+    bool ready = false;
+    if (row->positions != nullptr) {
+      const uint32_t holder = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(row->positions));
+      const uint32_t list = reinterpret_cast<uintptr_t>(row->positions) <= 0xFFFFFFFFu && holder >= 0x10000u ? read_be32_at(reinterpret_cast<const void*>(static_cast<uintptr_t>(holder))) : 0;
+      if (list >= 0x10000u && !(list >= 0x80000000u && list < 0x81800000u)) {
+        const uint32_t countAt = read_be32_at(reinterpret_cast<const void*>(static_cast<uintptr_t>(list)));
+        const uint32_t entriesAt = read_be32_at(reinterpret_cast<const void*>(static_cast<uintptr_t>(list + 4)));
+        if (countAt >= 0x10000u && entriesAt >= 0x10000u) {
+          ready = true;
+          oldCount = read_be32_at(reinterpret_cast<const void*>(static_cast<uintptr_t>(countAt)));
+          if (oldCount > 256) oldCount = 0;
+          entries.assign(reinterpret_cast<const uint8_t*>(static_cast<uintptr_t>(entriesAt)), reinterpret_cast<const uint8_t*>(static_cast<uintptr_t>(entriesAt)) + static_cast<size_t>(oldCount) * 16);
+        }
+      }
+    }
+    if (!ready) {
+      pending = true;
+      continue;
+    }
+    done.push_back(first.id);
+    if (oldCount > 32) {
+      std::fprintf(stderr, "[mods] floor %u has %u entrances of its own (more than 32): the recipe's entrances are not added\n", first.id, oldCount);
+      continue;
+    }
+    entries.resize(32 * 16, 0);
+    uint32_t added = 0;
+    for (const AddedRowCopy& r : sAddedRows) {
+      if (r.table != "floor_positions_append" || r.id != first.id || r.bytes.size() < 16) continue;
+      added++;
+      entries.insert(entries.end(), r.bytes.begin(), r.bytes.begin() + 16);
+    }
+    auto* mem = static_cast<uint8_t*>(PortMem_LowAlloc(0x20 + entries.size(), 16));
+    std::memset(mem, 0, 0x20);
+    put_be32(mem, static_cast<uint32_t>(reinterpret_cast<uintptr_t>(mem + 4)));
+    put_be32(mem + 4, static_cast<uint32_t>(reinterpret_cast<uintptr_t>(mem + 0x10)));
+    put_be32(mem + 8, static_cast<uint32_t>(reinterpret_cast<uintptr_t>(mem + 0x20)));
+    put_be32(mem + 0x10, static_cast<uint32_t>(entries.size() / 16));
+    std::memcpy(mem + 0x20, entries.data(), entries.size());
+    row->positions = reinterpret_cast<decltype(row->positions)>(mem);
+    std::fprintf(stderr, "[mods] floor %u: %u entrance(s) added after its own %u\n", first.id, added, oldCount);
+  }
+  return !pending;
+}
+}
+extern "C" void PortXD_RoomsFrame(void) {
+  static bool finished = false;
+  if (finished || sLiveTables == nullptr || sAddedRows.empty()) return;
+  finished = RoomsAppendEntrances(const_cast<XDCommonTables*>(sLiveTables));
+}
 extern "C" void PortXD_SetLiveCommonTables(const XDCommonTables* tables) { sLiveTables = tables; }
 
 extern "C" bool PortXD_CommonTableCounts(uint32_t* species, uint32_t* moves, uint32_t* items) {
@@ -1438,6 +1556,15 @@ extern "C" bool PortXD_ConvertCommonRel(const uint8_t* relFile, size_t relSize, 
       out->pokemon_data_number = *static_cast<uint32_t*>(out->globals[g].value);
     }
   }
+  for (const char* spot : {"esabapokemondata_E1", "esabapokemondata_E2", "esabapokemondata_E3", "esabapokemondata_EX"}) {
+    XDRelGlobalValue* top = global_named(out, (std::string(spot) + "_top").c_str());
+    XDRelGlobalValue* list = global_named(out, spot);
+    XDRelGlobalValue* number = global_named(out, (std::string(spot) + "_number").c_str());
+    if (top == nullptr || list == nullptr || number == nullptr || top->value == nullptr) continue;
+    EsaTable* record = static_cast<EsaTable*>(top->value);
+    record->head = reinterpret_cast<EsaHead*>(number->value);
+    record->entries = static_cast<EsaEntry*>(list->value);
+  }
   const std::vector<ExtraRowCopy> extraKept = sExtraRows;
   if (sModernType.on) {
     ExtraRowCopy c;
@@ -1491,6 +1618,11 @@ extern "C" bool PortXD_ConvertCommonRel(const uint8_t* relFile, size_t relSize, 
       delete l;
       return fail(error, errorSize, problem);
     }
+    if (!apply_floor_lists(out, problem)) {
+      delete l;
+      return fail(error, errorSize, problem);
+    }
+
   }
   if (!sPristine && global_named(out, "pokemon_data_number") != nullptr) register_xg_module_image(l);
   (void)l;

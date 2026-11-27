@@ -1,4 +1,5 @@
 #include "xd_pc_trade.h"
+#include "xd_pc_boxes.h"
 #include "i18n.h"
 
 using engine::i18n::Tr;
@@ -75,7 +76,8 @@ namespace {
 
 constexpr int32_t kRowMsg = 0x7D0FFE00;
 constexpr size_t kRec = xd::save::kPokemonSize;
-constexpr int kPartySlots = 6, kBoxes = 8, kBoxSlots = 30;
+constexpr int kPartySlots = 6, kBoxSlots = 30;
+int BoxCount() { return xd::pcboxes::Count(); }
 
 using xd::trade::Bytes;
 
@@ -142,7 +144,7 @@ class LiveTrader : public xd::trade::Trader {
       out.push_back(std::move(e));
     };
     for (int i = 0; i < kPartySlots; i++) add(-1, i, PartyPtr(i));
-    for (int b = 0; b < kBoxes; b++)
+    for (int b = 0; b < BoxCount(); b++)
       for (int s = 0; s < kBoxSlots; s++) add(b, s, BoxPtr(b, s));
     return out;
   }
@@ -160,7 +162,7 @@ class LiveTrader : public xd::trade::Trader {
       const uint8_t* p = PartyPtr(i);
       if (!IsEmptyRec(p) && WireOf(p) == give) at = {-1, i};
     }
-    for (int b = 0; b < kBoxes && !at.valid(); b++)
+    for (int b = 0; b < BoxCount() && !at.valid(); b++)
       for (int s = 0; s < kBoxSlots && !at.valid(); s++) {
         const uint8_t* p = BoxPtr(b, s);
         if (!IsEmptyRec(p) && WireOf(p) == give) at = {b, s};
@@ -269,6 +271,9 @@ Place sAfterPlace;
 bool sAfterWanted = false;
 bool sAfterRunning = false;
 int sAfterQuiet = 0;
+}
+bool PortXD_PcTradeBusy(void) { return sAfterWanted || sAfterRunning; }
+namespace {
 void AfterThread(void) {
   for (int i = 0; i < 5; i++) GSthreadSwitch();
   const bool evolved = Evolve(sAfterPlace);
@@ -459,7 +464,7 @@ std::vector<PortXD_Owned> PortXD_OwnedOf(uint16_t species) {
   };
   if (savedataGetStatus(nullptr, 2) == 0) return out;
   for (int i = 0; i < kPartySlots; i++) take(-1, i, PartyPtr(i));
-  for (int b = 0; b < kBoxes; b++)
+  for (int b = 0; b < BoxCount(); b++)
     for (int s = 0; s < kBoxSlots; s++) take(b, s, BoxPtr(b, s));
   return out;
 }

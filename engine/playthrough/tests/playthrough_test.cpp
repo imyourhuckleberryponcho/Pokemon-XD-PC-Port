@@ -69,6 +69,26 @@ int main(int argc, char** argv) {
         "round trip: every field (quotes, accents and backslashes too)");
   check(ep::ToJson(back) == ep::ToJson(modded), "round trip: the same text again");
   {
+    check(ep::ToJson(modded).find("room_recipes") == std::string::npos, "room recipes: none given, nothing written");
+    ep::Setup rooms = modded;
+    rooms.roomRecipes = {{"reading_room", "0123456789abcdef0123456789abcdef01234567"}, {"M3_out", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}};
+    ep::Setup again;
+    std::string err;
+    check(ep::FromJson(ep::ToJson(rooms), again, err) && again.roomRecipes == rooms.roomRecipes, "room recipes: written and read back, in order");
+    check(ep::ToJson(again) == ep::ToJson(rooms), "room recipes: the same text again");
+    ep::Setup old;
+    check(ep::FromJson(ep::ToJson(modded), old, err) && old.roomRecipes.empty(), "room recipes: a file from before them reads with none");
+    const std::vector<std::pair<std::string, std::string>> saved = {{"reading_room", "aaaa"}, {"M3_out", "bbbb"}};
+    check(ep::RoomRecipeChanges(saved, saved).empty(), "room guard: the same recipes and part files, no question");
+    check(ep::RoomRecipeChanges(saved, {{"M3_out", "bbbb"}, {"reading_room", "aaaa"}, {"other_room", "cccc"}}).empty(), "room guard: another order and a new room of the mods, no question");
+    const auto changed = ep::RoomRecipeChanges(saved, {{"reading_room", "aaab"}, {"M3_out", "bbbb"}});
+    check(changed.size() == 1 && changed[0].room == "reading_room" && !changed[0].gone, "room guard: a changed recipe (or a changed model file: it is in the number) is named");
+    const auto gone = ep::RoomRecipeChanges(saved, {{"M3_out", "bbbb"}});
+    check(gone.size() == 1 && gone[0].room == "reading_room" && gone[0].gone, "room guard: a room the mods do not give any more is named as gone");
+    check(ep::RoomRecipeChanges({}, {{"reading_room", "aaaa"}}).empty(), "room guard: a save made without rooms asks nothing, whatever the mods give now");
+    check(ep::RoomRecipeChanges(saved, {}).size() == 2, "room guard: all mods off, both rooms named");
+  }
+  {
     ep::Setup bound = modded;
     bound.addedRows = {{"zorb", "pokemon_data", "Zorblat \"Z\"", 415}, {"zorb", "waza_data", "Zap Test", 375}};
     ep::Setup again;
@@ -180,10 +200,21 @@ int main(int argc, char** argv) {
     more.moreShadows = "few:123456789";
     check(ep::ToJson(more).find("\"more_shadows\": \"few:123456789\"") != std::string::npos, "More Shadow Pokemon: written");
     check(ep::FromJson(ep::ToJson(more), moreBack, error) && moreBack.moreShadows == "few:123456789", "More Shadow Pokemon: round trip");
+    { ep::Setup boxes = plain; boxes.pcBoxes = 12; ep::Setup back; check(ep::FromJson(ep::ToJson(boxes), back, error) && back.pcBoxes == 12 && !boxes.Vanilla(), "PC boxes: 12 round trip, not vanilla");
+      check(ep::ToJson(plain).find("pc_boxes") == std::string::npos, "8 boxes: nothing written"); }
+    {
+      ep::Setup made, madeBack;
+      check(ep::ToJson(made).find("saveedit_shadows") == std::string::npos && made.Vanilla(), "no Shadow Pokemon of the save editor: nothing written, still Vanilla");
+      made.editorShadows = {"127:25:30:4000:357,0,0,0:2", "126:415:20:2000:357,370,0,0:0"};
+      check(!made.Vanilla() && ep::FromJson(ep::ToJson(made), madeBack, error) && madeBack.editorShadows == made.editorShadows, "Shadow Pokemon of the save editor: round trip, not Vanilla");
+      check(ep::TablesStamp(made) == ep::TablesStamp(ep::Setup{}), "Shadow Pokemon of the save editor: the tables stamp does not change (no species, move or item table changes)");
+    }
     check(!more.Vanilla() && ep::Label(more).find("More Shadow Pokemon: few") != std::string::npos && ep::Label(more).find("Vanilla") == std::string::npos,
           "More Shadow Pokemon: not Vanilla, the label names the amount (not the seed)");
     more.moreShadows = "own:50:123456789";
     check(ep::Label(more).find("More Shadow Pokemon: 50%") != std::string::npos && ep::Label(more).find("123456789") == std::string::npos, "More Shadow Pokemon: a percentage text is labelled \"50%\"");
+    more.moreShadows = "own2:25:5";
+    check(ep::Label(more).find("More Shadow Pokemon: 25%") != std::string::npos, "More Shadow Pokemon: the Mt. Battle percentage text (own2) is labelled \"25%\" too");
     more.moreShadows = "pct:75:42";
     check(ep::Label(more).find("More Shadow Pokemon: 75%") != std::string::npos, "More Shadow Pokemon: the older percentage text is labelled \"75%\" too");
   }

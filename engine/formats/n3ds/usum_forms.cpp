@@ -87,7 +87,7 @@ std::vector<std::string> split_lines(const std::string& s) {
   return v;
 }
 
-struct ItemRow { std::string name, copy; int price = 0, id = -1, nat = 0; bool mega = false; };
+struct ItemRow { std::string name, copy, plate_type; int price = 0, id = -1, nat = 0; bool mega = false; };
 
 }
 
@@ -131,7 +131,7 @@ void make_gen57_forms_data(const DataOptions& o, const Plan& plan, const ModelRe
   for (auto& l : pkx_old) first_pkx = std::max(first_pkx, atoi(l.c_str() + 4));
   first_pkx += 1;
 
-  struct Prep { const Json* f; std::string key, kind, name; int nat, form, record, k; Json row, rep; std::vector<std::string> notes; bool no_pkx = false; };
+  struct Prep { const Json* f; std::string key, kind, name; int nat, form, record, k; Json row, rep; std::vector<std::string> notes; bool no_pkx = false, look = false; };
   std::vector<Prep> prepared;
   const auto& forms = jget(fplan, "forms").a;
   for (size_t k = 0; k < forms.size(); k++) {
@@ -142,7 +142,7 @@ void make_gen57_forms_data(const DataOptions& o, const Plan& plan, const ModelRe
     Prep p;
     p.f = &f; p.nat = nat; p.form = form; p.kind = kind; p.k = (int)prepared.size();
     const Personal base = u.personal(nat);
-    p.record = base.form_stats_index + form - 1;
+    p.record = base.form_stats_index ? base.form_stats_index + form - 1 : nat;
     p.name = u.species_name(nat, "en");
     const Json* lab = f.find("label");
     p.key = form_key(p.name, kind, form, nat, lab ? lab->s : "");
@@ -151,6 +151,20 @@ void make_gen57_forms_data(const DataOptions& o, const Plan& plan, const ModelRe
     p.rep = rb.rep;
     p.notes = rb.notes;
     p.row.set("copy", Json(p.name));
+    if (const Json* lk = f.find("look"); lk && jtruthy(lk)) {
+      Json lr = Json::object();
+      lr.set("copy", Json(p.name));
+      if (const Json* px = p.row.find("pkxDataId")) lr.set("pkxDataId", *px);
+      p.row = lr;
+      p.look = true;
+    }
+    if (const Json* tj = f.find("type")) {
+      const int t = (int)tj->i, x = type_xd(t) < 0 ? 0 : type_xd(t);
+      Json zt = Json::array();
+      zt.push(Json(x)); zt.push(Json(x));
+      p.row.set("zokuseiDataId", zt);
+      p.rep.set("types", jints({t, t}));
+    }
     if (kind == "alt" && nat == 479) {
       const Json* sg = jget(ft, "rotom_signature").find(std::to_string(form));
       if (sg) {
@@ -199,8 +213,9 @@ void make_gen57_forms_data(const DataOptions& o, const Plan& plan, const ModelRe
   std::vector<std::string> form_lines = {"format 1"};
   std::vector<ItemRow> item_rows;
   std::set<int> ability_ids;
+  std::set<std::string> spawn_species;
   for (auto& p : prepared) {
-    for (auto& x : jget(p.row, "tokuseiDataId").a) if (x.i > 123) ability_ids.insert((int)x.i);
+    if (const Json* tk = p.row.find("tokuseiDataId")) for (auto& x : tk->a) if (x.i > 123) ability_ids.insert((int)x.i);
     if (p.no_pkx) {
       auto& o2 = p.row.o;
       o2.erase(std::remove_if(o2.begin(), o2.end(), [](auto& kv) { return kv.first == "pkxDataId"; }), o2.end());
@@ -217,6 +232,20 @@ void make_gen57_forms_data(const DataOptions& o, const Plan& plan, const ModelRe
         if (!replaced) item_rows.push_back(it);
         line += "|" + h.name;
       }
+    } else if (p.kind == "plate") {
+      const Json* lab = p.f->find("label");
+      const Json* pn = lab ? jget(ft, "plate_names").find(lab->s) : nullptr;
+      int pid = -1;
+      if (pn) for (int i = 0; i < u.item_count(); i++) if (u.item_name(i, "en") == pn->s) { pid = i; break; }
+      if (!pn || pid < 0) p.notes.push_back("no Plate item found");
+      else {
+        ItemRow it;
+        it.name = pn->s; it.copy = stone_copy; it.price = stone_price; it.id = pid; it.nat = p.nat; it.plate_type = lab->s;
+        bool replaced = false;
+        for (auto& x : item_rows) if (x.name == it.name) { x = it; replaced = true; }
+        if (!replaced) item_rows.push_back(it);
+        line += "|" + it.name;
+      }
     } else if (p.kind == "primal") {
       const int oid = p.nat == 382 ? 535 : 534;
       ItemRow it;
@@ -226,7 +255,22 @@ void make_gen57_forms_data(const DataOptions& o, const Plan& plan, const ModelRe
       if (!replaced) item_rows.push_back(it);
       line += "|" + it.name;
     }
+    if (const Json* sw = p.f->find("spawn"); sw && sw->i > 0 && !p.no_pkx) {
+      if (std::count(line.begin(), line.end(), '|') < 3) line += "|";
+      line += "|" + std::to_string(sw->i);
+      spawn_species.insert(p.name);
+    }
     form_lines.push_back(line);
+  }
+  {
+    const Json* sb = fplan.find("spawn_base");
+    if (sb) for (const std::string& nm : spawn_species) {
+      for (int n = 1; n <= 807; n++) {
+        if (u.species_name(n, "en") != nm) continue;
+        if (const Json* w = sb->find(std::to_string(n))) form_lines.push_back("spawnbase " + nm + "|" + std::to_string(w->i));
+        break;
+      }
+    }
   }
   if (std::any_of(prepared.begin(), prepared.end(), [](auto& p) { return p.kind == "alola"; })) {
     ItemRow it;
@@ -252,18 +296,29 @@ void make_gen57_forms_data(const DataOptions& o, const Plan& plan, const ModelRe
         text.set("typeName", Json(shown(py_strip(s))));
       }
       row.set("text", text);
+      if (p.look) { species.set(p.key, row); continue; }
       Json evo = *row.find("sinka.pokemonDataId");
       const Json& ekind = jget(row, "sinka.kind");
       size_t slot = 0;
       for (const EvoRec& e : u.evolutions(p.record)) {
         if (slot >= 5 || ekind.a[slot].i == 0) break;
-        if (e.form && p.kind == "alola") evo.a[slot] = Json(form_key(u.species_name(e.species, "en"), "alola", e.form, e.species, ""));
-        else evo.a[slot] = Json(u.species_name(e.species, "en"));
+        std::string target;
+        if (e.form && p.kind == "alola") target = form_key(u.species_name(e.species, "en"), "alola", e.form, e.species, "");
+        else target = u.species_name(e.species, "en");
+        if (p.kind == "alt") {
+          const Json* mylab = p.f->find("label");
+          if (mylab) {
+            for (auto& q : prepared)
+              if (q.nat == e.species && q.kind == "alt" && q.f->find("label") && q.f->find("label")->s == mylab->s) { target = q.key; break; }
+          }
+        }
+        evo.a[slot] = Json(target);
         slot++;
       }
       row.set("sinka.pokemonDataId", evo);
       species.set(p.key, row);
     }
+    Json plate_items = Json::object();
     for (auto& it : item_rows) {
       Json x = Json::object();
       if (it.id < 0) {
@@ -278,6 +333,11 @@ void make_gen57_forms_data(const DataOptions& o, const Plan& plan, const ModelRe
         continue;
       }
       std::string doc = jget(jget(ft, "stone_doc"), dl.c_str()).s;
+      if (!it.plate_type.empty()) {
+        doc = jget(jget(ft, "plate_doc"), dl.c_str()).s;
+        const std::string tn = jget(jget(jget(ft, "plate_types"), it.plate_type.c_str()), dl.c_str()).s;
+        for (size_t pos; (pos = doc.find("{T}")) != std::string::npos;) doc.replace(pos, 3, tn);
+      }
       const std::string sn = shown(u.species_name(it.nat, dl));
       for (size_t pos; (pos = doc.find("{S}")) != std::string::npos;) doc.replace(pos, 3, sn);
       x.set("copy", Json(it.copy));
@@ -287,7 +347,8 @@ void make_gen57_forms_data(const DataOptions& o, const Plan& plan, const ModelRe
       x.set("text", t);
       if (it.price) x.set("price", Json(it.price));
       if (it.mega) x.set("coupon", Json(stone_coupon));
-      items.set(it.name, x);
+      else if (!it.plate_type.empty()) x.set("coupon", jget(ft, "plate_coupon"));
+      (it.plate_type.empty() ? items : plate_items).set(it.name, x);
     }
     Json add = Json::object();
     if (!items.o.empty()) add.set("items", items);
@@ -297,6 +358,13 @@ void make_gen57_forms_data(const DataOptions& o, const Plan& plan, const ModelRe
     top.set("add", add);
     fs::create_directories(pack + "/" + folder);
     pf.write(folder + "/03_forms.json", top.dump(1, false));
+    if (!plate_items.o.empty()) {
+      Json padd = Json::object(), ptop = Json::object();
+      padd.set("items", plate_items);
+      ptop.set("_note", Json("made by gen57_forms from the player's own dump: the 17 Arceus Plates (0.8.0; placeholder price): game data, never in the repository"));
+      ptop.set("add", padd);
+      pf.write(folder + "/08_arceus_plates.json", ptop.dump(1, false));
+    }
   }
   {
     std::string t = "format 1\npkxcount 419";
@@ -346,6 +414,14 @@ void make_gen57_forms_data(const DataOptions& o, const Plan& plan, const ModelRe
       }
     }
     pf.write("forms.txt", t, true);
+  }
+  if (std::any_of(prepared.begin(), prepared.end(), [](auto& p) { return p.kind == "plate"; })) {
+    Json mv = Json::object(), jd = Json::object(), top = Json::object();
+    jd.set("type_from_user", Json(true));
+    mv.set("Judgment", jd);
+    top.set("_note", Json("made by gen57_forms: Judgment takes its user's type (Arceus Plates, 0.8.0)"));
+    top.set("moves", mv);
+    pf.write("battle/plates.json", top.dump(1, true));
   }
   {
     Json info = read_json(pack + "/gen57.json");

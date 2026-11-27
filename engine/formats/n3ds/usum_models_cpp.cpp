@@ -25,12 +25,17 @@
 #include "n3ds_faces.h"
 #include "n3ds_plan.h"
 
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__ANDROID__)
 extern char** environ;
 #endif
 
 using namespace n3ds;
 namespace fs = std::filesystem;
+
+#ifdef __ANDROID__
+#include <functional>
+std::function<int(const std::string& name, const std::vector<std::string>& args, std::string& output)> g_usum_builtin_run;
+#endif
 
 namespace {
 
@@ -187,7 +192,7 @@ Made make_one(const Ctx& c, const PlanItem& it) {
   char rep[4096];
   try {
     if (!it.skip.empty()) throw std::runtime_error(it.skip);
-    Species sp = load_species(*c.g, it.group);
+    Species sp = load_species(*c.g, it.group, it.motion_group);
     std::vector<uint8_t> xd;
     if (!it.standin_path.empty()) {
       if (it.standin_path.compare(0, 3, "xd:") == 0) xd = *c.xd->pkx_of(atoi(it.standin_path.c_str() + 3));

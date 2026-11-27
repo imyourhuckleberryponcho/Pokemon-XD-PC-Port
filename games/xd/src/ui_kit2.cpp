@@ -84,20 +84,23 @@ int GxFormat(int gs) {
   }
 }
 
-Image Decode(const uint8_t* t, size_t size) {
-  Image r;
-  if (size < 0x80) return r;
-  const int w = Be16(t), h = Be16(t + 2);
+bool DecodeToRgba(const uint8_t* t, size_t size, std::vector<uint8_t>& rgba, int& w, int& h) {
+  if (size < 0x80) return false;
+  w = Be16(t), h = Be16(t + 2);
   const int gs = static_cast<int32_t>(Be32(t + 8));
   const uint32_t tlutFmt = Be32(t + 0x0C), mip0 = Be32(t + 0x28), tlut = Be32(t + 0x48);
   const int fmt = GxFormat(gs);
-  if (w <= 0 || h <= 0 || fmt < 0 || mip0 == 0 || mip0 >= size) return r;
+  if (w <= 0 || h <= 0 || fmt < 0 || mip0 == 0 || mip0 >= size) return false;
   const uint32_t gxTlut = tlutFmt == 2 ? 1 : tlutFmt == 3 ? 2 : 0;
-  std::vector<uint8_t> rgba(size_t(w) * h * 4);
-  if (!PortGX_DecodeTexture(t + mip0, uint32_t(w), uint32_t(h), uint32_t(fmt), tlut != 0 && tlut < size ? t + tlut : nullptr, gxTlut,
-                            rgba.data())) {
-    return r;
-  }
+  rgba.assign(size_t(w) * h * 4, 0);
+  return PortGX_DecodeTexture(t + mip0, uint32_t(w), uint32_t(h), uint32_t(fmt), tlut != 0 && tlut < size ? t + tlut : nullptr, gxTlut, rgba.data());
+}
+
+Image Decode(const uint8_t* t, size_t size) {
+  Image r;
+  std::vector<uint8_t> rgba;
+  int w = 0, h = 0;
+  if (!DecodeToRgba(t, size, rgba, w, h)) return r;
   r.id = aurora_imgui_add_texture(uint32_t(w), uint32_t(h), rgba.data());
   r.w = w, r.h = h, r.ok = true;
   return r;
@@ -106,6 +109,8 @@ Image Decode(const uint8_t* t, size_t size) {
 }
 
 std::vector<uint8_t> DiscFile(const char* name) { return ReadDiscFile(name); }
+
+bool DecodeTexture(const uint8_t* texture, size_t size, std::vector<uint8_t>& rgba, int& w, int& h) { return DecodeToRgba(texture, size, rgba, w, h); }
 
 const Image& Texture(uint32_t resId) {
   const auto it = sImages.find(resId);

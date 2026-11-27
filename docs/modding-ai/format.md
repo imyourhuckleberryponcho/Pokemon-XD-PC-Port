@@ -19,6 +19,7 @@ The mods folder (open it from the launcher's Mods page): Windows `%APPDATA%\Poke
   sounds/effects.json    single sound effects of the author's own WAV / OGG (sounds/ also holds the sound files; see [content.md](content.md))
   sounds/songs.json      NEW songs (same)
   objects/<room>.json    people, zones, chests, music, doors of rooms (XD only, see story-objects.md)
+  rooms/<name>/room.json the recipe of a NEW room made from the disc's rooms (XD only, see rooms.md / room-format.md)
   games/<ID start>/...   parts made for ONE game (the same folders as above); see "One mod, more than one game"
 ```
 
@@ -63,6 +64,8 @@ Texture packs may also sit in `<data folder>\textures\GXXE01\<pack>\` and appear
   "works_with": ["other-mod"],
   "recommends": ["other-mod"],
   "only_with": ["other-mod"],
+  "needs_assets": ["gen57_pack"],
+  "recommends_assets": ["usum_models"],
   "links": {"other-mod": "https://example.com/other-mod.update.json"},
   "priority": 0,
   "updates": "https://example.com/my-mod/my-mod.update.json",
@@ -84,6 +87,8 @@ Texture packs may also sit in `<data folder>\textures\GXXE01\<pack>\` and appear
 | `before` | no | The twin of `after`: this mod comes before those ids |
 | `works_with`, `recommends` | no | Ids that go well with it. Suggestions only, never forced |
 | `only_with` | no | A compatibility patch: used only when ALL of these ids are on (and it goes after them) |
+| `needs_assets` | no | Ids of the player's OWN extra assets the mod cannot work without: `br_models` (Battle Revolution models), `usum_models` (Ultra Sun / Ultra Moon models), `gen4_pack`, `gen57_pack`. While one is not made on the launcher's Extra assets page (or is out of date, or the playthrough has Gen 4 / Gen 5-7 off) the mod is NOT used and one message says why. Never put files from those games in the mod. Unknown ids are refused (`manifest-assets`) |
+| `recommends_assets` | no | The same ids; only a note, the mod is used without them |
 | `links` | no | `{"id": "https://.../id.update.json"}`: where a missing mod named in `requires` / `recommends` can be downloaded (the player is asked) |
 | `author_key` | no | The author's public Ed25519 key (64 lower-case hex). Launchers pin it; an update signed with another key is accepted only when the old key announced it (key change) or the player confirms the new fingerprint |
 | `label_namespace` | no (set it if the mod adds rows) | DRAFT ([labels.md](../modding/labels.md)): `<author>.<pack>`, lower case letters / digits / `-` / `_`, one dot. The namespace of the stable labels of the rows the mod adds. Never `base`. Without it: `local.<mod id>` |

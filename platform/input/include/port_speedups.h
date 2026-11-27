@@ -15,6 +15,7 @@ uint32_t PortSpeedups_BreakPresses(void);
 uint32_t PortSpeedups_ReplayBarPresses(void);
 
 uint32_t PortSpeedups_CheatMenuPresses(void);
+uint32_t PortSpeedups_SaveStatesPresses(void);
 bool PortSpeedups_CheatChordModifiersHeld(void);
 
 void PortSpeedups_Frame(bool gameWants);

@@ -3,6 +3,7 @@
 #include "xd_species.h"
 #include "xd_sounds.h"
 #include "xd_toc.h"
+#include "xd_room_lib.h"
 #include "xd_objects.h"
 #include "json.h"
 
@@ -52,6 +53,14 @@ bool ReadFileBytes(const fs::path& p, std::vector<uint8_t>& out) {
   out.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
   return true;
 }
+xd::rooms::ReadPart PartReader(const std::vector<std::pair<std::string, fs::path>>& files) {
+  return [&files](const std::string& rel, std::vector<uint8_t>& out) {
+    for (const auto& [name, path] : files) {
+      if (Lower(name) == Lower(rel)) return ReadFileBytes(path, out);
+    }
+    return false;
+  };
+}
 
 bool FindEntryIndex(const FsysArchive& fsys, const std::string& file, uint32_t& index) {
   if (file.size() >= 2 && file[0] == '#') {
@@ -100,6 +109,11 @@ static void BuildNewRooms(em::RowsJob& job) {
   if (doors != nullptr && !doors->places.empty()) {
     if (!job.readEntry(doors->places[0].archive, doors->places[0].entry, doorBytes)) doorBytes.clear();
   }
+  const em::DataTable* events = job.catalog != nullptr ? job.catalog->FindTable("floor_event_list") : nullptr;
+  std::vector<uint8_t> eventBytes;
+  if (events != nullptr && !events->places.empty()) {
+    if (!job.readEntry(events->places[0].archive, events->places[0].entry, eventBytes)) eventBytes.clear();
+  }
   std::vector<uint8_t> floorBytes;
   if (floorTable != nullptr && !floorTable->places.empty()) {
     if (!job.readEntry(floorTable->places[0].archive, floorTable->places[0].entry, floorBytes)) floorBytes.clear();
@@ -108,6 +122,7 @@ static void BuildNewRooms(em::RowsJob& job) {
   std::vector<std::pair<uint32_t, std::string>> newGroups;
   uint32_t nextGroup = std::max(TocTopId(toc), 5000u);
   uint32_t doorCount = doors != nullptr ? doors->count : 0;
+  uint32_t eventCount = events != nullptr ? events->count : 0;
   std::string mods;
   std::vector<em::AddedRow> extra;
   std::set<std::string> usedNames;
@@ -141,12 +156,28 @@ static void BuildNewRooms(em::RowsJob& job) {
     const auto folder = job.modFolders.find(row.mod);
     std::vector<std::pair<std::string, fs::path>> files;
     if (folder != job.modFolders.end()) {
-      for (em::LayoutFile& f : em::LayoutFiles(folder->second, job.gameId, "rooms/" + row.key, false)) files.emplace_back(f.rel, f.path);
+      for (em::LayoutFile& f : em::LayoutFiles(folder->second, job.gameId, "rooms/" + row.key, true)) files.emplace_back(f.rel, f.path);
       std::sort(files.begin(), files.end());
     }
     contents.reserve(files.size());
+    {
+      std::string all;
+      for (const auto& [name, path] : files) {
+        std::vector<uint8_t> bytes;
+        ReadFileBytes(path, bytes);
+        all += Lower(name) + '\n' + std::to_string(bytes.size()) + '\n';
+        all.append(bytes.begin(), bytes.end());
+      }
+      if (!files.empty()) xd::rooms::NoteRoomHash(row.key, engine::rooms::RoomSha1(reinterpret_cast<const uint8_t*>(all.data()), all.size()));
+    }
     std::set<uint32_t> seen;
+    fs::path recipePath;
     for (const auto& [name, path] : files) {
+      if (name.find('/') != std::string::npos) continue;
+      if (Lower(name) == "room.json") {
+        recipePath = path;
+        continue;
+      }
       uint32_t entry = 0;
       if (!FindEntryIndex(fsys, name, entry) || !seen.insert(entry).second) {
         say(em::Message::Level::Problem, what + ": rooms/" + row.key + "/" + name + " names no entry of the archive it copies (" + sourceName +
@@ -167,6 +198,30 @@ static void BuildNewRooms(em::RowsJob& job) {
       }
       contents.push_back(std::move(data));
       list.push_back({entry, contents.back().data(), static_cast<uint32_t>(contents.back().size())});
+    }
+    std::vector<uint8_t> recipeEntrances, recipeCamera;
+    if (!recipePath.empty()) {
+      std::vector<uint8_t> json;
+      xd::rooms::BuiltRoom room;
+      bool taken = false;
+      if (!ReadFileBytes(recipePath, json)) {
+        say(em::Message::Level::Problem, what + ": rooms/" + row.key + "/room.json could not be read; the room stays a plain copy of the original.");
+      } else if (!xd::rooms::BuildRoom(std::string(json.begin(), json.end()), sourceName, job.readFile, job.discFiles, room, PartReader(files))) {
+        for (const std::string& p : room.problems) say(em::Message::Level::Problem, what + ": rooms/" + row.key + "/room.json: " + p);
+        say(em::Message::Level::Problem, what + ": the room recipe is not usable; the room stays a plain copy of the original (no map or collision of the mod is used).");
+      } else if (seen.count(room.base.entries[size_t(room.base.map)].index) != 0 || seen.count(room.base.entries[size_t(room.base.collision)].index) != 0) {
+        say(em::Message::Level::Problem, what + ": rooms/" + row.key + "/room.json makes the map and collision, but the mod also gives them as files (#N.bin); the recipe is ignored.");
+      } else {
+        contents.push_back(room.out.map);
+        list.push_back({room.base.entries[size_t(room.base.map)].index, contents.back().data(), static_cast<uint32_t>(contents.back().size())});
+        contents.push_back(room.out.collision);
+        list.push_back({room.base.entries[size_t(room.base.collision)].index, contents.back().data(), static_cast<uint32_t>(contents.back().size())});
+        for (const std::string& line : room.report) say(em::Message::Level::Info, "Room recipe \"" + row.key + "\": " + line);
+        if (room.recipe.entrancesGiven) recipeEntrances = engine::rooms::EntranceBytes(room.recipe.entrances);
+        if (room.recipe.cameraGiven) recipeCamera = engine::rooms::CameraBytes(room.recipe.camera);
+        taken = true;
+      }
+      (void)taken;
     }
     size_t size = 0;
     uint8_t* built = list.empty() ? nullptr : Fsys_Rebuild(archive.data(), archive.size(), list.data(), list.size(), &size);
@@ -190,6 +245,15 @@ static void BuildNewRooms(em::RowsJob& job) {
     newGroups.emplace_back(group, name);
     job.outFiles.push_back({name + ".fsys", std::move(out), row.mod});
     for (int lang = 0; lang < 5; lang++) PutBe32(row.bytes.data() + 0x2C + 4 * lang, group);
+    const auto listRow = [&](const char* table, std::vector<uint8_t> bytes) {
+      em::AddedRow a;
+      a.table = table, a.id = row.id, a.row = row.row, a.copyOf = 0, a.key = row.key + "." + table;
+      a.mod = row.mod, a.modName = row.modName, a.where = "rooms/" + row.key + "/room.json";
+      a.bytes = std::move(bytes);
+      extra.push_back(std::move(a));
+    };
+    if (!recipeEntrances.empty()) listRow("floor_positions", recipeEntrances);
+    if (!recipeCamera.empty()) listRow("floor_camera", recipeCamera);
     const uint32_t newFloor = row.id;
     uint32_t madeDoors = 0;
     if (doors != nullptr && !doorBytes.empty() && floorTable != nullptr && !floorBytes.empty()) {
@@ -211,9 +275,35 @@ static void BuildNewRooms(em::RowsJob& job) {
         extra.push_back(std::move(d));
       }
     }
+    uint32_t madeEvents = 0;
+    if (events != nullptr && !eventBytes.empty() && floorTable != nullptr && !floorBytes.empty()) {
+      const uint32_t sourceId = static_cast<uint32_t>(floorBytes[floorTable->places[0].offset + static_cast<size_t>(row.copyOf) * 64 + 2]) << 8 |
+                                floorBytes[floorTable->places[0].offset + static_cast<size_t>(row.copyOf) * 64 + 3];
+      for (uint32_t i = 0; i < events->count; i++) {
+        const size_t at = events->places[0].offset + static_cast<size_t>(i) * events->entrySize;
+        if (at + events->entrySize > eventBytes.size()) break;
+        if ((static_cast<uint32_t>(eventBytes[at + 2]) << 8 | eventBytes[at + 3]) != sourceId) continue;
+        em::AddedRow e;
+        e.table = "floor_event_list";
+        e.row = e.id = eventCount++;
+        e.copyOf = i;
+        e.key = row.key + ".event" + std::to_string(madeEvents++);
+        e.mod = row.mod, e.modName = row.modName, e.where = row.where;
+        e.bytes.assign(eventBytes.begin() + at, eventBytes.begin() + at + events->entrySize);
+        e.bytes[2] = static_cast<uint8_t>(newFloor >> 8);
+        e.bytes[3] = static_cast<uint8_t>(newFloor);
+        if (std::getenv("XD_ROOMS_LOG") != nullptr) {
+          std::string hex;
+          char b[4];
+          for (uint8_t v : e.bytes) { std::snprintf(b, sizeof b, "%02x", v); hex += b; }
+          say(em::Message::Level::Info, "event row " + std::to_string(i) + " copied for " + row.key + ": " + hex);
+        }
+        extra.push_back(std::move(e));
+      }
+    }
     char line[256];
-    std::snprintf(line, sizeof line, "New room \"%s\" (mod %s): floor %u, archive %s.fsys (group %u), a copy of %s.fsys with %zu entr%s of the mod, %u door row(s)",
-                  row.key.c_str(), row.mod.c_str(), row.id, name.c_str(), group, sourceName.c_str(), list.size(), list.size() == 1 ? "y" : "ies", madeDoors);
+    std::snprintf(line, sizeof line, "New room \"%s\" (mod %s): floor %u, archive %s.fsys (group %u), a copy of %s.fsys with %zu entr%s of the mod, %u door row(s), %u event row(s)",
+                  row.key.c_str(), row.mod.c_str(), row.id, name.c_str(), group, sourceName.c_str(), list.size(), list.size() == 1 ? "y" : "ies", madeDoors, madeEvents);
     say(em::Message::Level::Info, line);
     if (mods.find(row.mod) == std::string::npos) mods += (mods.empty() ? "" : ", ") + row.mod;
   }
@@ -720,8 +810,120 @@ void BuildRoomTexts(em::RowsJob& job) {
 
 }
 
+constexpr uint32_t kAppendedEntranceBase = 32;
+static void AppendDiscEntrances(em::RowsJob& job, const std::string& archiveName, const std::string& modId, const std::vector<engine::rooms::RecipeEntrance>& entrances) {
+  const auto say = [&](em::Message::Level level, const std::string& text) { if (job.say) job.say(level, text); };
+  const std::string what = "The recipe rooms/" + archiveName + "/room.json of the mod \"" + modId + "\"";
+  const em::DataTable* floorTable = job.catalog != nullptr ? job.catalog->FindTable("floordata") : nullptr;
+  std::vector<uint8_t> floorBytes, tocBytes;
+  std::string tocPath = "GSfsys.toc";
+  for (const std::string& f : job.discFiles) {
+    if (Lower(f) == "gsfsys.toc") tocPath = f;
+  }
+  Toc toc;
+  if (floorTable == nullptr || floorTable->places.empty() || !job.readEntry(floorTable->places[0].archive, floorTable->places[0].entry, floorBytes) ||
+      !job.readFile(tocPath, tocBytes) || !ReadToc(tocBytes, toc)) {
+    say(em::Message::Level::Problem, what + ": the room table or the archive list could not be read; its entrances are not added.");
+    return;
+  }
+  uint32_t floorId = 0;
+  for (uint32_t i = 0; i < floorTable->count && floorId == 0; i++) {
+    const size_t at = floorTable->places[0].offset + static_cast<size_t>(i) * 64;
+    if (at + 64 > floorBytes.size()) break;
+    if (Lower(TocName(tocBytes, toc, Be32(floorBytes.data() + at + 0x2C))) == Lower(archiveName)) floorId = static_cast<uint32_t>(floorBytes[at + 2]) << 8 | floorBytes[at + 3];
+  }
+  if (floorId == 0) {
+    say(em::Message::Level::Problem, what + ": no room of the game uses this archive; its entrances are not added.");
+    return;
+  }
+  uint32_t next = 0;
+  for (const em::AddedRow& r : *job.rows) {
+    if (r.table == "floor_positions_append") next = std::max(next, r.row + 1);
+  }
+  const uint32_t firstNew = next;
+  for (const engine::rooms::RecipeEntrance& e : entrances) {
+    em::AddedRow a;
+    a.table = "floor_positions_append";
+    a.id = floorId, a.row = next++, a.copyOf = 0, a.key = archiveName + ".entrance" + std::to_string(a.row);
+    a.mod = modId, a.modName = modId, a.where = "rooms/" + archiveName + "/room.json";
+    a.bytes = engine::rooms::EntranceBytes({e});
+    if (!e.exitOf.empty()) {
+      uint32_t found = 0;
+      for (em::AddedRow& r : *job.rows) {
+        if (r.table != "floor_event_list" || r.mod != modId || r.bytes.size() < 0x1C || r.bytes[0] != 1) continue;
+        if (r.key.compare(0, e.exitOf.size() + 6, e.exitOf + ".event") != 0) continue;
+        if (Be32(r.bytes.data() + 0x0C) != floorId) continue;
+        PutBe32(r.bytes.data() + 0x10, kAppendedEntranceBase + (a.row - firstNew));
+        found++;
+      }
+      if (found == 0) say(em::Message::Level::Problem, what + ": exit_of \"" + e.exitOf + "\": that room has no exit going to this room; the entrance is added, nothing uses it.");
+    }
+    job.rows->push_back(std::move(a));
+  }
+  say(em::Message::Level::Info, what + ": " + std::to_string(entrances.size()) + " entrance(s) added after the room's own");
+}
+
+static void BuildDiscRooms(em::RowsJob& job) {
+  const auto say = [&](em::Message::Level level, const std::string& text) { if (job.say) job.say(level, text); };
+  std::set<std::string> added;
+  for (const em::AddedRow& r : *job.rows) {
+    if (r.table == "floordata") added.insert(r.mod + "/" + Lower(r.key));
+  }
+  std::set<std::string> done;
+  for (const auto& [modId, folder] : job.modFolders) {
+    std::set<std::string> names;
+    for (const em::LayoutFile& f : em::LayoutFiles(folder, job.gameId, "rooms", true)) {
+      if (Lower(fs::path(f.rel).filename().string()) != "room.json") continue;
+      const fs::path parent = fs::path(f.rel).parent_path();
+      if (parent.empty() || parent.has_parent_path()) continue;
+      names.insert(parent.string());
+    }
+    for (const std::string& name : names) {
+      if (added.count(modId + "/" + Lower(name)) != 0) continue;
+      const std::string archiveFile = xd::rooms::FindArchiveFile(job.discFiles, name);
+      if (archiveFile.empty()) continue;
+      const std::string what = "The recipe rooms/" + name + "/room.json of the mod \"" + modId + "\"";
+      if (!done.insert(Lower(name)).second) {
+        say(em::Message::Level::Problem, what + ": another mod already changes the room " + name + "; ignored.");
+        continue;
+      }
+      std::vector<uint8_t> json;
+      std::vector<std::pair<std::string, fs::path>> files;
+      for (em::LayoutFile& f : em::LayoutFiles(folder, job.gameId, "rooms/" + name, true)) files.emplace_back(f.rel, f.path);
+      std::sort(files.begin(), files.end());
+      fs::path recipePath;
+      for (const auto& [rel, path] : files) {
+        if (Lower(rel) == "room.json") recipePath = path;
+      }
+      if (recipePath.empty() || !ReadFileBytes(recipePath, json)) continue;
+      xd::rooms::BuiltRoom room;
+      if (!xd::rooms::BuildRoom(std::string(json.begin(), json.end()), name, job.readFile, job.discFiles, room, PartReader(files))) {
+        for (const std::string& p : room.problems) say(em::Message::Level::Problem, what + ": " + p);
+        say(em::Message::Level::Problem, what + " is not usable; the room stays as the disc has it.");
+        continue;
+      }
+      {
+        std::string all;
+        for (const auto& [rel, path] : files) {
+          std::vector<uint8_t> bytes;
+          ReadFileBytes(path, bytes);
+          all += Lower(rel) + '\n' + std::to_string(bytes.size()) + '\n';
+          all.append(bytes.begin(), bytes.end());
+        }
+        xd::rooms::NoteRoomHash(name, engine::rooms::RoomSha1(reinterpret_cast<const uint8_t*>(all.data()), all.size()));
+      }
+      for (const std::string& line : room.report) say(em::Message::Level::Info, "Room recipe \"" + name + "\": " + line);
+      if (room.recipe.cameraGiven) say(em::Message::Level::Info, what + ": 'camera' is not used for a room of the disc: it keeps its own.");
+      if (room.recipe.entrancesGiven) AppendDiscEntrances(job, name, modId, room.recipe.entrances);
+      job.outFiles.push_back({archiveFile, std::move(room.archive), modId});
+      say(em::Message::Level::Info, "Room of the disc \"" + name + "\" (mod " + modId + "): changed by its recipe; " + archiveFile + " is replaced");
+    }
+  }
+}
+
 void BuildRooms(em::RowsJob& job) {
   BuildNewRooms(job);
+  BuildDiscRooms(job);
   xd::faces::BuildPictures(job);
   xd::species::BuildSpecies(job);
   xd::sound::BuildSounds(job);

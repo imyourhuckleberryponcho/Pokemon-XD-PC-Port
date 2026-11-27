@@ -103,7 +103,7 @@ void WalkTree(const fs::path& root, Tree& tree, Report& report, const SafetyLimi
 
 void CheckManifest(const Options& o, Report& report, const std::string& text) {
   static const std::vector<std::string> kKnown = {"id", "name", "version", "author", "description", "game", "requires", "conflicts",
-                                                  "after", "before", "works_with", "recommends", "only_with", "links", "author_key", "label_namespace", "priority", "applies", "scripts", "script_api", "format", "updates",
+                                                  "after", "before", "works_with", "recommends", "only_with", "needs_assets", "recommends_assets", "links", "author_key", "label_namespace", "priority", "applies", "scripts", "script_api", "format", "updates",
                                                   "homepage", "license", "tags"};
   const std::string file = "mod.json";
   const size_t before = report.Count(Severity::Problem);
@@ -209,6 +209,22 @@ void CheckManifest(const Options& o, Report& report, const std::string& text) {
     for (const auto& [id, line] : relations[k]) {
       if (!em::ValidModId(id)) report.Problem("manifest-relation", file, line, Fmt("\"%s\" has \"%s\", which isn't a mod id", relationKeys[k], id.c_str()));
       else if ((root.fields.count("id") && root.fields.at("id").kind == Value::Kind::String && id == root.fields.at("id").text)) report.Problem("manifest-self", file, line, Fmt("\"%s\" names the mod itself", relationKeys[k]));
+    }
+  }
+  {
+    std::vector<std::pair<std::string, int>> assets[2];
+    const char* const assetKeys[2] = {"needs_assets", "recommends_assets"};
+    for (int k = 0; k < 2; k++) list_field(assetKeys[k], assets[k]);
+    for (int k = 0; k < 2; k++) {
+      for (const auto& [id, line] : assets[k]) {
+        if (const em::AssetInfo* a = em::FindAsset(id)) {
+          if (k == 0) report.Note("asset-needed", file, line, Fmt("the mod is only used while the player has made the %s on the launcher's Extra assets page (\"needs_assets\"); nothing of it must be inside the mod", a->name));
+        } else {
+          std::string list;
+          for (const em::AssetInfo& a : em::KnownAssets()) list += (list.empty() ? "" : ", ") + std::string(a.id);
+          report.Problem("manifest-assets", file, line, Fmt("\"%s\" has \"%s\", which isn't an extra asset this port knows (use one of: %s)", assetKeys[k], id.c_str(), list.c_str()));
+        }
+      }
     }
   }
   if (const auto it = root.fields.find("links"); it != root.fields.end() && it->second.kind != Value::Kind::Null) {

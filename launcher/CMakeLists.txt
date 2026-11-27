@@ -15,11 +15,13 @@ target_link_libraries(launcher_imgui PUBLIC ${AURORA_SDL3_TARGET})
 add_library(launcher_ui STATIC launcher_app.cpp launcher_data.cpp launcher_modupdate.cpp launcher_modtools.cpp launcher_icon.cpp launcher_reports.cpp launcher_extra.cpp launcher_pad.cpp)
 if (WIN32)
   target_sources(launcher_ui PRIVATE launcher_sys_win.cpp)
+elseif (ANDROID)
+  target_sources(launcher_ui PRIVATE launcher_sys_android.cpp) # (the phone launcher: docs/ANDROID.md)
 else ()
   target_sources(launcher_ui PRIVATE launcher_sys_posix.cpp)
 endif ()
 target_include_directories(launcher_ui PUBLIC include)
-target_link_libraries(launcher_ui PUBLIC engine_presence engine_settings engine_controls engine_settings_ui engine_mods engine_update engine_modupdate
+target_link_libraries(launcher_ui PUBLIC engine_hdmaker engine_presence engine_settings engine_controls engine_settings_ui engine_mods engine_update engine_modupdate
   engine_memcard # the Save page's backups (save_backups.h)
   engine_save_slots # the Save page's "Saves" list (save_slots.h)
   launcher_imgui platform_os

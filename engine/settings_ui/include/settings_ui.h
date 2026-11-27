@@ -26,6 +26,11 @@ struct Options {
   Colors colors;
   void* headingFont = nullptr;
   bool (*textInput)(const char* label, std::string* text) = nullptr;
+  void (*afterRow)(void* user, const std::string& id) = nullptr;
+  void* afterRowUser = nullptr;
+#if defined(__ANDROID__)
+  bool stacked = false;
+#endif
 };
 
 std::vector<size_t> VisibleSettings(const settings::Registry& registry, settings::Category category,

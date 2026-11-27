@@ -352,7 +352,7 @@ The save has a Shadow list of **128** records and the disc's Shadow table has **
 Rows **84 to 127 are empty** (species 0, level 0). A data mod can fill them: set the row in `shadow_pokemon` (which deck Pokémon it is, its
 level, the heart gauge, the catch rate) and the same number in `shadow_species` (`darkPokemonList`). Each Shadow row points at a row of
 `story_pokemon` for its species, level and moves; point it at one that exists. No new file, no change in the game. Past 127 (0.7.6): the decomp has spare Shadow rows 128-383 and the port keeps their records
-in the save extension file (the required `shadow` section). The port itself uses them (More Shadow Pokémon "All"); a data mod cannot set them yet:
+in the save extension file (the required `shadow` section). The port itself uses them (More Shadow Pokémon "All"; since 0.8.0 also the save editor's Shadow Pokémon); a data mod cannot set them yet:
 the data-mod layer's `shadow_pokemon` / `shadow_species` tables end at row 127.
 
 ### TMs and HMs, tutors, bag slots: why they are not just more rows

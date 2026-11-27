@@ -522,6 +522,14 @@ void ThumbnailFrame() {
   else if (grab) PortShot_GamePicture(PictureArrived, file.empty() ? static_cast<void*>(&sKeepTag) : nullptr);
 }
 
+bool NewestFieldPicture(Picture& out) {
+  std::lock_guard<std::mutex> lock(sThumbLock);
+  if (sHist.empty() || sHist.back().second.Empty()) return false;
+  const th::Picture& p = sHist.back().second;
+  out.width = p.width, out.height = p.height, out.rgba = p.rgba;
+  return true;
+}
+
 Picture LoadThumbnail(const fs::path& file, bool keepAlpha) {
   Picture out;
   th::Picture p;

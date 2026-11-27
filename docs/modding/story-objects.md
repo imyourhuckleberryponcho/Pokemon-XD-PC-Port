@@ -71,6 +71,7 @@ Every list is optional. Names are letters, digits and `_` (up to 40), and are us
 | `talk_start` | what the person does when you talk to them: `2` (default) the whole body turns to face you, `1` only the head turns, `0` nothing, `3` cannot be talked to at all |
 | `talk_end` | `1` (default): after the talk a body-turning person turns back to the old direction; `0`: stays facing you (only matters with `talk_start` 2) |
 | `blend` | default `true`: smooth changes between the person's motions (the game's "flag2") |
+| `motion` | the motion the person starts with: `3` (default) the idle loop. `0` is the bind pose: arms out, a T-pose (what every person looked like before this field existed: the game takes the first motion from this value) |
 | `name_text` | the number of a message that is the person's name (0: none) |
 
 To talk to a person the hero must stand within about 10 units (the model row's talk distance plus both collision balls) AND face her: the game only looks 40 degrees to each side of where the hero looks. Pressing A beside her with your back turned does nothing (the same as any person in the game).

@@ -26,6 +26,7 @@ change. "Experimental" means it works but is new, so it may change or have rough
 | From scripts: trainer and wild battles, items, Pokémon and Shadow Pokémon gifts, a foe's team, a rental team, saved numbers and currencies, pages, picks and shops, a field-menu entry, saving, numbers in messages, rules for one battle | Experimental | [story-scripts.md](story-scripts.md) |
 | Field hooks (room ready, battle start and end, item use, steps, a flag or money changed, a Pokémon caught, the field menu opened) | Experimental | [story-scripts.md](story-scripts.md) |
 | People, zones, chests, music and doors in rooms | Experimental | [story-objects.md](story-objects.md) |
+| A mod that says it needs (or likes) the player's own extra assets: Battle Revolution or Ultra Sun / Ultra Moon models, the Gen 4 or Gen 5-7 pack (`needs_assets`, `recommends_assets`) | Experimental | [sharing.md](sharing.md) |
 | Own 3D model for a trainer or a person (replacing an existing one) | Experimental | [characters-and-models.md](characters-and-models.md) |
 | Own songs, cries, single sound effects and new songs | Experimental | [music-and-sound.md](music-and-sound.md) |
 | Check a mod, pack it, and check a downloaded mod from the launcher | Experimental | [sharing.md](sharing.md) |

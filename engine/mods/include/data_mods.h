@@ -134,6 +134,7 @@ struct AddedRow {
   bool inFile = false;
   bool existing = false;
   std::string label;
+  uint32_t copiedAdded = 0;
 };
 struct EditedAsset {
   std::string table;

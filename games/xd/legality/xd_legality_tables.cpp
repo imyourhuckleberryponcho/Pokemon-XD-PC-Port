@@ -7,7 +7,7 @@ namespace xd::legality {
 
 namespace {
 
-constexpr uint32_t kVersion = 1;
+constexpr uint32_t kVersion = 3;
 
 struct Writer {
   std::vector<uint8_t> b;
@@ -153,6 +153,20 @@ std::vector<uint8_t> Serialize(const TablesFile& t) {
   w.strs(n.items);
   w.strs(n.abilities);
   w.strs(n.natures);
+  w.strs(n.abilityText);
+  w.strs(n.formKey);
+  uint32_t extras = 0;
+  for (const SpeciesRules& s : r.species) extras += (s.hiddenAbility != 0 || s.formOf != 0) ? 1 : 0;
+  w.u32(extras);
+  for (size_t i = 0; i < r.species.size(); i++) {
+    const SpeciesRules& s = r.species[i];
+    if (s.hiddenAbility == 0 && s.formOf == 0) continue;
+    w.u16(static_cast<uint32_t>(i));
+    w.u8(s.hiddenAbility);
+    w.u16(s.formOf);
+    w.u8(s.formKind);
+    w.u16(s.plateItem);
+  }
   w.u32(Fnv(w.b.data(), w.b.size()));
   return w.b;
 }
@@ -172,7 +186,8 @@ bool Parse(const std::vector<uint8_t>& bytes, TablesFile& out, std::string& erro
   }
   Reader rd(bytes);
   rd.at = 4;
-  if (rd.u32() != kVersion) {
+  const uint32_t version = rd.u32();
+  if (version != 1 && version != kVersion) {
     error = "the tables file is from another version";
     return false;
   }
@@ -255,6 +270,25 @@ bool Parse(const std::vector<uint8_t>& bytes, TablesFile& out, std::string& erro
   out.names->items = rd.strs();
   out.names->abilities = rd.strs();
   out.names->natures = rd.strs();
+  out.hasExtras = version >= 2;
+  if (version >= 2) {
+    out.names->abilityText = rd.strs();
+    out.names->formKey = rd.strs();
+    const uint32_t extras = rd.count(version >= 3 ? 8 : 6);
+    for (uint32_t i = 0; i < extras && !rd.bad; i++) {
+      const uint32_t row = rd.u16();
+      const uint8_t hidden = static_cast<uint8_t>(rd.u8());
+      const uint16_t formOf = static_cast<uint16_t>(rd.u16());
+      const uint8_t kind = static_cast<uint8_t>(rd.u8());
+      const uint16_t plate = version >= 3 ? static_cast<uint16_t>(rd.u16()) : 0;
+      if (row < r.species.size()) {
+        r.species[row].hiddenAbility = hidden;
+        r.species[row].formOf = formOf;
+        r.species[row].formKind = kind;
+        r.species[row].plateItem = plate;
+      }
+    }
+  }
   if (rd.bad || rd.at + 4 != bytes.size()) {
     error = "the tables file is cut short";
     return false;

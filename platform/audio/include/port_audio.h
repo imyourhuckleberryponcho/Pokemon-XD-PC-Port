@@ -46,6 +46,17 @@ void PortAudio_SetFrozen(bool frozen);
 
 int PortDsp_UseCoefDump(const uint8_t* bytes, size_t size);
 
+typedef struct {
+  void* chip;
+  void* first;
+  void* current;
+  bool interruptQueued;
+  uint32_t booted, initialised, yields;
+} PortDspState;
+bool PortDsp_StateSave(PortDspState* out);
+void PortDsp_StateLoad(const PortDspState* in);
+void PortDsp_StateFree(PortDspState* state);
+
 #ifdef __cplusplus
 }
 #endif

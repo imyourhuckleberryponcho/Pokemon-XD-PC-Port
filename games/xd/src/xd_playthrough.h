@@ -73,6 +73,7 @@ void PadPoll(PADStatus* status);
 bool ScreenEnabled();
 std::string RestartLabel();
 bool TimerWatch();
+bool ContinueWatch();
 void TimerPersist();
 bool ChallengesPossible();
 void RuleNote(const std::string& what);

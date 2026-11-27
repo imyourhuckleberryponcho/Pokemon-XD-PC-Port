@@ -491,7 +491,9 @@ void make_gen4_pack(const std::string& out_folder, const DiscSource& pbr, const 
       const int k = face_k(dex);
       auto it = face_by_dex.find(dex);
       if (it == face_by_dex.end()) continue;
-      const uint32_t fid = 0x2000 + k;
+      const uint32_t fid = 0x2800 + k;
+      for (const FsEnt& e : ents)
+        if ((e.word0 >> 16) == fid) throw Fail("poke_face.fsys: the face id " + std::to_string(fid) + " is already a member of the disc's file");
       char nmb[32];
       std::snprintf(nmb, sizeof nmb, "g4face%03d", dex);
       ents.push_back({(fid << 16) | (9u << 9), 9, nmb, it->second->data, (uint32_t)it->second->data.size(), false});

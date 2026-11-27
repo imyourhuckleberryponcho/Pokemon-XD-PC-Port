@@ -40,6 +40,18 @@ enum class Problem {
 Problem CheckGen57(const std::filesystem::path& assets);
 inline bool Works(Problem p) { return p == Problem::None || p == Problem::LegacyOtherGen4; }
 
+constexpr int kGen4PackVersion = 2;
+constexpr int kGen57PackVersion = 1;
+
+enum class AssetState {
+  Ready,
+  NotMade,
+  OtherVersion,
+  DoesNotFit,
+  UnknownId,
+};
+AssetState StateOfAsset(const std::string& id, const std::filesystem::path& assets);
+
 std::string Fnv64Hex(const void* data, size_t size);
 
 }

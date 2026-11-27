@@ -6,9 +6,10 @@ add_subdirectory(formats/n3ds)
 add_subdirectory(formats/colo)
 
 if (WIN32)
-  add_library(engine_gs STATIC gs/gsthread_fibers.cpp)
+  add_library(engine_gs STATIC gs/gsthread_fibers.cpp gs/gsthread_coro_win.cpp)
 else () # Linux: the same functions on ucontext, stacks below 2 GB (docs/LINUX.md)
-  add_library(engine_gs STATIC gs/gsthread_ucontext.cpp)
+  add_library(engine_gs STATIC gs/gsthread_ucontext.cpp gs/port_ctx.c gs/gsthread_coro_posix.cpp)
+  target_include_directories(engine_gs PRIVATE ${PROJECT_SOURCE_DIR}/platform/os/include)
   if (APPLE) # (docs/MAC.md: MAP_32BIT for macOS)
     set_source_files_properties(gs/gsthread_ucontext.cpp PROPERTIES COMPILE_OPTIONS "${XD_MAC_COMPAT_OPTION}")
   endif ()
@@ -96,6 +97,12 @@ add_library(engine_mods STATIC mods/mod_manifest.cpp mods/mod_list.cpp mods/mod_
   mods/data_mods.cpp mods/mod_packs.cpp mods/mod_layout.cpp mods/labels.cpp mods/mod_values.cpp)
 target_include_directories(engine_mods PUBLIC mods/include)
 target_link_libraries(engine_mods PUBLIC engine_formats platform_disc engine_hdtex engine_i18n)
+
+add_library(engine_rooms STATIC rooms/ccd.cpp rooms/hsd.cpp rooms/recipe.cpp rooms/sha1.cpp rooms/preview.cpp rooms/c_api.cpp rooms/mesh.cpp)
+target_include_directories(engine_rooms PUBLIC rooms/include PRIVATE mods) # (mods: json.h, a header by itself)
+
+add_executable(rooms_test rooms/tests/rooms_test.cpp)
+target_link_libraries(rooms_test PRIVATE engine_rooms)
 
 add_executable(mods_test mods/tests/mods_test.cpp)
 target_link_libraries(mods_test PRIVATE engine_mods)
@@ -246,11 +253,18 @@ target_link_libraries(net_trade_test PRIVATE engine_net)
 add_executable(xd_net_test net/tools/xd_net_test.cpp)
 target_link_libraries(xd_net_test PRIVATE engine_net)
 
-add_library(engine_hdtex STATIC hdtex/hd_textures.cpp)
+add_library(engine_hdtex STATIC hdtex/hd_textures.cpp hdtex/disc_textures.cpp)
 target_include_directories(engine_hdtex PUBLIC hdtex/include)
+target_link_libraries(engine_hdtex PUBLIC engine_formats)
 
 add_executable(hdtex_test hdtex/tests/hdtex_test.cpp)
 target_link_libraries(hdtex_test PRIVATE engine_hdtex)
+
+add_library(engine_hdmaker STATIC hdtex/hd_maker.cpp)
+target_include_directories(engine_hdmaker PUBLIC hdtex/include)
+target_link_libraries(engine_hdmaker PUBLIC engine_hdtex PRIVATE engine_update PNG::PNG)
+add_executable(hd_maker_test hdtex/tests/hd_maker_test.cpp)
+target_link_libraries(hd_maker_test PRIVATE engine_hdmaker)
 
 add_library(engine_presence STATIC presence/presence.cpp)
 target_include_directories(engine_presence PUBLIC presence/include)

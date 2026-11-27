@@ -1,5 +1,6 @@
 #include "xd_hidden_ability.h"
 #include "xd_forms.h"
+#include "xd_pc_boxes.h"
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
@@ -89,15 +90,19 @@ void pokemonBiosSetSpeDefEffort(void* p, u16 v);
 void pokemonBiosSetNimblenessEffort(void* p, u16 v);
 void pokemonResetBasisStatus(void* p);
 u16 pokemonBiosGetPokemonDataId(void* p);
+void pokemonBiosSetPokemonDataId(void* p, u16 id);
 s32 pokemon_GetHp(void* p);
 s32 pokemon_GetMaxHp(void* p);
 void pokemon_SetHp(void* p, u16 v);
 void* itemDataBiosGetItemEffectParam(void* item);
 void* itemParamGetPtr(void* effect);
 u8 itemParamGetLevelUpFlag(u8* p);
+void* pcboxGetPokemonBoxName(void* pcbox, s8 box);
+s32 pcboxAddPokemon(void* pcbox, void* pokemon, s8 box);
 void pcboxDebugPokemonSetupFull(void);
 void pokemonCreate(void* pokemon, u16 species, u8 level, void* attest);
 u32 pokemonCheckRare(void* pokemon);
+uint32_t PortXD_GiftFit(void* pokemon, int32_t sex, int32_t seikaku, int32_t rare, uint32_t trainerRnd);
 uintptr_t savedataGetStatus(u32 save, u32 kind);
 uintptr_t gamedataGetStatus(void* gamedata, u32 kind);
 s32 heroCatchPokemon(void* hero, void* pokemon, u32 arg3, u32 arg4, u8 allowPCBox);
@@ -107,6 +112,7 @@ u16 memoDataGetCount(u32 kind);
 void* pokemonDataBiosGetPtr(u16 id);
 u16 pokemonDataBiosGetHeight(void* pdata);
 void pokemonBiosSetItemDataId(void* pokemon, u16 item);
+u16 pokemonDoItemSoubi(void* pokemon, u16 item, u8 equip);
 u32 pokemonGetSex(void* pokemon);
 u8 pokemonBiosGetLevel(void* pokemon);
 void pokemon_SetPokemonWazaDataId(void* pokemon, u32 index, u16 waza);
@@ -442,6 +448,30 @@ void Perform(const std::string& action) {
     heroCatchPokemon(reinterpret_cast<void*>(hero), pokemon, 0, 4, 1);
     memoDataSet(0, pokemon);
     sStatus = "give: species " + std::to_string(species) + " level " + std::to_string(level);
+  } else if (k == "spawnlooks") {
+    const long species = Num(w, 1, 0), count = Num(w, 2, 100);
+    const bool force = w.size() > 3 && w[3] == "force";
+    if (species < 1 || species > 0x3FFF || count < 1 || count > 5000) {
+      sStatus = "spawnlooks: <species row> [count 1..5000] [force]";
+      return;
+    }
+    alignas(16) static uint8_t pokemon[1024];
+    std::vector<std::pair<u32, int>> seen;
+    for (long i = 0; i < count; i++) {
+      std::memset(pokemon, 0, sizeof pokemon);
+      pokemonCreate(pokemon, static_cast<u16>(species), 5, reinterpret_cast<void*>(gamedataGetStatus(nullptr, 1)));
+      const uint32_t pid = PortXD_GiftFit(pokemon, -1, -1, -1, 0);
+      if (force) { const uint32_t pick = xd::forms::PickLook(static_cast<uint32_t>(species), pid, true); pokemonBiosSetPokemonDataId(pokemon, static_cast<u16>(pick)); }
+      const u32 row = pokemonBiosGetPokemonDataId(pokemon);
+      bool found = false;
+      for (auto& e : seen) if (e.first == row) { e.second++; found = true; }
+      if (!found) seen.push_back({row, 1});
+    }
+    std::sort(seen.begin(), seen.end());
+    std::string line = "[devmenu] spawnlooks " + std::to_string(species) + " " + std::to_string(count) + ":";
+    for (auto& e : seen) line += " " + std::to_string(e.first) + "=" + std::to_string(e.second);
+    std::fprintf(stderr, "%s\n", line.c_str());
+    sStatus = "spawnlooks: " + std::to_string(seen.size()) + " different rows";
   } else if (k == "giveshadow") {
     const long r = PortXD_GiftShadow(static_cast<s32>(Num(w, 1, 1)), static_cast<s32>(Num(w, 2, 0)));
     sStatus = "giveshadow: " + std::string(r >= 0 ? "party slot " + std::to_string(r + 1) : r == -2 ? "party full" : r == -4 ? "already have it" : "no such Shadow row");
@@ -466,8 +496,21 @@ void Perform(const std::string& action) {
       sStatus = "hold: <party slot 1-6> <item number>";
       return;
     }
-    pokemonBiosSetItemDataId(p, static_cast<u16>(item));
+    if (w.size() > 3 && w[3] == "call") {
+      if (item == 0) pokemonDoItemSoubi(p, 0, 0); else pokemonDoItemSoubi(p, static_cast<u16>(item), 1);
+    } else {
+      pokemonBiosSetItemDataId(p, static_cast<u16>(item));
+    }
     sStatus = "hold: party slot " + std::to_string(slot) + " holds item " + std::to_string(item);
+  } else if (k == "pchold") {
+    const long box = Num(w, 1, 1), place = Num(w, 2, 1), item = Num(w, 3, 0);
+    uint8_t* b = box >= 1 && box <= 32 ? static_cast<uint8_t*>(pcboxGetPokemonBoxName(nullptr, static_cast<s8>(box - 1))) : nullptr;
+    if (b == nullptr || place < 1 || place > 30 || item < 0) {
+      sStatus = "pchold: <box 1..32> <place 1..30> <item number>";
+      return;
+    }
+    pokemonBiosSetItemDataId(b + 20 + static_cast<size_t>(place - 1) * 0xC4, static_cast<u16>(item));
+    sStatus = "pchold: box " + std::to_string(box) + " place " + std::to_string(place) + " holds item " + std::to_string(item);
   } else if (k == "confuse") {
     const long slot = Num(w, 1, 0);
     void* p = fightIsFight() != 0 && slot >= 0 && slot <= 3 ? fightFloorGetFightOutBanmeToValidFightOutPokemon(nullptr, static_cast<u16>(slot)) : nullptr;
@@ -494,6 +537,47 @@ void Perform(const std::string& action) {
     sStatus = "zukan: species " + std::to_string(species) + (caught != 0 ? " seen + caught" : " seen");
   } else if (k == "pcfill") {
     pcboxDebugPokemonSetupFull();
+    for (int b = xd::pcboxes::kGameBoxes; w.size() > 1 && w[1] == "all" && b < xd::pcboxes::Count(); b++) {
+      uint8_t* from = static_cast<uint8_t*>(pcboxGetPokemonBoxName(nullptr, 0));
+      uint8_t* to = static_cast<uint8_t*>(pcboxGetPokemonBoxName(nullptr, static_cast<s8>(b)));
+      if (from != nullptr && to != nullptr) std::memcpy(to + 20, from + 20, static_cast<size_t>(xd::pcboxes::kSlots) * xd::pcboxes::kPokemonBytes);
+    }
+  } else if (k == "pcput") {
+    const long box = Num(w, 1, 0), species = Num(w, 2, 0), level = Num(w, 3, 5), count = Num(w, 4, 1);
+    if (box < 1 || box > xd::pcboxes::Count() || species < 1 || species > 0x3FFF || level < 1 || level > 100 || count < 1 || count > 30) {
+      sStatus = "pcput: <box 1.." + std::to_string(xd::pcboxes::Count()) + "> <species number> [level] [count 1..30]";
+      return;
+    }
+    int put = 0;
+    for (long i = 0; i < count; i++) {
+      alignas(16) static uint8_t pokemon[1024];
+      std::memset(pokemon, 0, sizeof pokemon);
+      pokemonCreate(pokemon, static_cast<u16>(species), static_cast<u8>(level), reinterpret_cast<void*>(gamedataGetStatus(nullptr, 1)));
+      if (pcboxAddPokemon(nullptr, pokemon, static_cast<s8>(box - 1)) == 1) put++;
+    }
+    sStatus = "pcput: " + std::to_string(put) + " of species " + std::to_string(species) + " into box " + std::to_string(box);
+    std::fprintf(stderr, "[devmenu] pcput box %ld: %d put\n", box, put);
+  } else if (k == "pcshow") {
+    const long box = Num(w, 1, 0);
+    uint8_t* rec = box >= 1 && box <= xd::pcboxes::Count() ? static_cast<uint8_t*>(pcboxGetPokemonBoxName(nullptr, static_cast<s8>(box - 1))) : nullptr;
+    if (rec == nullptr) {
+      sStatus = "pcshow: <box 1.." + std::to_string(xd::pcboxes::Count()) + ">";
+      return;
+    }
+    std::string name, list;
+    for (int i = 0; i < 10; i++) {
+      const uint16_t ch = static_cast<uint16_t>(rec[i * 2] | (rec[i * 2 + 1] << 8));
+      if (ch == 0) break;
+      name += ch >= 0x20 && ch < 0x7F ? static_cast<char>(ch) : '?';
+    }
+    int used = 0;
+    for (int i = 0; i < 30; i++) {
+      const u32 sp = pokemonBiosGetPokemonDataId(rec + 20 + static_cast<size_t>(i) * 0xC4);
+      if (sp != 0) used++;
+      list += (i > 0 ? " " : "") + std::to_string(sp);
+    }
+    std::fprintf(stderr, "[devmenu] pcshow box %ld \"%s\" (of %d): %d used: %s\n", box, name.c_str(), xd::pcboxes::Count(), used, list.c_str());
+    sStatus = "pcshow: box " + std::to_string(box) + " " + name;
   } else if (k == "heart") {
     const long slot = Num(w, 1, 1);
     void* p = slot >= 1 && slot <= 6 ? reinterpret_cast<void*>(heroGetStatus(nullptr, 3, static_cast<u16>(slot - 1)))

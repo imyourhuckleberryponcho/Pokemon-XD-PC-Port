@@ -6,7 +6,11 @@
 #include "disc_verify.h"
 #include "dol_tables.h"
 #include "xd_extra_sources.h"
+#if defined(XD_ANDROID_LAUNCHER)
+#include "xd_builtin_converters.h"
+#endif
 #include "xd_mod_rules.h"
+#include "xd_mod_assets.h"
 #include "xd_colosseum_page.h"
 #include "xd_modextract_page.h"
 #include "xd_gba_page.h"
@@ -41,6 +45,9 @@
 #include <SDL3/SDL_main.h>
 
 #include <launcher_sys.h>
+#if defined(__ANDROID__)
+#include <port_android_install.h>
+#endif
 
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
@@ -49,7 +56,7 @@
 #include <dxgi.h>
 #endif
 
-#if defined(__APPLE__)
+#if defined(__APPLE__) || defined(__ANDROID__)
 #include <unistd.h>
 #endif
 #include <SDL3/SDL_messagebox.h>
@@ -536,6 +543,12 @@ void ReadSetup(const std::vector<uint8_t>& data, SaveSummary& out) {
   if (!looks.empty()) {
     out.setup.push_back({Tr("Looks and sound"), looks});
   }
+  if (setup.pcBoxes > 8 || setup.engine == ep::Engine::Enhanced) {
+    out.pcBoxes = setup.pcBoxes > 8 ? setup.pcBoxes : 8;
+    out.pcBoxesCanRaise = setup.engine == ep::Engine::Enhanced;
+    out.pcBoxesFile = file;
+    if (setup.pcBoxes > 8) out.setup.push_back({Tr("PC boxes"), std::to_string(setup.pcBoxes)});
+  }
   if (setup.rules.present) {
     namespace tx = xd::rulesets::text;
     const std::string style = setup.rules.looks.Says() ? (setup.rules.looks.preset.empty() ? std::string("custom") : setup.rules.looks.preset) : std::string();
@@ -849,6 +862,7 @@ void SetUpUpdates(launcher::GameInfo::Updates& u, const fs::path& own) {
 #if defined(_WIN32)
   u.starterName = "Pokemon XD Launcher.exe|Pokemon XD.exe";
   u.requiredFiles = {"xd_launcher.exe", "xd.exe"};
+#elif defined(__ANDROID__)
 #else
   u.starterName = "Pokemon XD Launcher.sh|Pokemon XD.sh";
   u.requiredFiles = {"xd_launcher", "xd"};
@@ -1208,7 +1222,14 @@ int RunGameNow(const fs::path& program, int argc, char** argv) {
 
 }
 
+#if defined(__ANDROID__)
+extern "C" int XdAndroidLauncherMain(int argc, char** argv) {
+#else
 int main(int argc, char** argv) {
+#endif
+#if defined(XD_ANDROID_LAUNCHER)
+  xd::RegisterBuiltinConverters();
+#endif
   xd::cli::Options options = xd::cli::Parse(argc, argv);
   if (options.help) {
     ConsoleText(false, xd::cli::HelpText());
@@ -1274,7 +1295,11 @@ int main(int argc, char** argv) {
     game.restartArguments.push_back(argv[i]);
   }
   game.windowTitle = "Pok\xC3\xA9mon XD";
+#if defined(__ANDROID__)
+  game.subtitle = "Gale of Darkness - Android";
+#else
   game.subtitle = "Gale of Darkness - PC";
+#endif
   game.gameId = xd_settings::kGameId;
   game.textureGameId = "GXXE01";
   game.discHelp =
@@ -1363,16 +1388,24 @@ int main(int argc, char** argv) {
     }
   }
   game.appId = "PokemonXD.PCPort";
+#if !defined(__ANDROID__)
   game.readDiscPictures = ReadDiscPictures;
+#endif
   sGameProgram = game.program;
+#if !defined(__ANDROID__)
   if (const char* render = std::getenv("XD_LAUNCHER_RENDER"); render == nullptr || std::strcmp(render, "0") != 0) {
     game.renderPictures = RenderPictures;
   }
+#endif
   {
     const char* shaders = std::getenv("XD_LAUNCHER_SHADERS");
     const char* render = std::getenv("XD_LAUNCHER_RENDER");
     const bool off = shaders != nullptr ? std::strcmp(shaders, "0") == 0 : (render != nullptr && std::strcmp(render, "0") == 0);
+#if defined(__ANDROID__)
+    if (false) {
+#else
     if (!off) {
+#endif
       game.prepareShaders = PrepareShaders;
     }
   }
@@ -1408,10 +1441,31 @@ int main(int argc, char** argv) {
     }
     return true;
   };
+  game.raisePcBoxes = [](const fs::path& file, int boxes, std::string& error) {
+    namespace ep = engine::playthrough;
+    ep::Setup setup;
+    if (!ep::ReadFile(file, setup, error)) return false;
+    const int now = setup.pcBoxes > 8 ? setup.pcBoxes : 8;
+    if (setup.engine != ep::Engine::Enhanced || boxes <= now || boxes > 32) {
+      error = engine::i18n::Tr("This playthrough can't get that many boxes.");
+      return false;
+    }
+    setup.pcBoxes = boxes;
+    if (!ep::WriteFile(file, setup)) {
+      error = engine::i18n::Tr("The setup file could not be written.");
+      return false;
+    }
+    return true;
+  };
   static const engine::modcheck::GameRules modRules = xd::modrules::Rules();
   game.modRules = &modRules;
   game.openModDisc = xd::modrules::OpenDisc;
   game.closeModDisc = xd::modrules::CloseDisc;
+  game.modAssets = [](const std::string& id) {
+    xd::modassets::Context c;
+    c.assets = xd::SettingsFolder() / L"extra_assets";
+    return xd::modassets::Reason(id, c);
+  };
   game.modLooks = xd::playthrough::LooksOrSound;
   game.extra.sources = xd::ExtraSources();
   game.extra.identifyDisc = IdentifyDisc;
@@ -1433,8 +1487,30 @@ int main(int argc, char** argv) {
     return cached;
   };
   SetUpUpdates(game.updates, own);
+#if defined(__ANDROID__)
+  game.playInProcess = true;
+  game.installApk = [](const fs::path& apk, std::string& error) {
+    char why[256] = {};
+    const bool handed = PortAndroid_InstallApk(Utf8(apk).c_str(), why, sizeof why);
+    if (!handed) {
+      error = why;
+    }
+    return handed;
+  };
+  if (const char* apk = std::getenv("XD_ANDROID_INSTALL_TEST"); apk != nullptr && apk[0] != 0) {
+    char why[256] = {};
+    const bool handed = PortAndroid_InstallApk(apk, why, sizeof why);
+    std::fprintf(stderr, "[launcher] android install of %s: %s %s\n", apk, handed ? "handed to Android" : "FAILED:", why);
+  }
+  if (noLauncher) {
+    return 0;
+  }
+  launcher::Run(game);
+  return launcher::PlayRequested() ? 0 : 1;
+#else
   if (noLauncher) {
     return RunGameNow(game.program, argc, argv);
   }
   return launcher::Run(game);
+#endif
 }

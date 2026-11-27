@@ -130,6 +130,11 @@ struct Job {
   std::string note;
   std::vector<uint8_t> rgba;
   int width = 0, height = 0;
+  bool strip = false;
+  int stripLoop = 0, stripStep = 2, stripCount = 0, stripIdx = 0, stripBad = 0;
+  float stripWiden = 1.25f;
+  bool stripWidened = false;
+  std::vector<std::vector<uint8_t>> stripFrames;
 };
 
 std::vector<Job> sJobs;
@@ -150,7 +155,7 @@ std::vector<uint8_t> sPixels[2];
 int sMade = 0, sFailed = 0;
 FILE* sReport = nullptr;
 
-enum class Step { Boot, Load, Loading, Settle, Armed, Drawn, Next } sStep = Step::Boot;
+enum class Step { Boot, Load, Loading, Settle, StripWait, Armed, Drawn, Next } sStep = Step::Boot;
 uint32_t sStepFrame = 0;
 uint32_t sFrame = 0;
 bool sDrawnThisFrame = false;
@@ -425,7 +430,9 @@ void StopPose(_GSmodel* m) {
   if (m != nullptr && PoseFrame() >= 0.f) GSmodelStopTexAnimation(m), GSmodelSetTexAnimRate(m, 0.f);
 }
 
+float sStripPose = -1.f;
 float PoseFrame() {
+  if (sStripPose >= 0.f) return sStripPose;
   static const float v = [] {
     const char* e = std::getenv("XD_RENDER_ICON_POSE");
     return (e != nullptr && e[0] != '\0') ? static_cast<float>(std::atof(e)) : -1.f;
@@ -573,7 +580,7 @@ void StartJob(uint32_t frame) {
   }
 }
 
-u64 Key() { return sCurrent * 2 + (sJobs[sCurrent].refined ? 2 : 1); }
+u64 Key() { return sCurrent * 2 + (sJobs[sCurrent].refined ? 2 : 1) + (sJobs[sCurrent].strip ? (u64)(sJobs[sCurrent].stripIdx * 8 + sJobs[sCurrent].stripBad + 1) * 1000003ull : 0ull); }
 
 void DrawModel(GSgfxLayer* layer, _GSmodel* model, GXColor background, int stream) {
   const u32 s = static_cast<u32>(sSize) * 2;
@@ -646,6 +653,31 @@ public:
   void _render(GSgfxLayer* layer, GSgfxLayerPass pass) override { OnRender(layer, (int)pass); }
 };
 
+void FinishStrip(Job& job);
+void CollectStrip(Job& job, const std::vector<float>& premul, int width, int height, uint32_t frame) {
+  std::vector<uint8_t> pic = Resample(premul, width, height, width * 0.5f, height * 0.5f, (float)width, (float)height, sSize, sSize);
+  size_t covered = 0, opaque = 0;
+  for (size_t i = 3; i < pic.size(); i += 4) covered += pic[i] > 12, opaque += pic[i] >= 242;
+  if (covered == 0 || opaque * 10 < covered) {
+    if (++job.stripBad >= 4) {
+      job.failed = true, job.note = covered == 0 ? "nothing was drawn" : "washed-out pictures";
+      sStep = Step::Next;
+      return;
+    }
+    std::fprintf(stderr, "[render icon] %s: picture %d washed out or empty; drawn again\n", job.name.c_str(), job.stripIdx);
+    sStep = Step::StripWait, sStepFrame = frame;
+    return;
+  }
+  job.stripBad = 0;
+  job.stripFrames.push_back(std::move(pic));
+  if (++job.stripIdx < job.stripCount) {
+    sStripPose = static_cast<float>(job.stripIdx * job.stripStep);
+    sStep = Step::StripWait, sStepFrame = frame;
+    return;
+  }
+  FinishStrip(job);
+}
+
 void Collect(uint32_t frame) {
   Job& job = sJobs[sCurrent];
   const bool screen = job.kind == Kind::Logo || job.kind == Kind::Scene;
@@ -699,6 +731,10 @@ void Collect(uint32_t frame) {
     WritePng(sIconDir + kSep + job.name + (job.refined ? "_raw2" : "_raw1") + "_white.png", (int)width, (int)height, sPixels[1]);
   }
   const auto premul = Unblend(sPixels[0], sPixels[1], (int)(width * height));
+  if (job.strip) {
+    CollectStrip(job, premul, (int)width, (int)height, frame);
+    return;
+  }
   // The logo: only the top of the title picture (PRESS START and the copyright lines are below it).
   const int rows = job.kind == Kind::Logo ? (int)(height * 0.53f) : (int)height;
   if (job.face && !screen) {
@@ -835,6 +871,81 @@ void WriteOfferPicture(Job& job) {
   std::fprintf(stderr, "[render icon] wrote %s\n", file.c_str());
 }
 
+void FinishStrip(Job& job) {
+  const int s = sSize;
+  int x0 = s, y0 = s, x1 = -1, y1 = -1;
+  bool clipped = false;
+  for (const auto& f : job.stripFrames) {
+    for (int y = 0; y < s; y++) {
+      for (int x = 0; x < s; x++) {
+        if (f[(static_cast<size_t>(y) * s + x) * 4 + 3] <= 8) continue;
+        x0 = std::min(x0, x), y0 = std::min(y0, y), x1 = std::max(x1, x), y1 = std::max(y1, y);
+        if (x < 2 || y < 2 || x >= s - 2 || y >= s - 2) clipped = true;
+      }
+    }
+  }
+  if (x1 < 0) {
+    job.failed = true, job.note = "nothing was drawn";
+    sStep = Step::Next;
+    return;
+  }
+  if (clipped && !job.stripWidened) {
+    job.stripWidened = true;
+    job.stripWiden = 1.0f;
+    sView.dist *= 1.35f;
+    ApplyView();
+    std::fprintf(stderr, "[render icon] %s: the loop touches the edge of the view; drawn again from further away\n", job.name.c_str());
+    job.stripFrames.clear(), job.stripIdx = 0, job.stripBad = 0;
+    sStripPose = 0.f;
+    sStep = Step::StripWait, sStepFrame = sFrame;
+    return;
+  }
+  const int pad = std::max(2, s / 64);
+  x0 = std::max(0, x0 - pad), y0 = std::max(0, y0 - pad), x1 = std::min(s - 1, x1 + pad), y1 = std::min(s - 1, y1 + pad);
+  const int fw = x1 - x0 + 1, fh = y1 - y0 + 1, n = (int)job.stripFrames.size();
+  const float k = std::min(1.f, 16000.f / ((float)fw * n));
+  const int ow = std::max(1, (int)std::lround(fw * k)), oh = std::max(1, (int)std::lround(fh * k));
+  std::vector<uint8_t> sheet(static_cast<size_t>(ow) * n * oh * 4, 0);
+  for (int i = 0; i < n; i++) {
+    std::vector<float> premul(static_cast<size_t>(fw) * fh * 4);
+    for (int y = 0; y < fh; y++) {
+      for (int x = 0; x < fw; x++) {
+        const uint8_t* p = &job.stripFrames[i][(static_cast<size_t>(y0 + y) * s + (x0 + x)) * 4];
+        float* o = &premul[(static_cast<size_t>(y) * fw + x) * 4];
+        const float a = p[3] / 255.f;
+        o[0] = p[0] / 255.f * a, o[1] = p[1] / 255.f * a, o[2] = p[2] / 255.f * a, o[3] = a;
+      }
+    }
+    const std::vector<uint8_t> one = Resample(premul, fw, fh, fw * 0.5f, fh * 0.5f, (float)fw, (float)fh, ow, oh);
+    for (int y = 0; y < oh; y++) std::memcpy(&sheet[(static_cast<size_t>(y) * ow * n + static_cast<size_t>(i) * ow) * 4], &one[static_cast<size_t>(y) * ow * 4], static_cast<size_t>(ow) * 4);
+  }
+  const std::string png = sIconDir + kSep + job.name + ".png", txt = sIconDir + kSep + job.name + ".txt";
+  const double fps = 30.0 / job.stripStep;
+  if (!WritePng(png, ow * n, oh, sheet)) {
+    job.failed = true, job.note = "could not write " + png;
+    sStep = Step::Next;
+    return;
+  }
+  const std::string part = txt + ".part";
+  FILE* f = std::fopen(part.c_str(), "wb");
+  bool ok = f != nullptr;
+  if (ok) {
+    ok = std::fprintf(f, "%d %g %d %d\n", n, fps, ow, oh) > 0;
+    std::fclose(f);
+  }
+  std::error_code ec;
+  if (ok) std::filesystem::rename(PathOf(part), PathOf(txt), ec);
+  if (!ok || ec) {
+    job.failed = true, job.note = "could not write " + txt;
+  } else {
+    char note[160];
+    std::snprintf(note, sizeof note, "idle loop %d frames, %d pictures every %d (%g a second), frame %dx%d", job.stripLoop, n, job.stripStep, fps, ow, oh);
+    job.note = note;
+    std::fprintf(stderr, "[render icon] wrote %s (%s)\n", png.c_str(), note);
+  }
+  sStep = Step::Next;
+}
+
 void OnFrame(uint32_t frame) {
   if (sPrevious != nullptr) sPrevious(frame);
   sFrame = frame;
@@ -930,6 +1041,7 @@ void OnFrame(uint32_t frame) {
         GSmodelStartAnimation(job.model);
       }
       sShownFrame = frame;
+      if (job.strip) sStripPose = 0.f;
       sStep = Step::Settle;
       sStepFrame = frame;
     } else if (frame - sStepFrame > 60 * 30) {
@@ -974,6 +1086,32 @@ void OnFrame(uint32_t frame) {
         sStep = Step::Next;
         break;
       }
+      if (job.strip) {
+        const GSmodelLayout* layout = reinterpret_cast<const GSmodelLayout*>(job.model);
+        const int loop = GSmodelCanAnimate(job.model) != 0 ? static_cast<int>(GSmodelGetAnimFrameCount(job.model, static_cast<u32>(layout->animIndex)) + 0.5f) : 0;
+        std::fprintf(stderr, "[render icon] %s: animation %d has %d frames\n", job.name.c_str(), (int)layout->animIndex, loop);
+        if (loop < 4 || loop > 2000) {
+          job.failed = true, job.note = "the model has no idle animation (" + std::to_string(loop) + " frames)";
+          sStep = Step::Next;
+          break;
+        }
+        job.stripLoop = loop;
+        job.stripStep = std::max(2, (loop + 89) / 90);
+        job.stripCount = (loop + job.stripStep - 1) / job.stripStep;
+        sView.dist *= job.stripWiden;
+        ApplyView();
+        job.stripFrames.clear();
+        job.stripIdx = 0;
+        sStep = Step::Armed;
+        sStepFrame = frame;
+        break;
+      }
+      sStep = Step::Armed;
+      sStepFrame = frame;
+    }
+    break;
+  case Step::StripWait:
+    if (frame - sStepFrame >= 5) {
       sStep = Step::Armed;
       sStepFrame = frame;
     }
@@ -991,6 +1129,7 @@ void OnFrame(uint32_t frame) {
     if (sJobs[sCurrent].failed && sJobs[sCurrent].kind == Kind::Pokemon && !sJobs[sCurrent].retried) {
       Job copy = sJobs[sCurrent];
       std::fprintf(stderr, "[render icon] %s: %s; will be tried once more at the end\n", copy.name.c_str(), copy.note.c_str());
+      copy.stripFrames.clear(), copy.stripIdx = 0, copy.stripBad = 0, copy.stripWidened = false, copy.stripWiden = 1.25f;
       copy.failed = false, copy.tries = copy.tries + 1, copy.retried = copy.tries >= 3, copy.note.clear(), copy.sequence = nullptr, copy.model = nullptr, copy.refined = false;
       sJobs[sCurrent].failed = false, sJobs[sCurrent].retried = true, sJobs[sCurrent].note = "retried";
       sJobs.push_back(copy);
@@ -1005,6 +1144,8 @@ void OnFrame(uint32_t frame) {
       std::fprintf(sReport, "%s %s %s\n", job.name.c_str(), job.failed ? "failed" : "ok", job.note.c_str());
       std::fflush(sReport);
     }
+    sStripPose = -1.f;
+    job.stripFrames.clear();
     if (job.sequence != nullptr) Sequence_SetVisibility(job.sequence, false);
     sFreeLater = job.sequence;
     sFreeCacheGroup = job.fileGroup;
@@ -1047,6 +1188,15 @@ bool AddItem(const std::string& item) {
     if (row < 1) return false;
     add(Kind::Pokemon, row, shiny, "pokemon_" + std::to_string(row) + (shiny ? "_shiny" : ""));
     sJobs.back().row = true;
+    return true;
+  }
+  if (item.rfind("strip:", 0) == 0) {
+    const int row = (int)std::strtol(item.c_str() + 6, nullptr, 10);
+    const bool shiny = item.size() > 6 && item.compare(item.size() - 6, 6, ":shiny") == 0;
+    if (row < 1) return false;
+    add(Kind::Pokemon, row, shiny, std::to_string(row) + (shiny ? "_idle_shiny" : "_idle"));
+    sJobs.back().row = true;
+    sJobs.back().strip = true;
     return true;
   }
   if (item.rfind("species:", 0) == 0) {

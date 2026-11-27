@@ -25,7 +25,7 @@ struct Species {
   const GfMotion* mot(const std::string& k) const { for (auto& p : mots) if (p.first == k) return &p.second; return nullptr; }
   int group = 0;
 };
-Species load_species(const Garc& models, int group);
+Species load_species(const Garc& models, int group, int motion_group = -1);
 GfModel load_model_only(const Garc& models, int group);
 
 struct Opts {
@@ -34,6 +34,7 @@ struct Opts {
   double light = 1.0;
   int size_rule = 2;
   double height_cm = 0;
+  bool size_flat = false;
   bool hover_model = true;
   bool hover_idle = true;
   bool fx_skip_fire = false;

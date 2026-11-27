@@ -162,7 +162,7 @@ bool Parse(const std::string& text, Room& out, std::vector<std::string>& problem
     f.Number("angle", p.angle, -360, 360);
     f.Text("talk", p.talk), f.Text("move", p.move), f.Text("behavior", p.behavior);
     f.Bool("solid", p.solid), f.Bool("visible", p.visible), f.Bool("look_at_hero", p.lookAtHero), f.Bool("talk_through_walls", p.talkThroughWalls);
-    f.Bool("blend", p.blend), f.Whole("talk_start", p.talkStart, 0, 3), f.Whole("talk_end", p.talkEnd, 0, 1), f.Whole("name_text", p.nameText, 0, 0xFFFF);
+    f.Bool("blend", p.blend), f.Whole("talk_start", p.talkStart, 0, 3), f.Whole("talk_end", p.talkEnd, 0, 1), f.Whole("name_text", p.nameText, 0, 0xFFFF), f.Whole("motion", p.motion, 0, 255);
     if (!OneOf(p.behavior, {"stand", "wander", "look"})) {
       c.Say(v, "person \"" + p.name + "\": \"behavior\" must be stand, wander or look");
       good = false;
@@ -308,6 +308,7 @@ void Build(const Room& room, const Lookups& ask, Built& out, std::vector<std::st
     const int move = p.behavior == "wander" ? 2 : p.behavior == "look" ? 3 : 0;
     e[0] = static_cast<uint8_t>((p.visible ? 0x80 : 0) | 0x40 | (p.solid ? 0x20 : 0) | (p.lookAtHero ? 0x10 : 0) | (p.talkThroughWalls ? 0x08 : 0) | (p.blend ? 0x04 : 0));
     e[1] = static_cast<uint8_t>(move << 5 | static_cast<int>(p.talkStart) << 3 | static_cast<int>(p.talkEnd) << 1);
+    e[3] = static_cast<uint8_t>(p.motion);
     PutBe16(e + 4, static_cast<uint16_t>(static_cast<int16_t>(std::lround(p.angle))));
     PutBe16(e + 6, static_cast<uint32_t>(p.model));
     PutBe16(e + 8, static_cast<uint32_t>(p.nameText));

@@ -9,6 +9,7 @@
 #include <save_backups.h>
 #include <saveext.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -618,6 +619,133 @@ void TestCareful() {
   check(e3.UnpurifiedShadow(*e3.At(shadow)), "an unpurified Shadow Pokemon is recognised");
 }
 
+void TestMakeShadow(ByteOrder order) {
+  const std::string tag = std::string(" [") + xs::ByteOrderName(order) + "]";
+  const xd::legality::Rules rules = MakeRules();
+  se::Tables t = MakeTables(rules);
+  const std::vector<uint8_t> file = MakeFile(order, "WES");
+  se::Editor ed;
+  std::string error;
+  check(ed.Open(file, {}, error), "shadow: opens" + tag);
+  ed.Seed(5);
+  const se::Spot plain{se::Area::Party, 0, 0}, story{se::Area::Party, 0, 1};
+  check(ed.At(plain)->shadowId == 0 && ed.UnpurifiedShadow(*ed.At(story)), "shadow: party 1 is plain, party 2 is a story Shadow Pokemon" + tag);
+  se::ShadowWish wish;
+  const std::vector<uint8_t> before = ed.save().slotBytes;
+  check(!ed.MakeShadow(story, wish, t).empty() && ed.save().slotBytes == before, "shadow: a Shadow Pokemon is not made one again, nothing changed" + tag);
+  se::ShadowWish bad;
+  bad.moves[0] = 33;
+  check(!ed.MakeShadow(plain, bad, t).empty() && !ed.Dirty(), "shadow: only Shadow moves are accepted" + tag);
+  bad.moves[0] = 0;
+  check(!ed.MakeShadow(plain, bad, t).empty() && !ed.Dirty(), "shadow: at least one Shadow move is needed" + tag);
+  t.shadowRowFree = [](uint32_t row) { return row != 127; };
+  wish.gauge = 4500;
+  wish.revers = 3;
+  check(ed.MakeShadow(plain, wish, t).empty(), "shadow: made" + tag);
+  const xs::Pokemon& p = *ed.At(plain);
+  check(p.shadowId == 126, "shadow: the first free row from the end (127 was taken) is used" + tag);
+  const xs::ShadowEntry& e = ed.save().shadows[126];
+  check(e.Snagged() && !e.Purified() && e.heartGauge == 4500 && e.species == p.species && e.pid == p.pid, "shadow: snagged, full heart gauge, its species and personality value" + tag);
+  check(e.raw[0x40] == 3 && e.raw[0x3E + (order == ByteOrder::GameCube ? 1 : 0)] == 126, "shadow: reverse pattern and own row number" + tag);
+  check(e.raw[0x01] == 0xA1 || e.raw[0x01] == 0xA0, "shadow: byte 1 holds update and the origin" + tag);
+  check(ed.UnpurifiedShadow(p) && ed.WillMark(), "shadow: counts as an unpurified Shadow Pokemon and marks" + tag);
+  check(ed.ShadowOrders().size() == 1 && ed.ShadowOrdersChanged(), "shadow: one order for the setup file" + tag);
+  xs::ShadowOrder o;
+  check(xs::ParseShadowOrder(ed.ShadowOrders()[0], o) && o.row == 126 && o.species == p.species && o.gauge == 4500 && o.revers == 3 && o.moves[0] == xs::kShadowRush && o.level == p.level,
+        "shadow: the order says row, species, level, gauge, moves, pattern" + tag);
+  const std::vector<uint8_t> out = ed.Build(error);
+  xs::Save back;
+  xs::ReadReport rep;
+  check(!out.empty() && xs::ReadSave(out, back, rep, error) && back.party[0].shadowId == 126 && back.shadows[126].heartGauge == 4500, "shadow: the written file reads back" + tag);
+  check(ed.MakeShadow({se::Area::Party, 0, 2}, wish, t).empty() && ed.At({se::Area::Party, 0, 2})->shadowId == 125, "shadow: the next one takes row 125" + tag);
+  check(!ed.MakeNormal(story).empty(), "shadow: a story Shadow Pokemon can't be made ordinary" + tag);
+  const xs::ShadowEntry storyBefore = ed.save().shadows[ed.At(story)->shadowId];
+  check(ed.MakeNormal(plain).empty() && ed.At(plain)->shadowId == 0 && !ed.UnpurifiedShadow(*ed.At(plain)), "shadow: made ordinary again" + tag);
+  const xs::ShadowEntry& gone = ed.save().shadows[126];
+  check(gone.status == 0 && gone.heartGauge == ed.save().shadows[100].heartGauge && gone.species == ed.save().shadows[100].species, "shadow: the row is as an unused row again" + tag);
+  check(ed.ShadowOrders().size() == 1, "shadow: its order is gone, the other stays" + tag);
+  check(ed.save().shadows[ed.At(story)->shadowId].raw == storyBefore.raw, "shadow: the story's entry is byte for byte as it was" + tag);
+  se::Tables none = MakeTables(rules);
+  none.shadowRowFree = [](uint32_t) { return false; };
+  se::Editor ed2;
+  ed2.Open(file, {}, error);
+  check(!ed2.MakeShadow(plain, wish, none).empty() && !ed2.Dirty(), "shadow: no free row: refused, nothing changed" + tag);
+  xs::ShadowOrder a;
+  a.row = 90;
+  a.species = 415;
+  a.level = 20;
+  a.gauge = 2000;
+  a.moves[0] = 357;
+  a.moves[1] = 370;
+  a.revers = 4;
+  xs::ShadowOrder b;
+  check(xs::ParseShadowOrder(xs::FormatShadowOrder(a), b) && b.row == 90 && b.species == 415 && b.moves[1] == 370 && b.revers == 4 && xs::FormatShadowOrder(b) == xs::FormatShadowOrder(a), "shadow orders: text round trip");
+  check(!xs::ParseShadowOrder("", b) && !xs::ParseShadowOrder("90:415:20:2000:357:4", b) && !xs::ParseShadowOrder("90:415:20:2000:357,0,0,0:9", b) && !xs::ParseShadowOrder("0:415:20:2000:357,0,0,0:1", b) &&
+            !xs::ParseShadowOrder("90:415:20:0:357,0,0,0:1", b) && !xs::ParseShadowOrder("90:x:20:2000:357,0,0,0:1", b), "shadow orders: bad texts are refused");
+}
+
+void TestSpareShadowRows(ByteOrder order) {
+  const std::string tag = std::string(" [") + xs::ByteOrderName(order) + "]";
+  const xd::legality::Rules rules = MakeRules();
+  se::Tables t = MakeTables(rules);
+  t.moreShadows = true;
+  const std::vector<uint8_t> file = MakeFile(order, "WES");
+  se::Editor ed;
+  std::string error;
+  check(ed.Open(file, {}, error), "spare rows: opens" + tag);
+  ed.Seed(6);
+  const se::Spot plain{se::Area::Party, 0, 0}, story{se::Area::Party, 0, 1}, third{se::Area::Party, 0, 2};
+  se::ShadowWish wish;
+  wish.gauge = 8000;
+  int free0 = 0, total0 = 0;
+  ed.ShadowRowStats(t, free0, total0);
+  check(total0 == 256 && free0 == 256, "spare rows: 256 of 256 free with More Shadow Pokemon" + tag);
+  se::Tables plainT = MakeTables(rules);
+  ed.ShadowRowStats(plainT, free0, total0);
+  check(total0 == 300 && free0 == 300, "spare rows: 300 of 300 free in a plain playthrough (44 disc rows + 256 spare)" + tag);
+  const std::vector<uint8_t> slotBefore = ed.save().slotBytes;
+  check(ed.MakeShadow(plain, wish, t).empty(), "spare rows: made" + tag);
+  check(ed.At(plain)->shadowId == 383, "spare rows: the first spare row is 383" + tag);
+  check(ed.save().slotBytes != slotBefore && ed.save().shadows[127].status == 0, "spare rows: the pokemon's own record changed, the save's list rows stay" + tag);
+  const xs::ShadowEntry* e = ed.ShadowEntryOf(*ed.At(plain));
+  check(e != nullptr && e->status == 3 && e->heartGauge == 8000 && e->species == ed.At(plain)->species && e->pid == ed.At(plain)->pid, "spare rows: its entry is in the extension's records, snagged, gauge 8000" + tag);
+  check(ed.UnpurifiedShadow(*ed.At(plain)) && ed.EditorMadeShadow(plain) && ed.ExtraShadowsChanged(), "spare rows: counts as an editor-made Shadow Pokemon, the extension changed" + tag);
+  const std::vector<uint8_t> section = ed.ExtraShadowSection();
+  check(section.size() == 4 + 256 * xs::kShadowEntrySize && section[0] == 0 && section[1] == 1, "spare rows: the section holds rows 128..383 (256 records)" + tag);
+  check(ed.ShadowOrders().size() == 1 && ed.ShadowOrders()[0].rfind("383:", 0) == 0, "spare rows: the order names row 383" + tag);
+  int f1 = 0, t1 = 0;
+  ed.ShadowRowStats(t, f1, t1);
+  check(f1 == 255 && t1 == 256, "spare rows: 255 of 256 free" + tag);
+  se::Editor ed2;
+  check(ed2.Open(file, {}, error), "spare rows: a second editor opens" + tag);
+  ed2.SetExtraShadows(section);
+  ed2.SetShadowOrders(ed.ShadowOrders());
+  check(!ed2.ExtraShadowsChanged() && ed2.ExtraShadowSection() == section, "spare rows: the section reads back as it was" + tag);
+  check(ed.MakeShadow(third, wish, t).empty() && ed.At(third)->shadowId == 382, "spare rows: the next takes row 382" + tag);
+  check(!ed.MakeNormal(story).empty(), "spare rows: a story Shadow Pokemon is still refused" + tag);
+  check(ed.MakeNormal(plain).empty() && ed.At(plain)->shadowId == 0, "spare rows: made ordinary again" + tag);
+  const std::vector<uint8_t> sec2 = ed.ExtraShadowSection();
+  check(sec2.size() == section.size() && sec2[4 + 255 * xs::kShadowEntrySize] >> 5 == 0 && sec2[4 + 254 * xs::kShadowEntrySize] >> 5 == 3, "spare rows: row 383 is unused again, row 382 stays snagged" + tag);
+  se::Editor mv;
+  mv.Open(file, {}, error);
+  mv.Seed(7);
+  check(mv.MakeShadow(plain, wish, plainT).empty(), "where: made (disc row)" + tag);
+  const uint32_t row = mv.At(plain)->shadowId;
+  const se::Spot box{se::Area::Box, 2, 4};
+  const auto where = [&](const xs::Pokemon& p) {
+    const xs::ShadowEntry* en = mv.ShadowEntryOf(p);
+    return en == nullptr ? 0 : ((en->raw[1] & 0x03) << 1 | (en->raw[2] >> 7));
+  };
+  check(where(*mv.At(plain)) == 1, "where: in the party" + tag);
+  check(mv.Swap(plain, box).empty() && mv.At(box)->shadowId == row, "where: moved into box 3" + tag);
+  const xs::ShadowEntry* en = mv.ShadowEntryOf(*mv.At(box));
+  check(where(*mv.At(box)) == 2 && en != nullptr && en->raw[0x11] == 2, "where: PC box, box number 2" + tag);
+  check(mv.Swap(box, {se::Area::Party, 0, 3}).empty(), "where: moved back into the party" + tag);
+  int partySlot = -1;
+  for (int i = 0; i < xs::kPartySize; i++) if (mv.At({se::Area::Party, 0, i})->shadowId == row) partySlot = i;
+  check(partySlot >= 0 && where(*mv.At({se::Area::Party, 0, partySlot})) == 1, "where: in the party again" + tag);
+}
+
 void TestRealSave() {
   const char* path = std::getenv("XD_SAVEEDIT_TEST_SAVE");
   if (path == nullptr) {
@@ -644,6 +772,105 @@ void TestRealSave() {
 
 }
 
+void TestAbilitiesAndForms(ByteOrder order) {
+  const std::string tag = std::string(" [") + xs::ByteOrderName(order) + "]";
+  gScenario = 0;
+  xd::legality::Rules rules = MakeRules();
+  rules.species[1].hiddenAbility = 7;
+  rules.species[251].exists = true;
+  rules.species[251].formOf = 133;
+  rules.species[251].formKind = 1;
+  rules.species[251].abilities[0] = 5;
+  rules.species[252] = rules.species[251];
+  rules.species[252].formKind = 2;
+  rules.species[253] = rules.species[251];
+  rules.species[253].formKind = 0;
+  rules.species[254] = rules.species[251];
+  rules.species[254].formKind = 6, rules.species[254].plateItem = 31;
+  rules.species[255] = rules.species[251];
+  rules.species[255].formKind = 6, rules.species[255].plateItem = 32;
+  se::Tables t = MakeTables(rules);
+  t.abilityName = [](uint16_t id) { return "ABILITY" + std::to_string(id); };
+  t.formName = [](uint16_t row) { return "FORM" + std::to_string(row); };
+  const std::vector<uint8_t> file = MakeFile(order, "WES");
+  se::Editor ed;
+  std::string error;
+  check(ed.Open(file, {}, error), "abilities: the test save opens" + tag);
+  ed.Seed(3);
+  const se::Spot p1{se::Area::Party, 0, 0}, p3{se::Area::Party, 0, 2};
+  check(ed.At(p1)->SecondAbility() && !ed.At(p1)->HiddenAbility(), "the test Pokemon starts on its second ability place" + tag);
+  check(ed.SetAbilitySlot(p1, 2, t).empty() && ed.At(p1)->HiddenAbility() && !ed.At(p1)->SecondAbility(), "the hidden ability is set (and the second place left)" + tag);
+  check(ed.WillMark() && ed.changes().back().kind == "ability" && ed.changes().back().text.find("ABILITY7") != std::string::npos, "it marks, and the change says the ability's name" + tag);
+  check(ed.SetAbilitySlot(p1, 2, t).empty() && ed.changes().size() == 1, "the same place again changes nothing" + tag);
+  check(ed.SetAbilitySlot(p1, 1, t).empty() && ed.At(p1)->SecondAbility() && !ed.At(p1)->HiddenAbility(), "back to the second place clears the hidden mark" + tag);
+  check(ed.SetAbilitySlot(p1, 0, t).empty() && !ed.At(p1)->SecondAbility() && !ed.At(p1)->HiddenAbility(), "first place" + tag);
+  check(!ed.SetAbilitySlot(p1, 3, t).empty(), "a fourth place is refused" + tag);
+  check(ed.SetAbilitySlot(p1, 2, t).empty() && ed.SetSpecies(p1, 2, t).empty() && !ed.At(p1)->HiddenAbility(), "a species without a hidden ability loses the mark when it is chosen" + tag);
+  check(!ed.SetAbilitySlot(p1, 2, t).empty(), "no hidden ability on a species that has none here is refused" + tag);
+  check(ed.SetForm(p3, 251, t).empty() && ed.At(p3)->species == 251 && ed.changes().back().kind == "form" && ed.changes().back().text.find("FORM251") != std::string::npos, "an Alolan form is set; the change names it" + tag);
+  check(ed.SetForm(p3, 253, t).empty() && ed.At(p3)->species == 253, "from one form to another form of the same species" + tag);
+  check(!ed.SetForm(p3, 252, t).empty() && ed.At(p3)->species == 253, "a Mega form is never offered" + tag);
+  check(!ed.SetForm(p3, 134, t).empty() && ed.At(p3)->species == 253, "a form of another species is refused" + tag);
+  check(ed.SetForm(p3, 133, t).empty() && ed.At(p3)->species == 133, "back to the normal form (the base row)" + tag);
+  const uint16_t item0 = ed.At(p3)->heldItem;
+  check(ed.SetForm(p3, 254, t).empty() && ed.At(p3)->species == 254 && ed.At(p3)->heldItem == 31, "a Plate form is set together with its Plate" + tag);
+  check(ed.SetHeldItem(p3, 32, t).empty() && ed.At(p3)->species == 255 && ed.At(p3)->heldItem == 32, "another Plate as the held item turns the form" + tag);
+  check(ed.SetForm(p3, 254, t).empty() && ed.At(p3)->species == 254 && ed.At(p3)->heldItem == 31, "from one Plate form to another changes the Plate" + tag);
+  check(ed.SetHeldItem(p3, 7, t).empty() && ed.At(p3)->species == 133 && ed.At(p3)->heldItem == 7, "another item in place of the Plate puts the plain row back" + tag);
+  check(ed.SetHeldItem(p3, 31, t).empty() && ed.At(p3)->species == 254, "a Plate in the plain form turns it" + tag);
+  check(ed.SetForm(p3, 133, t).empty() && ed.At(p3)->species == 133 && ed.At(p3)->heldItem == 0, "the normal form takes the Plate away" + tag);
+  (void)item0;
+  {
+    const std::vector<uint8_t> raw = ed.Build(error);
+    xs::Save back2;
+    xs::ReadReport rep;
+    check(!raw.empty() && xs::ReadSave(raw, back2, rep, error), "the edited save writes and reads back: " + error);
+  }
+  {
+    xs::Pokemon q = *ed.At(p3);
+    q.species = 254, q.heldItem = 0;
+    auto codes = [&](const xs::Pokemon& x) { std::string s; for (const auto& f : xd::legality::Check(x, rules, xd::legality::Level::Legal, {}).findings) s += f.code + ","; return s; };
+    check(codes(q).find("form.plate") != std::string::npos, "the checker: a Plate form without its Plate" + tag);
+    q.species = 133, q.heldItem = 31;
+    check(codes(q).find("form.plate") != std::string::npos, "the checker: a Plate held in the plain form" + tag);
+    q.species = 254;
+    check(codes(q).find("form.plate") == std::string::npos, "the checker: form and Plate agree" + tag);
+  }
+
+  xd::legality::TablesFile tf;
+  tf.rules = rules;
+  tf.stamp = "0123456789abcdef";
+  tf.names = std::make_shared<xd::legality::TableNames>();
+  tf.names->species = {"", "BULBA"};
+  tf.names->abilities = {"", "STENCH", "DRIZZLE", "", "", "", "", "ADAPT"};
+  tf.names->abilityText = {"", "Stinks.", "", "", "", "", "", "Adapts."};
+  tf.names->formKey.assign(300, std::string());
+  tf.names->formKey[251] = "FORM (Alola)";
+  const std::vector<uint8_t> bytes = xd::legality::Serialize(tf);
+  xd::legality::TablesFile back;
+  check(xd::legality::Parse(bytes, back, error) && back.hasExtras, "a version 2 tables file reads back: " + error);
+  check(back.Ability(7) == "ADAPT" && back.AbilityText(7) == "Adapts." && back.AbilityText(2).empty() && back.FormKey(251) == "FORM (Alola)" && back.FormKey(5).empty(), "ability names and texts and the form keys survive");
+  check(back.rules.species[254].plateItem == 31 && back.rules.species[255].plateItem == 32 && back.rules.species[251].plateItem == 0, "the Plate items of the Plate form rows survive");
+  check(back.rules.species[1].hiddenAbility == 7 && back.rules.species[251].formOf == 133 && back.rules.species[251].formKind == 1 && back.rules.species[252].formKind == 2 &&
+            back.rules.species[2].hiddenAbility == 0 && back.rules.species[2].formOf == 0,
+        "hidden abilities, form of and form kind survive, and only for the rows that have them");
+  {
+    xd::legality::TablesFile plain = tf;
+    for (auto& sp : plain.rules.species) sp.hiddenAbility = 0, sp.formOf = 0, sp.formKind = 0;
+    plain.names->abilityText.clear();
+    plain.names->formKey.clear();
+    std::vector<uint8_t> v = xd::legality::Serialize(plain);
+    v.resize(v.size() - 4 - 12);
+    v[4] = 1;
+    uint32_t h = 2166136261u;
+    for (uint8_t b : v) h = (h ^ b) * 16777619u;
+    for (int i = 0; i < 4; i++) v.push_back(static_cast<uint8_t>(h >> (8 * i)));
+    xd::legality::TablesFile old;
+    check(xd::legality::Parse(v, old, error) && !old.hasExtras && old.Ability(7) == "ADAPT" && old.AbilityText(7).empty() && old.rules.species[251].formOf == 0,
+          "a version 1 file still reads, without the extras: " + error);
+  }
+}
+
 int main() {
   TestOps(ByteOrder::GameCube);
   TestOps(ByteOrder::PC);
@@ -654,6 +881,12 @@ int main() {
   TestCommit();
   TestTablesFile();
   TestCareful();
+  TestAbilitiesAndForms(ByteOrder::GameCube);
+  TestAbilitiesAndForms(ByteOrder::PC);
+  TestMakeShadow(ByteOrder::GameCube);
+  TestMakeShadow(ByteOrder::PC);
+  TestSpareShadowRows(ByteOrder::GameCube);
+  TestSpareShadowRows(ByteOrder::PC);
   TestRealSave();
   std::printf(sOk ? "ALL OK\n" : "FAILED\n");
   return sOk ? 0 : 1;

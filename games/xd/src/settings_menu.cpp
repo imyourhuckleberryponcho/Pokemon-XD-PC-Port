@@ -1,12 +1,16 @@
 #include "i18n.h"
+#include "xd_mod_assets.h"
 #include "xd_battle_models.h"
 #include "xd_playthrough.h"
 #include "xd_shadow_capacity.h"
 #include "xd_rulesets.h"
+#include "xd_savestate_ui.h"
 #include "xd_ruleset_texts.h"
 #include "xd_speedrun.h"
 #include "xd_challenges.h"
 #include "xd_shiny.h"
+#include "xd_exp_share.h"
+#include "xd_pc_boxes.h"
 #include "xd_gen4.h"
 #include "xd_gen57.h"
 #include "xd_languages.h"
@@ -137,6 +141,7 @@ int PortXD_CheatsEnabled(void);
 int PortXD_CheatDo(const char* action);
 int PortXD_CheatsWarned(void);
 void PortXD_CheatsSetWarned(int warned);
+uint32_t PortSpeedups_SaveStatesPresses(void);
 uint32_t PortSpeedups_CheatMenuPresses(void);
 }
 struct BagSlot {
@@ -205,7 +210,9 @@ bool IsTitleMenu(const void* window) {
 }
 
 bool sOn = false;
-bool sSelected = false;
+int sWrapPass = 0;
+int sSel = 0;
+int ExtraRows() { return xd::savestate_ui::Offered() ? 2 : 1; }
 bool sTitleSelected = false;
 bool sTitleMods = false;
 bool sTitleOnline = false;
@@ -840,31 +847,37 @@ void BarColour(const uint8_t* c, uint8_t* out) {
 }
 
 const char* EntryName() { return Tr("SETTINGS"); }
+const char* EntryNameOf(int k) { return k == 2 ? Tr("SAVE STATES") : Tr("SETTINGS"); }
 
-void DrawEntry(ImDrawList* dl, const Capture& cap, bool selected) {
+void DrawEntry(ImDrawList* dl, const Capture& cap, int sel) {
   if (!cap.any || cap.menu == nullptr) return;
   const Screen sc = ScreenNow();
-  DrawSprite(dl, sc, cap.button, kRow);
-  if (selected) {
-    uint8_t bar[4];
-    BarColour(cap.bar.sp.color, bar);
-    DrawSprite(dl, sc, cap.bar, kRow, bar);
-    DrawSprite(dl, sc, cap.flash, kRow);
+  const int n = ExtraRows();
+  for (int k = 1; k <= n; k++) {
+    const int dy = kRow * k;
+    const bool selected = sel == k;
+    DrawSprite(dl, sc, cap.button, static_cast<float>(dy));
+    if (selected) {
+      uint8_t bar[4];
+      BarColour(cap.bar.sp.color, bar);
+      DrawSprite(dl, sc, cap.bar, static_cast<float>(dy), bar);
+      DrawSprite(dl, sc, cap.flash, static_cast<float>(dy));
+    }
+    if (cap.text.seen) {
+      const SpriteWorkLayout& t = cap.text.sp;
+      const char* name = EntryNameOf(k);
+      int rectW = TextWidth(name);
+      const int rectH = sFontW + 1;
+      const float squeeze = rectW > t.w && t.w > 0 ? static_cast<float>(t.w) / static_cast<float>(rectW) : 1.f;
+      rectW = static_cast<int>(static_cast<float>(rectW) * squeeze);
+      const int x = (t.w - rectW) / 2, y = (t.h - rectH) / 2 - 2;
+      uint8_t col[4] = {0xF0, 0xF0, 0xF0, static_cast<uint8_t>(selected ? 0xFF : 0x80)};
+      col[3] = static_cast<uint8_t>(col[3] * cap.text.winColor[3] / 255);
+      DrawText(dl, sc, static_cast<float>(cap.text.offX + t.x + x), static_cast<float>(cap.text.offY + t.y + y + dy),
+               name, col, squeeze);
+    }
+    if (selected) DrawSprite(dl, sc, cap.hand, static_cast<float>(dy));
   }
-  if (cap.text.seen) {
-    const SpriteWorkLayout& t = cap.text.sp;
-    const char* name = EntryName();
-    int rectW = TextWidth(name);
-    const int rectH = sFontW + 1;
-    const float squeeze = rectW > t.w && t.w > 0 ? static_cast<float>(t.w) / static_cast<float>(rectW) : 1.f;
-    rectW = static_cast<int>(static_cast<float>(rectW) * squeeze);
-    const int x = (t.w - rectW) / 2, y = (t.h - rectH) / 2 - 2;
-    uint8_t col[4] = {0xF0, 0xF0, 0xF0, static_cast<uint8_t>(selected ? 0xFF : 0x80)};
-    col[3] = static_cast<uint8_t>(col[3] * cap.text.winColor[3] / 255);
-    DrawText(dl, sc, static_cast<float>(cap.text.offX + t.x + x), static_cast<float>(cap.text.offY + t.y + y + kRow),
-             name, col, squeeze);
-  }
-  if (selected) DrawSprite(dl, sc, cap.hand, kRow);
 }
 
 struct TitleCapture {
@@ -1018,10 +1031,15 @@ const Row kRows[] = {
     {"audio.ff_effects", [] { return Tr("Effects while fast-forwarding"); }, 0, true, ""},
     {"gameplay.physical_special_split", [] { return Tr("Physical/special split"); }, 0, true, ""},
     {"gameplay.tm_move_names", [] { return Tr("TMs show their move"); }, 0, true, ""},
+    {"gameplay.random_forms", [] { return Tr("Random looks"); }, 0, true, ""},
     {"video.battle_revolution_models", [] { return Tr("Battle Revolution models"); }, 0, true, ""},
     {"system.pause_on_focus_loss", [] { return Tr("Pause in the background"); }, 0, true, ""},
     {"system.background_controller", [] { return Tr("Controller in the background"); }, 0, false, ""},
     {"system.discord_presence", [] { return Tr("Discord presence"); }, 0, false, ""},
+    {"system.stream_overlay", [] { return Tr("Stream overlay"); }, 0, false, ""},
+    {"system.stream_overlay_moving", [] { return Tr("Moving pictures"); }, 0, false, ""},
+    {"system.stream_overlay_look", [] { return Tr("Stream overlay look"); }, 0, false, ""},
+    {"system.save_states", [] { return Tr("Save states"); }, 0, true, ""},
     {"cheats.enabled", [] { return Tr("Enable cheats"); }, 0, true, ""},
     {nullptr, [] { return Tr("Back"); }, 0, false, ""},
 };
@@ -1456,10 +1474,8 @@ int ChoiceNames(const Row& r, std::string& left, std::string& right) {
   return v.i == 0 ? 0 : 1;
 }
 
-void Choose(const Row& r, int side) {
-  std::string left, right;
-  const int now = ChoiceNames(r, left, right);
-  if (now != side) Change(r, side > now ? +1 : -1);
+void Choose(const Row& r) {
+  Change(r, +1);
 }
 
 template <class F> std::vector<std::string> WrapBy(const std::string& text, F&& widthOf) {
@@ -2041,8 +2057,7 @@ bool PageFrame(void*, const PortMenuInput* in) {
   const Row& row = *sPage.rows[sPage.cursor];
   if (row.id != nullptr) {
     if (screen && TwoChoices(row)) {
-      if (in->repeat & PAD_BUTTON_LEFT) Choose(row, 0);
-      if (in->repeat & PAD_BUTTON_RIGHT) Choose(row, 1);
+      if (in->repeat & (PAD_BUTTON_LEFT | PAD_BUTTON_RIGHT)) Choose(row);
     } else {
       if (in->repeat & PAD_BUTTON_LEFT) Change(row, -1);
       if (in->repeat & PAD_BUTTON_RIGHT) Change(row, +1);
@@ -2179,7 +2194,7 @@ namespace ng {
 
 constexpr int kShadowPcts[] = {10, 25, 50, 75, 100};
 
-enum class Kind { Original, RuleSet, Pokemon, Looks, Engine, Timer, Setting, Mod, Randomizer, RandomizerSwitch, RandomizerCode, RandomizerPaste, MoreShadows, Challenges, ShinyOdds, ShinyShadow, ShinyGift, ShinySpot, Starter, StarterTwo, Start };
+enum class Kind { Original, RuleSet, Pokemon, Looks, Engine, Timer, Setting, Mod, Randomizer, RandomizerSwitch, RandomizerCode, RandomizerPaste, MoreShadows, Challenges, ShinyOdds, ShinyShadow, ShinyGift, ShinySpot, Starter, StarterTwo, ExpShare, PcBoxes, Start };
 struct SRow {
   Kind kind;
   const Row* setting = nullptr;
@@ -2211,6 +2226,8 @@ struct State {
   std::string moreShadowsNote;
   int shinyOdds = 0;
   int starterChoose = 0, starterTwo = 0;
+  int expShare = 0;
+  int pcBoxes = 8;
   int shinyUnlock = 0;
   std::vector<bool> rules;
   int timer[4] = {0, 0, 0, 0};
@@ -2301,8 +2318,16 @@ const SwitchText kSwitchTexts[] = {
      [] { return Tr("Only for \"Random\" ground items. On: only items that have a name (no \"????\" items). Off: every item number, "
                     "as codes from before version 0.7.2 did. Leave it On unless you are playing an old code."); }},
     {"abilities", [] { return Tr("Abilities"); },
-     [] { return Tr("Pokemon get other abilities, so a Pokemon may surprise you in battle. Wonder Guard and Forecast "
-                    "are never handed out."); }},
+     [] { return Tr("Pokemon get other abilities, so a Pokemon may surprise you in battle. Wonder Guard, Forecast and the abilities "
+                    "that change a Pokemon's form are never handed out."); }},
+    {"abilities.all", [] { return Tr("Abilities of every generation"); },
+     [] { return Tr("Every Pokemon: the Gen 4-7 Pokemon get other abilities too, and the abilities they carry (Technician, Moxie, "
+                    "Prankster...) can go to any Pokemon, but only those the game has an effect for. Pokemon whose ability changes "
+                    "their form (Wishiwashi, Aegislash, Arceus...) keep theirs. Newer abilities are only handed out when their rules are on: Gen 4 abilities with the Gen 4 rules, Gen 5-7 abilities with a Gen 5-7 rule set; without them only abilities of the original game. "
+                    "Disc Pokemon only: as codes made before version 0.8.0."); }},
+    {"abilities.rules", [] { return Tr("Newer abilities"); },
+     [] { return Tr("With \"Abilities of every generation\". Gen 4 abilities are handed out only when the Gen 4 rules are on, and Gen 5-7 abilities "
+                    "only when a Gen 5-7 rule set is on (they would do nothing otherwise). Starting the game sets this from your rules."); }},
     {"abilities.family", [] { return Tr("Same in a family"); },
      [] { return Tr("Abilities. On: a Pokemon keeps its ability when it evolves. Off: each stage gets its own."); }},
     {"tm_compat", [] { return Tr("TM learners"); },
@@ -2347,6 +2372,40 @@ const SwitchText kSwitchTexts[] = {
     {"gen57", [] { return Tr("Include Gen 5-7 Pokemon"); },
      [] { return Tr("Also adds the 314 Gen 5-7 Pokemon. Needs the Gen 4 Pokemon switch on and the Gen 5-7 pack "
                     "(launcher, Extra assets page)."); }},
+    {"battles_mt", [] { return Tr("Mt. Battle teams"); },
+     [] { return Tr("Other Pokemon in the teams of Mt. Battle's 100 trainers. Levels stay as the game has them, and a team never has the "
+                    "same Pokemon or the same held item twice. Example: a trainer's Zubat may turn into a Poliwag. "
+                    "The prizes stay."); }},
+    {"battles_colosseum", [] { return Tr("Orre Colosseum teams"); },
+     [] { return Tr("Other Pokemon in the teams of the Orre Colosseum's trainers. Levels stay (all level 20 or 40, as the game has them), "
+                    "and a team never has the same Pokemon or the same held item twice. Example: a level 20 Pidgey may turn into a "
+                    "level 20 Poliwag."); }},
+    {"battle_similar", [] { return Tr("Battles: strength"); },
+     [] { return Tr("Mt. Battle and the Orre Colosseum: each Pokemon is replaced by one about as "
+                    "strong. Off: any Pokemon the Legendaries row allows."); }},
+    {"battle_moves", [] { return Tr("Battles: moves"); },
+     [] { return Tr("For those battles' new Pokemon. By level: the last four moves it learns up to its level. Kept: the moves the game "
+                    "gave that slot. The Trainers' levels, held items and natures rows below "
+                    "count here too (Mt. Battle levels never go past their area's top level)."); }},
+    {"gens_1", [] { return Tr("Generation 1 Pokemon"); },
+     [] { return Tr("Bulbasaur to Mew (151). Left out: none of them is handed out anywhere the randomizer picks Pokemon (Poke Spots, "
+                    "trainers, Shadow Pokemon, the starter, the other battles). At least one generation stays used. Example: with "
+                    "Generation 1 left out, no Eevee or Pikachu appears."); }},
+    {"gens_2", [] { return Tr("Generation 2 Pokemon"); },
+     [] { return Tr("Chikorita to Celebi (100). Left out: none of them is handed out anywhere the randomizer picks Pokemon. At least "
+                    "one generation stays used. Example: with Generation 2 left out, no Togepi or Lugia appears."); }},
+    {"gens_3", [] { return Tr("Generation 3 Pokemon"); },
+     [] { return Tr("Treecko to Deoxys (135). Left out: none of them is handed out anywhere the randomizer picks Pokemon. At least "
+                    "one generation stays used. Example: with Generation 3 left out, no Gardevoir or Rayquaza appears."); }},
+    {"gens_4", [] { return Tr("Generation 4 Pokemon"); },
+     [] { return Tr("Turtwig to Arceus (107; needs \"Include Gen 4 Pokemon\"). Left out: none of them is handed out. Example: with "
+                    "Generation 4 left out, no Lucario or Garchomp appears."); }},
+    {"gens_5", [] { return Tr("Generation 5 Pokemon"); },
+     [] { return Tr("Victini to Genesect (156; needs \"Include Gen 5-7 Pokemon\"). Left out: none of them is handed out."); }},
+    {"gens_6", [] { return Tr("Generation 6 Pokemon"); },
+     [] { return Tr("Chespin to Volcanion (72; needs \"Include Gen 5-7 Pokemon\"). Left out: none of them is handed out."); }},
+    {"gens_7", [] { return Tr("Generation 7 Pokemon"); },
+     [] { return Tr("Rowlet to Zeraora (86; needs \"Include Gen 5-7 Pokemon\"). Left out: none of them is handed out."); }},
 };
 
 std::string ChoiceNote(const std::string& id, uint32_t v) {
@@ -2451,6 +2510,13 @@ std::string ChoiceShown(std::string name) {
   if (name == "natural (by level)") return Tr("By level");
   if (name == "only where the disc had one") return Tr("As on the disc");
   if (name == "matched to the new Pokemon's strength") return Tr("To strength");
+  if (name == "disc Pokemon only") return Tr("Disc Pokemon only");
+  if (name == "every Pokemon") return Tr("Every Pokemon");
+  if (name == "original rules only") return Tr("Original rules only");
+  if (name == "+ Gen 4 abilities") return Tr("+ Gen 4 abilities");
+  if (name == "+ Gen 4-7 abilities") return Tr("+ Gen 4-7 abilities");
+  if (name == "used") return Tr("Used");
+  if (name == "left out") return Tr("Left out");
   if (name == "off") return Tr("Off");
   if (name == "on") return Tr("On");
   if (name == "kept") return Tr("Kept");
@@ -2517,6 +2583,24 @@ void SetRandomizerSwitch(int sw, uint32_t value) {
   const auto& schema = xd::randomizer::GetSchema();
   engine::randomizer::Settings rs = CodeSettings(s.rCode);
   rs.Set(schema, schema.switches[sw].id, value);
+  {
+    const std::string& id = schema.switches[sw].id;
+    if (id == "gen4" || id == "gen57" || id == "abilities") {
+      if (id == "gen4" && value == 0) rs.Set(schema, "abilities.all", 0);
+      else if (value != 0 && rs.Get(schema, "abilities") != 0 && rs.Get(schema, "gen4") != 0) rs.Set(schema, "abilities.all", 1);
+    }
+  }
+  if (schema.switches[sw].id.rfind("gens_", 0) == 0 && value != 0) {
+    bool anyUsed = false;
+    for (int g = 1; g <= 7; g++) {
+      const bool exists = g <= 3 || (g == 4 && rs.Get(schema, "gen4") != 0) || (g >= 5 && rs.Get(schema, "gen57") != 0);
+      if (exists && rs.Get(schema, "gens_" + std::to_string(g)) == 0) anyUsed = true;
+    }
+    if (!anyUsed) {
+      s.rMessage = Tr("At least one generation has to stay used.");
+      return;
+    }
+  }
   s.rCode = engine::randomizer::EncodeCode(schema, rs);
   s.rMessage.clear();
 }
@@ -2593,6 +2677,14 @@ void BuildRows() {
       if (parent >= 0 && rs.Get(schema, schema.switches[parent].id) == 0) continue;
       if (schema.switches[i].id == "gen4" && xd::xg::Off(xd::xg::Feature::Gen4Pokemon) != nullptr) continue;
       if (schema.switches[i].id == "starter.similar" && rs.Get(schema, "starter.choice") == 2) continue;
+      const std::string& swId = schema.switches[i].id;
+      if (swId == "gens_4" && rs.Get(schema, "gen4") == 0) continue;
+      if (swId == "abilities.all" && rs.Get(schema, "gen4") == 0) continue;
+      if (swId == "abilities.rules") continue;
+      if ((swId == "gens_5" || swId == "gens_6" || swId == "gens_7") && rs.Get(schema, "gen57") == 0) continue;
+      if ((swId == "battle_similar" || swId == "battle_moves") && rs.Get(schema, "battles_mt") + rs.Get(schema, "battles_colosseum") == 0) {
+        continue;
+      }
       s.rows.push_back({Kind::RandomizerSwitch, nullptr, -1, i});
     }
   }
@@ -2603,6 +2695,8 @@ void BuildRows() {
   if (xd::xg::Off(xd::xg::Feature::Randomizer) == nullptr) s.rows.push_back({Kind::MoreShadows});
   s.rows.push_back({Kind::Starter});
   if (s.starterChoose != 0) s.rows.push_back({Kind::StarterTwo});
+  if (s.engine == engine::playthrough::Engine::Enhanced) s.rows.push_back({Kind::PcBoxes});
+  if (s.engine == engine::playthrough::Engine::Enhanced) s.rows.push_back({Kind::ExpShare});
   for (int i = 0; i < static_cast<int>(xd::challenges::Rules().size()); i++) {
     if (xd::rulesets::IsOwnedId(xd::challenges::Rules()[i].id)) continue;
     s.rows.push_back({Kind::Challenges, nullptr, -1, i});
@@ -2619,6 +2713,7 @@ engine::playthrough::Setup Chosen() {
   const std::vector<std::string> options = s.engine == engine::playthrough::Engine::Enhanced
                                                ? xd::shiny::OptionsOf(s.shinyOdds, s.shinyUnlock)
                                                : std::vector<std::string>();
+  const std::vector<std::string> expOptions = s.engine == engine::playthrough::Engine::Enhanced ? xd::expshare::OptionsOf(s.expShare != 0) : std::vector<std::string>();
   if (s.rStyle != 0 && xd::xg::Off(xd::xg::Feature::Gen4Pokemon) == nullptr && xd::randomizer::CodeIncludesGen4(s.rCode) &&
       std::find(rules.begin(), rules.end(), "gen4_pokemon") == rules.end()) {
     rules.insert(rules.begin(), "gen4_pokemon");
@@ -2628,6 +2723,7 @@ engine::playthrough::Setup Chosen() {
     rules.insert(rules.begin(), "gen57_pokemon");
   }
   std::vector<std::string> allOptions = options;
+  for (const std::string& o : expOptions) allOptions.push_back(o);
   if (StarterBlockedWhy().empty()) {
     for (const std::string& o : xd::starter::ChoiceOptions(s.starterChoose != 0, s.starterTwo != 0)) allOptions.push_back(o);
   }
@@ -2638,7 +2734,21 @@ engine::playthrough::Setup Chosen() {
     c.present = true;
     xd::rulesets::Apply(setup, c);
   }
+  if (!setup.randomizer.empty()) {
+    const auto& schema = xd::randomizer::GetSchema();
+    engine::randomizer::Settings rs = CodeSettings(setup.randomizer);
+    if (rs.Get(schema, "abilities.all") != 0) {
+      const auto has = [&](const char* id) { return std::find(setup.challenges.begin(), setup.challenges.end(), id) != setup.challenges.end(); };
+      const uint32_t level = has("gen5_rules") || has("gen6_rules") || has("gen7_rules") ? 2 : has("gen4_rules") ? 1 : 0;
+      if (rs.Get(schema, "abilities.rules") != level) {
+        rs.Set(schema, "abilities.rules", level);
+        setup.randomizer = engine::randomizer::EncodeCode(schema, rs);
+      }
+    }
+  }
   if (s.moreShadows != 0 && xd::xg::Off(xd::xg::Feature::Randomizer) == nullptr) setup.moreShadows = xd::randomizer::MoreShadowsText(s.moreShadows, s.moreShadowsSeed, s.moreShadowsPct);
+  setup.pcBoxes = s.engine == engine::playthrough::Engine::Enhanced ? xd::pcboxes::Clamp(s.pcBoxes) : 8;
+  if (setup.pcBoxes <= 8) setup.pcBoxes = 0;
   setup.speedrun.present = setup.speedrun.on = s.timer[0] != 0;
   setup.speedrun.withoutLoads = s.timer[0] == 2;
   setup.speedrun.start = s.timer[1];
@@ -2690,6 +2800,8 @@ std::string RowLabel(const SRow& r) {
   case Kind::ShinySpot: return Tr("Shiny Bonsly / Munchlax");
   case Kind::Starter: return Tr("Starter");
   case Kind::StarterTwo: return Tr("Two starters");
+  case Kind::ExpShare: return Tr("Modern Exp. Share");
+  case Kind::PcBoxes: return Tr("PC boxes");
   case Kind::Challenges:
     if (!RuleBlockedWhy(xd::challenges::Rules()[r.sw].id).empty()) {
       return Fmt(Tr("%s (not available)"), xd::challenges::Rules()[r.sw].label());
@@ -2711,9 +2823,9 @@ std::string MoreShadowsInfo() {
     } else {
       have = xd::shadowcap::Get(0, cap);
     }
-    if (have) return Fmt(Tr("%d%%: %d Pokemon of story trainers become Shadow Pokemon (no species twice)."), s.moreShadowsPct, xd::shadowcap::RealCountOf(cap, s.moreShadowsPct));
+    if (have) return Fmt(Tr("%d%%: %d Pokemon of trainers become Shadow Pokemon (no species twice)."), s.moreShadowsPct, xd::shadowcap::RealCountOf(cap, s.moreShadowsPct));
   }
-  return Tr("Off: the plain game. Pick a percentage of story trainers' Pokemon to become Shadow Pokemon.");
+  return Tr("Off: the plain game. Pick a percentage of trainers' Pokemon to become Shadow Pokemon.");
 }
 
 std::string StyleNote(int style) {
@@ -2766,7 +2878,8 @@ std::string RowInfo(const SRow& r) {
     const auto& def = xd::randomizer::GetSchema().switches[r.sw];
     const SwitchText* t = SwitchTextOf(def.id);
     const std::string note = ChoiceNote(def.id, std::min(CodeSettings(s.rCode).Get(xd::randomizer::GetSchema(), def.id), def.Choices() - 1));
-    if (t != nullptr) return (note.empty() ? std::string() : note + " ") + t->info();
+    const std::string refused = def.id.rfind("gens_", 0) == 0 && !s.rMessage.empty() ? s.rMessage + " " : std::string();
+    if (t != nullptr) return refused + (note.empty() ? std::string() : note + " ") + t->info();
     return Fmt("%s.", Tr(def.label).c_str());
   }
   case Kind::RandomizerCode:
@@ -2778,6 +2891,12 @@ std::string RowInfo(const SRow& r) {
     if (!StarterBlockedWhy().empty()) return StarterBlockedWhy() + " " + Tr("Turn its starter switch off to choose your own.");
     return std::string(Tr("Choosing your starter marks this playthrough as cheats used.")) + " " + Tr("Eevee: the game's own partner Pokemon. Choose: after you name yourself, pick your starter from every Pokemon of this playthrough "
               "(Pokemon of the generations you turned on). It starts at level 10 with the moves it would know, like Eevee. Kept with this playthrough.");
+  case Kind::ExpShare:
+    return Tr("On: Pokemon that didn't battle get half the experience of the ones that did (the Gen 6 and 7 rule). Shadow Pokemon store theirs as usual, "
+              "the level cap still counts, and the Exp. Share item works as before. Kept with this playthrough. Off: as the game.");
+  case Kind::PcBoxes:
+    return Tr("How many boxes the Pokemon PC has: 8 (the game) up to 32. You can add more later from the launcher's Save page, never fewer. "
+              "Pokemon in boxes 9 and up stay only in this game: a save taken to a GameCube or Dolphin has the first 8 boxes.");
   case Kind::StarterTwo:
     return Tr("On: you pick a second starter, which joins your party in the second place at level 10. Off: one starter.");
   case Kind::ShinyOdds:
@@ -2849,6 +2968,7 @@ void Open(void*) {
   s.starterChoose = xd::starter::ChooseOn(s.defaults.options) ? 1 : 0;
   s.starterTwo = xd::starter::TwoOn(s.defaults.options) ? 1 : 0;
   s.shinyOdds = xd::shiny::OddsIndexOf(s.defaults.options);
+  s.expShare = xd::expshare::OnIn(s.defaults.options) ? 1 : 0;
   s.shinyUnlock = xd::shiny::UnlocksOf(s.defaults.options);
   s.rules.assign(xd::challenges::Rules().size(), false);
   if (!xd::gen4::PackPresent(&s.gen4Why)) {
@@ -2910,7 +3030,7 @@ void Close(void*) {
     s.rStyle = 0;
     s.choice = engine::rulesets::Default(xd::rulesets::Registry());
     s.choice.looks.preset = "original_xd", s.choice.looks.sources = {"xd"};
-    s.shinyOdds = 0, s.shinyUnlock = 0, s.starterChoose = 0, s.starterTwo = 0;
+    s.shinyOdds = 0, s.shinyUnlock = 0, s.starterChoose = 0, s.starterTwo = 0, s.expShare = 0, s.pcBoxes = 8;
     s.rules.assign(s.rules.size(), false);
   }
   const es::Registry& reg = es::Global();
@@ -2958,6 +3078,9 @@ void RowValues(const SRow& r, std::string& left, std::string& right, std::string
   } else if (r.kind == Kind::StarterTwo) {
     left = Tr("On"), right = Tr("Off");
     set = s.starterTwo != 0 ? 0 : 1;
+  } else if (r.kind == Kind::ExpShare) {
+    left = Tr("On"), right = Tr("Off");
+    set = s.expShare != 0 ? 0 : 1;
   } else if (r.kind == Kind::ShinyShadow) {
     left = "On", right = "Off";
     set = (s.shinyUnlock & xd::shiny::kUnlockShadow) != 0 ? 0 : 1;
@@ -2986,6 +3109,8 @@ void RowValues(const SRow& r, std::string& left, std::string& right, std::string
     value = s.rCode;
   } else if (r.kind == Kind::RandomizerPaste) {
     value = Tr("Paste (A)");
+  } else if (r.kind == Kind::PcBoxes) {
+    value = std::to_string(s.pcBoxes);
   } else if (r.kind == Kind::MoreShadows) {
     value = s.moreShadows >= 5 ? Fmt("%d%%", s.moreShadowsPct) : s.moreShadows == 1 ? Tr("A few") : s.moreShadows == 2 ? Tr("Many") : s.moreShadows >= 3 ? Tr("All") : Tr("Off");
   }
@@ -3228,7 +3353,13 @@ void Audit(const AuditRun& run, ImDrawList* dl, const Screen& sc) {
   s = State();
   s.engine = engine::playthrough::Engine::Enhanced;
   s.rStyle = 4;
-  s.rCode = xd::randomizer::CodeFor(xd::randomizer::Style::Classic, 12345);
+  {
+    engine::randomizer::Settings rs;
+    xd::randomizer::ApplyStyle(rs, xd::randomizer::Style::Classic);
+    rs.seed = 12345;
+    for (const char* on : {"battles_mt", "gen4", "gen57"}) rs.Set(xd::randomizer::GetSchema(), on, 1);
+    s.rCode = engine::randomizer::EncodeCode(xd::randomizer::GetSchema(), rs);
+  }
   s.rules.assign(xd::challenges::Rules().size(), false);
   for (const char* name : {"A mod", "A mod with a rather long name indeed: the Great Big Ultra Mod"}) {
     xd::pt::ModChoice m;
@@ -3298,7 +3429,7 @@ void Audit(const AuditRun& run, ImDrawList* dl, const Screen& sc) {
       const std::string d = RowInfo(r);
       const int pages = std::max(1, (kit::LinesOf(d, 530.f, 1.f, 0) + 1) / 2);
       if (r.kind == Kind::MoreShadows) {
-        for (const std::string& f : {Fmt(Tr("%d%%: %d Pokemon of story trainers become Shadow Pokemon (no species twice)."), 100, 203)}) {
+        for (const std::string& f : {Fmt(Tr("%d%%: %d Pokemon of trainers become Shadow Pokemon (no species twice)."), 100, 203)}) {
           const int p1 = std::max(1, (kit::LinesOf(f, 530.f, 1.f, 0) + 1) / 2);
           if (p1 > 1) std::fprintf(stderr, "[textfit] MORE SHADOWS TEXT SPILLS ONTO %d PAGES: %s\n", p1, f.c_str());
         }
@@ -3353,13 +3484,19 @@ bool Frame(void*, const PortMenuInput* in) {
   const bool left = (in->repeat & PAD_BUTTON_LEFT) != 0, right = (in->repeat & PAD_BUTTON_RIGHT) != 0;
   const bool a = (in->pressed & PAD_BUTTON_A) != 0;
   bool close = false;
+  auto rowText = [](const SRow& row) {
+    std::string l, rt, v;
+    int set = -1;
+    RowValues(row, l, rt, v, set);
+    return set >= 0 ? (set == 0 ? "[" + l + "] " + rt : l + " [" + rt + "]") : v;
+  };
+  static const bool rowLog = std::getenv("XD_NEWGAME_ROW_LOG") != nullptr;
+  const std::string rowBefore = rowLog && (left || right || a) ? rowText(r) : std::string(), rowName = rowLog ? RowLabel(r) : std::string();
   switch (r.kind) {
   case Kind::Engine:
     if (left || right || a) {
-      SetEngine(left ? engine::playthrough::Engine::Faithful
-                     : right ? engine::playthrough::Engine::Enhanced
-                             : (s.engine == engine::playthrough::Engine::Faithful ? engine::playthrough::Engine::Enhanced
-                                                                                  : engine::playthrough::Engine::Faithful));
+      SetEngine(s.engine == engine::playthrough::Engine::Faithful ? engine::playthrough::Engine::Enhanced
+                                                                  : engine::playthrough::Engine::Faithful);
       event = kSoundMove;
     }
     break;
@@ -3400,7 +3537,7 @@ bool Frame(void*, const PortMenuInput* in) {
   case Kind::Setting:
     if (left || right || a) {
       sPage.changed = false;
-      if (TwoChoices(*r.setting) && (left || right)) Choose(*r.setting, left ? 0 : 1);
+      if (TwoChoices(*r.setting) && (left || right)) Choose(*r.setting);
       else Change(*r.setting, left ? -1 : +1);
       s.settingsChanged |= sPage.changed;
       event = kSoundMove;
@@ -3409,7 +3546,7 @@ bool Frame(void*, const PortMenuInput* in) {
   case Kind::Mod:
     if ((left || right || a) && xd::xg::Off(xd::xg::Feature::Mods) == nullptr) {
       bool& on = s.defaults.mods[r.mod].on;
-      on = left ? true : right ? false : !on;
+      on = !on;
       event = kSoundMove;
     }
     break;
@@ -3430,7 +3567,7 @@ bool Frame(void*, const PortMenuInput* in) {
       const int to = a ? (at == 0 ? 1 : 0) : (at + (left ? top : 1)) % (top + 1);
       s.moreShadowsNote.clear();
       if (to != 0 && s.moreShadowsSeed == 0) s.moreShadowsSeed = NewSeed() % 1000000000000ull + 1;
-      s.moreShadows = to == 0 ? 0 : 6;
+      s.moreShadows = to == 0 ? 0 : 7;
       s.moreShadowsPct = to == 0 ? 0 : kShadowPcts[to - 1];
       event = kSoundMove;
     }
@@ -3440,11 +3577,7 @@ bool Frame(void*, const PortMenuInput* in) {
       const auto& schema = xd::randomizer::GetSchema();
       const auto& def = schema.switches[r.sw];
       const uint32_t n2 = def.Choices(), v = std::min(CodeSettings(s.rCode).Get(schema, def.id), n2 - 1);
-      uint32_t to = (v + (left ? n2 - 1 : 1)) % n2;
-      if (n2 == 2 && !a) {
-        const bool onLeft = def.choiceNames[0] == "off";
-        to = left ? (onLeft ? 1 : 0) : (onLeft ? 0 : 1);
-      }
+      const uint32_t to = (v + (left ? n2 - 1 : 1)) % n2;
       SetRandomizerSwitch(r.sw, to);
       s.rStyle = StyleIndexOf(CodeSettings(s.rCode));
       BuildRows();
@@ -3455,7 +3588,7 @@ bool Frame(void*, const PortMenuInput* in) {
     if (left || right || a) {
       const bool blocked = !RuleBlockedWhy(xd::challenges::Rules()[r.sw].id).empty();
       if (blocked) break;
-      const bool on = left ? true : right ? false : !s.rules[r.sw];
+      const bool on = !s.rules[r.sw];
       if (on && NeededOff(r.sw) != nullptr) break;
       SetRule(r.sw, on);
       event = kSoundMove;
@@ -3463,14 +3596,27 @@ bool Frame(void*, const PortMenuInput* in) {
     break;
   case Kind::Starter:
     if ((left || right || a) && StarterBlockedWhy().empty()) {
-      s.starterChoose = left ? 0 : right ? 1 : 1 - s.starterChoose;
+      s.starterChoose = 1 - s.starterChoose;
       BuildRows();
       event = kSoundMove;
     }
     break;
   case Kind::StarterTwo:
     if ((left || right || a) && StarterBlockedWhy().empty()) {
-      s.starterTwo = left ? 1 : right ? 0 : 1 - s.starterTwo;
+      s.starterTwo = 1 - s.starterTwo;
+      event = kSoundMove;
+    }
+    break;
+  case Kind::ExpShare:
+    if (left || right || a) {
+      s.expShare = 1 - s.expShare;
+      event = kSoundMove;
+    }
+    break;
+  case Kind::PcBoxes:
+    if (left || right || a) {
+      const int up = a ? (s.pcBoxes >= 32 ? 8 : (s.pcBoxes / 8 + 1) * 8) : left ? s.pcBoxes - 1 : s.pcBoxes + 1;
+      s.pcBoxes = std::clamp(up, 8, 32);
       event = kSoundMove;
     }
     break;
@@ -3486,7 +3632,7 @@ bool Frame(void*, const PortMenuInput* in) {
     if (left || right || a) {
       const int bit = r.kind == Kind::ShinyShadow ? xd::shiny::kUnlockShadow
                       : r.kind == Kind::ShinyGift ? xd::shiny::kUnlockGifts : xd::shiny::kUnlockSpots;
-      const bool on = left ? true : right ? false : (s.shinyUnlock & bit) == 0;
+      const bool on = (s.shinyUnlock & bit) == 0;
       s.shinyUnlock = on ? (s.shinyUnlock | bit) : (s.shinyUnlock & ~bit);
       event = kSoundMove;
     }
@@ -3511,6 +3657,10 @@ bool Frame(void*, const PortMenuInput* in) {
     if (a) close = true;
     break;
   default: break;
+  }
+  if (rowLog && (left || right || a)) {
+    const std::string after = rowText(s.rows[std::min<size_t>(s.cursor, s.rows.size() - 1)]);
+    std::fprintf(stderr, "[newgame row] %s %s: \"%s\" -> \"%s\"%s\n", rowName.c_str(), a ? "A" : left ? "left" : "right", rowBefore.c_str(), after.c_str(), rowBefore == after ? " (UNCHANGED)" : "");
   }
   if (in->pressed & PAD_BUTTON_START) close = true;
   if (!close && (in->pressed & PAD_BUTTON_B)) { s.back = close = true; event = kSoundBack; }
@@ -3940,7 +4090,9 @@ bool InIds(const std::vector<std::string>& ids, const std::string& id) {
 }
 
 void Rebuild() {
-  s.review = em::ReviewList(s.list.Active(), s.found, s.gameId);
+  xd::modassets::Context assets;
+  assets.assets = xd::SettingsFolder() / L"extra_assets";
+  s.review = em::ReviewList(s.list.Active(), s.found, s.gameId, xd::modassets::Checker(assets));
   s.rows.clear();
   for (int i = 0; i < static_cast<int>(s.review.rows.size()); i++) s.rows.push_back({Kind::Mod, i});
   for (int i = 0; i < static_cast<int>(s.broken.size()); i++) s.rows.push_back({Kind::Broken, i});
@@ -4315,12 +4467,12 @@ bool Frame(void*, const PortMenuInput* in) {
     if (r.kind == Kind::Mod) {
       const em::ReviewRow& row = s.review.rows[r.index];
       auto& entry = s.list.Active().mods[static_cast<size_t>(r.index)];
-      if (row.mod != nullptr && (left || right) && entry.second != left) {
-        entry.second = left;
+      if (row.mod != nullptr && (left || right)) {
+        entry.second = !entry.second;
         s.notice.clear();
         Rebuild();
         event = kSoundMove;
-        std::fprintf(stderr, "[mods menu] switched %s %s\n", RowName(r).c_str(), left ? "on" : "off");
+        std::fprintf(stderr, "[mods menu] switched %s %s\n", RowName(r).c_str(), entry.second ? "on" : "off");
       }
       if (a) {
         std::fprintf(stderr, "[mods menu] picked up %s (place %d)\n", RowName(r).c_str(), r.index + 1);
@@ -4394,6 +4546,7 @@ void Neutral(PADStatus& s);
 void Filter(PADStatus* status);
 #include "online_lobby_page.inc"
 #include "save_picker_page.inc"
+#include "savestate_page.inc"
 #include "cheat_menu.inc"
 #include "loading_screen.inc"
 
@@ -4633,7 +4786,7 @@ void Filter(PADStatus* status) {
     PortXD_ShowRuleMessage(message);
     return;
   }
-  if (xd::pt::ScreenEnabled() || xd::pt::EngineQuestionPossible() || xd::pt::TimerWatch() || xd::pt::PickerPossible()) {
+  if (xd::pt::ScreenEnabled() || xd::pt::EngineQuestionPossible() || xd::pt::TimerWatch() || xd::pt::PickerPossible() || xd::pt::ContinueWatch()) {
     if (IsTitleMenu(w) && w->state == 2 && w->pad_a4 == 0 && w->cursor >= 0 && w->cursor < 5 && !sTitleSelected &&
         xd::pt::TitleInput(status, menuTitleGetSelect(w->cursor), newButtons)) {
       return;
@@ -4665,34 +4818,57 @@ void EntryFilter(PADStatus* status) {
     sTitleSelected = sTitleMods = sTitleOnline = false;
   }
   if (!open) {
-    if (sSelected) std::fprintf(stderr, "[settings menu] the field menu is no longer taking input: entry off\n");
-    sSelected = false;
+    if (sSel != 0) std::fprintf(stderr, "[settings menu] the field menu is no longer taking input: entry off\n");
+    sSel = 0;
+    sWrapPass = 0;
     return;
   }
-  if (!sSelected) {
+  if (sSel == 0) {
     if (w->cursor == m->exitIndex && (newDirs & kDown) != 0) {
-      sSelected = true;
+      sSel = 1;
       PlayMenuSound(w->menuID, kSoundMove);
       PortInput_LatchHeld();
       for (int i = 0; i < PAD_MAX_CONTROLLERS; i++) Neutral(status[i]);
+    } else if (w->cursor == 0 && (newDirs & kUp) != 0) {
+      sSel = ExtraRows();
+      sWrapPass = 60;
+    }
+    return;
+  }
+  if (sSel > ExtraRows()) sSel = ExtraRows();
+  if (sWrapPass > 0) {
+    if (w->cursor == m->exitIndex) {
+      sWrapPass = 0;
+      PortInput_LatchHeld();
+      for (int i = 0; i < PAD_MAX_CONTROLLERS; i++) Neutral(status[i]);
+    } else if (--sWrapPass == 0) {
+      sSel = 0;
     }
     return;
   }
   if (newDirs & kDown) {
-    sSelected = false;
+    if (sSel < ExtraRows()) {
+      sSel++;
+      PlayMenuSound(w->menuID, kSoundMove);
+      PortInput_LatchHeld();
+    } else {
+      sSel = 0;
+      return;
+    }
+  } else if (newButtons & (PAD_BUTTON_B | PAD_BUTTON_START)) {
+    sSel = 0;
     return;
-  }
-  if (newButtons & (PAD_BUTTON_B | PAD_BUTTON_START)) {
-    sSelected = false;
-    return;
-  }
-  if (newDirs & kUp) {
-    sSelected = false;
+  } else if (newDirs & kUp) {
+    sSel--;
     PlayMenuSound(w->menuID, kSoundMove);
     PortInput_LatchHeld();
   } else if (newButtons & PAD_BUTTON_A) {
     sPageFromTitle = false;
-    if (PortMenu_Open(&kPage)) PlayMenuSound(w->menuID, kSoundChoose);
+    if (sSel == 2) {
+      if (PortMenu_Open(&ss::kPage)) PlayMenuSound(w->menuID, kSoundChoose);
+    } else if (PortMenu_Open(&kPage)) {
+      PlayMenuSound(w->menuID, kSoundChoose);
+    }
   }
   for (int i = 0; i < PAD_MAX_CONTROLLERS; i++) Neutral(status[i]);
 }
@@ -4831,7 +5007,7 @@ void PortXD_SettingsMenuInit(void) {
   } else {
     sOn = true;
   }
-  if (sOn || xd::pt::ScreenEnabled() || xd::pt::ChallengesPossible() || xd::pt::EngineQuestionPossible() || xd::pt::TimerWatch() || xd::pt::PickerPossible() || std::getenv("XD_ONLINE_ROOM_RESUME") != nullptr ||
+  if (sOn || xd::pt::ScreenEnabled() || xd::pt::ChallengesPossible() || xd::pt::EngineQuestionPossible() || xd::pt::TimerWatch() || xd::pt::PickerPossible() || xd::pt::ContinueWatch() || std::getenv("XD_ONLINE_ROOM_RESUME") != nullptr ||
       xd::picker::Current() != xd::picker::Intent::None || xd::replay::Watching() || xd::replay::KeysScripted()) {
     PortInput_SetPadFilter(Filter);
   }
@@ -4896,12 +5072,12 @@ static void MenuWinSpriteDraw(void* window, void* sprite) {
   }
   const s16 id = sp->id;
   const s16 y = sp->y;
-  const bool hide = sSelected && (id == m->bar || id == m->flash || id == m->hand);
+  const bool hide = sSel != 0 && (id == m->bar || id == m->flash || id == m->hand);
   const s16 h = sp->h;
   if (id == m->cap) {
-    sp->y = static_cast<s16>(y + kRow);
+    sp->y = static_cast<s16>(y + kRow * ExtraRows());
   } else if (id == m->side) {
-    sp->h = static_cast<s16>(h + kRow);
+    sp->h = static_cast<s16>(h + kRow * ExtraRows());
   } else if (hide) {
     sp->y = -4000;
   }
@@ -4925,7 +5101,7 @@ static void MenuWinSpriteDraw(void* window, void* sprite) {
 }
 
 s32 PortXD_FieldMenuPrint2(s32 layer, s32 x, s32 y, s32 color, u32 msg) {
-  if (sOn && sSelected && msg == 0x429B) {
+  if (sOn && sSel != 0 && msg == 0x429B) {
     color = static_cast<s32>((static_cast<u32>(color) & 0xFFFFFF00u) | 0x80u);
   }
   return GSmsgPrint2(layer, x, y, static_cast<u32>(color), msg);
@@ -5006,7 +5182,7 @@ void PortXD_SettingsMenuOverlay(void) {
     const int d = sFrozenShift - shown.button.shift;
     for (Shot* sh : {&shown.button, &shown.bar, &shown.flash, &shown.text, &shown.hand}) sh->offX = static_cast<s16>(sh->offX + d);
   }
-  DrawEntry(ImGui::GetBackgroundDrawList(), shown, sSelected);
+  DrawEntry(ImGui::GetBackgroundDrawList(), shown, sSel);
 }
 
 }
@@ -5059,10 +5235,36 @@ bool PortXD_ShowRuleMessage(const std::string& text) {
   ng::ruleText = text;
   return PortMenu_Open(&ng::kRulePage);
 }
+extern "C" bool PortXD_OpenSaveStatesMenu(void) { return PortMenu_Open(&ss::kPage); }
 extern "C" bool PortXD_OpenCheatMenu(void) {
   if (!PortXD_CheatsEnabled()) return false;
   return PortMenu_Open(&cm::kPage);
 }
+
+#ifdef __ANDROID__
+extern "C" bool PortXD_OpenSettingsPageForTouch(void) {
+  sPageFromTitle = false;
+  return PortMenu_Open(&kPage);
+}
+
+extern "C" int menuPcBoxPeekCursor(int* box, int* place, int* state, int* holding, int* quick, void** under);
+int32_t windowGetActiveID(void);
+extern "C" uint32_t PortXD_TouchContext(void) {
+  constexpr uint32_t kDpadBit = 1u << 1, kXBit = 1u << 4, kZBit = 1u << 6, kLBit = 1u << 7, kRBit = 1u << 8;
+  static int32_t sLastId = -2;
+  static const bool log = std::getenv("XD_TOUCH_CONTEXT_LOG") != nullptr;
+  const int32_t id = windowGetActiveID();
+  if (log && id != sLastId) {
+    sLastId = id;
+    std::fprintf(stderr, "[touch context] the game's active window: menu id 0x%X\n", static_cast<unsigned>(id));
+  }
+  if (PortMenu_Active()) return kLBit | kRBit | kZBit | kXBit | kDpadBit;
+  int box = 0, place = 0, state = 0, holding = 0, quick = 0;
+  void* under = nullptr;
+  if (menuPcBoxPeekCursor(&box, &place, &state, &holding, &quick, &under) != 0) return kLBit | kRBit | kZBit;
+  return 0;
+}
+#endif
 
 extern "C" bool PortXD_LandingCoverActive(void) { return ls::CoverActive(); }
 void PortXD_ShowNote(const std::string& text, float seconds) {
@@ -5235,6 +5437,7 @@ void PortXD_TextFitAudit(const char* path) {
       for (int sel = 0; sel < 2; sel++) run(std::string("mods list '") + label + "' sel" + std::to_string(sel), [&] { bag::DrawRow(&tmp, sc, bag::kRowTop, label, "", "", sel != 0, false); });
     }
     cm::Audit(run, &tmp, sc);
+    ss::Audit(run, &tmp, sc);
     cw::Audit(run, &tmp, sc);
     run("mods list desc", [&] { bag::DrawDescription(&tmp, sc, Fmt(Tr("From the mod %s. Press A to use it."), "A mod with a rather long name indeed"), 0.f, 0); });
     ng::Audit(run, &tmp, sc);

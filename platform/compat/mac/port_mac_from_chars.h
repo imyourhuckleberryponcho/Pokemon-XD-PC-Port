@@ -1,6 +1,6 @@
 #ifndef PORT_MAC_FROM_CHARS_H
 #define PORT_MAC_FROM_CHARS_H
-#if defined(__APPLE__) || defined(PORT_TEST_MAC_HALVES)
+#if defined(__APPLE__) || defined(__ANDROID__) || defined(PORT_TEST_MAC_HALVES)
 #include <stdlib.h>
 #ifdef __APPLE__
 #include <xlocale.h>

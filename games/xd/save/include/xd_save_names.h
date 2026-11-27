@@ -22,6 +22,7 @@ public:
   std::string Move(uint16_t id) const;
   std::string Nature(uint8_t id) const;
   std::string Ability(uint16_t id) const;
+  std::string AbilityText(uint16_t id) const;
   std::string Message(uint32_t key) const;
 
 private:

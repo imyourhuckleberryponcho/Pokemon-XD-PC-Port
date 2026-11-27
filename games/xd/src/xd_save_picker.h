@@ -53,6 +53,7 @@ struct Picture {
   uint32_t width = 0, height = 0;
   std::vector<uint8_t> rgba;
 };
+bool NewestFieldPicture(Picture& out);
 Picture LoadThumbnail(const std::filesystem::path& file, bool keepAlpha = false);
 
 }

@@ -6,6 +6,7 @@
 #include "port_log.h"
 #include "port_seh.h"
 
+#include <dirent.h>
 #include <dlfcn.h>
 #include <execinfo.h>
 #include <pthread.h>
@@ -43,6 +44,19 @@ const greg_t* mac_gregs(const ucontext_t* uc, greg_t* r) {
   return r;
 }
 #define PORT_GREGS(uc) mac_gregs(uc, macRegisters)
+#elif defined(__ANDROID__) && defined(__aarch64__)
+enum { REG_RAX, REG_RBX, REG_RCX, REG_RDX, REG_RSI, REG_RDI, REG_RBP, REG_RSP, REG_R8, REG_R9, REG_R10, REG_R11,
+       REG_R12, REG_R13, REG_R14, REG_R15, REG_RIP, REG_ERR, REG_COUNT };
+typedef unsigned long long greg_t;
+const greg_t* arm_gregs(const ucontext_t* uc, greg_t* r) {
+  const auto& m = uc->uc_mcontext;
+  const greg_t v[REG_COUNT] = {m.regs[0], m.regs[1], m.regs[2], m.regs[3], m.regs[4], m.regs[5], m.regs[29], m.sp,
+                               m.regs[8], m.regs[9], m.regs[10], m.regs[11], m.regs[12], m.regs[13], m.regs[14],
+                               m.regs[15], m.pc, 0};
+  for (int i = 0; i < REG_COUNT; ++i) r[i] = v[i];
+  return r;
+}
+#define PORT_GREGS(uc) arm_gregs(uc, macRegisters)
 #else
 #define PORT_GREGS(uc) ((uc)->uc_mcontext.gregs)
 #endif
@@ -131,7 +145,7 @@ void on_crash(int sig, siginfo_t* info, void* contextRaw) {
   }
   claim_report();
   const auto* uc = static_cast<const ucontext_t*>(contextRaw);
-#ifdef __APPLE__
+#if defined(__APPLE__) || (defined(__ANDROID__) && defined(__aarch64__))
   greg_t macRegisters[REG_COUNT];
 #endif
   const greg_t* r = PORT_GREGS(uc);
@@ -196,6 +210,69 @@ void not_yet(const char* what) {
   std::fprintf(stderr, "[crash report] %s: not on Linux yet\n", what);
 }
 
+#ifdef __linux__
+constexpr int kSnapFrames = 40;
+struct ThreadSnap {
+  std::atomic<long> want{0};
+  std::atomic<int> ready{0};
+  int count = 0;
+  void* frames[kSnapFrames];
+};
+ThreadSnap sSnap;
+
+void on_snapshot(int) {
+  if (sSnap.want.load() != thread_id()) return;
+  sSnap.count = backtrace(sSnap.frames, kSnapFrames);
+  sSnap.ready.store(1);
+}
+
+void print_snap_frame(void* address) {
+  Dl_info info{};
+  const auto a = reinterpret_cast<uintptr_t>(address);
+  if (dladdr(address, &info) == 0) {
+    std::fprintf(stderr, "    0x%" PRIxPTR "\n", a);
+    return;
+  }
+  const char* module = info.dli_fname != nullptr ? info.dli_fname : "?";
+  const char* slash = std::strrchr(module, '/');
+  if (slash != nullptr) module = slash + 1;
+  const uintptr_t off = a - reinterpret_cast<uintptr_t>(info.dli_fbase);
+  if (info.dli_sname != nullptr) {
+    std::fprintf(stderr, "    %s+0x%" PRIxPTR " (%s+0x%" PRIxPTR ")\n", info.dli_sname,
+                 a - reinterpret_cast<uintptr_t>(info.dli_saddr), module, off);
+  } else {
+    std::fprintf(stderr, "    (%s+0x%" PRIxPTR ")\n", module, off);
+  }
+}
+
+void thread_facts(long tid, char* name, size_t nameSize, char* state, unsigned long* ticks) {
+  std::snprintf(name, nameSize, "?");
+  *state = '?';
+  *ticks = 0;
+  char path[64];
+  std::snprintf(path, sizeof path, "/proc/self/task/%ld/stat", tid);
+  if (std::FILE* f = std::fopen(path, "r")) {
+    char line[512];
+    if (std::fgets(line, sizeof line, f) != nullptr) {
+      const char* open = std::strchr(line, '(');
+      const char* close = std::strrchr(line, ')');
+      if (open != nullptr && close != nullptr && close > open) {
+        std::snprintf(name, nameSize, "%.*s", static_cast<int>(close - open - 1), open + 1);
+        unsigned long ut = 0, st = 0;
+        char s = '?';
+        long d[10];
+        if (std::sscanf(close + 2, "%c %ld %ld %ld %ld %ld %ld %ld %ld %ld %ld %lu %lu", &s, &d[0], &d[1], &d[2],
+                        &d[3], &d[4], &d[5], &d[6], &d[7], &d[8], &d[9], &ut, &st) == 13) {
+          *state = s;
+          *ticks = ut + st;
+        }
+      }
+    }
+    std::fclose(f);
+  }
+}
+#endif
+
 }
 
 extern "C" void PortCrash_DescribeAddress(const void* address, char* out, size_t outSize) {
@@ -227,6 +304,62 @@ extern "C" int PortCrash_WriteMinidump(const wchar_t*, const PortCrashReport*) {
 extern "C" void PortCrash_WatchWrites(uintptr_t) { not_yet("XD_WATCH (watching writes to an address)"); }
 extern "C" void PortCrash_SampleThread(unsigned, unsigned, unsigned) { not_yet("XD_SAMPLE (sampling a thread's stack)"); }
 extern "C" void PortCrash_PrintThreadStack(void*) { not_yet("another thread's call stack"); }
+
+extern "C" void PortCrash_PrintAllThreadStacks(const char* title) {
+#ifdef __linux__
+  static std::atomic<int> busy{0};
+  if (busy.exchange(1) != 0) return;
+  static int sig = 0;
+  if (sig == 0) {
+    sig = SIGRTMIN + 2;
+    struct sigaction sa {};
+    sa.sa_handler = on_snapshot;
+    sa.sa_flags = SA_RESTART;
+    sigemptyset(&sa.sa_mask);
+    sigaction(sig, &sa, nullptr);
+  }
+  std::fprintf(stderr, "[watchdog] %s\n", title != nullptr ? title : "every thread's calls (most recent first):");
+  const long self = thread_id();
+  long tids[256];
+  int n = 0;
+  if (DIR* d = opendir("/proc/self/task")) {
+    while (const dirent* e = readdir(d)) {
+      const long t = std::atol(e->d_name);
+      if (t > 0 && n < 256) tids[n++] = t;
+    }
+    closedir(d);
+  }
+  std::fprintf(stderr, "[watchdog] %d threads\n", n);
+  for (int i = 0; i < n; i++) {
+    char name[64], state;
+    unsigned long ticks;
+    thread_facts(tids[i], name, sizeof name, &state, &ticks);
+    std::fprintf(stderr, "  thread %ld \"%s\" state %c, cpu %lu ticks%s\n", tids[i], name, state, ticks,
+                 tids[i] == self ? " (the watchdog itself)" : "");
+    if (tids[i] == self) continue;
+    sSnap.ready.store(0);
+    sSnap.count = 0;
+    sSnap.want.store(tids[i]);
+    if (syscall(SYS_tgkill, static_cast<long>(getpid()), tids[i], sig) != 0) {
+      std::fprintf(stderr, "    (could not be asked)\n");
+      continue;
+    }
+    for (int waited = 0; waited < 400 && sSnap.ready.load() == 0; waited++) {
+      const timespec nap{0, 1000000};
+      nanosleep(&nap, nullptr);
+    }
+    sSnap.want.store(0);
+    if (sSnap.ready.load() == 0) {
+      std::fprintf(stderr, "    (no answer within 0.4 s)\n");
+      continue;
+    }
+    for (int f = 0; f < sSnap.count; f++) print_snap_frame(sSnap.frames[f]);
+  }
+  busy.store(0);
+#else
+  not_yet("every thread's call stack");
+#endif
+}
 
 PortSehFrame::PortSehFrame() : previous(tSehTop) { tSehTop = this; }
 PortSehFrame::~PortSehFrame() { tSehTop = previous; }

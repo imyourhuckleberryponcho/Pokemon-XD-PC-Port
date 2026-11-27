@@ -166,6 +166,7 @@ bool PortXD_LinkDataModule(const uint8_t* file, size_t size, std::vector<std::pa
   return true;
 }
 
+extern "C" void PortXD_RoomsFrame(void);
 namespace {
 
 int link_module(void* module, void* bss) {
@@ -199,6 +200,7 @@ int link_module(void* module, void* bss) {
       if (PortXD_ShopTablesLinkedHook != nullptr) PortXD_ShopTablesLinkedHook();
     }
     sDataModules.push_back(std::move(m));
+    PortXD_RoomsFrame();
     return 1;
   }
   const size_t size = Rel_FileExtent(file);

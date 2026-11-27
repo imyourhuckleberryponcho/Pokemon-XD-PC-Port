@@ -58,7 +58,7 @@ extern uint32_t pokemon_nakigoe_data_number;
 
 namespace {
 
-constexpr int kPackVersion = 2;
+constexpr int kPackVersion = xd::packmatch::kGen4PackVersion;
 constexpr uint32_t kPkxSpare = XD_PC_SPARE_SPECIES;
 constexpr uint32_t kWaveOld = 389, kWaveSpare = XD_PC_SPARE_SPECIES;
 

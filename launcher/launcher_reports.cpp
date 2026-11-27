@@ -19,7 +19,7 @@
 #include <fstream>
 #include <sstream>
 #include <system_error>
-#if defined(__APPLE__)
+#if defined(__APPLE__) || defined(__ANDROID__)
 #include <sys/stat.h>
 #endif
 
@@ -543,7 +543,7 @@ int64_t StampTime(const std::string& s) {
 }
 
 int64_t WriteTime(const fs::path& file) {
-#if defined(__APPLE__)
+#if defined(__APPLE__) || defined(__ANDROID__)
   struct stat st {};
   if (::stat(file.c_str(), &st) != 0) {
     return -1;

@@ -1,0 +1,57 @@
+--- a/lib/gx/gx.hpp
++++ b/lib/gx/gx.hpp
+@@ -1,4 +1,5 @@
+ #pragma once
++#include <atomic>
+ #include <dolphin/gx.h>
+ #include <aurora/math.hpp>
+ 
+@@ -619,6 +620,8 @@
+ const Mat3x4<float>* view_override_for_draw(float* zoom) noexcept;
+ // Called for every draw while the override is on (notes its projection): whether it is 2D to hide.
+ bool view_override_hides_draw() noexcept;
++// (patch 0066, testing only) AuroraSetSkipDraws(1): draws are read from the command stream and dropped, nothing is uploaded or drawn.
++extern std::atomic<bool> g_skipDraws;
+ 
+ // In-between pictures (AuroraInterpSetMode, GXAurora.h).
+ struct InterpTransforms {
+--- a/lib/gx/gx.cpp
++++ b/lib/gx/gx.cpp
+@@ -820,6 +820,8 @@
+   return &s_overrideView;
+ }
+ 
++std::atomic<bool> g_skipDraws{false};
++
+ bool view_override_hides_draw() noexcept {
+   const auto& state = g_gxState;
+   if (!s_viewOverride.active) {
+@@ -1304,3 +1306,5 @@
+   *plain = s_interpLastPlain;
+ }
+ } // namespace aurora::gx
++
++extern "C" void AuroraSetSkipDraws(int on) { aurora::gx::g_skipDraws.store(on != 0, std::memory_order_relaxed); }
+--- a/lib/gx/command_processor.cpp
++++ b/lib/gx/command_processor.cpp
+@@ -1045,6 +1045,11 @@
+     UNLIKELY { vtxSize = calc_vtx_size(fmt); }
+ 
+   u32 totalVtxBytes = vtxCount * vtxSize;
++  if (g_skipDraws.load(std::memory_order_relaxed))
++    UNLIKELY {
++      reader.take(std::min<size_t>(totalVtxBytes, reader.remaining())); // (patch 0066: testing only, no draw)
++      return;
++    }
+   // A vertex whose position index is all ones (0xFF / 0xFFFF) is not drawn by the GX hardware: it is dropped
+   // from the primitive and the next vertex takes its place. Drawn as an ordinary vertex, the shader reads array
+   // element 0xFFFF, far past the array. So such vertices are taken out of the stream here and the rest is drawn.
+@@ -1480,7 +1485,7 @@
+     const auto vertexData = reader.take(totalVtxBytes);
+     const gfx::Range vertRange = gfx::push_verts(vertexData.data(), vertexData.size(), 4);
+     interp_set_draw(0, 0, false); // (in-between pictures: not a draw that can be told apart)
+-    if (indexCount != 0 && !view_override_hides_draw()) {
++    if (indexCount != 0 && !g_skipDraws.load(std::memory_order_relaxed) && !view_override_hides_draw()) {
+       push_gx_draw(prim, fmt, vtxCount, vertRange, idxRange, indexCount);
+       interp_draw_done(static_cast<u16>((1u << MaxPnMtx) - 1));
+     }

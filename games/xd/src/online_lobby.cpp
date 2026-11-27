@@ -8,6 +8,7 @@
 
 namespace xd::online {
 namespace {
+constexpr bool kOfferEditedShadowsRow = false;
 
 const char* kNoPack = "This PC has no Gen 4 pack yet (make it from your Pokemon Battle Revolution disc in the launcher).";
 
@@ -118,6 +119,7 @@ std::vector<Row> SettingRows(const RoomRules& r, const PcInfo& pc) {
                          std::to_string(r.timerSeconds)));
   rows.push_back(MakeRow("shadow", "Shadow Pokemon", {Opt("off", "Not allowed"), Opt("on", "Allowed")}, r.shadowAllowed ? "on" : "off"));
   if (r.shadowAllowed) {
+    if (kOfferEditedShadowsRow) rows.push_back(MakeRow("edited", "Edited Shadows", {Opt("off", "Not allowed"), Opt("on", "Allowed")}, r.editedShadows ? "on" : "off"));
     rows.push_back(MakeRow("obey", "Shadow Pokemon obey", {Opt("story", "As in the story (they may refuse)"), Opt("purified", "Like purified ones")}, r.shadowObey));
   }
   return rows;
@@ -136,6 +138,7 @@ RoomRules Sanitized(RoomRules r, const PcInfo& pc) {
     }
   }
   if (r.items == "bag" && r.team != "save") r.items = "none";
+  if (!r.shadowAllowed) r.editedShadows = false;
   return r;
 }
 
@@ -197,6 +200,7 @@ bool Cycle(RoomRules& r, const std::string& id, int dir, const PcInfo& pc) {
   } else if (id == "items") r.items = value;
   else if (id == "timer") r.timerSeconds = std::atoi(value.c_str());
   else if (id == "shadow") r.shadowAllowed = value == "on";
+  else if (id == "edited" && kOfferEditedShadowsRow) r.editedShadows = value == "on";
   else if (id == "obey") r.shadowObey = value;
   else if (id.compare(0, 2, "d_") == 0) {
     draft::Settings s = DraftOf(r);
@@ -268,13 +272,14 @@ std::vector<std::string> RoomLines(const RoomRules& r, const std::string& editio
                              (r.previewSeconds > 0 ? " (" + std::to_string(r.previewSeconds) + " seconds)." : "."));
   if (r.bankSeconds > 0) l.push_back("Battle clock: each player has " + std::to_string(r.bankSeconds / 60) + " minutes in all for their choices.");
   l.push_back(std::string("Shadow Pokemon: ") + (!r.shadowAllowed ? "not allowed" : r.shadowObey == "story" ? "allowed, they may refuse orders as in the story" : "allowed, they obey like purified ones"));
+  if (r.shadowAllowed && kOfferEditedShadowsRow) l.push_back(std::string("Edited Shadows: ") + (r.editedShadows ? "allowed" : "not allowed"));
   return l;
 }
 
 std::string RulesToText(const RoomRules& r) {
   std::ostringstream o;
   o << "rules=" << r.ruleSet << ";items=" << r.items << ";timer=" << r.timerSeconds << ";shadow=" << (r.shadowAllowed ? "on" : "off")
-    << ";shadow_obey=" << r.shadowObey << ";level=" << r.level << ";team=" << r.team << ";split=" << (r.split ? "on" : "off") << ";style=" << r.style;
+    << ";shadow_obey=" << r.shadowObey << (r.editedShadows ? ";shadow_edited=on" : "") << ";level=" << r.level << ";team=" << r.team << ";split=" << (r.split ? "on" : "off") << ";style=" << r.style;
   if (!r.draft.empty()) o << ";draft=" << r.draft;
   if (!r.rs.empty()) o << ";rs=" << r.rs;
   if (!r.gens.empty()) o << ";gens=" << r.gens;
@@ -301,6 +306,7 @@ bool Apply(Peer& p, const std::string& line) {
   else if (verb == "UNREADY") p.ready = false;
   else if (verb == "REMATCH") p.rematch = true, p.nonce = static_cast<uint32_t>(std::strtoul(arg.c_str(), nullptr, 16));
   else if (verb == "LEAVE") p.left = true;
+  else if (verb == "REFUSE") { if (p.refusals.size() < 4 && !arg.empty()) p.refusals.push_back(arg.substr(0, 300)); }
   else if (verb == "PV") p.pvTeam = true, p.pvIds = SplitInts(arg);
   else if (verb == "PVC") p.pvCommit = true, p.pvCommitHex = arg;
   else if (verb == "PVR") {

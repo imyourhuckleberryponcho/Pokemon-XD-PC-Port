@@ -2,6 +2,9 @@
 #include <port_disc.h>
 
 #include "xd_languages.h"
+#ifdef __ANDROID__
+#include "xd_builtin_converters.h"
+#endif
 
 #include <algorithm>
 #include <cstdint>
@@ -33,7 +36,11 @@ void PutBe32(std::vector<uint8_t>& v, uint32_t x) {
 [[noreturn]] void Fail(int code, const std::string& message) {
   std::printf("error %s\n", message.c_str());
   std::fflush(stdout);
+#ifdef __ANDROID__
+  throw XdLanguagesExit{code};
+#else
   std::exit(code);
+#endif
 }
 
 std::string Lower(std::string s) {

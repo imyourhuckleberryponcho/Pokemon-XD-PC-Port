@@ -1,3 +1,4 @@
+#include "xd_test_run.h"
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -48,7 +49,36 @@ void ReadSwitches() {
 }
 }
 
+extern "C" void AuroraSetSkipDraws(int on);
+namespace {
+bool sNoDrawRead = false, sNoDrawOn = false;
+uint32_t sNoDrawFrom = 0, sNoDrawTo = 0;
+void NoDrawPoll() {
+  if (!sNoDrawRead) {
+    sNoDrawRead = true;
+    const char* v = std::getenv("XD_TEST_NO_DRAW");
+    if (v != nullptr && *v != '\0' && xd::TestRunSwitchSet([](const char* n) { return std::getenv(n); }) != nullptr) {
+      unsigned a = 0, b = 0;
+      if (std::sscanf(v, "%u-%u", &a, &b) == 2 && b > a) {
+        sNoDrawFrom = a;
+        sNoDrawTo = b;
+        std::fprintf(stderr, "[test no draw] no drawing from game frame %u to %u (XD_TEST_NO_DRAW)\n", a, b);
+      }
+    }
+  }
+  if (sNoDrawTo == 0) return;
+  const uint32_t now = PortVI_GetFlipCount();
+  const bool want = now >= sNoDrawFrom && now < sNoDrawTo;
+  if (want != sNoDrawOn) {
+    sNoDrawOn = want;
+    AuroraSetSkipDraws(want ? 1 : 0);
+    std::fprintf(stderr, "[test no draw] game frame %u: drawing %s\n", now, want ? "OFF" : "on again");
+  }
+}
+}
+
 extern "C" void PortXD_SettingsSwitchesUpdate(void) {
+  NoDrawPoll();
   if (!sRead) ReadSwitches();
   bool video = false;
   while (sNext < sSwitches.size() && PortVI_GetFlipCount() >= sSwitches[sNext].frame) {

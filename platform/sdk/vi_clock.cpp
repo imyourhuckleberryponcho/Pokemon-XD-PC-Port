@@ -5,6 +5,10 @@
 
 #include <settings_c.h>
 
+#include <any>
+
+#include "port_savestate.h"
+
 extern "C" {
 void OSInitThreadQueue(void* queue);
 void OSSleepThread(void* queue);
@@ -211,4 +215,64 @@ void PortVI_SetFrameHook(void (*hook)(void)) {
   sHookThread = std::this_thread::get_id();
 }
 
+}
+
+extern "C" uint32_t PortVI_GetFlipCount(void);
+extern "C" void PortVI_SetFlipCount(uint32_t n);
+namespace {
+struct ViSaved {
+  uint32_t retrace = 0, hookRetrace = 0, flips = 0, samplingRate = 0;
+  int pollsArmed = 0;
+  int64_t hidden = 0, fieldBase = 0;
+  RetraceCallback pre = nullptr, post = nullptr;
+  void (*samplingCallback)(void) = nullptr;
+  bool started = false;
+};
+}
+
+std::any PortState_ViSave(portstate::Why&) {
+  ViSaved s;
+  s.retrace = sRetraceCount;
+  s.hookRetrace = sHookRetrace;
+  s.flips = PortVI_GetFlipCount();
+  s.samplingRate = sSamplingRate;
+  s.pollsArmed = sPollsArmed;
+  s.hidden = sHiddenTicks.load();
+  s.fieldBase = sFieldBase;
+  s.pre = sPreRetrace;
+  s.post = sPostRetrace;
+  s.samplingCallback = sSamplingCallback;
+  s.started = sStarted;
+  return s;
+}
+
+bool PortState_ViCheck(const std::any& state, portstate::Why& why) {
+  if (std::any_cast<ViSaved>(&state) == nullptr) {
+    why = "no state";
+    return false;
+  }
+  return true;
+}
+
+void PortState_ViLoad(const std::any& state) {
+  const auto& s = std::any_cast<const ViSaved&>(state);
+  sRetraceCount = s.retrace;
+  sHookRetrace = s.hookRetrace;
+  PortVI_SetFlipCount(s.flips);
+  sSamplingRate = s.samplingRate;
+  sPollsArmed = s.pollsArmed;
+  sHiddenTicks.store(s.hidden);
+  sFieldBase = s.fieldBase;
+  sPreRetrace = s.pre;
+  sPostRetrace = s.post;
+  sSamplingCallback = s.samplingCallback;
+  sStarted = s.started;
+}
+
+void PortState_ViToBytes(const std::any& state, portstate::Out& out) { out.pod(std::any_cast<const ViSaved&>(state)); }
+bool PortState_ViFromBytes(portstate::In& in, std::any& state) {
+  ViSaved s = in.pod<ViSaved>();
+  if (!in.ok()) return false;
+  state = s;
+  return true;
 }

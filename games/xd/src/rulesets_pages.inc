@@ -475,7 +475,7 @@ int FrameView(const PortMenuInput* in) {
       }
     } else if (vCur >= 5 && DetailRows()[static_cast<size_t>(vCur - 5)] == 6 && (a || left || right)) {
       const bool on = s.choice.MechanicOn(xd::rulesets::Registry(), xd::rulesets::kModernTypes);
-      s.choice.mechanics[xd::rulesets::kModernTypes] = left ? "on" : right ? "off" : (on ? "off" : "on");
+      s.choice.mechanics[xd::rulesets::kModernTypes] = on ? "off" : "on";
       ev = kSoundMove;
     }
   } else if (s.view == kPokemon) {

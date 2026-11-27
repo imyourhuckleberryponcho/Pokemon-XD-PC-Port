@@ -66,6 +66,7 @@ PADSamplingCallback PADSetSamplingCallback(PADSamplingCallback callback);
 #define DVDGetCommandBlockStatus PortDVD_GetCommandBlockStatus
 #define DVDGetDriveStatus PortDVD_GetDriveStatus
 #define DVDReadPrio PortDVD_ReadPrio
+#define DVDClose PortDVD_Close
 #define DVDOpen PortDVD_Open
 #define ARQPostRequest PortARQ_PostRequest
 #define CARDMountAsync PortCARD_MountAsync

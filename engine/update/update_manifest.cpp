@@ -553,6 +553,8 @@ bool ParseSignedManifest(std::string_view fileText, std::string_view publicKeyHe
 std::string_view CurrentSystem() {
 #if defined(_WIN32)
   return "windows";
+#elif defined(__ANDROID__)
+  return "android";
 #elif defined(__APPLE__)
   return "mac";
 #else

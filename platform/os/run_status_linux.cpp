@@ -99,8 +99,50 @@ void Write(uint32_t progress, unsigned stillSeconds, const char* state) {
   fs::rename(tmp, sFile, ec);
 }
 
+#ifdef __ANDROID__
+long ReadNumber(const std::string& path) {
+  long v = -1;
+  if (std::FILE* f = std::fopen(path.c_str(), "rb")) {
+    if (std::fscanf(f, "%ld", &v) != 1) v = -1;
+    std::fclose(f);
+  }
+  return v;
+}
+void LogDeviceState() {
+  std::string line = "[device] cpu MHz now/top:";
+  for (int c = 0; c < 12; ++c) {
+    const std::string base = "/sys/devices/system/cpu/cpu" + std::to_string(c) + "/cpufreq/";
+    const long cur = ReadNumber(base + "scaling_cur_freq");
+    const long top = ReadNumber(base + "cpuinfo_max_freq");
+    if (cur < 0 && top < 0) continue;
+    line += " " + (cur >= 0 ? std::to_string(cur / 1000) : std::string("?")) + "/" + (top >= 0 ? std::to_string(top / 1000) : std::string("?"));
+  }
+  line += " | temps:";
+  int shown = 0;
+  for (int z = 0; z < 40 && shown < 10; ++z) {
+    const std::string base = "/sys/class/thermal/thermal_zone" + std::to_string(z) + "/";
+    const long t = ReadNumber(base + "temp");
+    if (t < 0) continue;
+    std::string type;
+    if (std::FILE* f = std::fopen((base + "type").c_str(), "rb")) {
+      char buf[64] = {};
+      if (std::fgets(buf, sizeof buf, f) != nullptr) type = buf;
+      std::fclose(f);
+      while (!type.empty() && (type.back() == '\n' || type.back() == '\r')) type.pop_back();
+    }
+    line += " " + type + "=" + std::to_string(t >= 1000 ? t / 1000 : t) + "C";
+    ++shown;
+  }
+  if (shown == 0) line += " none readable";
+  std::fprintf(stderr, "%s\n", line.c_str());
+}
+#endif
+
 void* Watch(void*) {
   uint32_t last = sProgress();
+#ifdef __ANDROID__
+  unsigned long long nextDevice = TickMs() + 60000ull;
+#endif
   unsigned long long lastMove = TickMs();
   bool reported = false;
   while (!sStopped.load()) {
@@ -108,6 +150,12 @@ void* Watch(void*) {
     if (sStopped.load()) break;
     const uint32_t now = sProgress();
     const unsigned long long tick = TickMs();
+#ifdef __ANDROID__
+    if (tick >= nextDevice) {
+      nextDevice = tick + 60000ull;
+      LogDeviceState();
+    }
+#endif
     if (sWaitingForPlayer.load() || sMessageWindows.load() > 0) {
       lastMove = tick;
       Write(now, 0, "waiting for the player");
@@ -126,9 +174,12 @@ void* Watch(void*) {
     Write(now, still, stuck ? "STUCK" : (still >= 6 ? "slow" : "running"));
     if (stuck && !reported) {
       reported = true;
-      std::fprintf(stderr, "\n[watchdog] STUCK: no new game frame for %u s (at frame %u). (The threads' call stacks "
-                           "are not printed on Linux and Mac yet.)\n",
-                   still, now);
+      std::fprintf(stderr, "\n[watchdog] STUCK: no new game frame for %u s (at frame %u).\n", still, now);
+      PortCrash_PrintAllThreadStacks("every thread's calls (most recent first):");
+      PortLog_Flush();
+      const struct timespec nap = {2, 0};
+      nanosleep(&nap, nullptr);
+      PortCrash_PrintAllThreadStacks("2 s later:");
       PortLog_Flush();
       if (sExitWhenStuck) {
         std::fprintf(stderr, "[watchdog] test run: ending with exit code 124\n");

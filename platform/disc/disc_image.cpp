@@ -1,6 +1,7 @@
 #include "port_disc.h"
 
 #include <nod.h>
+#include "disc_open.h"
 
 #include <cstdio>
 #include <cstring>
@@ -110,7 +111,7 @@ PortDiscKind PortDisc_Probe(const char* path, PortDiscInfo* info, char* error, s
   NodHandle* disc = nullptr;
   NodDiscHeader header{};
   NodDiscMeta meta{};
-  if (nod_disc_open(path, nullptr, &disc) != NOD_RESULT_OK || nod_disc_header(disc, &header) != NOD_RESULT_OK) {
+  if (PortDisc_NodOpen(path, nullptr, &disc) != NOD_RESULT_OK || nod_disc_header(disc, &header) != NOD_RESULT_OK) {
     if (error != nullptr && errorSize > 0) {
       const char* detail = nod_error_message();
       std::snprintf(error, errorSize, "%s", detail != nullptr ? detail : "unknown reason");
@@ -151,7 +152,7 @@ PortDiscHashResult PortDisc_HashSha1(const char* path, PortDiscHashProgress prog
   NodDiscOptions options{};
   options.preloader_threads = 2;
   NodHandle* disc = nullptr;
-  if (nod_disc_open(path, &options, &disc) != NOD_RESULT_OK) {
+  if (PortDisc_NodOpen(path, &options, &disc) != NOD_RESULT_OK) {
     return PORT_DISC_HASH_READ_ERROR;
   }
   const uint64_t total = nod_disc_size(disc);
@@ -193,5 +194,26 @@ PortDiscHashResult PortDisc_HashSha1(const char* path, PortDiscHashProgress prog
   sha1.FinishHex(out);
   return PORT_DISC_HASH_OK;
 }
+
+#ifdef __ANDROID__
+bool PortDisc_ContentSize(const char* path, uint64_t* size) {
+  if (path == nullptr || std::strncmp(path, "content://", 10) != 0) {
+    return false;
+  }
+  SDL_IOStream* io = SDL_IOFromFile(path, "rb");
+  if (io == nullptr) {
+    return false;
+  }
+  const Sint64 n = SDL_GetIOSize(io);
+  SDL_CloseIO(io);
+  if (n < 0) {
+    return false;
+  }
+  if (size != nullptr) {
+    *size = static_cast<uint64_t>(n);
+  }
+  return true;
+}
+#endif
 
 }

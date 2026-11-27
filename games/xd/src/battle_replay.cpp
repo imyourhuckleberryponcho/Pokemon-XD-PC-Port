@@ -1,3 +1,4 @@
+#include "xd_mod_assets.h"
 #include "battle_replay.h"
 
 #include "online_battle.h"
@@ -1027,7 +1028,13 @@ bool CheckEnvironment() {
     const std::string text = "This replay was made with the battle-changing mods \"" + (wanted.empty() ? std::string("none") : wanted) + "\"; this game has \"" +
                              (have.empty() ? std::string("none") : have) + "\" switched on" + (why.empty() ? std::string("") : " (here: " + why + ")") +
                              ". Mods that only change looks or sound never matter, but these change what a battle computes. Switch them to match (the Mods page of the launcher) and watch it again.";
-    Refuse(text);
+    std::string assets;
+    for (const auto& b : xd::modassets::Blocked()) {
+      if (wanted.find(b.id) != std::string::npos) {
+        assets += (assets.empty() ? "" : "; ") + b.id + " (needs " + engine::mods::AssetNames(b.assets) + ")";
+      }
+    }
+    Refuse(text + (assets.empty() ? std::string() : " Not loaded here because it needs extra assets of your own that are not ready: " + assets + ". Make them on the launcher's Extra assets page."));
     return false;
   }
   const std::string wantRando = P.file.Get("randomizer"), haveRando = xd::pt::LoadedRandomizer();

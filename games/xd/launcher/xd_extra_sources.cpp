@@ -163,6 +163,22 @@ const std::vector<launcher::GameInfo::ExtraSource>& ExtraSources() {
       return {0, std::string()};
     };
     usum.doneText = Tr("Pick \"Models: Ultra Sun / Ultra Moon\" in the New Game setup to play with them.");
+#ifdef __ANDROID__
+    usum.converterArguments = {"--rom", "{disc}", "--xd-disc", "{game_disc}", "--out", "{out}", "--gen4-pack", "{out2}"};
+    usum.thirdFolder.clear();
+    usum.thirdManifestFile.clear();
+    usum.thirdManifestId.clear();
+    usum.thirdProvides.clear();
+    usum.thirdWarning.clear();
+    usum.thirdCheck = nullptr;
+    usum.thirdRecipe = 0;
+    usum.makeLabel = Tr("Make models and Gen 4 pack");
+    usum.provides = Tr("Ultra Sun / Ultra Moon models and Gen 4 Pokemon");
+    usum.how = Tr("The converter built into this app turns the Pokemon models in your own Ultra Sun or Ultra Moon dump into XD's model format "
+                  "(the folder extra_assets/usum) and makes the Gen 4 pack from it. The dump must be decrypted: a cartridge dump (.3ds or .cci) or a "
+                  "digital copy (.cia). It is read where it is (not copied). Your XD disc (the Disc page) is needed too. It takes a while: keep "
+                  "the app open. The Gen 5-7 pack cannot be made on the phone yet: make it on a PC and bring it with the button at the top.");
+#endif
     usum.tab = "models";
     usum.tabOrder = 0;
     v.push_back(usum);

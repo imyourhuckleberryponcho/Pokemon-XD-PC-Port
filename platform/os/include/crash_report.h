@@ -14,6 +14,7 @@ void PortCrash_WatchWrites(uintptr_t address);
 void PortCrash_SampleThread(unsigned afterMs, unsigned everyMs, unsigned count);
 
 void PortCrash_PrintThreadStack(void* thread);
+void PortCrash_PrintAllThreadStacks(const char* title);
 
 typedef struct PortCrashReport {
   const char* kind;

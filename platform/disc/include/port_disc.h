@@ -83,6 +83,10 @@ typedef enum PortDiscHashResult {
 
 PortDiscHashResult PortDisc_HashSha1(const char* path, PortDiscHashProgress progress, void* user, char out[41]);
 
+#ifdef __ANDROID__
+bool PortDisc_ContentSize(const char* path, uint64_t* size);
+#endif
+
 #ifdef __cplusplus
 }
 #endif

@@ -86,6 +86,38 @@ int main() {
     gen4(b, "pbr_gen4", 107, toc), gen57(b, 622, true, tocHash);
     check(pm::CheckGen57(b) == pm::Problem::TooManyCries, "new pack, Gen 4 pack with more cries than the room: refused");
   }
+  {
+    const fs::path a = root / "assets";
+    using S = pm::AssetState;
+    check(pm::StateOfAsset("gen4_pack", a) == S::NotMade && pm::StateOfAsset("gen57_pack", a) == S::NotMade &&
+              pm::StateOfAsset("br_models", a) == S::NotMade && pm::StateOfAsset("usum_models", a) == S::NotMade,
+          "assets: nothing made: every asset is not made");
+    check(pm::StateOfAsset("nonsense", a) == S::UnknownId, "assets: an unknown id");
+    put(a / "pbr" / "mod.json", "{\"id\": \"battle-revolution-models\", \"version\": \"1.0\"}");
+    check(pm::StateOfAsset("br_models", a) == S::NotMade, "assets: a models folder without a single model archive is not made");
+    fs::create_directories(a / "pbr" / "fsys" / "pkx_absol.fsys");
+    check(pm::StateOfAsset("br_models", a) == S::Ready, "assets: Battle Revolution models made");
+    put(a / "usum" / "mod.json", "{\"id\": \"battle-revolution-models\"}");
+    fs::create_directories(a / "usum" / "fsys" / "pkx_absol.fsys");
+    check(pm::StateOfAsset("usum_models", a) == S::NotMade, "assets: another converter's folder is not the Ultra Sun / Ultra Moon models");
+    put(a / "usum" / "mod.json", "{\"id\": \"ultra-sun-moon-models\"}");
+    check(pm::StateOfAsset("usum_models", a) == S::Ready, "assets: Ultra Sun / Ultra Moon models made");
+    gen4(a, "usum_gen4", 0, toc);
+    check(pm::StateOfAsset("gen4_pack", a) == S::Ready, "assets: the Gen 4 pack of the dump counts");
+    put(a / "usum_gen4" / "gen4.json", "{\"id\": \"x\", \"version\": 1}");
+    check(pm::StateOfAsset("gen4_pack", a) == S::OtherVersion, "assets: a Gen 4 pack of another version is out of date");
+    put(a / "usum_gen4" / "gen4.json", "{\"id\": \"x\", \"version\": 2}");
+    gen57(a, 622, true, tocHash);
+    check(pm::StateOfAsset("gen57_pack", a) == S::Ready, "assets: the Gen 5-7 pack made with this Gen 4 pack");
+    put(a / "usum_gen4" / "files" / "GSfsys.toc", "another archive list");
+    check(pm::StateOfAsset("gen57_pack", a) == S::DoesNotFit, "assets: the Gen 5-7 pack does not fit another Gen 4 pack");
+    put(a / "usum_gen4" / "files" / "GSfsys.toc", toc);
+    put(a / "usum_gen57" / "gen57.json", "{\"id\": \"x\", \"version\": 9}");
+    check(pm::StateOfAsset("gen57_pack", a) == S::OtherVersion, "assets: a Gen 5-7 pack of another version is out of date");
+    fs::remove_all(a / "usum_gen4");
+    put(a / "usum_gen57" / "gen57.json", "{\"id\": \"x\", \"version\": 1}");
+    check(pm::StateOfAsset("gen57_pack", a) == S::DoesNotFit, "assets: the Gen 5-7 pack without any Gen 4 pack does not fit");
+  }
   fs::remove_all(root, ec);
   std::printf(sOk ? "pack match test: all passed\n" : "pack match test: FAILED\n");
   return sOk ? 0 : 1;

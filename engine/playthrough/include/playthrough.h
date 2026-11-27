@@ -65,6 +65,7 @@ struct Setup {
   Speedrun speedrun;
   PlayStats stats;
   Engine engine = Engine::Faithful;
+  std::vector<std::pair<std::string, std::string>> roomRecipes;
   std::vector<AddedRowRef> addedRows;
   std::vector<ModUse> mods;
   std::string randomizer, randomizerVersion, seed;
@@ -72,6 +73,8 @@ struct Setup {
   std::vector<std::string> options;
   std::string split;
   std::string moreShadows;
+  int pcBoxes = 0;
+  std::vector<std::string> editorShadows;
   std::string edition;
   rulesets::Choice rules;
   std::string ruleSetStarted;
@@ -100,7 +103,7 @@ struct Setup {
   uint32_t trainerId = 0, secretId = 0;
 
   std::vector<const ModUse*> WorldMods() const;
-  bool Vanilla() const { return WorldMods().empty() && randomizer.empty() && challenges.empty() && options.empty() && moreShadows.empty(); }
+  bool Vanilla() const { return WorldMods().empty() && randomizer.empty() && challenges.empty() && options.empty() && moreShadows.empty() && pcBoxes <= 8 && editorShadows.empty(); }
 };
 
 std::string Label(const Setup& setup);
@@ -137,6 +140,9 @@ std::string TablesStamp(const Setup& setup);
 bool IsEngineSetting(const settings::Definition& def);
 std::string ApplyEngine(settings::Registry& registry, Engine engine);
 Engine DefaultEngine(const settings::Registry& registry);
+
+struct RoomChange { std::string room; bool gone = false; };
+std::vector<RoomChange> RoomRecipeChanges(const std::vector<std::pair<std::string, std::string>>& saved, const std::vector<std::pair<std::string, std::string>>& now);
 
 bool EngineQuestionDue(const Setup& setup, Engine playersEngine);
 void SwitchEngine(Setup& setup, Engine to, const std::string& when);

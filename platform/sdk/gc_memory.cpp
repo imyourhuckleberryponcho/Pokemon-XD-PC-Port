@@ -7,6 +7,13 @@
 #else
 #include <sys/mman.h>
 #include <unistd.h>
+#ifdef __ANDROID__
+#include "port_android_layout.h"
+#include <sys/syscall.h>
+#if __ANDROID_API__ < 30
+#define memfd_create(name, flags) static_cast<int>(syscall(__NR_memfd_create, (name), (flags)))
+#endif
+#endif
 #ifndef MAP_FIXED_NOREPLACE
 #define MAP_FIXED_NOREPLACE 0x100000
 #endif
@@ -17,6 +24,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cerrno>
 #include <mutex>
 
 extern void* MEM1Start;
@@ -24,7 +32,11 @@ extern void* MEM1End;
 
 namespace {
 constexpr uintptr_t kLowCandidates[] = {0x70000000, 0x60000000, 0x50000000, 0x30000000, 0x20000000, 0x10000000};
+#ifdef __ANDROID__
+size_t kLowSize = 0x10000000;
+#else
 constexpr size_t kLowSize = 0x10000000;
+#endif
 uintptr_t kLowBase = 0;
 bool sLowReserved = false;
 bool sGameProgram = false;
@@ -34,6 +46,14 @@ bool reserve_low() {
   if (const char* none = std::getenv("PORT_TEST_NO_LOW_MEMORY"); none != nullptr && none[0] == '1') {
     return false;
   }
+#ifdef __ANDROID__
+  if (const uintptr_t base = PortAndroid_LowBlockBase(); base != 0) {
+    kLowBase = base;
+    kLowSize = PortAndroid_LowBlockSize();
+    return true;
+  }
+  return false;
+#endif
   for (const uintptr_t base : kLowCandidates) {
 #ifdef _WIN32
     if (VirtualAlloc(reinterpret_cast<void*>(base), kLowSize, MEM_RESERVE, PAGE_NOACCESS) ==
@@ -62,6 +82,16 @@ constexpr uint32_t kArenaStart = 0x3100;
 constexpr uint32_t kBusClock = 162000000;
 constexpr uint32_t kCpuClock = 486000000;
 bool sReserved = false;
+#ifdef __ANDROID__
+char sFailure[700] = "";
+#endif
+#ifndef _WIN32
+#ifdef __ANDROID__
+int fixed_flags(uintptr_t at) { return PortAndroid_FixedRangeReserved(at) ? MAP_FIXED : MAP_FIXED_NOREPLACE; }
+#else
+int fixed_flags(uintptr_t) { return MAP_FIXED_NOREPLACE; }
+#endif
+#endif
 }
 
 extern "C" {
@@ -70,20 +100,37 @@ bool PortMem_ReserveMEM1(void) {
   sGameProgram = true;
 #ifndef _WIN32
   const int fd = memfd_create("gc_mem1", 0);
+  [[maybe_unused]] const int fdError = errno;
   const bool sized = fd >= 0 && ftruncate(fd, kMem1Size) == 0;
+  [[maybe_unused]] const int sizeError = errno;
   void* p = sized ? mmap(reinterpret_cast<void*>(kMem1Base), kMem1Size, PROT_READ | PROT_WRITE,
-                         MAP_SHARED | MAP_FIXED_NOREPLACE, fd, 0)
+                         MAP_SHARED | fixed_flags(kMem1Base), fd, 0)
                   : MAP_FAILED;
+  [[maybe_unused]] const int mapError = errno;
+#ifdef __ANDROID__
+  if (!sized) {
+    std::snprintf(sFailure, sizeof sFailure, "%s failed (%s)", fd < 0 ? "memfd_create" : "sizing the memory file", std::strerror(fd < 0 ? fdError : sizeError));
+  } else if (p != reinterpret_cast<void*>(kMem1Base)) {
+    std::snprintf(sFailure, sizeof sFailure, "main memory at 0x80000000: %s; held by: %.300s", p == MAP_FAILED ? std::strerror(mapError) : "the system placed it elsewhere", PortAndroid_RangeOwners(kMem1Base, kMem1Size));
+  }
+  if (p != MAP_FAILED && p != reinterpret_cast<void*>(kMem1Base)) munmap(p, kMem1Size);
+#endif
   sReserved = p == reinterpret_cast<void*>(kMem1Base);
   if (sReserved && mmap(reinterpret_cast<void*>(kMem1UncachedBase), kMem1Size, PROT_READ | PROT_WRITE,
-                        MAP_SHARED | MAP_FIXED_NOREPLACE, fd, 0) != reinterpret_cast<void*>(kMem1UncachedBase)) {
+                        MAP_SHARED | fixed_flags(kMem1UncachedBase), fd, 0) != reinterpret_cast<void*>(kMem1UncachedBase)) {
     std::fprintf(stderr, "[platform/sdk] no uncached view of game memory at 0xC0000000 (range taken)\n");
   }
   if (fd >= 0) {
     close(fd);
   }
   void* lc = mmap(reinterpret_cast<void*>(kLockedCacheBase), kLockedCacheSize, PROT_READ | PROT_WRITE,
-                  MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0);
+                  MAP_PRIVATE | MAP_ANONYMOUS | fixed_flags(kLockedCacheBase), -1, 0);
+#ifdef __ANDROID__
+  if (sFailure[0] == 0 && lc != reinterpret_cast<void*>(kLockedCacheBase)) {
+    std::snprintf(sFailure, sizeof sFailure, "the locked cache at 0xE0000000: %s; held by: %.300s", lc == MAP_FAILED ? std::strerror(errno) : "the system placed it elsewhere", PortAndroid_RangeOwners(kLockedCacheBase, kLockedCacheSize));
+  }
+  if (lc != MAP_FAILED && lc != reinterpret_cast<void*>(kLockedCacheBase)) munmap(lc, kLockedCacheSize);
+#endif
   sReserved = sReserved && lc == reinterpret_cast<void*>(kLockedCacheBase);
 #else
   HANDLE section = CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0, kMem1Size, nullptr);
@@ -100,8 +147,17 @@ bool PortMem_ReserveMEM1(void) {
               VirtualAlloc(lc, kLockedCacheSize, MEM_COMMIT, PAGE_READWRITE) == lc;
 #endif
   sLowReserved = sLowReserved || reserve_low();
+#ifdef __ANDROID__
+  if (sFailure[0] == 0 && !sLowReserved) {
+    std::snprintf(sFailure, sizeof sFailure, "no free block of 96 MB or more below 4 GB for the game's converted data (free below 2 GB: %s)", PortAndroid_LargestGaps());
+  }
+#endif
   return sReserved && sLowReserved;
 }
+
+#ifdef __ANDROID__
+const char* PortMem_StartFailureNote(void) { return sFailure; }
+#endif
 
 void* PortMem_LowAlloc(size_t size, size_t align) {
   std::lock_guard<std::mutex> guard(sLowLock);
@@ -162,6 +218,28 @@ void* PortMem_LowAlloc(size_t size, size_t align) {
   }
   sLowUsed = end;
   return reinterpret_cast<void*>(kLowBase + start);
+}
+
+void PortMem_LowRange(uint8_t** base, size_t* used) {
+  std::lock_guard<std::mutex> guard(sLowLock);
+  *base = sLowReserved ? reinterpret_cast<uint8_t*>(kLowBase) : nullptr;
+  *used = sLowReserved ? sLowUsed : 0;
+}
+
+bool PortMem_LowEnsureUsed(size_t used) {
+  std::lock_guard<std::mutex> guard(sLowLock);
+  if (!sLowReserved || used > kLowSize || used < sLowUsed) return false;
+  if (used > sLowCommitted) {
+    const size_t commitEnd = std::min(kLowSize, (used + 0xFFFF) & ~size_t{0xFFFF});
+#ifdef _WIN32
+    if (VirtualAlloc(reinterpret_cast<void*>(kLowBase + sLowCommitted), commitEnd - sLowCommitted, MEM_COMMIT, PAGE_READWRITE) == nullptr) return false;
+#else
+    if (mprotect(reinterpret_cast<void*>(kLowBase + sLowCommitted), commitEnd - sLowCommitted, PROT_READ | PROT_WRITE) != 0) return false;
+#endif
+    sLowCommitted = commitEnd;
+  }
+  sLowUsed = used;
+  return true;
 }
 
 bool PortMem_LowIsOrdinary(void) { return sLowIsOrdinary; }

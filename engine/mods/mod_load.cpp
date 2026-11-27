@@ -279,6 +279,34 @@ private:
       }
       on.push_back(mod);
     }
+    if (mOpt.assetCheck) {
+      for (size_t i = 0; i < on.size();) {
+        const Manifest& m = on[i]->manifest;
+        std::vector<std::string> notReady, reasons;
+        for (const std::string& id : m.needsAssets) {
+          const std::string reason = mOpt.assetCheck(id);
+          if (!reason.empty()) {
+            notReady.push_back(id);
+            reasons.push_back(reason);
+          }
+        }
+        if (notReady.empty()) {
+          i++;
+          continue;
+        }
+        Say(Message::Level::Problem, AssetProblemText(m.name, notReady, reasons));
+        mResult.assetBlocked.push_back({m.id, m.name, notReady, AssetProblemText(m.name, notReady, reasons)});
+        on.erase(on.begin() + static_cast<std::ptrdiff_t>(i));
+      }
+      for (const FoundMod* mod : on) {
+        for (const std::string& id : mod->manifest.recommendsAssets) {
+          const std::string reason = mOpt.assetCheck(id);
+          if (reason.empty()) continue;
+          Say(Message::Level::Info, Fmt(Tr("The mod \"%s\" works best with the %s of your own (%s). It is used without them."), mod->manifest.name.c_str(),
+                                        AssetNames({id}).c_str(), reason.c_str()));
+        }
+      }
+    }
     for (bool changed = true; changed;) {
       changed = false;
       for (size_t i = 0; i < on.size() && !changed; i++) {
@@ -972,6 +1000,7 @@ private:
       }
       if (!e.generated && Fsys_Entry(&fsys, index, &old) && contents.back().size() > old.size) {
         const bool builtIn = e.from.compare(0, std::strlen(kLayerPrefix), kLayerPrefix) == 0;
+        mResult.biggerAny = true;
         const char* listAll = std::getenv("XD_MODS_SIZE_LOG");
         if (builtIn) {
           mResult.biggerBuiltIn.push_back(Fmt("%s %s (%u bytes, was %u)", layer.discPath.c_str(), e.name.c_str(), static_cast<unsigned>(contents.back().size()),

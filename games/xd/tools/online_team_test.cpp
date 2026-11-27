@@ -95,6 +95,35 @@ int main() {
   room.shadowAllowed = true;
   CHECK(CheckTeam(shadow, rules, room).empty());
 
+
+  const std::vector<std::string> orders = {"383:25:30:4500:357,0,0,0:2", "100:7:20:2000:357,370,0,0:2"};
+  std::vector<xd::save::Pokemon> mixed = {Make(1), Make(2, 5), Make(1, 383), Make(2, 100)};
+  CHECK(EditedShadowMask(mixed, orders) == 12u);
+  CHECK(EditedShadowMask(mixed, {}) == 0u && EditedShadowMask({}, orders) == 0u);
+  CHECK(EditedShadowMask(mixed, {"garbage", "5:1:1:1:1,0,0,0:0"}) == 2u);
+  room.shadowAllowed = true;
+  room.editedShadows = false;
+  const std::vector<std::string> refused = CheckTeam(mixed, rules, room, 12u);
+  CHECK(refused.size() == 2 && refused[0].find("Pokemon 3") != std::string::npos && refused[0].find("save editor") != std::string::npos && refused[1].find("Pokemon 4") != std::string::npos);
+  const std::vector<std::string> unmarked = CheckTeam(mixed, rules, room, 0u);
+  CHECK(unmarked.size() == 1 && unmarked[0].find("Pokemon 3") != std::string::npos && unmarked[0].find("extra Shadow Pokemon") != std::string::npos);
+  room.editedShadows = true;
+  CHECK(CheckTeam(mixed, rules, room, 12u).empty());
+  room.shadowAllowed = false;
+  CHECK(!CheckTeam(mixed, rules, room, 12u).empty());
+  room.shadowAllowed = true;
+  room.editedShadows = false;
+
+  uint32_t mask = 77;
+  CHECK(EncodeTeam(mixed, 0) == EncodeTeam(mixed) && EncodeTeam(mixed, 0).find(" E") == std::string::npos);
+  const std::string withMask = EncodeTeam(mixed, 12u);
+  CHECK(withMask.size() > EncodeTeam(mixed).size() && withMask.compare(withMask.size() - 3, 3, " Ec") == 0);
+  CHECK(DecodeTeam(withMask, back, &why, &mask) && mask == 12u && back.size() == 4 && back[2].raw == mixed[2].raw);
+  CHECK(DecodeTeam(EncodeTeam(mixed), back, &why, &mask) && mask == 0u);
+  CHECK(!DecodeTeam(EncodeTeam(mixed, 12u) + "zz", back, &why, &mask));
+  CHECK(!DecodeTeam(EncodeTeam({Make(1)}, 4u), back, &why, &mask));
+  CHECK(!DecodeTeam(EncodeTeam(mixed, 12u).substr(0, EncodeTeam(mixed, 12u).size() - 3) + " Ezz", back, &why, &mask));
+
   std::printf("online_team_test: %d checks, %d failed\n", sChecks, sFailed);
   return sFailed ? 1 : 0;
 }

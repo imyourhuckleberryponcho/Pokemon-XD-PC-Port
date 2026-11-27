@@ -54,6 +54,7 @@ std::vector<int> TimeoutPick(const std::vector<int>& chosen, int teamSize, int w
 struct Peer {
   bool accepted = false, declined = false, ready = false, rematch = false, left = false;
   int teamCount = -1;
+  std::vector<std::string> refusals;
   bool pvTeam = false, pvCommit = false, pvReveal = false;
   std::vector<int> pvIds;
   std::string pvCommitHex;

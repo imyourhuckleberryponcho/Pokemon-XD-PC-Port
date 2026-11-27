@@ -40,6 +40,14 @@ struct StartRequest {
   std::filesystem::path outputFile;
   bool killTree = false;
 };
+#ifdef __ANDROID__
+struct BuiltinPrograms {
+  bool (*has)(const std::string& name) = nullptr;
+  int (*run)(const std::string& name, const std::vector<std::string>& arguments, const std::filesystem::path& outputFile) = nullptr;
+};
+void SetBuiltinPrograms(const BuiltinPrograms& programs);
+bool HasBuiltinProgram(const std::filesystem::path& program);
+#endif
 struct Process;
 Process* StartProgram(const StartRequest& request, std::string& error);
 bool Ended(Process* process, int waitMs);

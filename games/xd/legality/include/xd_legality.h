@@ -39,6 +39,10 @@ struct SpeciesRules {
   uint16_t evolvesFrom = 0;
   uint8_t sexRatio = 0xFF;
   uint16_t initFriend = 70;
+  uint8_t hiddenAbility = 0;
+  uint16_t formOf = 0;
+  uint8_t formKind = 0;
+  uint16_t plateItem = 0;
 };
 
 struct MoveRules {
