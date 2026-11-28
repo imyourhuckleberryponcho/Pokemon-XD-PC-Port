@@ -17,6 +17,7 @@ body{font-family:XD1,'Segoe UI','Yu Gothic UI','Noto Sans JP',sans-serif;color:#
 .n{font-family:XD3,'Segoe UI','Yu Gothic UI','Noto Sans JP',sans-serif}
 .tx{text-shadow:1.2px 1.2px 0 #000,0 0 2px rgba(0,0,0,.7)}
 .fit{display:inline-block;white-space:nowrap;transform-origin:0 50%}
+/* the game's HP bar: black frame, grey inside, the fill's own rows of colour (sampled from the disc's picture) */
 .hpb{position:relative;background:#000}
 .hpb b{position:absolute;inset:2px;background:linear-gradient(#4a4a4a 82%,#737373 82%)}
 .hpb i,.hpb u{position:absolute;left:2px;top:2px;bottom:2px;width:calc((100% - 4px)*var(--hp));transition:width .6s linear}
@@ -35,18 +36,24 @@ body{font-family:XD1,'Segoe UI','Yu Gothic UI','Noto Sans JP',sans-serif;color:#
 [data-st=sleep] .st{background-image:url(ui/st_sleep.png)}
 [data-st=freeze] .st{background-image:url(ui/st_freeze.png)}
 [data-st=fainted] .st{background-image:url(ui/st_fainted.png)}
+/* shiny: one small four-point star that glints now and then */
 .star{position:absolute;display:none;width:16px;height:16px;background:radial-gradient(closest-side,#fff 0 18%,transparent 19%),conic-gradient(from 0deg,#ffe97a,#fff6c8,#ffd23a,#fff6c8,#ffe97a);
   clip-path:polygon(50% 0,60% 40%,100% 50%,60% 60%,50% 100%,40% 60%,0 50%,40% 40%);filter:drop-shadow(0 0 2px #a86b00);animation:glint 4s ease-in-out infinite}
 .shiny .star{display:block}
 @keyframes glint{0%,60%,100%{transform:scale(.85)}70%{transform:scale(1.3) rotate(20deg)}80%{transform:scale(.9)}90%{transform:scale(1.15)}}
+/* gender sign after a name (data format 2) */
 .g{font-size:.82em;margin-left:.28em;display:inline-block}
 .g.male{color:#6cb6ff}.g.female{color:#ff8fbd}
+/* the experience gauge (the capsule's lower lip, as in the game): blue, the same black frame as the HP bar */
 .exp{position:relative;background:#000}
 .exp b{position:absolute;inset:1.5px;background:#3a3a3a}
 .exp i{position:absolute;left:1.5px;top:1.5px;bottom:1.5px;width:calc((100% - 3px)*var(--exp));background:linear-gradient(#7fc0ff 0 16%,#1073ff 16% 72%,#004ac6 72%);transition:width .8s}
+/* the pieces made from your disc do not exist yet: a plain dark back so the writing stays readable */
 body.nopieces .plate,body.nopieces .hud{background:rgba(24,24,30,.82)!important;border-image:none!important;border-radius:14px}
 </style>
 <style>
+/* 1000 x 260. Field: the party screen's cards, three by two, at the bottom. Battle: the two that fight become the battle's own name
+   capsules, the others a row of short cards under them. Every frame, bar, pill, ball and letter is the game's own picture. */
 #team{position:absolute;left:4px;right:4px;bottom:4px;display:grid;grid-template-columns:repeat(3,1fr);gap:6px 7px;justify-items:start}
 .m{position:relative;zoom:.932;width:350px;height:64px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))}
 .plate,.ring,.hole,.hud,.lip,.hring,.hring2{position:absolute;pointer-events:none}
@@ -73,12 +80,15 @@ body.nopieces .plate,body.nopieces .hud{background:rgba(24,24,30,.82)!important;
 .hud,.lip,.hring,.hring2,.hh,.exp,.xl{display:none}
 #balls{position:absolute;left:8px;top:0;display:none;gap:3px}
 #balls i{width:22px;height:22px;background:center/contain no-repeat url(ui/ball_none.png)}
+/* low HP: the frame of the HP bar breathes, nothing jumps */
 .low .hp{animation:low 1.8s ease-in-out infinite}
 @keyframes low{0%,100%{box-shadow:0 0 0 0 rgba(255,70,40,0)}50%{box-shadow:0 0 0 2px rgba(255,86,50,.95),0 0 9px 2px rgba(255,60,30,.6)}}
+/* Shadow: the purple frame smoulders */
 .shadow:not(.faint)::before{content:'';position:absolute;inset:-3px -2px -3px -3px;border-radius:34px 14px 14px 34px;box-shadow:0 0 8px 2px rgba(122,30,200,.7);animation:smo 3.2s ease-in-out infinite}
 @keyframes smo{50%{opacity:.35}}
 .hit .hole{animation:hit .5s steps(2) 1}@keyframes hit{50%{filter:brightness(2.6)}}
 .sent{animation:sent .45s ease-out}@keyframes sent{0%{transform:translateY(18px);opacity:0}}
+/* ---- battle ---- */
 .battle #team{display:flex;flex-wrap:wrap;gap:6px 7px;align-content:flex-end;inset:4px}
 .battle .m:not(.on){order:2;width:259px;zoom:.932}
 .battle .m:not(.on) .num{display:none}
@@ -111,6 +121,7 @@ body.nopieces .plate,body.nopieces .hud{background:rgba(24,24,30,.82)!important;
 .battle .m.on .star{left:166px;top:2px;width:13px;height:13px}
 .battle .m.on.shadow:not(.faint)::before{inset:-2px;border-radius:14px 27px 27px 14px;box-shadow:0 0 5px 1.5px rgba(122,30,200,.75)}
 .battle #balls{display:flex;left:9px;bottom:176px;top:auto}
+/* ---- the tall shape (?shape=side): a column of the party screen's cards, for the space beside a 4:3 picture ---- */
 .side #team{left:8px;right:auto;bottom:auto;top:8px;display:flex;flex-direction:column;flex-wrap:nowrap;gap:9px;align-content:flex-start;inset:8px auto auto 8px}
 .side .m,.side.battle .m:not(.on){zoom:1;width:350px;margin:0 0 0 14px}
 .side.battle .m:not(.on){order:2}
@@ -122,8 +133,12 @@ body.nopieces .plate,body.nopieces .hud{background:rgba(24,24,30,.82)!important;
 </style></head>
 <body><div id="balls"></div><div id="team"></div>
 <script>
+/* Shared by the three looks: reads party.js, keeps one element per Pokemon alive between updates so things can move, and tells the
+)PG0",
+R"PG1(   page what happened (damage, heal, faint, level, sent out). The page file only supplies XD.root, XD.build and XD.update. */
 (function () {
   var q = new URLSearchParams(location.search), dn = q.get('data');
+  /* ?data=<name> reads data/<name>.js instead of party.js (for trying a page with made-up data); letters, digits, _ and - only */
   var src = dn && /^[A-Za-z0-9_-]+$/.test(dn) ? 'data/' + dn + '.js' : 'party.js';
   var last = null, prev = {}, els = {};
   var XD = window.XD = {
@@ -132,7 +147,9 @@ body.nopieces .plate,body.nopieces .hud{background:rgba(24,24,30,.82)!important;
     hpClass: function (m) { var p = m.hp / Math.max(1, m.max_hp); return p > .5 ? 'hi' : p > .2 ? 'mid' : 'lo'; },
     fainted: function (m) { return !m.egg && (m.status === 'fainted' || m.hp <= 0); },
     name: function (m) { return m.egg ? 'EGG' : (m.nickname || m.name || ''); },
+    /* the picture for a round window: the game's small face if the program has it, else the best picture there is */
     small: function (m) { return m.small || m.face || ''; },
+    /* gender sign after the name (data format 2; older files have none) */
     setName: function (span, m) {
       span.textContent = XD.name(m);
       if (!m.egg && (m.gender === 'male' || m.gender === 'female')) span.append(XD.el('span', 'g ' + m.gender, m.gender === 'male' ? '\u2642' : '\u2640'));
@@ -143,6 +160,7 @@ body.nopieces .plate,body.nopieces .hud{background:rgba(24,24,30,.82)!important;
       return Math.max(0, Math.min(1, (m.exp - a) / (b - a)));
     },
     STATUS: { poison: 'poison', bad_poison: 'poison', burn: 'burn', paralysis: 'paralysis', sleep: 'sleep', freeze: 'freeze', fainted: 'fainted' },
+    /* long names are pressed together a little (as the game's menus do): never cut, never wrapped */
     fit: function (e) { e.style.transform = ''; var cs = getComputedStyle(e.parentNode), w = e.parentNode.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight), s = e.scrollWidth; if (s > w && w > 0) e.style.transform = 'scaleX(' + Math.max(.45, w / s) + ')'; },
     flash: function (e, c, ms) { e.classList.remove(c); void e.offsetWidth; e.classList.add(c); setTimeout(function () { e.classList.remove(c); }, ms || 900); }
   };
@@ -175,13 +193,16 @@ body.nopieces .plate,body.nopieces .hud{background:rgba(24,24,30,.82)!important;
     if (XD.layout) XD.layout(party, d, els);
     XD.refit();
   };
+  /* names are fitted again whenever a box finished growing or shrinking (a battle starting, a Pokemon sent out) */
   XD.refit = function () { document.querySelectorAll('.fit').forEach(XD.fit); };
   var rt = null; document.addEventListener('transitionend', function () { clearTimeout(rt); rt = setTimeout(XD.refit, 30); });
   XD.start = function () {
+    /* the game's menu pieces are made on this PC from your disc the first time the overlay runs: until they exist the boxes get a plain dark back */
     var tries = 0;
     function pieces() { var p = new Image(); p.onload = function () { if (document.body.classList.contains('nopieces')) location.reload(); }; p.onerror = function () { document.body.classList.add('nopieces'); }; p.src = 'ui/small_silver.png?t=' + Date.now(); }
     pieces();
     function poll() { var o = document.getElementById('feed'); if (o) o.remove(); var s = document.createElement('script'); s.id = 'feed'; s.charset = 'utf-8'; s.src = src + (src.indexOf('?') < 0 ? '?t=' : '&t=') + Date.now(); document.head.append(s); }
+    /* the game's letters (font\xd*.ttf, made from your disc) are loaded before the first picture, so no name jumps; without them system fonts are used */
     var f = document.fonts ? Promise.all(['XD0', 'XD1', 'XD2', 'XD3'].map(function (n) { return document.fonts.load('18px ' + n); })) : Promise.resolve();
     f.catch(function () {}).then(function () { if (q.get('hold')) return; poll(); if (!dn) setInterval(function () { poll(); if (document.body.classList.contains('nopieces') && ++tries % 5 === 0) pieces(); }, 1000); document.fonts && document.fonts.addEventListener && document.fonts.addEventListener('loadingdone', XD.refit); });
   };
@@ -232,6 +253,7 @@ body{font-family:XD1,'Segoe UI','Yu Gothic UI','Noto Sans JP',sans-serif;color:#
 .n{font-family:XD3,'Segoe UI','Yu Gothic UI','Noto Sans JP',sans-serif}
 .tx{text-shadow:1.2px 1.2px 0 #000,0 0 2px rgba(0,0,0,.7)}
 .fit{display:inline-block;white-space:nowrap;transform-origin:0 50%}
+/* the game's HP bar: black frame, grey inside, the fill's own rows of colour (sampled from the disc's picture) */
 .hpb{position:relative;background:#000}
 .hpb b{position:absolute;inset:2px;background:linear-gradient(#4a4a4a 82%,#737373 82%)}
 .hpb i,.hpb u{position:absolute;left:2px;top:2px;bottom:2px;width:calc((100% - 4px)*var(--hp));transition:width .6s linear}
@@ -250,20 +272,27 @@ body{font-family:XD1,'Segoe UI','Yu Gothic UI','Noto Sans JP',sans-serif;color:#
 [data-st=sleep] .st{background-image:url(ui/st_sleep.png)}
 [data-st=freeze] .st{background-image:url(ui/st_freeze.png)}
 [data-st=fainted] .st{background-image:url(ui/st_fainted.png)}
+/* shiny: one small four-point star that glints now and then */
 .star{position:absolute;display:none;width:16px;height:16px;background:radial-gradient(closest-side,#fff 0 18%,transparent 19%),conic-gradient(from 0deg,#ffe97a,#fff6c8,#ffd23a,#fff6c8,#ffe97a);
   clip-path:polygon(50% 0,60% 40%,100% 50%,60% 60%,50% 100%,40% 60%,0 50%,40% 40%);filter:drop-shadow(0 0 2px #a86b00);animation:glint 4s ease-in-out infinite}
 .shiny .star{display:block}
 @keyframes glint{0%,60%,100%{transform:scale(.85)}70%{transform:scale(1.3) rotate(20deg)}80%{transform:scale(.9)}90%{transform:scale(1.15)}}
+/* gender sign after a name (data format 2) */
 .g{font-size:.82em;margin-left:.28em;display:inline-block}
 .g.male{color:#6cb6ff}.g.female{color:#ff8fbd}
+/* the experience gauge (the capsule's lower lip, as in the game): blue, the same black frame as the HP bar */
 .exp{position:relative;background:#000}
 .exp b{position:absolute;inset:1.5px;background:#3a3a3a}
 .exp i{position:absolute;left:1.5px;top:1.5px;bottom:1.5px;width:calc((100% - 3px)*var(--exp));background:linear-gradient(#7fc0ff 0 16%,#1073ff 16% 72%,#004ac6 72%);transition:width .8s}
+/* the pieces made from your disc do not exist yet: a plain dark back so the writing stays readable */
 body.nopieces .plate,body.nopieces .hud{background:rgba(24,24,30,.82)!important;border-image:none!important;border-radius:14px}
 </style>
 <style>
+/* 1000 x 260. The 3D models stand on round metal stands along one brushed-metal rail (the battle capsule's metal); the rail holds
+   only the name, the level and the HP bar. */
 #team{position:absolute;left:0;right:0;bottom:0;top:0;display:flex;justify-content:center;padding:0 8px}
 .m{position:relative;flex:0 0 164px;height:100%;transition:flex-basis .5s}
+/* the rail: each Pokemon has its own piece of it, so one to six of them make one to six pieces */
 .rail{position:absolute;left:0;right:0;bottom:4px;height:62px;background:url(ui/railmid_silver.png) 0 0/100% 100%;z-index:3}
 .m:first-child .rail{left:-4px;border-radius:26px 0 0 26px}
 .m:last-child .rail{right:-4px;border-radius:0 26px 26px 0}
@@ -282,10 +311,12 @@ body.nopieces .plate,body.nopieces .hud{background:rgba(24,24,30,.82)!important;
 .num{display:none}
 .st{position:absolute;left:7px;top:29px;width:49px;height:14px}
 [data-st]:not([data-st=none]) .lv{display:none}
+/* the stand */
 .stand{position:absolute;left:50%;bottom:53px;width:124px;height:30px;margin-left:-62px;border-radius:50%;z-index:1;
   background:radial-gradient(ellipse at 50% 42%,#3a3a3a 0 52%,#151515 54% 57%,transparent 58%),linear-gradient(90deg,#7d7d7d,#efefef 30%,#9d9d9d 55%,#e2e2e2 78%,#777);
   box-shadow:0 7px 0 -1px #4c4c4c,0 7px 0 0 #000,0 0 0 1.5px #000;transition:all .45s}
 .shadow .stand{background:radial-gradient(ellipse at 50% 42%,#3a1a52 0 52%,#150a1e 54% 57%,transparent 58%),linear-gradient(90deg,#3f2160,#8a55b8 30%,#51307a 55%,#7d4bab 78%,#3a1d58);box-shadow:0 7px 0 -1px #2a1440,0 7px 0 0 #000,0 0 0 1.5px #000}
+/* the model */
 .hold{position:absolute;left:50%;bottom:67px;width:0;height:0;z-index:2;transform-origin:0 0;transition:transform .5s cubic-bezier(.2,.9,.3,1.2),filter .5s}
 .mdl{position:absolute;left:0;bottom:0;transform:translateX(-50%)}
 .spr{position:absolute;inset:0;background-repeat:no-repeat;background-size:var(--tw) 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-size:var(--tw) 100%;mask-size:var(--tw) 100%}
@@ -299,6 +330,7 @@ body.nopieces .plate,body.nopieces .hud{background:rgba(24,24,30,.82)!important;
 .mdl.face:empty{width:0;height:0}
 .mdl.face:empty::after{content:'';position:absolute;left:-17px;bottom:4px;width:34px;height:34px;background:url(ui/ball_ok.png) center/contain no-repeat;filter:drop-shadow(0 2px 2px rgba(0,0,0,.5))}
 .nopic .star{display:none}
+/* Shadow: its own shape, purple, rises out of it and fades, three times over; the body has a dark violet rim */
 .faint .mdl{transform:translate(-50%,36%)}
 .aura{background:linear-gradient(#d46bff,#7a14d8 55%,#3d0a80);filter:blur(7px);opacity:0;animation:rise 2.4s linear infinite;transform-origin:50% 100%}
 .a2{animation-delay:-.8s,-.8s!important}.a3{animation-delay:-1.6s,-1.6s!important}
@@ -308,10 +340,12 @@ body.nopieces .plate,body.nopieces .hud{background:rgba(24,24,30,.82)!important;
 .haze{display:none;position:absolute;left:50%;bottom:58px;width:150px;height:56px;margin-left:-75px;background:radial-gradient(closest-side,rgba(150,50,255,.75),rgba(100,20,190,.35) 55%,transparent);z-index:1;animation:haze 3s ease-in-out infinite}
 .shadow:not(.faint) .haze{display:block}@keyframes haze{50%{transform:scale(1.12,.86);opacity:.65}}
 .faint .aura{display:none}
+/* fainted: grey, dark, sunk behind the rail */
 .clip{position:absolute;left:-40px;right:-40px;top:-40px;bottom:0;z-index:2;pointer-events:none}
 .faint .clip{bottom:64px;overflow:hidden}.faint .hold{bottom:3px;transform:scale(.86)!important;filter:grayscale(1) brightness(.5) contrast(.9)}
 .faint .stand{opacity:.85;filter:brightness(.5)}
 .faint .nm,.faint .num{color:#c9b3ba}
+/* in a battle the ones that fight step forward: bigger, in front, the window framed in the game's white ring */
 .battle .m:not(.on) .hold{transform:scale(.84)} .battle .m:not(.on):not(.faint) .hold{filter:brightness(.86)}
 .battle .m.on{z-index:5;flex-basis:200px} .battle .m:not(.on){flex-basis:142px}
 .battle[data-out="1"] .m.on{flex-basis:216px}.battle[data-out="1"] .m:not(.on){flex-basis:152px}
@@ -326,9 +360,11 @@ body.nopieces .plate,body.nopieces .hud{background:rgba(24,24,30,.82)!important;
 .battle .m.on .hp{left:9px;right:84px}
 .battle .m.on.shadow .heart{left:9px;right:84px}
 .battle .m.on .st{left:auto;right:7px;top:8px}
+/* low HP: the bar's frame breathes red; nothing jumps, nothing beeps */
 .low .hp{animation:low 1.8s ease-in-out infinite}
 )PG0",
 R"PG1(@keyframes low{0%,100%{box-shadow:0 0 0 0 rgba(255,70,40,0)}50%{box-shadow:0 0 0 2px rgba(255,86,50,.95),0 0 9px 2px rgba(255,60,30,.6)}}
+/* moments */
 .hit .mdl{animation:shake .55s linear 1}
 .hit .body::after,.lvup .body::after{content:''}
 .hit .body{animation-name:play,hitflash}.hit .body{animation:play var(--d) steps(var(--f)) infinite,hitflash .6s steps(2) 1}
@@ -343,11 +379,13 @@ R"PG1(@keyframes low{0%,100%{box-shadow:0 0 0 0 rgba(255,70,40,0)}50%{box-shadow
 .sent .hold{animation:sent .7s ease-out 1}@keyframes sent{0%{transform:scale(.1);filter:brightness(6)}60%{filter:brightness(2)}100%{transform:scale(1.2)}}
 .star{left:8px;top:auto;bottom:128px;width:22px;height:22px;z-index:4}
 .star.s2{left:auto;right:14px;bottom:100px;width:14px;height:14px;animation-delay:-1.7s}
+/* status on the model itself: a still tint, no strobing */
 [data-st=poison] .body{filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 4px #c040ff)}
 [data-st=burn] .body{filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 4px #ff7030)}
 [data-st=freeze] .body{filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 4px #8fe8ff) brightness(1.08)}
 [data-st=paralysis] .body{filter:drop-shadow(0 0 1px #000) drop-shadow(0 0 4px #ffe13a)}
 [data-st=sleep] .body{filter:drop-shadow(0 0 1px #000) brightness(.75) saturate(.8)}
+/* ---- tall shape (?shape=side): a column for the space beside a 4:3 picture, 420 x 1000 ---- */
 .side #team{flex-direction:column;justify-content:flex-start;align-items:stretch;padding:8px 10px;left:0;right:auto;width:420px}
 .side .m,.side.battle .m:not(.on),.side.battle .m.on{flex:0 0 161px;transition:none}
 .side.battle .m.on{flex-basis:184px}.side.battle .m:not(.on){flex-basis:148px}
@@ -368,8 +406,11 @@ R"PG1(@keyframes low{0%,100%{box-shadow:0 0 0 0 rgba(255,70,40,0)}50%{box-shadow
 </style></head>
 <body><div id="team"></div>
 <script>
+/* Shared by the three looks: reads party.js, keeps one element per Pokemon alive between updates so things can move, and tells the
+   page what happened (damage, heal, faint, level, sent out). The page file only supplies XD.root, XD.build and XD.update. */
 (function () {
   var q = new URLSearchParams(location.search), dn = q.get('data');
+  /* ?data=<name> reads data/<name>.js instead of party.js (for trying a page with made-up data); letters, digits, _ and - only */
   var src = dn && /^[A-Za-z0-9_-]+$/.test(dn) ? 'data/' + dn + '.js' : 'party.js';
   var last = null, prev = {}, els = {};
   var XD = window.XD = {
@@ -378,7 +419,9 @@ R"PG1(@keyframes low{0%,100%{box-shadow:0 0 0 0 rgba(255,70,40,0)}50%{box-shadow
     hpClass: function (m) { var p = m.hp / Math.max(1, m.max_hp); return p > .5 ? 'hi' : p > .2 ? 'mid' : 'lo'; },
     fainted: function (m) { return !m.egg && (m.status === 'fainted' || m.hp <= 0); },
     name: function (m) { return m.egg ? 'EGG' : (m.nickname || m.name || ''); },
+    /* the picture for a round window: the game's small face if the program has it, else the best picture there is */
     small: function (m) { return m.small || m.face || ''; },
+    /* gender sign after the name (data format 2; older files have none) */
     setName: function (span, m) {
       span.textContent = XD.name(m);
       if (!m.egg && (m.gender === 'male' || m.gender === 'female')) span.append(XD.el('span', 'g ' + m.gender, m.gender === 'male' ? '\u2642' : '\u2640'));
@@ -389,6 +432,7 @@ R"PG1(@keyframes low{0%,100%{box-shadow:0 0 0 0 rgba(255,70,40,0)}50%{box-shadow
       return Math.max(0, Math.min(1, (m.exp - a) / (b - a)));
     },
     STATUS: { poison: 'poison', bad_poison: 'poison', burn: 'burn', paralysis: 'paralysis', sleep: 'sleep', freeze: 'freeze', fainted: 'fainted' },
+    /* long names are pressed together a little (as the game's menus do): never cut, never wrapped */
     fit: function (e) { e.style.transform = ''; var cs = getComputedStyle(e.parentNode), w = e.parentNode.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight), s = e.scrollWidth; if (s > w && w > 0) e.style.transform = 'scaleX(' + Math.max(.45, w / s) + ')'; },
     flash: function (e, c, ms) { e.classList.remove(c); void e.offsetWidth; e.classList.add(c); setTimeout(function () { e.classList.remove(c); }, ms || 900); }
   };
@@ -421,18 +465,26 @@ R"PG1(@keyframes low{0%,100%{box-shadow:0 0 0 0 rgba(255,70,40,0)}50%{box-shadow
     if (XD.layout) XD.layout(party, d, els);
     XD.refit();
   };
+  /* names are fitted again whenever a box finished growing or shrinking (a battle starting, a Pokemon sent out) */
   XD.refit = function () { document.querySelectorAll('.fit').forEach(XD.fit); };
   var rt = null; document.addEventListener('transitionend', function () { clearTimeout(rt); rt = setTimeout(XD.refit, 30); });
   XD.start = function () {
+    /* the game's menu pieces are made on this PC from your disc the first time the overlay runs: until they exist the boxes get a plain dark back */
     var tries = 0;
     function pieces() { var p = new Image(); p.onload = function () { if (document.body.classList.contains('nopieces')) location.reload(); }; p.onerror = function () { document.body.classList.add('nopieces'); }; p.src = 'ui/small_silver.png?t=' + Date.now(); }
     pieces();
     function poll() { var o = document.getElementById('feed'); if (o) o.remove(); var s = document.createElement('script'); s.id = 'feed'; s.charset = 'utf-8'; s.src = src + (src.indexOf('?') < 0 ? '?t=' : '&t=') + Date.now(); document.head.append(s); }
+    /* the game's letters (font\xd*.ttf, made from your disc) are loaded before the first picture, so no name jumps; without them system fonts are used */
     var f = document.fonts ? Promise.all(['XD0', 'XD1', 'XD2', 'XD3'].map(function (n) { return document.fonts.load('18px ' + n); })) : Promise.resolve();
     f.catch(function () {}).then(function () { if (q.get('hold')) return; poll(); if (!dn) setInterval(function () { poll(); if (document.body.classList.contains('nopieces') && ++tries % 5 === 0) pieces(); }, 1000); document.fonts && document.fonts.addEventListener && document.fonts.addEventListener('loadingdone', XD.refit); });
   };
 })();
 </script><script>
+/* A 3D model in the page: the pictures the game drew of it (one row of frames of its idle animation, or one still), standing on the
+   bottom of its box. Falls back to the game's small face, then to nothing (the name is always there). */
+/* what picture a model has: a strip of its idle animation (faces/<row>_idle.webp, frames side by side, listed in the data as m.idle) when the program
+)PG1",
+R"PG2(   has made one; else the 3D still the game rendered (m.still); else null and the page shows the game's small face, then a Poke Ball and the name. */
 XD.modelOf = function (m) {
   var T = window.XDModels || {}, t = T[m.species_id + (m.shiny ? 's' : '')];
   if (t) return t;
@@ -454,6 +506,7 @@ XD.makeModel = function (m) {
   });
   return box;
 };
+/* size: every model fills about the same room; big species a little bigger than small ones */
 XD.sizeModel = function (box, maxW, maxH, mass) {
   var M = box._M; if (!M) return;
   var rel = Math.max(.82, Math.min(1.12, Math.pow(M.r / 11, .13)));
@@ -504,6 +557,7 @@ body{font-family:XD1,'Segoe UI','Yu Gothic UI','Noto Sans JP',sans-serif;color:#
 .n{font-family:XD3,'Segoe UI','Yu Gothic UI','Noto Sans JP',sans-serif}
 .tx{text-shadow:1.2px 1.2px 0 #000,0 0 2px rgba(0,0,0,.7)}
 .fit{display:inline-block;white-space:nowrap;transform-origin:0 50%}
+/* the game's HP bar: black frame, grey inside, the fill's own rows of colour (sampled from the disc's picture) */
 .hpb{position:relative;background:#000}
 .hpb b{position:absolute;inset:2px;background:linear-gradient(#4a4a4a 82%,#737373 82%)}
 .hpb i,.hpb u{position:absolute;left:2px;top:2px;bottom:2px;width:calc((100% - 4px)*var(--hp));transition:width .6s linear}
@@ -522,18 +576,24 @@ body{font-family:XD1,'Segoe UI','Yu Gothic UI','Noto Sans JP',sans-serif;color:#
 [data-st=sleep] .st{background-image:url(ui/st_sleep.png)}
 [data-st=freeze] .st{background-image:url(ui/st_freeze.png)}
 [data-st=fainted] .st{background-image:url(ui/st_fainted.png)}
+/* shiny: one small four-point star that glints now and then */
 .star{position:absolute;display:none;width:16px;height:16px;background:radial-gradient(closest-side,#fff 0 18%,transparent 19%),conic-gradient(from 0deg,#ffe97a,#fff6c8,#ffd23a,#fff6c8,#ffe97a);
   clip-path:polygon(50% 0,60% 40%,100% 50%,60% 60%,50% 100%,40% 60%,0 50%,40% 40%);filter:drop-shadow(0 0 2px #a86b00);animation:glint 4s ease-in-out infinite}
 .shiny .star{display:block}
 @keyframes glint{0%,60%,100%{transform:scale(.85)}70%{transform:scale(1.3) rotate(20deg)}80%{transform:scale(.9)}90%{transform:scale(1.15)}}
+/* gender sign after a name (data format 2) */
 .g{font-size:.82em;margin-left:.28em;display:inline-block}
 .g.male{color:#6cb6ff}.g.female{color:#ff8fbd}
+/* the experience gauge (the capsule's lower lip, as in the game): blue, the same black frame as the HP bar */
 .exp{position:relative;background:#000}
 .exp b{position:absolute;inset:1.5px;background:#3a3a3a}
 .exp i{position:absolute;left:1.5px;top:1.5px;bottom:1.5px;width:calc((100% - 3px)*var(--exp));background:linear-gradient(#7fc0ff 0 16%,#1073ff 16% 72%,#004ac6 72%);transition:width .8s}
+/* the pieces made from your disc do not exist yet: a plain dark back so the writing stays readable */
 body.nopieces .plate,body.nopieces .hud{background:rgba(24,24,30,.82)!important;border-image:none!important;border-radius:14px}
 </style>
 <style>
+/* 1000 x 260. Walking around: one slim belt of the party screen's cards. In a battle the two that fight open into the battle's own
+   capsules and their 3D model comes out of the round window; the others close to a round window with an HP ring. */
 #team{position:absolute;left:4px;right:4px;bottom:4px;height:252px;display:flex;align-items:flex-end;gap:4px}
 .m{position:relative;flex:0 0 162px;height:58px;transition:flex-basis .45s cubic-bezier(.3,.9,.4,1),height .45s}
 .plate{position:absolute;inset:0;border:solid transparent;border-width:0 24px 0 56px;border-image:url(ui/small_silver.png) 0 90 0 186 fill/0 24px 0 56px}
@@ -554,6 +614,7 @@ body.nopieces .plate,body.nopieces .hud{background:rgba(24,24,30,.82)!important;
 .low .hp{animation:low 1.8s ease-in-out infinite}
 @keyframes low{0%,100%{box-shadow:0 0 0 0 rgba(255,70,40,0)}50%{box-shadow:0 0 0 2px rgba(255,86,50,.95),0 0 9px 2px rgba(255,60,30,.6)}}
 .shadow:not(.faint)::before{content:'';position:absolute;inset:-1px;border-radius:30px 12px 12px 30px;box-shadow:0 0 7px 2px rgba(122,30,200,.75)}
+/* --- battle: the ones that fight --- */
 .battle .m.on{order:1;flex-basis:300px;height:71px;margin-right:12px;z-index:4}
 .battle .m.on.shadow{margin-bottom:8px}
 .battle .m.on .plate,.battle .m.on .hole{display:none}
@@ -579,6 +640,7 @@ body.nopieces .plate,body.nopieces .hud{background:rgba(24,24,30,.82)!important;
 .battle .m.on .st{left:auto;right:76px;top:auto;bottom:7px;width:54px;height:16px;z-index:2}
 .battle .m.on .heart{left:41px;right:76px;top:auto;bottom:-3px;height:8px;z-index:2}
 .battle .m.on .star{left:auto;right:6px;top:-6px}
+/* the model comes out of the window: its lower part stays inside, everything above is free */
 .battle .m.on .pop{display:block;position:absolute;left:140.5px;bottom:7.5px;width:248px;height:190px;z-index:3;overflow:hidden;
   -webkit-mask:linear-gradient(#000 0 0) top/100% calc(100% - 28px) no-repeat,radial-gradient(circle 28.5px at 124px calc(100% - 28px),#000 98%,transparent) no-repeat;
   mask:linear-gradient(#000 0 0) top/100% calc(100% - 28px) no-repeat,radial-gradient(circle 28.5px at 124px calc(100% - 28px),#000 98%,transparent) no-repeat}
@@ -597,6 +659,7 @@ R"PG1(@keyframes rise{0%{transform:scale(1.02,1.0);opacity:0}22%{opacity:.8}100%
 .shadow .body{filter:drop-shadow(0 0 1px #2a0050) drop-shadow(0 0 5px #8a20e0) brightness(.93) saturate(.92)}
 .mdl.face{display:none}
 .battle .m.on.nomodel .hole{display:block;left:237px;top:auto;bottom:8px;width:55px;height:55px;z-index:2}
+/* --- battle: the others --- */
 .battle .m:not(.on){order:2;flex:0 0 78px;height:86px}
 .battle .m:not(.on) .plate,.battle .m:not(.on) .hp,.battle .m:not(.on) .heart,.battle .m:not(.on)::before{display:none}
 .battle .m:not(.on) .ringbg{display:block;position:absolute;left:7px;top:0;width:64px;height:64px;border-radius:50%;
@@ -613,6 +676,7 @@ R"PG1(@keyframes rise{0%{transform:scale(1.02,1.0);opacity:0}22%{opacity:.8}100%
 @keyframes lowr{50%{filter:drop-shadow(0 0 6px #ff4a28) drop-shadow(0 0 2px #ff4a28)}}
 .hit .pop,.hit .hole{animation:hf .55s steps(2) 1}@keyframes hf{50%{filter:brightness(2.8)}}
 .sent .pop{animation:snt .6s cubic-bezier(.2,.9,.3,1.3)}@keyframes snt{0%{transform:translateY(60px) scale(.3);opacity:0}}
+/* ---- tall shape (?shape=side) 360 x 560 ---- */
 .side #team{flex-direction:column;align-items:flex-start;justify-content:flex-start;left:8px;top:8px;height:auto;bottom:auto;gap:7px}
 .side .m{flex:0 0 58px;width:196px;height:58px}
 .side.battle .m.on{flex:0 0 71px;width:300px;margin:72px 0 6px}.side.battle .m.on.shadow{margin-bottom:16px}
@@ -624,8 +688,11 @@ R"PG1(@keyframes rise{0%{transform:scale(1.02,1.0);opacity:0}22%{opacity:.8}100%
 </style></head>
 <body><div id="team"></div>
 <script>
+/* Shared by the three looks: reads party.js, keeps one element per Pokemon alive between updates so things can move, and tells the
+   page what happened (damage, heal, faint, level, sent out). The page file only supplies XD.root, XD.build and XD.update. */
 (function () {
   var q = new URLSearchParams(location.search), dn = q.get('data');
+  /* ?data=<name> reads data/<name>.js instead of party.js (for trying a page with made-up data); letters, digits, _ and - only */
   var src = dn && /^[A-Za-z0-9_-]+$/.test(dn) ? 'data/' + dn + '.js' : 'party.js';
   var last = null, prev = {}, els = {};
   var XD = window.XD = {
@@ -634,7 +701,9 @@ R"PG1(@keyframes rise{0%{transform:scale(1.02,1.0);opacity:0}22%{opacity:.8}100%
     hpClass: function (m) { var p = m.hp / Math.max(1, m.max_hp); return p > .5 ? 'hi' : p > .2 ? 'mid' : 'lo'; },
     fainted: function (m) { return !m.egg && (m.status === 'fainted' || m.hp <= 0); },
     name: function (m) { return m.egg ? 'EGG' : (m.nickname || m.name || ''); },
+    /* the picture for a round window: the game's small face if the program has it, else the best picture there is */
     small: function (m) { return m.small || m.face || ''; },
+    /* gender sign after the name (data format 2; older files have none) */
     setName: function (span, m) {
       span.textContent = XD.name(m);
       if (!m.egg && (m.gender === 'male' || m.gender === 'female')) span.append(XD.el('span', 'g ' + m.gender, m.gender === 'male' ? '\u2642' : '\u2640'));
@@ -645,6 +714,7 @@ R"PG1(@keyframes rise{0%{transform:scale(1.02,1.0);opacity:0}22%{opacity:.8}100%
       return Math.max(0, Math.min(1, (m.exp - a) / (b - a)));
     },
     STATUS: { poison: 'poison', bad_poison: 'poison', burn: 'burn', paralysis: 'paralysis', sleep: 'sleep', freeze: 'freeze', fainted: 'fainted' },
+    /* long names are pressed together a little (as the game's menus do): never cut, never wrapped */
     fit: function (e) { e.style.transform = ''; var cs = getComputedStyle(e.parentNode), w = e.parentNode.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight), s = e.scrollWidth; if (s > w && w > 0) e.style.transform = 'scaleX(' + Math.max(.45, w / s) + ')'; },
     flash: function (e, c, ms) { e.classList.remove(c); void e.offsetWidth; e.classList.add(c); setTimeout(function () { e.classList.remove(c); }, ms || 900); }
   };
@@ -677,18 +747,25 @@ R"PG1(@keyframes rise{0%{transform:scale(1.02,1.0);opacity:0}22%{opacity:.8}100%
     if (XD.layout) XD.layout(party, d, els);
     XD.refit();
   };
+  /* names are fitted again whenever a box finished growing or shrinking (a battle starting, a Pokemon sent out) */
   XD.refit = function () { document.querySelectorAll('.fit').forEach(XD.fit); };
   var rt = null; document.addEventListener('transitionend', function () { clearTimeout(rt); rt = setTimeout(XD.refit, 30); });
   XD.start = function () {
+    /* the game's menu pieces are made on this PC from your disc the first time the overlay runs: until they exist the boxes get a plain dark back */
     var tries = 0;
     function pieces() { var p = new Image(); p.onload = function () { if (document.body.classList.contains('nopieces')) location.reload(); }; p.onerror = function () { document.body.classList.add('nopieces'); }; p.src = 'ui/small_silver.png?t=' + Date.now(); }
     pieces();
     function poll() { var o = document.getElementById('feed'); if (o) o.remove(); var s = document.createElement('script'); s.id = 'feed'; s.charset = 'utf-8'; s.src = src + (src.indexOf('?') < 0 ? '?t=' : '&t=') + Date.now(); document.head.append(s); }
+    /* the game's letters (font\xd*.ttf, made from your disc) are loaded before the first picture, so no name jumps; without them system fonts are used */
     var f = document.fonts ? Promise.all(['XD0', 'XD1', 'XD2', 'XD3'].map(function (n) { return document.fonts.load('18px ' + n); })) : Promise.resolve();
     f.catch(function () {}).then(function () { if (q.get('hold')) return; poll(); if (!dn) setInterval(function () { poll(); if (document.body.classList.contains('nopieces') && ++tries % 5 === 0) pieces(); }, 1000); document.fonts && document.fonts.addEventListener && document.fonts.addEventListener('loadingdone', XD.refit); });
   };
 })();
 </script><script>
+/* A 3D model in the page: the pictures the game drew of it (one row of frames of its idle animation, or one still), standing on the
+   bottom of its box. Falls back to the game's small face, then to nothing (the name is always there). */
+/* what picture a model has: a strip of its idle animation (faces/<row>_idle.webp, frames side by side, listed in the data as m.idle) when the program
+   has made one; else the 3D still the game rendered (m.still); else null and the page shows the game's small face, then a Poke Ball and the name. */
 XD.modelOf = function (m) {
   var T = window.XDModels || {}, t = T[m.species_id + (m.shiny ? 's' : '')];
   if (t) return t;
@@ -710,6 +787,7 @@ XD.makeModel = function (m) {
   });
   return box;
 };
+/* size: every model fills about the same room; big species a little bigger than small ones */
 XD.sizeModel = function (box, maxW, maxH, mass) {
 )PG1",
 R"PG2(  var M = box._M; if (!M) return;
@@ -738,6 +816,7 @@ XD.build = function (m) {
 XD.update = function (e, m) {
   XD.setName(e._n, m); e._lv.textContent = m.egg ? '' : m.level; e._num.textContent = m.egg ? '' : m.hp + ' / ' + m.max_hp;
 };
+/* more capsules open than fit (three Pokemon "on the field" for a moment, a long party in the tall shape): the whole belt shrinks to fit the box, from its lower left corner */
 XD.fitBelt = function () {
   var t = XD.root; t.style.transform = ''; t.style.width = '';
   var kids = Array.prototype.slice.call(t.children), need = 0, gap = 4;
