@@ -238,11 +238,8 @@ ln -s "../Resources/Stream overlay guide.txt" "$APP/Contents/MacOS/Stream overla
 # RecompLauncher (recomplauncher.com) reads this first from the download; the zip holds only the app (above), so it
 # goes inside the app (their note, 2026-11-14: "inside the app/AppImage"), with a copy beside it in the folder.
 cp "$ROOT/recomplauncher.json" "$APP/Contents/Resources/recomplauncher.json"
-# The Stream overlay guide (docs/STREAM_OVERLAY_GUIDE.txt, made from the .md by tools/stream_overlay/make_guide.py --write): inside the app, and
-# linked in Contents/MacOS where the launcher's "How to use it in OBS" button looks (next to the program, like the fonts).
+# The Stream overlay guide must be up to date with its .md (made by tools/stream_overlay/make_guide.py --write); copied and linked above.
 python3 "$ROOT/tools/stream_overlay/make_guide.py" --check >/dev/null || { echo "package_mac.sh: docs/STREAM_OVERLAY_GUIDE.txt is out of date (python3 tools/stream_overlay/make_guide.py --write)"; exit 1; }
-cp "$ROOT/docs/STREAM_OVERLAY_GUIDE.txt" "$APP/Contents/Resources/Stream overlay guide.txt"
-ln -s "../Resources/Stream overlay guide.txt" "$APP/Contents/MacOS/Stream overlay guide.txt"
 cp "$ROOT/recomplauncher.json" "$DEST/recomplauncher.json"
 
 # No game data may be inside (the same rule as every package of the port).
