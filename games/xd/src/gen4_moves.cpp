@@ -7,6 +7,7 @@
 #include "xd_mod_battle.h"
 
 #include <cstdint>
+#include "port_addr_window.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -430,7 +431,7 @@ SideState& SideOf(void* side) {
   return sSides[0];
 }
 
-uint32_t Narrow(const void* p) { return static_cast<uint32_t>(reinterpret_cast<uintptr_t>(p)); }
+uint32_t Narrow(const void* p) { return PortWin_Off(p); }
 void* SideOfPokemon(void* fop) { return fightTargetGetPtrAsNowFightType(2, Narrow(fop)); }
 
 void PutBe32(uint8_t* p, uint32_t v) { p[0] = v >> 24; p[1] = v >> 16; p[2] = v >> 8; p[3] = v; }

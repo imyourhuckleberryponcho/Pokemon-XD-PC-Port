@@ -21,6 +21,7 @@ class Unsupported : public std::runtime_error {
 struct Species {
   GfModel gm;
   std::map<std::string, Rgba> texs;
+  std::map<std::string, Rgba> shiny_texs;
   std::vector<std::pair<std::string, GfMotion>> mots;
   const GfMotion* mot(const std::string& k) const { for (auto& p : mots) if (p.first == k) return &p.second; return nullptr; }
   int group = 0;
@@ -43,6 +44,7 @@ struct Opts {
   bool iris_bake = true, eye_rgb5 = true;
   bool fx = false, bake_scale = false, match = false, eye_blend = false, lure = false;
   double steel = 0, cheeks = 0, sat_boost = 0, ghost_alpha = 0, scale = 0;
+  bool shiny = false;
 };
 
 using Logger = std::function<void(const std::string&)>;
@@ -53,6 +55,13 @@ struct ConvertInfo {
   double scale = 0;
   pbr::WriteReport report;
   int step = 0;
+  bool iris2 = false;
+  struct Shiny {
+    bool done = false;
+    int swap[3] = {0, 1, 2}, mod[3] = {127, 127, 127};
+    int standin_swap[3] = {0, 1, 2}, standin_mod[3] = {127, 127, 127};
+    double err_fit = 0, err_none = 0, err_standin = 0, cover = 0;
+  } shiny;
 };
 
 std::vector<uint8_t> convert(const Species& sp, const std::vector<uint8_t>& xd_bytes, const Opts& opts, const Logger& log, ConvertInfo* info,

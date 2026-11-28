@@ -25,6 +25,11 @@ uint8_t* PortDisc_ReadFile(const char* path, size_t* size);
 uint8_t* PortDisc_ReadOriginalFile(const char* path, size_t* size);
 void PortDisc_Free(void* data);
 
+typedef struct PortDiscReader PortDiscReader;
+PortDiscReader* PortDisc_ReaderOpen(const char* path);
+uint8_t* PortDisc_ReaderReadFile(PortDiscReader* reader, const char* path, size_t* size);
+void PortDisc_ReaderClose(PortDiscReader* reader);
+
 typedef struct PortDiscOverlayFile {
   const char* path;
   const char* localFile;

@@ -142,6 +142,9 @@ s32 dbgMenuFightStopTimeOut(void);
 s32 dbgMenuDbgPokemonGet(void);
 s32 dbgMenuFlagCheck(void);
 s32 dbgMenuMenuTestEeveeMenu(void);
+#ifdef XD_ADDR_WINDOW
+s32 dbgMenuMenuTestPokemonChangeMenu(void);
+#endif
 s32 dbgMenuFightEncountSelect(void);
 s32 dbgMenuHeroCreateItem(void);
 s32 dbgMenuHeroIncMoney(void);
@@ -247,6 +250,9 @@ const Screen kScreens[] = {
     {"dbgMenuSetHeroStyleVisor", "Hero style: visor", dbgMenuSetHeroStyleVisor},
     {"dbgMenuSetHeroStyleSnatch", "Hero style: Snag Machine", dbgMenuSetHeroStyleSnatch},
     {"dbgMenuPTout", "Partner leaves", dbgMenuPTout},
+#ifdef XD_ADDR_WINDOW
+    {"dbgMenuMenuTestPokemonChangeMenu", "Menu: Pokemon change (exchange menu; address-window tests)", dbgMenuMenuTestPokemonChangeMenu},
+#endif
 };
 
 struct Scheduled {

@@ -24,6 +24,7 @@
 #endif
 
 extern void* MEM1Start;
+#include "../sdk/include/port_addr_window.h"
 
 extern "C" {
 void PortOS_RaiseInterrupt(void (*handler)(void*), void* arg);
@@ -47,7 +48,10 @@ uint16_t sCoefTable[0x800];
 bool sHaveCoefTable = false;
 
 uint8_t* dsp_memory(void*, uint32_t address, uint32_t size) {
-#ifdef __ANDROID__
+#ifdef XD_ADDR_WINDOW
+  if (address - g_portWinImgLo < g_portWinImgSize) return static_cast<uint8_t*>(PortWin_Ptr(address));
+#endif
+#if defined(__ANDROID__) && !defined(XD_ADDR_WINDOW)
   if (address >= 0x02000000u && address < 0x80000000u) {
     return reinterpret_cast<uint8_t*>(static_cast<uintptr_t>(address));
   }
@@ -59,7 +63,7 @@ uint8_t* dsp_memory(void*, uint32_t address, uint32_t size) {
     }
     return nullptr;
   }
-  return reinterpret_cast<uint8_t*>(static_cast<uintptr_t>(address));
+  return static_cast<uint8_t*>(PortWin_Ptr(address));
 }
 
 void dsp_log(void*, const char* message) { std::fprintf(stderr, "[platform/audio] DSP: %s\n", message); }
@@ -342,7 +346,7 @@ void boot_task(DSPTaskInfo* task) {
     std::fprintf(stderr, "[platform/audio] DSP: boot loader said %08lX, not 8071FEED\n", static_cast<unsigned long>(hello));
   }
   send_and_wait(0x80F3A001);
-  send_and_wait(static_cast<u32>(reinterpret_cast<uintptr_t>(task->iram_mmem_addr)));
+  send_and_wait(PortWin_Off(task->iram_mmem_addr));
   send_and_wait(0x80F3C002);
   send_and_wait(task->iram_addr & 0xFFFF);
   send_and_wait(0x80F3A002);

@@ -4,6 +4,7 @@
 #include <data_table.h>
 #include <gs_formats.h>
 #include <port_disc.h>
+#include <port_addr_window.h>
 #include <dol_tables.h>
 
 #include <game/pxdvs/app/fight/fightData.h>
@@ -835,6 +836,9 @@ void* convert_table(Loaded* l, const TableDesc* desc, const RelPrologStore& at, 
     return nullptr;
   }
   void* pc = PortMem_LowAlloc(static_cast<size_t>(count ? count : 1) * desc->pcSize, 16);
+#ifdef XD_ADDR_WINDOW
+  DataTable_SetAddr32Encoder([](const void* p, uint32_t* out) -> int { return PortWin_TryOff(p, out); });
+#endif
   DataTable_SetHighAddr32Ok(PortMem_LowIsOrdinary() ? 1 : 0);
   l->section = at.section;
   l->table = desc->name;
@@ -879,8 +883,9 @@ void patch_section_addresses(Loaded* l) {
     } else {
       continue;
     }
-    if (reinterpret_cast<uintptr_t>(target) > 0xFFFFFFFFu) continue;
-    put_be32(copy.ptr + r.offset, static_cast<uint32_t>(reinterpret_cast<uintptr_t>(target)));
+    uint32_t targetValue = 0;
+    if (!PortWin_TryOff(target, &targetValue)) continue;
+    put_be32(copy.ptr + r.offset, targetValue);
   }
 }
 
@@ -924,16 +929,16 @@ bool apply_floor_chars(XDCommonTables* out, std::string& problem) {
     const uint8_t* ownInfo = nullptr;
     uint32_t ownCount = 0;
     if (r.copyOf == 0 && row->chars != nullptr) {
-      const uint32_t holder = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(row->chars));
-      bool ok = readable(holder) && reinterpret_cast<uintptr_t>(row->chars) <= 0xFFFFFFFFu;
+      uint32_t holder = 0;
+      bool ok = PortWin_TryOff(row->chars, &holder) && readable(holder);
       uint32_t list = 0, countAt = 0, infoAt = 0;
       if (ok) {
-        list = read_be32_at(reinterpret_cast<const void*>(static_cast<uintptr_t>(holder)));
+        list = read_be32_at(PortWin_Ptr(holder));
         ok = readable(list) || list == 0;
       }
       if (ok && list != 0) {
-        countAt = read_be32_at(reinterpret_cast<const void*>(static_cast<uintptr_t>(list)));
-        infoAt = read_be32_at(reinterpret_cast<const void*>(static_cast<uintptr_t>(list + 4)));
+        countAt = read_be32_at(PortWin_Ptr(list));
+        infoAt = read_be32_at(PortWin_Ptr(list + 4));
         ok = readable(countAt) && readable(infoAt);
       }
       if (!ok) {
@@ -941,8 +946,8 @@ bool apply_floor_chars(XDCommonTables* out, std::string& problem) {
         continue;
       }
       if (list != 0) {
-        ownCount = read_be32_at(reinterpret_cast<const void*>(static_cast<uintptr_t>(countAt)));
-        ownInfo = reinterpret_cast<const uint8_t*>(static_cast<uintptr_t>(infoAt));
+        ownCount = read_be32_at(PortWin_Ptr(countAt));
+        ownInfo = static_cast<const uint8_t*>(PortWin_Ptr(infoAt));
       }
     }
     if (std::getenv("XD_ROOMS_LOG") != nullptr) {
@@ -964,9 +969,9 @@ bool apply_floor_chars(XDCommonTables* out, std::string& problem) {
     const uint32_t count = static_cast<uint32_t>(entries.size() / kEntry);
     auto* mem = static_cast<uint8_t*>(PortMem_LowAlloc(0x20 + entries.size(), 16));
     std::memset(mem, 0, 0x20);
-    put_be32(mem, static_cast<uint32_t>(reinterpret_cast<uintptr_t>(mem + 4)));
-    put_be32(mem + 4, static_cast<uint32_t>(reinterpret_cast<uintptr_t>(mem + 0x10)));
-    put_be32(mem + 8, static_cast<uint32_t>(reinterpret_cast<uintptr_t>(mem + 0x20)));
+    put_be32(mem, PortWin_Off(mem + 4));
+    put_be32(mem + 4, PortWin_Off(mem + 0x10));
+    put_be32(mem + 8, PortWin_Off(mem + 0x20));
     put_be32(mem + 0x10, count);
     std::memcpy(mem + 0x20, entries.data(), entries.size());
     row->chars = reinterpret_cast<decltype(row->chars)>(mem);

@@ -14,8 +14,8 @@ struct FullArgs {
   bool eol_crlf = false;
 };
 
-const int GEN57_MAKE_VERSION = 9;
-const char* kConverterVersion = "0.2.7";
+const int GEN57_MAKE_VERSION = 10;
+const char* kConverterVersion = "0.2.8";
 
 int run_process(const std::string& exe, const std::vector<std::string>& args, const std::map<std::string, std::string>* env, const std::string& logfile,
                 const std::function<void(const std::string&)>& on_line = nullptr) {

@@ -46,6 +46,7 @@ uint32_t DataTable_Convert(const TableDesc* desc, const uint8_t* gc, uint32_t gc
                        PointerResolver resolve, void* user);
 
 void DataTable_SetHighAddr32Ok(int ok);
+void DataTable_SetAddr32Encoder(int (*encoder)(const void* p, uint32_t* out));
 
 uint32_t DataTable_VerifyRoundTrip(const TableDesc* desc, const uint8_t* gc, uint32_t count, const void* pc);
 

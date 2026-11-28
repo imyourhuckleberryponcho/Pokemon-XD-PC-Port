@@ -341,7 +341,11 @@ static void TestMake(const fs::path& standin, const fs::path& root) {
 
   SetEnv("XD_STANDIN_CRASH", "1");
   s = RunStandIn(standin, root, (root / "pbr.iso").string(), 0);
+  #ifdef _WIN32
   CHECK(s.phase == P::Failed && s.message.find("exit code -1073741819") != std::string::npos);
+#else
+  CHECK(s.phase == P::Failed && s.message.find("exit code ") != std::string::npos);
+#endif
   CHECK(s.message.find((root / "extra" / "pbr.log").string()) != std::string::npos);
   {
     std::ifstream log(root / "extra" / "pbr.log", std::ios::binary);

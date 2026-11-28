@@ -31,32 +31,95 @@ bool sHave[3] = {false, false, false};
 em::DataCatalog sCatalog;
 bool sCatalogOk = false;
 
+extern "C" const char* PortXD_DiscPath(void);
+
+using DiscCache = std::map<std::pair<std::string, std::string>, std::pair<bool, std::vector<uint8_t>>>;
+DiscCache sProgramCache;
+int sScanDepth = 0;
+PortDiscReader* sReader = nullptr;
+std::string sHeldName;
+uint8_t* sHeldFile = nullptr;
+size_t sHeldSize = 0;
+FsysArchive sHeld{};
+bool sHeldOpen = false;
+size_t sBiggestArchive = 0, sArchiveBytesRead = 0;
+uint32_t sArchivesRead = 0;
+
+void DropHeld() {
+  if (sHeldFile != nullptr) PortDisc_Free(sHeldFile);
+  sHeldFile = nullptr, sHeldSize = 0, sHeldOpen = false, sHeld = FsysArchive{};
+  sHeldName.clear();
+}
+
+struct ScanScope {
+  ScanScope() {
+    if (sScanDepth++ == 0 && PortDisc_GameId()[0] == '\0') {
+      const char* path = PortXD_DiscPath();
+      if (path != nullptr && path[0] != '\0') sReader = PortDisc_ReaderOpen(path);
+    }
+  }
+  ~ScanScope() {
+    if (--sScanDepth != 0) return;
+    DropHeld();
+    if (sReader != nullptr) PortDisc_ReaderClose(sReader);
+    sReader = nullptr;
+  }
+  ScanScope(const ScanScope&) = delete;
+  ScanScope& operator=(const ScanScope&) = delete;
+};
+
+uint8_t* ReadArchiveFile(const std::string& archive, size_t* size) {
+  return sReader != nullptr ? PortDisc_ReaderReadFile(sReader, archive.c_str(), size) : PortDisc_ReadOriginalFile(archive.c_str(), size);
+}
+
 bool ReadDisc(const std::string& archive, const std::string& entry, std::vector<uint8_t>& out) {
-  static std::map<std::pair<std::string, std::string>, std::pair<bool, std::vector<uint8_t>>> cache;
-  const auto it = cache.find({archive, entry});
-  if (it != cache.end()) {
-    out = it->second.second;
-    return it->second.first;
+  const bool program = archive == em::kProgramArchive;
+  if (program) {
+    const auto it = sProgramCache.find({archive, entry});
+    if (it != sProgramCache.end()) {
+      out = it->second.second;
+      return it->second.first;
+    }
   }
   bool ok = false;
   std::vector<uint8_t> bytes;
   size_t size = 0;
-  if (archive == em::kProgramArchive) {
+  if (program) {
     const uint8_t* dol = PortDisc_Dol(&size);
     if (dol != nullptr && size != 0) {
       bytes.assign(dol, dol + size);
       ok = true;
     }
-  } else if (uint8_t* file = PortDisc_ReadOriginalFile(archive.c_str(), &size)) {
-    FsysArchive f{};
-    if (Fsys_Open(file, size, &f)) {
+  } else {
+    uint8_t* file = nullptr;
+    FsysArchive local{};
+    FsysArchive* f = nullptr;
+    bool fileOwned = false;
+    if (sScanDepth > 0 && sHeldFile != nullptr && sHeldName == archive) {
+      f = sHeldOpen ? &sHeld : nullptr;
+    } else {
+      if (sScanDepth > 0) DropHeld();
+      file = ReadArchiveFile(archive, &size);
+      if (file != nullptr) {
+        if (sScanDepth > 0) {
+          sHeldFile = file, sHeldSize = size, sHeldName = archive;
+          sArchivesRead++, sArchiveBytesRead += size, sBiggestArchive = std::max(sBiggestArchive, size);
+          sHeldOpen = Fsys_Open(file, size, &sHeld);
+          f = sHeldOpen ? &sHeld : nullptr;
+        } else {
+          fileOwned = true;
+          f = Fsys_Open(file, size, &local) ? &local : nullptr;
+        }
+      }
+    }
+    if (f != nullptr) {
       const bool byNumber = entry.size() >= 2 && entry[0] == '#';
       const unsigned long number = byNumber ? std::strtoul(entry.c_str() + 1, nullptr, 10) : 0;
-      for (uint32_t i = 0; i < f.count && !ok; i++) {
+      for (uint32_t i = 0; i < f->count && !ok; i++) {
         FsysEntry e;
-        if (byNumber ? i == number : Fsys_Entry(&f, i, &e) && (std::strcmp(e.fullName, entry.c_str()) == 0 || std::strcmp(e.name, entry.c_str()) == 0)) {
+        if (byNumber ? i == number : Fsys_Entry(f, i, &e) && (std::strcmp(e.fullName, entry.c_str()) == 0 || std::strcmp(e.name, entry.c_str()) == 0)) {
           uint32_t n = 0;
-          if (uint8_t* p = Fsys_Extract(&f, i, &n)) {
+          if (uint8_t* p = Fsys_Extract(f, i, &n)) {
             bytes.assign(p, p + n);
             std::free(p);
             ok = true;
@@ -64,17 +127,13 @@ bool ReadDisc(const std::string& archive, const std::string& entry, std::vector<
         }
       }
     }
-    PortDisc_Free(file);
+    if (fileOwned && file != nullptr) PortDisc_Free(file);
   }
-#ifdef __ANDROID__
-  static size_t sKept = 0;
-  if (archive == em::kProgramArchive || (bytes.size() <= (256u << 10) && sKept + bytes.size() <= (32u << 20))) {
-    sKept += bytes.size();
-    cache[{archive, entry}] = {ok, bytes};
+  if (!ok) {
+    static int sReported = 0;
+    if (sReported++ < 8) std::fprintf(stderr, "[shadow capacity] could not read %s / %s (scan depth %d)\n", archive.c_str(), entry.c_str(), sScanDepth);
   }
-#else
-  cache[{archive, entry}] = {ok, bytes};
-#endif
+  if (program) sProgramCache[{archive, entry}] = {ok, bytes};
   out = bytes;
   return ok;
 }
@@ -118,6 +177,7 @@ bool ForCode(const std::string& code, int pool, xr::MoreShadowsCapacity& out) {
   }
   bool ok = false;
   xr::MoreShadowsCapacity cap;
+  ScanScope scan;
   do {
     if (!sCatalogOk) break;
     std::string error;
@@ -145,11 +205,26 @@ bool ForCode(const std::string& code, int pool, xr::MoreShadowsCapacity& out) {
 
 }
 
+static void ReadShadowCapacityScan();
+
 extern "C" void PortXD_ReadShadowCapacity(void) {
   if (!xd::pt::ScreenEnabled()) return;
+  ReadShadowCapacityScan();
+  std::fprintf(stderr, "[shadow capacity] the scan read %u archives (%llu MB in all, the biggest %llu MB, at most one held at a time)\n", sArchivesRead,
+               static_cast<unsigned long long>(sArchiveBytesRead >> 20), static_cast<unsigned long long>(sBiggestArchive >> 20));
+#ifdef __ANDROID__
+  PortLowStats st;
+  PortLow_GetStats(&st);
+  std::fprintf(stderr, "[shadow capacity] below-4-GB memory: %llu MB in use after the scan (the highest so far %llu MB)\n", static_cast<unsigned long long>(st.used >> 20),
+               static_cast<unsigned long long>(st.usedPeak >> 20));
+#endif
+}
+
+static void ReadShadowCapacityScan() {
   em::DataCatalog& catalog = sCatalog;
   std::string error;
   sCatalogOk = false;
+  ScanScope scan;
   if (!xd::data::BuildDataCatalog(ReadDisc, catalog, error)) {
     std::fprintf(stderr, "[shadow capacity] the disc's tables could not be read (%s): the New Game screen shows no number\n", error.c_str());
     return;
@@ -173,9 +248,4 @@ extern "C" void PortXD_ReadShadowCapacity(void) {
     std::fprintf(stderr, "[shadow capacity] pool %d (%s): %u eligible trainers, %u eligible Pokemon, %u free species, %u free rows\n", pool, pool == 0 ? "Gen 1-3" : pool == 1 ? "+ Gen 4" : "+ Gen 5-7",
                  cap.trainers, cap.slots, cap.species, cap.rows);
   }
-#ifdef __ANDROID__
-  PortLowStats st;
-  PortLow_GetStats(&st);
-  std::fprintf(stderr, "[shadow capacity] below-4-GB memory in use after the tables: %llu MB\n", static_cast<unsigned long long>(st.used >> 20));
-#endif
 }

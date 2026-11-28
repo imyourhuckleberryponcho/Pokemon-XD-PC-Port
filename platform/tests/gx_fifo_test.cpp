@@ -4,6 +4,7 @@
 #include <dolphin/os.h>
 
 #include <cstdint>
+#include <port_addr_window.h>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -146,9 +147,9 @@ int main(int argc, char* argv[]) {
   const u8 token9[] = {0x61, 0x48, 0x00, 0x00, 0x09};
   check(contains(before, after, token9, sizeof(token9)), "recording into the layer buffer resumes after the list");
 
-  *reinterpret_cast<volatile u8*>(0x80100010) = 0x5A;
-  check(*reinterpret_cast<volatile u8*>(0xC0100010) == 0x5A, "game memory is mirrored uncached at 0xC0000000");
-  auto* gameList = reinterpret_cast<u8*>(0x80100000);
+  *static_cast<volatile u8*>(PortWin_Ptr(0x80100010)) = 0x5A;
+  check(*static_cast<volatile u8*>(PortWin_Ptr(0xC0100010)) == 0x5A, "game memory is mirrored uncached at 0xC0000000");
+  auto* gameList = static_cast<u8*>(PortWin_Ptr(0x80100000));
   std::memcpy(gameList, sDisplayList, dlSize);
   GXGetFifoPtrs(&sFifoA, &rd, &before);
   GXCallDisplayList(gameList, dlSize);

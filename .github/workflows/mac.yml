@@ -49,12 +49,14 @@ on:
         required: false
         default: "1"
       stage:
-        description: "compile = only build (cheapest, until the build is clean); all = also tests, start, zip"
+        description: "compile = only build (cheapest, until the build is clean); all = also tests, start, zip; probe = ONLY the ten-minute address-space probe of the native Apple Silicon plan (no build, no source; always runs on the Apple-silicon machine macos-15); arm64-probe = a native Apple Silicon COMPILE of the game with the 4 GB window (preset mac-arm64-probe; lists every error, runs nothing; macos-15)"
         required: false
         type: choice
         options:
           - compile
           - all
+          - probe
+          - arm64-probe
         default: "compile"
       machine:
         description: "GitHub's Mac machine: macos-15 = Apple silicon (as a player's Mac); macos-15-intel when the first has no free machines"
@@ -64,6 +66,14 @@ on:
           - macos-15
           - macos-15-intel
         default: "macos-15-intel"
+      arm64_runner:
+        description: "Stage arm64-probe only: which Apple-silicon runner compiles it (macos-15 = the default; macos-14 = the older M1 image, to see that the compile holds on both)"
+        required: false
+        type: choice
+        options:
+          - macos-15
+          - macos-14
+        default: "macos-15"
 
 permissions:
   contents: read
@@ -73,8 +83,128 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Stage "probe" (docs/MAC_ARM.md, step 4): a few seconds of a tiny C program, nothing else. It answers three questions about
+  # native arm64 macOS (a 4 GB reservation, a high address hint, a huge zero-fill segment in the linked file). It always runs
+  # on "macos-15" (Apple silicon): on an Intel machine it would answer for x86_64, which is not the question.
+  # A tester without GitHub does the same by hand: tools/mac/window_probe/README.txt.
+  probe:
+    name: Address-space probe (native Apple Silicon plan, step 4)
+    if: ${{ inputs.stage == 'probe' }}
+    runs-on: macos-15 # always Apple silicon: the probe is about native arm64 (the "machine" choice does not apply)
+    timeout-minutes: 10
+    steps:
+      - name: The port's source (only the probe's folder is used)
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: tools/mac/window_probe
+      - name: Build and run the probe
+        run: |
+          set -u
+          uname -a; sw_vers; arch
+          sh tools/mac/window_probe/run_probe.sh "$PWD/probe_out" | tee probe_console.txt
+          { echo "### Address-space probe"; echo '```'; grep -E "^(FACT|link |########|macOS|this program)" probe_out/probe_report.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: window-probe-report
+          path: |
+            probe_out/probe_report.txt
+            probe_out/*.build.txt
+            probe_console.txt
+          retention-days: 30
+          if-no-files-found: warn
+
+  # Stage "arm64-probe" (docs/MAC_ARM.md, round 2): the game and the port's own files COMPILED for native Apple Silicon (preset
+  # mac-arm64-probe: arm64, the 4 GB window, no low-memory tricks). It never links the launcher and never runs the game; the
+  # point is the list of compile errors (logs/errors.txt) that only Apple's compiler and SDK can show. Always on macos-15.
+  arm64:
+    name: Native Apple Silicon compile (arm64 + 4 GB window), never run
+    if: ${{ inputs.stage == 'arm64-probe' }}
+    runs-on: ${{ inputs.arm64_runner || 'macos-15' }}
+    timeout-minutes: 90
+    env:
+      XD_BUILD_JOBS: "3"
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_MAXSIZE: 3G
+      CCACHE_COMPILERCHECK: content
+    steps:
+      - name: The port's source
+        uses: actions/checkout@v7
+      - name: Aurora, SDL and Borealis at the versions third_party/README.md names
+        run: |
+          set -eu
+          get() { # folder, repository, commit or tag
+            if [ ! -f "third_party/$1/CMakeLists.txt" ]; then
+              rm -rf "third_party/$1"
+              git clone --filter=blob:none "https://github.com/$2" "third_party/$1"
+              git -C "third_party/$1" checkout --detach "$3"
+              git -C "third_party/$1" submodule update --init --recursive --depth 1
+            fi
+          }
+          get aurora encounter/aurora 5794daa2ccbd3d2ddf01af788e51a8612850ffd1
+          get SDL libsdl-org/SDL release-3.4.20
+          get borealis encounter/borealis 8e9427fab92c1935a5d6bacadc6053c687f10c1e
+      - name: The game's source (the decompilation), read only
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.decomp_repository }}
+          ssh-key: ${{ secrets.DECOMP_DEPLOY_KEY }}
+          path: decomp
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Snapshot of the game's source
+        env:
+          COMMIT: ${{ inputs.decomp_commit }}
+        run: |
+          set -eu
+          python3 tools/sync_decomp.py --decomp "$PWD/decomp" --commit "${COMMIT:-HEAD}"
+          cat snapshot/CURRENT.txt
+      - name: Tools (Ninja, ccache, libclang for the table generator)
+        run: |
+          set -eu
+          command -v ninja >/dev/null || brew install ninja
+          command -v ccache >/dev/null || brew install ccache || true
+          python3 -m pip install --user --break-system-packages libclang || python3 -m pip install --user libclang
+          clang --version; cmake --version; uname -m
+      - name: Compile for arm64 (every error is listed, nothing is run)
+        env:
+          KEEP_GOING: ${{ inputs.keep_going }}
+        run: |
+          set +e -u
+          mkdir -p logs
+          XD_MAC_PRESET=mac-arm64-probe XD_PYTHON="$(command -v python3)" XD_KEEP_GOING="$KEEP_GOING" XD_COMPILER_CACHE=1 XD_GAME_FIRST=1             XD_DISC_TABLES_ALLOW_UNREAD=1 bash ./build_mac.sh platform_sdk platform_os platform_audio platform_input platform_video xd > logs/build.log 2>&1
+          RESULT=$?
+          tail -n 60 logs/build.log
+          grep -n "error:" logs/build.log | head -n 400 > logs/errors.txt || true
+          cp build/mac/mac-arm64-probe/disc_tables/flags.json logs/disc_tables_flags.json 2>/dev/null || true
+          { echo "### arm64 compile: $([ $RESULT = 0 ] && echo finished || echo FAILED)"; echo "- compile errors listed: $(wc -l < logs/errors.txt)"; echo '```'; grep "build_mac.sh:" logs/build.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+      - name: The window's block keeper on Apple silicon (os/low_arena.c pointed at one reserved range; seconds, no disc)
+        run: |
+          set +e -u
+          mkdir -p logs
+          {
+            clang -c -O1 -Iplatform/os/include platform/os/low_arena.c -o logs/low_arena.o &&
+            clang++ -O1 -Iplatform/os/include platform/tests/low_arena_range_test.cpp logs/low_arena.o -o logs/low_arena_range_test &&
+            ./logs/low_arena_range_test
+            echo "low_arena_range_test exit code: $?"
+          } > logs/low_arena_range_test.txt 2>&1
+          { echo "### block keeper test (Apple silicon)"; echo '```'; tail -n 12 logs/low_arena_range_test.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+      - name: Upload the logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: arm64-compile-logs
+          path: logs/
+          retention-days: 30
+          if-no-files-found: warn
+
   mac:
     name: Mac app (x86_64 through Rosetta 2), untested
+    if: ${{ inputs.stage != 'probe' && inputs.stage != 'arm64-probe' }}
     # (2026-11-11: the first run never got an Apple-silicon machine, "capacity constraints"; nothing was charged.
     # The Intel machine builds the same x86_64 program, without Rosetta in between.)
     runs-on: ${{ inputs.machine || 'macos-15' }}
@@ -398,7 +528,7 @@ jobs:
           grep -q "without a good signature: 0$" logs/package_helpers.txt || PROBLEMS_EXTRA="$PROBLEMS_EXTRA helper-signatures"
           grep -q "NOT IN THE APP" logs/package_helpers.txt && PROBLEMS_EXTRA="$PROBLEMS_EXTRA helper-missing"
           grep -q -E "^quarantined (usum|pbr)_models/[a-z_]+ exit [1-9]|Killed: 9|^quarantined launcher -> game hand-over exit (0|1[0-9][0-9])$" logs/package_helpers.txt && PROBLEMS_EXTRA="$PROBLEMS_EXTRA quarantine-blocks-helper"
-          grep -q "^hdmake usage exit 2$" logs/package_helpers.txt || PROBLEMS_EXTRA="$PROBLEMS_EXTRA hdmake-start"
+          grep -q "^hdmake usage exit [02]$" logs/package_helpers.txt || PROBLEMS_EXTRA="$PROBLEMS_EXTRA hdmake-start"
           grep -q "^hdmake install exit 1$" logs/package_helpers.txt && [ -x "$RUNNER_TEMP/hdtools/realesrgan-ncnn-vulkan" ] || PROBLEMS_EXTRA="$PROBLEMS_EXTRA hdmake-install"
           PROBLEMS=""
           grep -q "does NOT verify\|SIGNING FAILED\|signing failed" logs/package.log && PROBLEMS="$PROBLEMS signing"

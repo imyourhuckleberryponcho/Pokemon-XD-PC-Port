@@ -19,7 +19,7 @@
 # Output: build/mac/mac-release/bin; then games/xd/mac/package_mac.sh makes the app and the zip.
 set -u
 cd "$(dirname "$0")" || exit 1
-PRESET=mac-release
+PRESET="${XD_MAC_PRESET:-mac-release}" # XD_MAC_PRESET=mac-arm64-probe: native Apple Silicon with the 4 GB window (docs/MAC_ARM.md, never run)
 # The Linux list (build.sh) plus the game and the launcher (xd_launcher: the app's main program, docs/MAC.md
 # "Launcher on the Mac"). Not on the Mac: the updater (as on Linux).
 MAC_TARGETS="settings_test controls_test memcard_test save_backups_test gen3_save_test randomizer_test

@@ -149,18 +149,18 @@ void PortDisc_ListFiles(PortDiscFileCallback callback, void* user) {
   nod_partition_iterate_fst(sPartition, &list_entry, &st);
 }
 
-uint8_t* PortDisc_ReadOriginalFile(const char* path, size_t* size) {
-  if (sPartition == nullptr) {
+static uint8_t* ReadFromPartition(NodHandle* partition, const char* path, size_t* size) {
+  if (partition == nullptr) {
     return nullptr;
   }
   NodNodeKind kind;
   uint32_t length = 0;
-  const uint32_t index = nod_partition_find_file(sPartition, path, &kind, &length);
+  const uint32_t index = nod_partition_find_file(partition, path, &kind, &length);
   if (index == NOD_FST_STOP || kind != NOD_NODE_KIND_FILE) {
     return nullptr;
   }
   NodHandle* file = nullptr;
-  if (nod_partition_open_file(sPartition, index, &file) != NOD_RESULT_OK) {
+  if (nod_partition_open_file(partition, index, &file) != NOD_RESULT_OK) {
     return nullptr;
   }
   auto* data = static_cast<uint8_t*>(std::malloc(length ? length : 1));
@@ -179,6 +179,36 @@ uint8_t* PortDisc_ReadOriginalFile(const char* path, size_t* size) {
     *size = length;
   }
   return data;
+}
+
+uint8_t* PortDisc_ReadOriginalFile(const char* path, size_t* size) {
+  return ReadFromPartition(sPartition, path, size);
+}
+
+struct PortDiscReader {
+  NodHandle* disc = nullptr;
+  NodHandle* partition = nullptr;
+};
+
+PortDiscReader* PortDisc_ReaderOpen(const char* path) {
+  auto* r = new PortDiscReader();
+  if (PortDisc_NodOpen(path, nullptr, &r->disc) != NOD_RESULT_OK ||
+      nod_disc_open_partition_kind(r->disc, NOD_PARTITION_KIND_DATA, nullptr, &r->partition) != NOD_RESULT_OK) {
+    PortDisc_ReaderClose(r);
+    return nullptr;
+  }
+  return r;
+}
+
+uint8_t* PortDisc_ReaderReadFile(PortDiscReader* reader, const char* path, size_t* size) {
+  return reader != nullptr ? ReadFromPartition(reader->partition, path, size) : nullptr;
+}
+
+void PortDisc_ReaderClose(PortDiscReader* reader) {
+  if (reader == nullptr) return;
+  if (reader->partition != nullptr) nod_free(reader->partition);
+  if (reader->disc != nullptr) nod_free(reader->disc);
+  delete reader;
 }
 
 void PortDisc_Free(void* data) { std::free(data); }

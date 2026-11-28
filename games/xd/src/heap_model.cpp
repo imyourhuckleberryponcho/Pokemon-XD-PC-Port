@@ -8,11 +8,18 @@
 #endif
 
 #include <algorithm>
+#include <port_addr_window.h>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <mutex>
+#ifdef XD_ADDR_WINDOW
+extern "C" void PortCrash_DescribeAddress(const void* address, char* out, size_t outSize);
+namespace {
+const bool sWindowDescribe = (g_portWinDescribe = PortCrash_DescribeAddress, true);
+}
+#endif
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -765,8 +772,8 @@ extern "C" void* OSInitAlloc(void* arenaStart, void* arenaEnd, int maxHeaps) {
   open_log();
   for (Heap& h : sHeaps) clear_heap(h);
   sHeaps.assign(std::max(maxHeaps, 0), Heap{});
-  sPcArenaStart = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(r));
-  sPcArenaEnd = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(arenaEnd)) & 0xFFFFFFE0u;
+  sPcArenaStart = PortWin_Off(r);
+  sPcArenaEnd = PortWin_Off(arenaEnd) & 0xFFFFFFE0u;
   sGcArenaStart = (kGcArenaLo + maxHeaps * kGcHeapDescSize + 0x1F) & 0xFFFFFFE0u;
   if (!sInit && (sLog != nullptr || enabled_model())) {
     std::atexit([] {
@@ -788,8 +795,8 @@ extern "C" int OSCreateHeap(void* start, void* end) {
   if (!sInit || heap < 0 || heap >= static_cast<int>(sHeaps.size())) return heap;
   Heap& h = sHeaps[heap];
   clear_heap(h);
-  const uint32_t lo = (to_gc(static_cast<uint32_t>(reinterpret_cast<uintptr_t>(start))) + 0x1F) & 0xFFFFFFE0u;
-  const uint32_t hi = to_gc(static_cast<uint32_t>(reinterpret_cast<uintptr_t>(end))) & 0xFFFFFFE0u;
+  const uint32_t lo = (to_gc(PortWin_Off(start)) + 0x1F) & 0xFFFFFFE0u;
+  const uint32_t hi = to_gc(PortWin_Off(end)) & 0xFFFFFFE0u;
   h = Heap{};
   h.type = 0;
   h.lo = lo;

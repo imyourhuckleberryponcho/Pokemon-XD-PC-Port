@@ -11,6 +11,9 @@
 #ifndef MAP_ANONYMOUS
 #define MAP_ANONYMOUS MAP_ANON
 #endif
+#ifndef MAP_NORESERVE
+#define MAP_NORESERVE 0
+#endif
 
 typedef struct Window { uintptr_t start, end; } Window;
 #ifdef __ANDROID__
@@ -28,14 +31,23 @@ static void windows_init(void) {
   sWindowCount = n;
 }
 #else
-static const Window kWindows[] = {
+static Window kWindows[] = {
   {0x42000000u, 0x50000000u},
   {0x81800000u, 0xC0000000u},
   {0xC1800000u, 0xE0000000u},
   {0x01000000u, 0x10000000u},
 };
-#define WINDOW_COUNT (sizeof(kWindows) / sizeof(kWindows[0]))
+#define WINDOW_MAX 4u
 #endif
+#ifdef __ANDROID__
+#undef WINDOW_MAX
+#define WINDOW_MAX 16u
+#endif
+#ifndef __ANDROID__
+static unsigned sWindowCount = WINDOW_MAX;
+#define WINDOW_COUNT sWindowCount
+#endif
+static int sRangeMode = 0;
 
 #define HDR ((size_t)16)
 #define MIN_BLOCK ((size_t)32)
@@ -65,7 +77,7 @@ static FreeBlock* sBins[BINS];
 static uint64_t sBinMap[4];
 static Segment sSegments[MAX_SEGMENTS];
 static volatile unsigned sSegmentTop;
-static uintptr_t sCursor[16];
+static uintptr_t sCursor[WINDOW_MAX];
 static PortLowStats sStats;
 static uint64_t sFreeBytes;
 
@@ -144,8 +156,65 @@ static unsigned next_bin(unsigned bin) {
   return BINS;
 }
 
+static uintptr_t overlap_end(uintptr_t a, size_t len) {
+  unsigned i;
+  for (i = 0; i < sSegmentTop; ++i) {
+    const uintptr_t st = sSegments[i].start, en = sSegments[i].end;
+    if (en != 0 && a < en && a + len > st) return en;
+  }
+  return 0;
+}
+
+static void* map_in_range(size_t len) {
+  const Window win = kWindows[0];
+  uintptr_t want;
+  int wrapped = 0;
+  if (len > win.end - win.start) return NULL;
+  want = sCursor[0] < win.start ? win.start : sCursor[0];
+  for (;;) {
+    uintptr_t over;
+    if (want + len > win.end) {
+      if (wrapped) return NULL;
+      wrapped = 1;
+      want = win.start;
+      continue;
+    }
+    over = overlap_end(want, len);
+    if (over != 0) {
+      want = (over + 0xFFFFu) & ~(uintptr_t)0xFFFFu;
+      continue;
+    }
+    {
+      void* p = mmap((void*)want, len, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+      if (p == MAP_FAILED) return NULL;
+      sCursor[0] = want + len;
+      return p;
+    }
+  }
+}
+
+static void give_space(void* p, size_t len) {
+  if (sRangeMode) {
+    mmap(p, len, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED | MAP_NORESERVE, -1, 0);
+  } else {
+    munmap(p, len);
+  }
+}
+
+void PortLow_UseRange(uintptr_t start, uintptr_t end) {
+  pthread_mutex_lock(&sLock);
+  kWindows[0].start = start;
+  kWindows[0].end = end;
+  sCursor[0] = start;
+  sWindowCount = 1;
+  sRangeMode = 1;
+  sStats.windowBytes = 0;
+  pthread_mutex_unlock(&sLock);
+}
+
 static void* map_in_window(unsigned w, size_t len) {
   const Window win = kWindows[w];
+  if (sRangeMode) return map_in_range(len);
   const size_t step = (size_t)4 << 20;
   uintptr_t want;
   unsigned tries = 0;
@@ -204,7 +273,7 @@ static void segment_drop(uintptr_t start) {
 int PortLow_Owns(const void* ptr) {
   const uintptr_t a = (uintptr_t)ptr;
   unsigned i, top;
-  if (a >= 0xE0000000u || a < 0x01000000u) return 0;
+  if (!sRangeMode && (a >= 0xE0000000u || a < 0x01000000u)) return 0;
   top = sSegmentTop;
   for (i = 0; i < top; ++i) {
     const uintptr_t start = sSegments[i].start, end = sSegments[i].end;
@@ -226,7 +295,7 @@ static Block* grow(size_t need) {
   for (w = 0; w < WINDOW_COUNT && p == NULL; ++w) p = map_in_window(w, len);
   if (p == NULL) return NULL;
   if (!segment_add((uintptr_t)p, (uintptr_t)p + len)) {
-    munmap(p, len);
+    give_space(p, len);
     return NULL;
   }
   {
@@ -250,7 +319,7 @@ static void release_segment(Block* b) {
   segment_drop((uintptr_t)b);
   sStats.reserved -= len;
   sStats.segments -= 1;
-  munmap((void*)b, len);
+  give_space((void*)b, len);
 }
 
 static void no_room(size_t size) {

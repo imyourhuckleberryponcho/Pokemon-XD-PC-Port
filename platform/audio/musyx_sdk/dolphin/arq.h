@@ -29,6 +29,12 @@ void ARQPostRequest(ARQRequest* request, u32 owner, u32 type, u32 priority, uint
                     u32 length, ARQCallback callback);
 u32 ARQGetChunkSize(void);
 
+#ifdef XD_ADDR_WINDOW
+void PortWin_MusyX_ARQPostRequest(ARQRequest* request, u32 owner, u32 type, u32 priority, uintptr_t source, uintptr_t dest,
+                                  u32 length, ARQCallback callback);
+#define ARQPostRequest PortWin_MusyX_ARQPostRequest
+#endif
+
 #ifdef __cplusplus
 }
 #endif

@@ -3,11 +3,16 @@ target_include_directories(platform_compat INTERFACE compat/include)
 target_include_directories(platform_compat PRIVATE ${XD_AURORA_DIR}/include)
 target_compile_options(platform_compat INTERFACE "${XD_FLAG_FORCE_INCLUDE}${CMAKE_CURRENT_SOURCE_DIR}/compat/include/cw_compat.h")
 
-add_library(platform_sdk STATIC sdk/gx_wgpipe.cpp sdk/gx_fifo.cpp sdk/gx_dump.cpp sdk/sdk_missing.c sdk/sdk_stubs.c sdk/os_threads.cpp sdk/vi_clock.cpp sdk/game_clock.cpp sdk/frame_cost.cpp sdk/cpu_cost.cpp sdk/gc_memory.cpp sdk/async_callbacks.cpp sdk/disc_drive.cpp sdk/card_serial.cpp sdk/card_backup.cpp sdk/card_root.cpp
+add_library(platform_sdk STATIC sdk/gx_wgpipe.cpp sdk/gx_fifo.cpp sdk/gx_dump.cpp sdk/sdk_missing.c sdk/sdk_stubs.c sdk/os_threads.cpp sdk/vi_clock.cpp sdk/game_clock.cpp sdk/frame_cost.cpp sdk/cpu_cost.cpp sdk/gc_memory.cpp sdk/guest_window.cpp sdk/async_callbacks.cpp sdk/disc_drive.cpp sdk/card_serial.cpp sdk/card_backup.cpp sdk/card_root.cpp
   sdk/gx_render_modes.c sdk/mtx_ps.c)
 target_include_directories(platform_sdk PRIVATE sdk/include ${XD_AURORA_DIR}/lib
   ${XD_AURORA_DIR}/lib/dolphin/os)
 target_include_directories(platform_sdk INTERFACE sdk/include)
+
+if (XD_ADDR_WINDOW AND NOT WIN32)
+  target_sources(platform_sdk PRIVATE os/low_arena.c)
+  target_include_directories(platform_sdk PRIVATE os/include)
+endif ()
 target_link_libraries(platform_sdk PUBLIC aurora::gx aurora::core aurora::pad aurora::os aurora::dvd aurora::card
   engine_settings # system.disc_timing (async_callbacks.cpp)
   engine_memcard) # save backups before card writes (card_backup.cpp)

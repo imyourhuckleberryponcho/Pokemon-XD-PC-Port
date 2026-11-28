@@ -14,6 +14,8 @@ void* PortLow_Realloc(void* ptr, size_t size);
 void* PortLow_Memalign(size_t alignment, size_t size);
 void PortLow_Free(void* ptr);
 
+void PortLow_UseRange(uintptr_t start, uintptr_t end);
+
 int PortLow_Owns(const void* ptr);
 size_t PortLow_Size(const void* ptr);
 

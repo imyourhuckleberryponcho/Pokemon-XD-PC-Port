@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <set>
 
@@ -529,6 +530,8 @@ struct Built {
   int tris = 0;
   double scale = 0;
   bool eyes_ties = false;
+  ConvertInfo::Shiny shiny;
+  bool iris2 = false;
 };
 
 Built build(const Species& sp, const std::vector<uint8_t>& xd_bytes, const Opts& opts, const Logger& log, double step) {
@@ -699,7 +702,11 @@ Built build(const Species& sp, const std::vector<uint8_t>& xd_bytes, const Opts&
   std::unique_ptr<gfi::MatchPlan> mplan;
   if (opts.match && opts.hand && !gfi::hand_match_enabled(nat)) log("INFO: colour match: off for this species (hand table usum_hand)");
   else if (opts.match) mplan = gfi::colour_match_plan(gm, texs, xd_bytes, opts, nat, log);
-  gfi::MadeImages mi = gfi::make_images(gm, texs, opts, nat, mplan.get());
+  std::vector<pbr::Rgba> raw_normal;
+  const bool want_shiny = opts.shiny && !sp.shiny_texs.empty();
+  bool iris2_used = false;
+  gfi::MadeImages mi = gfi::make_images(gm, texs, opts, nat, mplan.get(), want_shiny ? &raw_normal : nullptr, false, &iris2_used);
+  B.iris2 = iris2_used;
   std::set<std::string> baked_iris;
   for (auto& e : gfi::iris_plan(gm, texs, opts)) for (auto& n : e.second) baked_iris.insert(n);
   if (!baked_iris.empty()) log("INFO: iris plates painted into the eye picture");
@@ -1182,6 +1189,66 @@ Built build(const Species& sp, const std::vector<uint8_t>& xd_bytes, const Opts&
       h[rec] = 0;
     }
   }
+  if (want_shiny) {
+    std::map<std::string, pbr::Rgba> stex = texs;
+    for (auto& kv : sp.shiny_texs) {
+      pbr::Rgba r(kv.second.w, kv.second.h);
+      r.px = kv.second.px;
+      stex[kv.first] = std::move(r);
+    }
+    std::vector<pbr::Rgba> raw_shiny;
+    gfi::MadeImages ms = gfi::make_images(gm, stex, opts, nat, mplan.get(), &raw_shiny, true);
+    if (ms.images.size() == mi.images.size() && raw_shiny.size() == raw_normal.size()) {
+      std::vector<double> area(mi.images.size(), 0.0);
+      for (auto& me_ : gm.meshes) {
+        if (hidden_mesh(me_)) continue;
+        for (auto& sm : me_.subs) {
+          auto mit = mat_index.find(sm.name);
+          if (mit == mat_index.end() || !sm.verts.has("pos")) continue;
+          const int img = mi.mat_img[mit->second].first;
+          if (img < 0) continue;
+          const Arr& P = sm.verts.get("pos");
+          for (auto& t : triangles(sm)) {
+            if (t[0] < 0 || t[1] < 0 || t[2] < 0 || t[0] >= P.rows || t[1] >= P.rows || t[2] >= P.rows) continue;
+            double a[3], b[3];
+            for (int k = 0; k < 3; k++) { a[k] = P.at((int)t[1], k) - P.at((int)t[0], k); b[k] = P.at((int)t[2], k) - P.at((int)t[0], k); }
+            double cx_ = a[1] * b[2] - a[2] * b[1], cy_ = a[2] * b[0] - a[0] * b[2], cz_ = a[0] * b[1] - a[1] * b[0];
+            area[img] += 0.5 * std::sqrt(cx_ * cx_ + cy_ * cy_ + cz_ * cz_);
+          }
+        }
+      }
+      double tot = 0;
+      for (double a : area) tot += a;
+      if (tot <= 0) std::fill(area.begin(), area.end(), 1.0);
+      gfi::ShinyFit f = gfi::fit_shiny(raw_normal, raw_shiny, area);
+      if (f.weight > 0) {
+        auto& h0 = pkx.header;
+        auto rd = [&](size_t o) { return (int)(int32_t)((h0[o] << 24) | (h0[o + 1] << 16) | (h0[o + 2] << 8) | h0[o + 3]); };
+        B.shiny.done = true;
+        for (int c = 0; c < 3; c++) {
+          B.shiny.swap[c] = f.swap[c];
+          B.shiny.mod[c] = f.mod[c];
+          int ss = rd(0x70 + 4 * c);
+          B.shiny.standin_swap[c] = (ss >= 0 && ss < 4) ? std::min(ss, 2) : c;
+          B.shiny.standin_mod[c] = h0[0x80 + c];
+        }
+        B.shiny.err_fit = f.err_fit;
+        B.shiny.err_none = f.err_none;
+        B.shiny.cover = f.cover;
+        B.shiny.err_standin = gfi::shiny_error(raw_normal, raw_shiny, area, B.shiny.standin_swap, B.shiny.standin_mod);
+        for (int c = 0; c < 4; c++) {
+          const int v = c < 3 ? f.swap[c] : 3;
+          h0[0x70 + 4 * c] = 0; h0[0x71 + 4 * c] = 0; h0[0x72 + 4 * c] = 0; h0[0x73 + 4 * c] = (uint8_t)v;
+        }
+        for (int c = 0; c < 3; c++) h0[0x80 + c] = (uint8_t)f.mod[c];
+        h0[0x83] = 0xFF;
+        log(sf("INFO: shiny: swap %d%d%d modulation %d/%d/%d colour error %.1f (no change %.1f, the stand-in's table %.1f)", f.swap[0], f.swap[1], f.swap[2], f.mod[0], f.mod[1], f.mod[2],
+               f.err_fit, f.err_none, B.shiny.err_standin));
+      }
+    } else {
+      log("INFO: shiny: the shiny pictures do not line up with the normal ones: the stand-in's table stays");
+    }
+  }
   B.pkx = std::move(pkx);
   return B;
 }
@@ -1210,6 +1277,8 @@ std::vector<uint8_t> convert(const Species& sp, const std::vector<uint8_t>& xd_b
       info->size = data.size();
       info->tris = B.tris;
       info->scale = B.scale;
+      info->shiny = B.shiny;
+      info->iris2 = B.iris2;
       info->report = rep;
     }
     log(sf("written %d bytes (XD original %d)", (int)data.size(), (int)xd_bytes.size()));
@@ -1231,6 +1300,7 @@ Opts opts_gen4(double height_cm) {
   Opts o;
   o.ground = true; o.decimate = 2600; o.fire = true; o.light = 1.0; o.fx = true; o.bake_scale = true; o.eyes = true; o.size_rule = 2; o.height_cm = height_cm;
   o.hover_model = true; o.eye_blend = true; o.ghost_alpha = 0.6; o.steel = 1.2; o.lure = true; o.cheeks = 1.0;
+  o.shiny = true;
   return o;
 }
 std::vector<uint8_t> convert_one(const Species& sp, const std::vector<uint8_t>& xd_bytes, const Opts& o, ConvertInfo* info, std::vector<std::string>* log) {
@@ -1255,7 +1325,7 @@ std::vector<uint8_t> convert_ladder(const Species& sp, const std::vector<uint8_t
   for (step = start; step < (int)L.size(); step++) {
     Opts o;
     o.ground = true; o.fire = true; o.light = 1.0; o.eyes = true; o.size_rule = 2; o.size_flat = true; o.max_side = L[step].side; o.height_cm = height_cm;
-    o.hover_model = true; o.anim_tol = L[step].atol; o.chan_tol = L[step].ctol; o.quant = L[step].quant; o.decimate = L[step].dec;
+    o.shiny = true; o.hover_model = true; o.anim_tol = L[step].atol; o.chan_tol = L[step].ctol; o.quant = L[step].quant; o.decimate = L[step].dec;
     pkx = convert(sp, xd_bytes, o, [](const std::string&) {}, info);
     if (pkx.size() <= FILE_CAP_BYTES) break;
   }
@@ -1276,6 +1346,16 @@ Species load_species(const Garc& g, int group, int motion_group) {
   for (auto& t : pc_split(lz11_maybe(g.read(base + 1)))) {
     GfTexture T = parse_texture(t);
     sp.texs[T.name] = decode_texture(T);
+  }
+  try {
+    for (auto& t : pc_split(lz11_maybe(g.read(base + 2)))) {
+      GfTexture T = parse_texture(t);
+      if (sp.texs.count(T.name)) sp.shiny_texs[T.name] = decode_texture(T);
+    }
+  } catch (const std::exception&) { sp.shiny_texs.clear(); }
+  if (std::getenv("N3DS_SHINY_AS_NORMAL") && !sp.shiny_texs.empty()) {
+    for (auto& kv : sp.shiny_texs) sp.texs[kv.first] = kv.second;
+    sp.shiny_texs.clear();
   }
   auto subs = pc_split(lz11_maybe(g.read(base + 4)));
   static const std::pair<const char*, int> GF_SLOT[5] = {{"idle", 0}, {"hit", 16}, {"faint", 17}, {"phys", 8}, {"special", 12}};

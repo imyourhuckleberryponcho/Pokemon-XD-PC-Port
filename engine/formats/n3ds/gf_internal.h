@@ -28,7 +28,18 @@ struct MatchPlan {
   double sigma = 12.0;
   pbr::Rgba apply(const pbr::Rgba& in, bool skin_only) const;
 };
-MadeImages make_images(const GfModel& gm, const std::map<std::string, pbr::Rgba>& texs, const Opts& opts, int nat, const MatchPlan* plan = nullptr);
+MadeImages make_images(const GfModel& gm, const std::map<std::string, pbr::Rgba>& texs, const Opts& opts, int nat, const MatchPlan* plan = nullptr,
+                       std::vector<pbr::Rgba>* raw_out = nullptr, bool skip_encode = false, bool* iris2_used = nullptr);
+
+struct ShinyFit {
+  int swap[3] = {0, 1, 2};
+  int mod[3] = {127, 127, 127};
+  double err_fit = 0, err_none = 0;
+  double weight = 0;
+  double cover = 0;
+};
+ShinyFit fit_shiny(const std::vector<pbr::Rgba>& normal, const std::vector<pbr::Rgba>& shiny, const std::vector<double>& image_weight);
+double shiny_error(const std::vector<pbr::Rgba>& normal, const std::vector<pbr::Rgba>& shiny, const std::vector<double>& image_weight, const int swap[3], const int mod[3]);
 std::unique_ptr<MatchPlan> colour_match_plan(const GfModel& gm, const std::map<std::string, pbr::Rgba>& texs, const std::vector<uint8_t>& xd_bytes,
                                              const Opts& opts, int nat, const Logger& log);
 bool match_piece_ok(const GfMaterial& mt, const std::vector<int>& fixes);

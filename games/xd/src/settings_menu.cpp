@@ -1,5 +1,8 @@
 #include "i18n.h"
 #include "xd_mod_assets.h"
+#if defined(XD_ADDR_WINDOW) && defined(XD_WINDOW_STANDIN)
+#include "port_addr_window.h"
+#endif
 #include "xd_battle_models.h"
 #include "xd_playthrough.h"
 #include "xd_shadow_capacity.h"
@@ -5020,6 +5023,17 @@ void PortXD_SettingsMenuInit(void) {
 }
 
 u8 PortXD_SndPushGroup(void* prj, u16 gid, void* samples, void* sampdir, void* pool) {
+#if defined(XD_ADDR_WINDOW) && defined(XD_WINDOW_STANDIN)
+  {
+    const uint64_t a = reinterpret_cast<uint64_t>(prj), d = reinterpret_cast<uint64_t>(sampdir);
+    if (std::getenv("XD_WINDOW_LOG_GROUPS") != nullptr) {
+      std::fprintf(stderr, "[window] sndPushGroup group %u: project %p, sample directory %p, samples %p, pool %p\n", gid, prj, sampdir, samples, pool);
+    }
+    if ((a >= 0x80000000ull && a < 0x100000000ull) || (d >= 0x80000000ull && d < 0x100000000ull)) {
+      PortWin_Note("sndPushGroup was given a raw GameCube address as the project or the sample directory (value = group id)", gid);
+    }
+  }
+#endif
   const u8 ok = sndPushGroup(prj, gid, samples, sampdir, pool);
   if (ok) PortSfx_NoteGroup(prj, gid, sampdir, pool);
   return ok;

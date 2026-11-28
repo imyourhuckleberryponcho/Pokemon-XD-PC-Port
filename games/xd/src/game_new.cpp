@@ -1,4 +1,5 @@
 #include <cstdint>
+#include <port_addr_window.h>
 #include <cstdlib>
 #ifdef _MSC_VER
 #include <intrin.h>
@@ -75,7 +76,17 @@ bool called_from_game(void* returnAddress) {
 
 bool in_game_heap(void* ptr) {
   const auto a = reinterpret_cast<uintptr_t>(ptr);
+#ifdef XD_ADDR_WINDOW
+  const uintptr_t off = a - g_portWinBase;
+  if (off >= 0x80000000u && off < 0x81800000u) return true;
+#if defined(XD_WINDOW_STANDIN)
   return a >= 0x80000000u && a < 0x81800000u;
+#else
+  return false;
+#endif
+#else
+  return a >= 0x80000000u && a < 0x81800000u;
+#endif
 }
 
 void* game_new(size_t size) { return GSmemIsInitialized() ? GSmemAlloc(static_cast<uint32_t>(size)) : nullptr; }

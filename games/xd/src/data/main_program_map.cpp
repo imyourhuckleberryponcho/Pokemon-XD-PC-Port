@@ -1,5 +1,6 @@
 #include "common_rel.h"
 #include "dol_tables.h"
+#include <port_addr_window.h>
 
 #include <algorithm>
 #include <cstdio>
@@ -116,7 +117,7 @@ extern "C" void* PortXD_GameAddress(uint32_t gcAddress) {
   if (gcAddress < 0x80003100u || gcAddress >= imageEnd) {
     fatal_address(gcAddress, "it's outside main.dol");
   }
-  return reinterpret_cast<void*>(static_cast<uintptr_t>(gcAddress));
+  return PortWin_Ptr(gcAddress);
 }
 
 extern "C" void* PortXD_GameAddressIfKnown(uint32_t gcAddress, uint32_t* size) {
@@ -142,7 +143,7 @@ extern "C" void* PortXD_GameAddressIfKnown(uint32_t gcAddress, uint32_t* size) {
     return nullptr;
   }
   *size = imageEnd - gcAddress;
-  return reinterpret_cast<void*>(static_cast<uintptr_t>(gcAddress));
+  return PortWin_Ptr(gcAddress);
 }
 
 extern "C" uint32_t PortXD_GameAddressOf(const void* p) {
@@ -161,10 +162,17 @@ extern "C" uint32_t PortXD_GameAddressOf(const void* p) {
   }
   uint32_t bssStart, bssEnd, imageEnd;
   PortXD_DolImage(&bssStart, &bssEnd, &imageEnd);
+#ifdef XD_ADDR_WINDOW
+  uint32_t u = 0;
+  if (PortWin_TryOff(p, &u) && u >= 0x80003100u && u < imageEnd) {
+    return u;
+  }
+#else
   const auto u = reinterpret_cast<uintptr_t>(p);
   if (u >= 0x80003100u && u < imageEnd) {
     return static_cast<uint32_t>(u);
   }
+#endif
   std::fprintf(stderr, "[games/xd] PortXD_GameAddressOf(%p): not something game data can refer to. Stopping here.\n", p);
   std::fflush(stderr);
   std::abort();

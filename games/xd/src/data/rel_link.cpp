@@ -1,4 +1,5 @@
 #include "common_rel.h"
+#include <port_addr_window.h>
 
 #include <gs_formats.h>
 
@@ -117,11 +118,20 @@ bool PortXD_LinkDataModule(const uint8_t* file, size_t size, std::vector<std::pa
       problem = msg;
       return false;
     }
+#ifdef XD_ADDR_WINDOW
+    uint32_t target32 = 0;
+    if (!PortWin_TryOff(reinterpret_cast<void*>(target), &target32)) {
+      problem = "an address in its data doesn't fit in 32 bits";
+      return false;
+    }
+    if (out != nullptr) put_be32(copies[rr.section] + rr.offset, target32);
+#else
     if (target > 0xFFFFFFFFu) {
       problem = "an address in its data doesn't fit in 32 bits";
       return false;
     }
     if (out != nullptr) put_be32(copies[rr.section] + rr.offset, static_cast<uint32_t>(target));
+#endif
   }
   RelPrologStore stores[512];
   const int n = Rel_ReadPrologStores(&rel, stores, 512);
@@ -134,7 +144,7 @@ bool PortXD_LinkDataModule(const uint8_t* file, size_t size, std::vector<std::pa
     uint32_t room = 0;
     void* var = PortXD_GameAddressIfKnown(st.dolAddress, &room);
     if (var == nullptr && dead_store_target(st.dolAddress)) {
-      var = reinterpret_cast<void*>(static_cast<uintptr_t>(st.dolAddress));
+      var = PortWin_Ptr(st.dolAddress);
       room = 4;
     }
     if (var == nullptr || room < 4) {
@@ -144,12 +154,18 @@ bool PortXD_LinkDataModule(const uint8_t* file, size_t size, std::vector<std::pa
       return false;
     }
     uintptr_t value = st.constant;
+#ifdef XD_ADDR_WINDOW
+    uint32_t value32 = st.constant;
+#endif
     if (st.isRelAddress) {
       if (st.section >= rel.numSections || copies[st.section] == nullptr) {
         problem = "its _prolog stores the address of its own code";
         return false;
       }
       value = reinterpret_cast<uintptr_t>(copies[st.section] + st.offset);
+#ifdef XD_ADDR_WINDOW
+      value32 = PortWin_Off(copies[st.section] + st.offset);
+#endif
     }
     if (out != nullptr) {
       bool pointer = false;
@@ -158,7 +174,11 @@ bool PortXD_LinkDataModule(const uint8_t* file, size_t size, std::vector<std::pa
         *static_cast<void**>(var) = reinterpret_cast<void*>(value);
         out->emplace_back(var, static_cast<uint32_t>(sizeof(void*)));
       } else {
+#ifdef XD_ADDR_WINDOW
+        put_be32(static_cast<uint8_t*>(var), value32);
+#else
         put_be32(static_cast<uint8_t*>(var), static_cast<uint32_t>(value));
+#endif
         out->emplace_back(var, 4);
       }
     }

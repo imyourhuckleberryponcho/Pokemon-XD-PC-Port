@@ -4,6 +4,9 @@
 
 #include <sys/mman.h>
 #ifndef __ANDROID__
+#ifndef MAP_32BIT
+#define MAP_32BIT 0
+#endif
 #include <ucontext.h>
 #endif
 #ifdef __ANDROID__
@@ -13,6 +16,11 @@
 #include <cstdio>
 #include <cstdlib>
 #include <unordered_map>
+
+extern "C" {
+void* (*PortGsStackAlloc)(size_t bytes) = nullptr;
+void (*PortGsStackFree)(void* p, size_t bytes) = nullptr;
+}
 
 namespace {
 
@@ -69,7 +77,11 @@ size_t pc_stack_size(uint32_t gcSize) {
 
 void free_stack(Task& t) {
   if (t.stack != nullptr) {
-    munmap(t.stack, t.stackSize);
+    if (PortGsStackFree != nullptr) {
+      PortGsStackFree(t.stack, t.stackSize);
+    } else {
+      munmap(t.stack, t.stackSize);
+    }
     t.stack = nullptr;
   }
 }
@@ -92,9 +104,11 @@ void PortGSthread_Create(void* thread, void* entry, PortGSthreadExit exitFunc, u
   size_t usable = (pc_stack_size(stackSize) + 0x3FFF) & ~size_t{0x3FFF};
   if (usable < kReserve) usable = kReserve;
   t.stackSize = usable + kGuard;
-  void* stack = mmap(nullptr, t.stackSize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT | MAP_STACK,
-                     -1, 0);
-  if (stack == MAP_FAILED) {
+  void* stack = PortGsStackAlloc != nullptr
+                    ? PortGsStackAlloc(t.stackSize)
+                    : mmap(nullptr, t.stackSize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT | MAP_STACK,
+                           -1, 0);
+  if (stack == MAP_FAILED || stack == nullptr) {
     fatal("no memory below 2 GB for a task's stack");
   }
   mprotect(stack, kGuard, PROT_NONE);
@@ -130,6 +144,11 @@ void PortGSthread_Run(void* thread) {
   auto it = sTasks.find(thread);
   if (it == sTasks.end()) {
     fatal("run of an unknown task");
+  }
+  static const bool runLog = std::getenv("XD_TASK_RUN_LOG") != nullptr;
+  if (runLog) {
+    static unsigned long n = 0;
+    std::fprintf(stderr, "[taskrun] %lu thread %p entry %p\n", n++, thread, reinterpret_cast<void*>(it->second.entry));
   }
   sSchedulerRunning = true;
   sStarting = &it->second;

@@ -16,6 +16,21 @@ endforeach ()
 string(APPEND _spare_text "#endif\n")
 file(CONFIGURE OUTPUT "${CMAKE_BINARY_DIR}/generated/xd_spare.h" CONTENT "${_spare_text}" @ONLY NEWLINE_STYLE UNIX)
 include_directories("${CMAKE_BINARY_DIR}/generated")
+set(_xd_window_inc "${CMAKE_BINARY_DIR}/generated/window_inc")
+if (XD_ADDR_WINDOW)
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  execute_process(COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/window_headers.py" "${XD_SNAPSHOT_DIR}"
+    "${_xd_window_inc}" "${PROJECT_SOURCE_DIR}/platform/sdk/include/port_addr_window.h"
+    RESULT_VARIABLE _xd_wh_rc OUTPUT_VARIABLE _xd_wh_out ERROR_VARIABLE _xd_wh_err)
+  if (NOT _xd_wh_rc EQUAL 0)
+    message(FATAL_ERROR "xd: XD_ADDR_WINDOW: tools/window_headers.py failed: ${_xd_wh_err}")
+  endif ()
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${XD_SNAPSHOT_DIR}/include/game/gcptr.h"
+    "${XD_SNAPSHOT_DIR}/include/game/gcdata.h" "${PROJECT_SOURCE_DIR}/tools/window_headers.py")
+  include_directories(BEFORE "${_xd_window_inc}")
+else ()
+  file(REMOVE_RECURSE "${_xd_window_inc}")
+endif ()
 
 if (XD_BUILD_GAME)
 file(READ "${XD_SNAPSHOT_DIR}/objects.json" _xd_objects_json)
@@ -116,6 +131,10 @@ file(WRITE "${_xd_dt_dir}/flags.json.new" "{\"defines\": [\"AURORA\", \"AURORA_E
 elseif (APPLE)
   execute_process(COMMAND "${CMAKE_C_COMPILER}" -print-resource-dir OUTPUT_VARIABLE _xd_clang_res
     OUTPUT_STRIP_TRAILING_WHITESPACE)
+  set(_xd_mac_pc_target "x86_64-apple-macosx13.3")
+  if (XD_MAC_ARM64)
+    set(_xd_mac_pc_target "arm64-apple-macosx13.3") # (native Apple Silicon: docs/MAC_ARM.md)
+  endif ()
   set(_xd_sdk "${CMAKE_OSX_SYSROOT}")
   if (NOT _xd_sdk OR NOT IS_DIRECTORY "${_xd_sdk}")
     execute_process(COMMAND xcrun --sdk macosx --show-sdk-path OUTPUT_VARIABLE _xd_sdk OUTPUT_STRIP_TRAILING_WHITESPACE)
@@ -130,7 +149,7 @@ elseif (APPLE)
  \"force_includes\": [\"${CMAKE_CURRENT_SOURCE_DIR}/src/game_code_seg.h\", \"${PROJECT_SOURCE_DIR}/platform/compat/include/cw_compat.h\", \"${PROJECT_SOURCE_DIR}/platform/sdk/include/sdk_port.h\"],
  \"first_includes\": [\"${_xd_linux_first}\"],
  \"system_includes\": [${_xd_mac_sysinc}], \"gc_system_includes\": [${_xd_mac_sysinc}],
- \"pc_target\": \"x86_64-apple-macosx13.3\", \"gc_target\": \"i386-apple-macosx10.13\"}
+ \"pc_target\": \"${_xd_mac_pc_target}\", \"gc_target\": \"i386-apple-macosx10.13\"}
 ")
 elseif (ANDROID)
   execute_process(COMMAND "${CMAKE_C_COMPILER}" -print-resource-dir OUTPUT_VARIABLE _xd_clang_res
@@ -202,6 +221,17 @@ message(STATUS "xd: ${_xd_dt_out}")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/tools/gen_disc_tables.py"
   "${CMAKE_CURRENT_SOURCE_DIR}/src/data/disc_table_addresses.tsv")
 include("${_xd_dt_dir}/files.cmake")
+if (XD_ADDR_WINDOW)
+  set(_xd_window_src "${CMAKE_BINARY_DIR}/generated/window_src")
+  execute_process(COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/window_rewrite.py" "${XD_SNAPSHOT_DIR}"
+    "${_xd_dt_dir}/flags.json" "${_xd_window_src}" "${_xd_window_src}.txt" "${_xd_dt_dir}/stripped"
+    RESULT_VARIABLE _xd_wr_rc OUTPUT_VARIABLE _xd_wr_out ERROR_VARIABLE _xd_wr_err)
+  if (NOT _xd_wr_rc EQUAL 0)
+    message(FATAL_ERROR "xd: XD_ADDR_WINDOW: tools/window_rewrite.py failed: ${_xd_wr_out} ${_xd_wr_err}")
+  endif ()
+  message(STATUS "xd: ${_xd_wr_out}")
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/tools/window_rewrite.py")
+endif ()
 set(_xd_as "${_xd_dt_dir}/stripped/game/pxdvs/app/script/appScript.cpp")
 if (EXISTS "${_xd_as}")
   file(READ "${_xd_as}" _xd_as_text)
@@ -224,6 +254,31 @@ foreach (_w ${XD_DISC_TABLE_WRAPPERS} "${_xd_dt_dir}/disc_tables_list.c")
 endforeach ()
 list(APPEND XD_GAME_SOURCES ${XD_DISC_TABLE_WRAPPERS} "${_xd_dt_dir}/disc_tables_list.c")
 
+if (XD_ADDR_WINDOW)
+  file(STRINGS "${_xd_window_src}.txt" _xd_win_rewritten)
+  foreach (_rel ${_xd_win_rewritten})
+    set(_orig "${XD_SNAPSHOT_DIR}/src/${_rel}")
+    list(FIND XD_GAME_SOURCES "${_orig}" _idx)
+    if (_idx LESS 0)
+      continue() # (a file of the table generator's: rewritten in its stripped copy, in place)
+    endif ()
+    set(_new "${_xd_window_src}/${_rel}")
+    list(INSERT XD_GAME_SOURCES ${_idx} "${_new}")
+    list(REMOVE_ITEM XD_GAME_SOURCES "${_orig}")
+    get_filename_component(_orig_dir "${_orig}" DIRECTORY)
+    foreach (_prop LANGUAGE COMPILE_DEFINITIONS COMPILE_OPTIONS)
+      get_source_file_property(_v "${_orig}" ${_prop})
+      if (_v)
+        set_property(SOURCE "${_new}" PROPERTY ${_prop} ${_v})
+      endif ()
+    endforeach ()
+    get_source_file_property(_v "${_orig}" INCLUDE_DIRECTORIES)
+    if (NOT _v)
+      set(_v "")
+    endif ()
+    set_property(SOURCE "${_new}" PROPERTY INCLUDE_DIRECTORIES ${_v} "${_orig_dir}" "${PROJECT_SOURCE_DIR}/platform/sdk/include")
+  endforeach ()
+endif ()
 add_library(xd_game OBJECT ${XD_GAME_SOURCES})
 
 if (DEFINED ENV{XD_GAME_NOOPT} AND NOT "$ENV{XD_GAME_NOOPT}" STREQUAL "")
@@ -690,6 +745,12 @@ endforeach ()
 if (NOT XD_MUSYX_STREAM_C)
   message(FATAL_ERROR "MusyX's stream.c is not in the snapshot's file list (platform/audio/musyx_categories.c needs it)")
 endif ()
+if (XD_ADDR_WINDOW)
+  foreach (_src ${XD_MUSYX_SOURCES})
+    set_property(SOURCE "${_src}" APPEND PROPERTY COMPILE_OPTIONS "${XD_FLAG_FORCE_INCLUDE}${PROJECT_SOURCE_DIR}/platform/sdk/include/port_win_musyx.h")
+    set_property(SOURCE "${_src}" APPEND PROPERTY INCLUDE_DIRECTORIES "${PROJECT_SOURCE_DIR}/platform/sdk/include")
+  endforeach ()
+endif ()
 foreach (_src ${XD_MUSYX_SOURCES})
   if (_src MATCHES "/runtime/synth\\.c$")
     set_property(SOURCE "${_src}" APPEND PROPERTY COMPILE_DEFINITIONS hwSetVolume=PortMusyX_SynthSetVolume)
@@ -925,7 +986,7 @@ add_executable(report_scrub_test tools/report_scrub_test.cpp src/report_scrub.cp
 target_compile_features(report_scrub_test PRIVATE cxx_std_17)
 
 add_executable(xd_heap_model_test tools/xd_heap_model_test.cpp src/heap_model.cpp)
-target_include_directories(xd_heap_model_test PRIVATE ${PROJECT_SOURCE_DIR}/platform/os/include ${PROJECT_SOURCE_DIR}/platform/sdk/include) # (port_win_compat.h, port_savestate.h)
+target_include_directories(xd_heap_model_test PRIVATE ${PROJECT_SOURCE_DIR}/platform/os/include ${PROJECT_SOURCE_DIR}/platform/sdk/include) # (port_win_compat.h, port_savestate.h, port_addr_window.h)
 
 add_library(xd_extra_sources STATIC launcher/xd_extra_sources.cpp launcher/xd_n3ds_dump.cpp src/pack_match.cpp)
 target_include_directories(xd_extra_sources PUBLIC launcher src ${PROJECT_SOURCE_DIR}/launcher/include ${PROJECT_SOURCE_DIR}/platform/os/include)
@@ -1090,15 +1151,23 @@ if (NOT WIN32)
   list(APPEND XD_PROGRAM_PORT_SOURCES src/bug_report_linux.cpp)
 endif ()
 if (ANDROID)
+  if (XD_ADDR_WINDOW)
+    list(APPEND XD_PROGRAM_PORT_SOURCES ${PROJECT_SOURCE_DIR}/platform/os/low_arena.c ${PROJECT_SOURCE_DIR}/platform/os/android_layout.c ${PROJECT_SOURCE_DIR}/platform/os/android_log.c)
+    set_property(SOURCE ${PROJECT_SOURCE_DIR}/platform/os/low_arena.c ${PROJECT_SOURCE_DIR}/platform/os/android_layout.c ${PROJECT_SOURCE_DIR}/platform/os/android_log.c APPEND PROPERTY
+      INCLUDE_DIRECTORIES ${PROJECT_SOURCE_DIR}/platform/os/include)
+  else ()
   list(APPEND XD_PROGRAM_PORT_SOURCES ${PROJECT_SOURCE_DIR}/platform/os/low_arena.c ${PROJECT_SOURCE_DIR}/platform/os/android_layout.c ${PROJECT_SOURCE_DIR}/platform/os/android_log.c
     ${PROJECT_SOURCE_DIR}/platform/os/low_malloc_android.cpp ${PROJECT_SOURCE_DIR}/platform/os/low_malloc_selftest.cpp)
   set_property(SOURCE ${PROJECT_SOURCE_DIR}/platform/os/low_arena.c ${PROJECT_SOURCE_DIR}/platform/os/android_layout.c ${PROJECT_SOURCE_DIR}/platform/os/android_log.c
     ${PROJECT_SOURCE_DIR}/platform/os/low_malloc_android.cpp ${PROJECT_SOURCE_DIR}/platform/os/low_malloc_selftest.cpp APPEND PROPERTY
     INCLUDE_DIRECTORIES ${PROJECT_SOURCE_DIR}/platform/os/include)
+  endif ()
   set_property(SOURCE src/boot.c APPEND PROPERTY COMPILE_OPTIONS "-include${PROJECT_SOURCE_DIR}/platform/os/include/port_android_compat.h")
   set_property(SOURCE src/boot.c APPEND PROPERTY INCLUDE_DIRECTORIES ${PROJECT_SOURCE_DIR}/platform/os/include ${PROJECT_SOURCE_DIR}/engine/gs/include)
 endif ()
-if (APPLE)
+if (APPLE AND XD_MAC_ARM64)
+  list(APPEND XD_PROGRAM_PORT_SOURCES src/find_variable_mac.cpp)
+elseif (APPLE)
   list(APPEND XD_PROGRAM_PORT_SOURCES src/mac_low_reserve.c src/find_variable_mac.cpp)
   list(APPEND XD_PROGRAM_PORT_SOURCES ${PROJECT_SOURCE_DIR}/platform/os/low_arena.c
     ${PROJECT_SOURCE_DIR}/platform/os/low_malloc_mac.cpp ${PROJECT_SOURCE_DIR}/platform/os/low_malloc_selftest.cpp)
@@ -1148,6 +1217,8 @@ set_property(SOURCE src/ui_kit2.cpp src/warp.cpp src/render_icon.cpp src/setting
   ${XD_AURORA_DIR}/include ${XD_SNAPSHOT_DIR}/include)
 if (MSVC)
   set(XD_PROGRAM_LINK_OPTIONS /BASE:0x40000000 /DYNAMICBASE:NO /INCREMENTAL:NO)
+elseif (APPLE AND XD_MAC_ARM64) # native arm64: the system's defaults
+  set(XD_PROGRAM_LINK_OPTIONS "")
 elseif (APPLE) # macOS (docs/MAC.md, never run): the same address, and the reserved ranges of mac_low_reserve.c
   set(XD_PROGRAM_LINK_OPTIONS ${XD_MAC_LOW_LINK_OPTIONS}
     -Wl,-segaddr,__XDLOW,0x70000000 -Wl,-segaddr,__XDMEM1,0x80000000 -Wl,-segaddr,__XDMEMU,0xC0000000

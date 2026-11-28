@@ -197,6 +197,21 @@ Saves, settings, mods, logs and bug reports live in one data folder: {p['data']}
 """
 
 
+NEW_082 = """New in 0.8.2
+------------
+- The Eevee evolution offer shows full-body pictures for Leafeon, Glaceon and Sylveon too (also with only the Ultra
+  Sun / Ultra Moon packs).
+- Shiny Gen 4-7 Pokemon now get their own shiny colours from your Ultra Sun / Ultra Moon dump (make your packs again
+  once); Pancham and others have pupils again.
+- Android (beta): phones where the game said its memory spot was taken (like the Retroid Pocket 6) now get a second
+  way to start (beta; tell us if it works).
+- Fixed: the New Game screen's randomizer count no longer keeps everything it read in memory: it reads each game
+  archive once and gives the memory back (this is what made the Enhanced look run out of memory on some phones). The
+  count still shows as before.
+- Online: 0.8.2 plays with 0.8.2 only. Older versions are turned away with a clear message on both sides.
+"""
+
+
 NEW_081 = """New in 0.8.1
 ------------
 - Fixed on Windows: "Make models and Gen 4 pack" (and the other Battle Revolution model makers) crashed at once in
@@ -686,7 +701,7 @@ The full history is on the GitHub releases page: """ + RELEASES_URL + """
 
 
 def new_in():
-    return NEW_081 + chr(10) + NEW_080 + chr(10) + NEW_077 + chr(10) + NEW_076 + chr(10) + NEW_075 + chr(10) + NEW_074 + chr(10) + NEW_073 + chr(10) + NEW_072 + chr(10) + NEW_071 + chr(10) + NEW_070 + chr(10) + NEW_061 + chr(10) + NEW_060 + chr(10) + NEW_05X
+    return NEW_082 + chr(10) + NEW_081 + chr(10) + NEW_080 + chr(10) + NEW_077 + chr(10) + NEW_076 + chr(10) + NEW_075 + chr(10) + NEW_074 + chr(10) + NEW_073 + chr(10) + NEW_072 + chr(10) + NEW_071 + chr(10) + NEW_070 + chr(10) + NEW_061 + chr(10) + NEW_060 + chr(10) + NEW_05X
 
 
 def known_issues(system):

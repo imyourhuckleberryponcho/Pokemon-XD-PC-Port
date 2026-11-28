@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <mutex>
+#include "include/port_addr_window.h"
 #include <string>
 #include <vector>
 
@@ -139,7 +140,8 @@ void PortGXDump_Fifo(const void* data, uint32_t size) {
 void PortGXDump_DisplayList(const void* list, uint32_t size) {
   std::lock_guard<std::mutex> lock(sLock);
   if (size == 0 || !active()) return;
-  uint32_t address = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(list));
+  uint32_t address = 0;
+  PortWin_TryOff(list, &address);
   const uint8_t* mem1 = PortMem_MEM1();
   if (mem1 != nullptr && static_cast<const uint8_t*>(list) >= mem1 && static_cast<const uint8_t*>(list) < mem1 + kMem1Size) {
     address = static_cast<uint32_t>(static_cast<const uint8_t*>(list) - mem1);

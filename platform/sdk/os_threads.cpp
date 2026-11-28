@@ -34,6 +34,10 @@
 #include <pthread.h>
 #include <signal.h>
 #include <sys/mman.h>
+#ifndef MAP_32BIT
+#define MAP_32BIT 0
+#endif
+#include "include/port_addr_window.h"
 #endif
 
 extern "C" int64_t OSGetTime(void);
@@ -489,8 +493,19 @@ void start_game_thread(PThread* t) {
 #else
   constexpr size_t kStack = 0x100000, kGuard = 0x1000;
 #endif
+#ifdef XD_ADDR_WINDOW
+  void* block = PortWin_StackMapKind(kGuard + kStack, 4);
+  if (block == nullptr) {
+#ifdef XD_WINDOW_STANDIN
+    block = mmap(nullptr, kGuard + kStack, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT | MAP_STACK, -1, 0);
+#else
+    block = MAP_FAILED;
+#endif
+  }
+#else
   void* block = mmap(nullptr, kGuard + kStack, PROT_READ | PROT_WRITE,
                      MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT | MAP_STACK, -1, 0);
+#endif
   if (block == MAP_FAILED) {
     fatal("no memory below 2 GB for a game thread's stack");
   }

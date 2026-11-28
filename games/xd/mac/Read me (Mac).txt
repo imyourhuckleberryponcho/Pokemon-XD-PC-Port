@@ -200,6 +200,19 @@ Saves, settings, mods, logs and bug reports live in one data folder: ~/Library/A
   copies everything, checks the copy, switches, and puts the old folder in the Trash so nothing is lost; the launcher then
   starts again); "Remove all game data..." (asks first, names the folder, offers to export your saves first).
 
+New in 0.8.2
+------------
+- The Eevee evolution offer shows full-body pictures for Leafeon, Glaceon and Sylveon too (also with only the Ultra
+  Sun / Ultra Moon packs).
+- Shiny Gen 4-7 Pokemon now get their own shiny colours from your Ultra Sun / Ultra Moon dump (make your packs again
+  once); Pancham and others have pupils again.
+- Android (beta): phones where the game said its memory spot was taken (like the Retroid Pocket 6) now get a second
+  way to start (beta; tell us if it works).
+- Fixed: the New Game screen's randomizer count no longer keeps everything it read in memory: it reads each game
+  archive once and gives the memory back (this is what made the Enhanced look run out of memory on some phones). The
+  count still shows as before.
+- Online: 0.8.2 plays with 0.8.2 only. Older versions are turned away with a clear message on both sides.
+
 New in 0.8.1
 ------------
 - Fixed on Windows: "Make models and Gen 4 pack" (and the other Battle Revolution model makers) crashed at once in

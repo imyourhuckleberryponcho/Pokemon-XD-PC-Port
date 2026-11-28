@@ -1,4 +1,5 @@
 #include "disc_tables.h"
+#include <port_addr_window.h>
 #include "dol_tables.h"
 
 #include <sdk_port.h>
@@ -140,7 +141,7 @@ void* resolve_data(const XDDiscTable* t, uint32_t entry, uint32_t gcOff, uint32_
     }
   }
   if (kind == XDDT_STR && in_loaded_data(v)) {
-    return reinterpret_cast<void*>(static_cast<uintptr_t>(v));
+    return PortWin_Ptr(v);
   }
   fail(t, entry, gcOff, "points at something the port doesn't know", v);
 }
@@ -161,8 +162,13 @@ uint32_t unresolve_data(const void* p) {
       return var.gcAddress + static_cast<uint32_t>(static_cast<const uint8_t*>(p) - b);
     }
   }
+#ifdef XD_ADDR_WINDOW
+  uint32_t window = 0;
+  return PortWin_TryOff(p, &window) ? window : 0xFFFFFFFFu;
+#else
   const auto u = reinterpret_cast<uintptr_t>(p);
   return u < 0x100000000ull ? static_cast<uint32_t>(u) : 0xFFFFFFFFu;
+#endif
 }
 
 void convert(const XDDiscTable* t, const uint8_t* gc, uint8_t* dest) {

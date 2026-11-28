@@ -55,6 +55,8 @@ bool DataTable_Validate(const TableDesc* desc, char* error, size_t errorSize) {
 
 static int sHighAddr32Ok = 0;
 void DataTable_SetHighAddr32Ok(int ok) { sHighAddr32Ok = ok; }
+static int (*sAddr32Encoder)(const void* p, uint32_t* out) = NULL;
+void DataTable_SetAddr32Encoder(int (*encoder)(const void* p, uint32_t* out)) { sAddr32Encoder = encoder; }
 
 uint32_t DataTable_Convert(const TableDesc* desc, const uint8_t* gc, uint32_t gcBaseOffset, uint32_t count, void* pc,
                            PointerResolver resolve, void* user) {
@@ -107,11 +109,26 @@ uint32_t DataTable_Convert(const TableDesc* desc, const uint8_t* gc, uint32_t gc
           if (f->kind == FIELD_PTR) {
             memcpy(d, &p, sizeof(p));
           } else {
+#ifdef XD_ADDR_WINDOW
+            uint32_t v;
+            if (sAddr32Encoder != NULL) {
+              if (!sAddr32Encoder(p, &v) && !sHighAddr32Ok) {
+                unresolved++;
+              }
+            } else {
+              if ((uintptr_t)p > 0xFFFFFFFFu && !sHighAddr32Ok) {
+                unresolved++;
+              }
+              v = (uint32_t)(uintptr_t)p;
+            }
+            memcpy(d, &v, 4);
+#else
             if ((uintptr_t)p > 0xFFFFFFFFu && !sHighAddr32Ok) {
               unresolved++;
             }
             const uint32_t v = (uint32_t)(uintptr_t)p;
             memcpy(d, &v, 4);
+#endif
           }
           break;
         }

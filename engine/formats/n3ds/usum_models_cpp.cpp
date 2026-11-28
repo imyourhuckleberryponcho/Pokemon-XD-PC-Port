@@ -222,6 +222,14 @@ Made make_one(const Ctx& c, const PlanItem& it) {
              info.step, shortest(info.scale).c_str(), it.gid, it.nat, xd.size(), std::chrono::duration<double>(std::chrono::steady_clock::now() - t_start).count(), roles.c_str());
     m.bytes = out->size();
     m.report = rep;
+    if (info.iris2) { m.report.pop_back(); m.report += ", \"iris2\": true}"; }
+    if (info.shiny.done) {
+      char sb[400];
+      snprintf(sb, sizeof sb, ", \"shiny\": {\"swap\": [%d, %d, %d], \"mod\": [%d, %d, %d], \"err\": %.2f, \"err_none\": %.2f, \"err_standin\": %.2f, \"cover\": %.3f}}", info.shiny.swap[0], info.shiny.swap[1], info.shiny.swap[2],
+               info.shiny.mod[0], info.shiny.mod[1], info.shiny.mod[2], info.shiny.err_fit, info.shiny.err_none, info.shiny.err_standin, info.shiny.cover);
+      m.report.pop_back();
+      m.report += sb;
+    }
     if (!logv.empty()) {
       m.report.pop_back();
       m.report += ", \"log\": [";

@@ -37,12 +37,16 @@
 #include <port_win_compat.h>
 #include <malloc.h>
 #include <sys/mman.h>
+#ifndef MAP_32BIT
+#define MAP_32BIT 0
+#endif
 #ifdef __ANDROID__
 #include <pthread.h>
 #include <port_android_compat.h>
 #else
 #include <ucontext.h>
 #endif
+#include <port_addr_window.h>
 #if defined(__linux__) && !defined(__ANDROID__)
 #include <sys/personality.h>
 #include <unistd.h>
@@ -604,7 +608,7 @@ int aurora_main(int argc, char** argv) {
     free(middle);
     free(small);
   }
-#if defined(__APPLE__) || defined(__ANDROID__)
+#if (defined(__APPLE__) || defined(__ANDROID__)) && !defined(XD_ADDR_WINDOW)
   {
     extern int PortLowMalloc_SelfTest(const char* tag, unsigned stressMb);
     extern bool PortXD_TestRun(void);
@@ -613,7 +617,27 @@ int aurora_main(int argc, char** argv) {
     SDL_SetMemoryFunctions(malloc, calloc, realloc, free);
   }
 #endif
+#ifdef XD_ADDR_WINDOW
+  {
+    extern void* (*PortGsStackAlloc)(size_t);
+    extern void (*PortGsStackFree)(void*, size_t);
+    if (PortWin_StackKindOn(2)) {
+      PortGsStackAlloc = PortWin_TaskStackMap;
+      PortGsStackFree = PortWin_TaskStackUnmap;
+    }
+  }
+  PortWin_Init();
+  char* stack = (char*)PortWin_StackMapKind(size + guard, 1);
+  if (stack == NULL) {
+#ifdef XD_WINDOW_STANDIN
+    stack = (char*)mmap(NULL, size + guard, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT, -1, 0);
+#else
+    stack = (char*)MAP_FAILED;
+#endif
+  }
+#else
   char* stack = (char*)mmap(NULL, size + guard, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT, -1, 0);
+#endif
   if (stack == MAP_FAILED) {
     return fail(Tr("Could not place the program's main stack below 4 GB (the game keeps addresses in 4 bytes). "
                    "On a Mac this means the system did not give the program its low memory: please send "
@@ -763,7 +787,7 @@ int aurora_main(int argc, char** argv) {
   }
 #endif
 
-#ifdef __ANDROID__
+#if defined(__ANDROID__) && !defined(XD_ADDR_WINDOW)
   {
     void* PortMem_LowAlloc(size_t size, size_t align);
     volatile unsigned char* cached = (volatile unsigned char*)(uintptr_t)0x80003000u;

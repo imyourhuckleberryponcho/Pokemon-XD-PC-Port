@@ -5,6 +5,7 @@
 #include <settings_c.h>
 
 #include "disc_drive.h"
+#include "include/port_addr_window.h"
 
 #include <algorithm>
 #include <atomic>
@@ -483,7 +484,11 @@ struct ArqDone {
 
 void arq_deliver(void* arg) {
   auto* d = static_cast<ArqDone*>(arg);
+#ifdef XD_ADDR_WINDOW
+  reinterpret_cast<void (*)(uintptr_t)>(d->callback)(reinterpret_cast<uintptr_t>(d->request));
+#else
   d->callback(static_cast<u32>(reinterpret_cast<uintptr_t>(d->request)));
+#endif
   delete d;
 }
 
@@ -567,7 +572,11 @@ void arq_interrupt(void*, void*) {
     const int64_t wasTb = tArqInterruptTb;
     tInArqInterrupt = true;
     tArqInterruptTb = tb;
+#ifdef XD_ADDR_WINDOW
+    reinterpret_cast<void (*)(uintptr_t)>(done.callback)(reinterpret_cast<uintptr_t>(done.request));
+#else
     done.callback(static_cast<u32>(reinterpret_cast<uintptr_t>(done.request)));
+#endif
     tInArqInterrupt = wasIn;
     tArqInterruptTb = wasTb;
   }
@@ -768,8 +777,15 @@ void PortDVD_OnFlip(uint32_t frame) {
 void PortARQ_PostRequest(ARQRequest* request, u32 owner, u32 type, u32 priority, u32 source, u32 dest, u32 length,
                          void (*callback)(u32)) {
   PortCpuCost_Count(6u, length);
+#ifdef XD_ADDR_WINDOW
+  const uintptr_t srcAddr = reinterpret_cast<uintptr_t>(PortWin_Ptr(source));
+  const uintptr_t dstAddr = reinterpret_cast<uintptr_t>(PortWin_Ptr(dest));
+#else
+  const uintptr_t srcAddr = source;
+  const uintptr_t dstAddr = dest;
+#endif
   if (drive_model()) {
-    ARQPostRequest(request, owner, type, priority, source, dest, length, nullptr);
+    ARQPostRequest(request, owner, type, priority, srcAddr, dstAddr, length, nullptr);
     std::lock_guard<std::mutex> guard(sLock);
     if (disc_log()) {
       std::fprintf(stderr, "[arq post] req=%p len=0x%x prio=%u busy=%d flip=%u field=%u t=%lld abs=%lld\n",
@@ -790,8 +806,16 @@ void PortARQ_PostRequest(ARQRequest* request, u32 owner, u32 type, u32 priority,
     std::lock_guard<std::mutex> guard(sLock);
     sArqPending[request] = callback;
   }
-  ARQPostRequest(request, owner, type, priority, source, dest, length, callback != nullptr ? arq_done : nullptr);
+  ARQPostRequest(request, owner, type, priority, srcAddr, dstAddr, length, callback != nullptr ? arq_done : nullptr);
 }
+
+#ifdef XD_ADDR_WINDOW
+extern "C" void PortWin_MusyX_ARQPostRequest(ARQRequest* request, u32 owner, u32 type, u32 priority, uintptr_t source,
+                                             uintptr_t dest, u32 length, void (*callback)(uintptr_t)) {
+  ARQPostRequest(request, owner, type, priority, reinterpret_cast<uintptr_t>(PortWin_Ptr(static_cast<uint32_t>(source))),
+                 reinterpret_cast<uintptr_t>(PortWin_Ptr(static_cast<uint32_t>(dest))), length, callback);
+}
+#endif
 
 s32 PortCARD_MountAsync(s32 chan, void* workArea, CARDCallback detachCallback, CARDCallback attachCallback) {
   {

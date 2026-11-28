@@ -417,7 +417,7 @@ std::vector<std::pair<std::string, std::vector<std::string>>> iris_plan(const Gf
 static inline int texel_of(double f, int n) { return std::min((int)std::floor(f * n), n - 1); }
 
 pbr::Rgba bake_eye_irises(const GfModel& gm, const std::map<std::string, pbr::Rgba>& texs, const GfMaterial& eye_mt, const std::vector<std::string>& iris_names,
-                          const pbr::Rgba& eye, const Opts& opts) {
+                          const pbr::Rgba& eye, const Opts& opts, bool* used2) {
   const GfCoord& ec = *colour_coord(eye_mt);
   int w = eye.w, h = eye.h;
   double sx = ec.scale[0], sy = ec.scale[1], etx = ec.trans[0], ety = ec.trans[1];
@@ -430,6 +430,14 @@ pbr::Rgba bake_eye_irises(const GfModel& gm, const std::map<std::string, pbr::Rg
     const GfCoord* ico = colour_coord(*im);
     pbr::Rgba tile = texs.at(ico->name);
     if (opts.light > 0) tile = light_tweak(tile, opts.light);
+    const pbr::Rgba* tile2 = nullptr;
+    const GfCoord* ico2 = nullptr;
+    for (auto& c : im->coords) if (c.unit == 1 && c.name != ico->name && contains(c.name, "Iris") && texs.count(c.name)) {
+      const pbr::Rgba& t2 = texs.at(c.name);
+      bool hole = false, solid = false;
+      for (size_t k = 3; k < t2.px.size(); k += 4) { if (t2.px[k] < 128) hole = true; else solid = true; }
+      if (hole && solid) { tile2 = &t2; ico2 = &c; if (used2) *used2 = true; }
+    }
     const pbr::Rgba* mask = nullptr;
     const GfCoord* mco = nullptr;
     for (auto& c : im->coords) if (c.unit == 2 && contains(c.name, "Nor") && texs.count(c.name)) { mask = &texs.at(c.name); mco = &c; }
@@ -451,6 +459,11 @@ pbr::Rgba bake_eye_irises(const GfModel& gm, const std::map<std::string, pbr::Rg
             int tj = texel_of(wrap_coord(ico->scale[1] * (V - ico->trans[1]), ico->wrap[1]), tile.h);
             const uint8_t* tp = &tile.px[((size_t)tj * tile.w + ti) * 4];
             int64_t a = tp[3];
+            if (tile2) {
+              int t2i = texel_of(wrap_coord(ico2->scale[0] * (U - ico2->trans[0]), ico2->wrap[0]), tile2->w);
+              int t2j = texel_of(wrap_coord(ico2->scale[1] * (V - ico2->trans[1]), ico2->wrap[1]), tile2->h);
+              a = a * tile2->px[((size_t)t2j * tile2->w + t2i) * 4 + 3] / 255;
+            }
             if (mask) {
               int mi = texel_of(wrap_coord(mco->scale[0] * (U - (mco->trans[0] + txs)), mco->wrap[0]), mask->w);
               int mj = texel_of(wrap_coord(mco->scale[1] * (V - (mco->trans[1] + tys)), mco->wrap[1]), mask->h);
@@ -493,7 +506,7 @@ pbr::Rgba round5(const pbr::Rgba& in) {
   return o;
 }
 
-MadeImages make_images(const GfModel& gm, const std::map<std::string, pbr::Rgba>& texs, const Opts& opts, int nat, const MatchPlan* mplan) {
+MadeImages make_images(const GfModel& gm, const std::map<std::string, pbr::Rgba>& texs, const Opts& opts, int nat, const MatchPlan* mplan, std::vector<pbr::Rgba>* raw_out, bool skip_encode, bool* iris2_used) {
   MadeImages out;
   std::map<std::string, int> name_to_img;
   std::map<int, std::string> cls;
@@ -628,7 +641,7 @@ MadeImages make_images(const GfModel& gm, const std::map<std::string, pbr::Rgba>
           rgba = bake_emission(rgba, *incp, hand_glow_strength(nat), &it->second, maskp);
         }
       }
-      for (auto& e : plan_) if (e.first == mt.name) rgba = bake_eye_irises(gm, texs, mt, e.second, rgba, opts);
+      for (auto& e : plan_) if (e.first == mt.name) rgba = bake_eye_irises(gm, texs, mt, e.second, rgba, opts, iris2_used);
       int nw = std::min(w, opts.max_side), nh = std::min(h, opts.max_side);
       if (nw != w || nh != h) rgba = pbr::gx_resize(rgba, nw, nh);
       pbr::Image im;
@@ -638,11 +651,12 @@ MadeImages make_images(const GfModel& gm, const std::map<std::string, pbr::Rgba>
       if (c == "xlu" || (c == "opa" && eye_plate)) {
         if (c == "opa") rgba = round5(rgba);
         im.format = 5;
-        im.data = pbr::gx_encode_rgb5a3(rgba);
+        if (!skip_encode) im.data = pbr::gx_encode_rgb5a3(rgba);
       } else {
         im.format = 14;
-        im.data = pbr::gx_encode_cmpr(rgba);
+        if (!skip_encode) im.data = pbr::gx_encode_cmpr(rgba);
       }
+      if (raw_out) raw_out->push_back(rgba);
       name_to_img[key] = (int)out.images.size();
       out.images.push_back(std::move(im));
       cls[name_to_img[key]] = c;

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(xd_port VERSION 0.8.1 LANGUAGES C CXX)
+project(xd_port VERSION 0.8.2 LANGUAGES C CXX)
 option(XD_BUILD_AVF_ENCODER "macOS: build xd_encode, the replay export's video + sound encoder (AVFoundation)" OFF)
 if (APPLE AND XD_BUILD_AVF_ENCODER)
   enable_language(OBJCXX)
@@ -7,6 +7,16 @@ endif ()
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 20)
+
+option(XD_ADDR_WINDOW "The game's addresses are offsets into a 4 GB window placed above 4 GB (stand-in for the native arm64 Mac build)" OFF)
+option(XD_WINDOW_NATIVE "With XD_ADDR_WINDOW: no Windows / Linux stand-in helpers (stacks, image and C library blocks must all be window memory), as on a native Mac or Android build" OFF)
+if (XD_ADDR_WINDOW)
+  add_compile_definitions(XD_ADDR_WINDOW=1)
+  if (NOT APPLE AND NOT ANDROID AND NOT XD_WINDOW_NATIVE)
+    add_compile_definitions(XD_WINDOW_STANDIN=1) # image and stacks stay low here (port_addr_window.h)
+  endif ()
+  message(STATUS "xd: XD_ADDR_WINDOW=ON (the 4 GB window, placed above 4 GB)")
+endif ()
 
 if (MSVC)
   set(XD_FLAG_UTF8 /utf-8)
@@ -217,17 +227,27 @@ if (ANDROID)
   include_directories("${PROJECT_SOURCE_DIR}/platform/os/include" "${PROJECT_SOURCE_DIR}/engine/gs/include")
 endif ()
 if (APPLE)
-  if (NOT CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" AND NOT CMAKE_OSX_ARCHITECTURES STREQUAL "x86_64")
-    message(FATAL_ERROR "xd: the Mac build is x86_64 only (cmake --preset mac-release sets CMAKE_OSX_ARCHITECTURES); "
-      "a native arm64 build cannot map the game's memory below 4 GB (docs/MAC.md)")
+  set(XD_MAC_ARM64 OFF)
+  if (CMAKE_OSX_ARCHITECTURES STREQUAL "arm64")
+    set(XD_MAC_ARM64 ON)
+    if (NOT XD_ADDR_WINDOW)
+      message(FATAL_ERROR "xd: a native arm64 Mac build needs -DXD_ADDR_WINDOW=ON (no memory below 4 GB there; docs/MAC_ARM.md)")
+    endif ()
+  elseif (NOT CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" AND NOT CMAKE_OSX_ARCHITECTURES STREQUAL "x86_64")
+    message(FATAL_ERROR "xd: the Mac build is x86_64 (cmake --preset mac-release sets CMAKE_OSX_ARCHITECTURES) or arm64 with the window "
+      "(preset mac-arm64-probe; docs/MAC_ARM.md)")
   endif ()
   add_compile_options(-ffp-contract=off) # as on Linux: nothing fused by the compiler itself
   list(APPEND XD_FLAGS_GAME_CODE -fsigned-char -fno-strict-enums)
   add_compile_definitions(_XOPEN_SOURCE=700 _DARWIN_C_SOURCE=1)
   include_directories(BEFORE "${PROJECT_SOURCE_DIR}/platform/compat/mac") # <malloc.h>, which macOS doesn't have
   set(XD_MAC_COMPAT_OPTION "-include${PROJECT_SOURCE_DIR}/platform/os/include/port_mac_compat.h")
-  set(XD_MAC_LOW_LINK_OPTIONS -Wl,-pagezero_size,0x1000 -Wl,-no_pie -Wl,-image_base,0x40000000
-    -Wl,-no_fixup_chains -Wl,-no_huge)
+  if (XD_MAC_ARM64)
+    set(XD_MAC_LOW_LINK_OPTIONS "") # (the system's defaults: position independent; the game's memory is the window)
+  else ()
+    set(XD_MAC_LOW_LINK_OPTIONS -Wl,-pagezero_size,0x1000 -Wl,-no_pie -Wl,-image_base,0x40000000
+      -Wl,-no_fixup_chains -Wl,-no_huge)
+  endif ()
   add_link_options(${XD_MAC_LOW_LINK_OPTIONS})
 endif ()
 

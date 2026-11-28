@@ -1,3 +1,4 @@
+#include <port_addr_window.h>
 #include <port_audio_categories.h>
 #include <settings.h>
 
@@ -112,7 +113,7 @@ int ClassifyStream(void* update, uint32_t user, uint32_t streamId) {
   if (update != reinterpret_cast<void*>(&_sndStreamCallback) || user == 0) {
     return PORT_AUDIO_MUSIC;
   }
-  const StreamHead* s = reinterpret_cast<const StreamHead*>(static_cast<uintptr_t>(user));
+  const StreamHead* s = reinterpret_cast<const StreamHead*>(PortWin_Ptr(user));
   if (s->stid != streamId) {
     if (!sLayoutWarned.exchange(true)) {
       std::fprintf(stderr, "[audio] GSsnd's stream layout looks different (games/xd/src/audio_categories.cpp "

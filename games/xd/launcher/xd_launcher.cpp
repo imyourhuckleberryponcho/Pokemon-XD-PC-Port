@@ -1056,17 +1056,21 @@ bool RenderTrainerPortraits(const std::string& discPath, const std::string& id, 
 bool RenderOfferPictures(const std::string& discPath, const std::string& id, const std::function<void()>& starting,
                          const std::function<bool()>& stop, std::string& error) {
   std::error_code ec;
-  const fs::path pack = xd::SettingsFolder() / L"extra_assets" / L"pbr_gen4" / L"gen4.json";
+  fs::path pack = xd::SettingsFolder() / L"extra_assets" / L"pbr_gen4" / L"gen4.json";
+  if (!fs::exists(pack, ec)) pack = xd::SettingsFolder() / L"extra_assets" / L"usum_gen4" / L"gen4.json";
+  const fs::path pack57 = xd::SettingsFolder() / L"extra_assets" / L"usum_gen57" / L"gen57.json";
+  const bool have57 = fs::exists(pack57, ec);
   if (!fs::exists(pack, ec) || !fs::exists(sGameProgram, ec)) return true;
   const fs::path folder = xd::UserFolder() / L"icons" / L"offer";
   const fs::path done = folder / (L"render_offer_" + fs::path(id).wstring() + L".done");
-  const std::string stamp = std::to_string(static_cast<long long>(fs::last_write_time(pack, ec).time_since_epoch().count())) + "|2";
+  const std::string stamp = std::to_string(static_cast<long long>(fs::last_write_time(pack, ec).time_since_epoch().count())) + "|3" +
+                            (have57 ? "|" + std::to_string(static_cast<long long>(fs::last_write_time(pack57, ec).time_since_epoch().count())) : std::string());
   std::string have;
   if (std::ifstream in(done); in) std::getline(in, have);
   if (have == stamp) return true;
   fs::create_directories(folder, ec);
   starting();
-  sys::Process* game = StartHiddenGame({"XD_RENDER_ICON=offer", "XD_CHALLENGES=gen4_rules"}, discPath, true);
+  sys::Process* game = StartHiddenGame({"XD_RENDER_ICON=offer", have57 ? "XD_CHALLENGES=gen4_rules,gen57_pokemon" : "XD_CHALLENGES=gen4_rules"}, discPath, true);
   if (game == nullptr) {
     error = Tr("could not start the game program for the Eevee offer pictures");
     return false;

@@ -2,6 +2,8 @@
 #include <gx/fifo.hpp>
 
 #include "port_savestate.h"
+#include "include/port_addr_window.h"
+
 #include <algorithm>
 #include <any>
 #include <cstdint>
@@ -470,7 +472,7 @@ void GXGetFifoStatus(GXFifoObj* fifo, GXBool* overhi, GXBool* underflow, u32* fi
 
 u32 PortGX_ReadCPUFifoWriteReg(void) {
   syncStaged();
-  const u32 phys = static_cast<u32>(reinterpret_cast<uintptr_t>(sCpuWrite)) & 0x03FFFFE0u;
+  const u32 phys = PortWin_Off(sCpuWrite) & 0x03FFFFE0u;
   return phys | (sCpuWrap ? 1u << 26 : 0u);
 }
 

@@ -24,6 +24,8 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
 
 static void* sGame;
+static int sFixedMissing;
+#define WIN_LIB "libxdgame_win.so"
 
 #define FIXED_COUNT 3
 static const struct { uintptr_t at; size_t size; } kFixed[FIXED_COUNT] = {
@@ -181,6 +183,7 @@ __attribute__((constructor(101))) static void reserve_fixed_ranges(void) {
     void* t = mmap((void*)0x78000000u, 0x20000000, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0);
     if (t != MAP_FAILED) {
       memset(t, 1, 0x200000);
+      if (access("/data/data/net.pokemonxdpc.port/files/xd_test_los_full", F_OK) == 0) memset((char*)t + 0x07F00000, 1, 0x100000);
       prctl(0x53564d41, 0, (unsigned long)t, 0x20000000, (unsigned long)"dalvik-free list large object space");
     }
   }
@@ -211,6 +214,7 @@ __attribute__((constructor(101))) static void reserve_fixed_ranges(void) {
     }
     LOGE("fixed range %lx + %lx is TAKEN already (%s)", (unsigned long)kFixed[i].at, (unsigned long)kFixed[i].size,
          p == MAP_FAILED ? strerror(errno) : "placed elsewhere");
+    sFixedMissing = 1;
     maps_lines(kFixed[i].at, kFixed[i].at + kFixed[i].size, taken, sizeof(taken));
   }
   setenv("XD_ANDROID_FIXED", reserved, 1);
@@ -246,7 +250,7 @@ static size_t library_span(const char* path) {
   return (size_t)(((hi - (lo & ~(uint64_t)0xFFFF)) + 0xFFFF) & ~(uint64_t)0xFFFF);
 }
 
-static uintptr_t reserve_low(size_t size) {
+static uintptr_t reserve_low(size_t size, uintptr_t limit) {
   static char buf[1 << 16];
   const int fd = open("/proc/self/maps", O_RDONLY | O_CLOEXEC);
   uintptr_t bestStart = 0, bestEnd = 0, cursor = 0x02000000;
@@ -266,7 +270,7 @@ static uintptr_t reserve_low(size_t size) {
       while ((v = (*p >= '0' && *p <= '9') ? *p - '0' : (*p >= 'a' && *p <= 'f') ? *p - 'a' + 10 : -1) >= 0) a = a * 16 + (unsigned)v, ++p;
       if (*p == '-') ++p;
       while ((v = (*p >= '0' && *p <= '9') ? *p - '0' : (*p >= 'a' && *p <= 'f') ? *p - 'a' + 10 : -1) >= 0) b = b * 16 + (unsigned)v, ++p;
-      if (a < 0x80000000ull) {
+      if (a < (unsigned long long)limit) {
         uintptr_t gs = (cursor + 0xFFFF) & ~(uintptr_t)0xFFFF, ge = (uintptr_t)a & ~(uintptr_t)0xFFFF;
         if (ge > gs && ge - gs >= size && (bestEnd == 0 || ge - gs < bestEnd - bestStart)) {
           bestStart = gs;
@@ -282,7 +286,7 @@ static uintptr_t reserve_low(size_t size) {
   }
   close(fd);
   {
-    uintptr_t gs = (cursor + 0xFFFF) & ~(uintptr_t)0xFFFF, ge = 0x80000000u;
+    uintptr_t gs = (cursor + 0xFFFF) & ~(uintptr_t)0xFFFF, ge = limit;
     if (ge > gs && ge - gs >= size && (bestEnd == 0 || ge - gs < bestEnd - bestStart)) {
       bestStart = gs;
       bestEnd = ge;
@@ -305,6 +309,7 @@ static int load_game(void) {
   android_dlextinfo ext;
   size_t span;
   uintptr_t at;
+  int useWindow = 0;
   if (sGame != NULL) return 1;
   if (dladdr((void*)&load_game, &info) == 0 || info.dli_fname == NULL) {
     LOGE("dladdr failed");
@@ -313,13 +318,48 @@ static int load_game(void) {
   snprintf(path, sizeof(path), "%s", info.dli_fname);
   slash = strrchr(path, '/');
   if (slash == NULL) return 0;
-  snprintf(slash + 1, sizeof(path) - (size_t)(slash + 1 - path), "libxdgame.so");
+  if (sFixedMissing) {
+    snprintf(slash + 1, sizeof(path) - (size_t)(slash + 1 - path), WIN_LIB);
+    if (access(path, R_OK) == 0) {
+      useWindow = 1;
+      unsetenv("XD_ANDROID_FIXED");
+      unsetenv("XD_ANDROID_TAKEOVER");
+      unsetenv("XD_ANDROID_EARLY_TAKEN");
+      setenv("XD_ANDROID_WINDOW", "1", 1);
+      LOGE("LIBRARY CHOICE: the window library " WIN_LIB " (the fixed GameCube address ranges could not all be taken: see the 'fixed range' lines above)");
+    } else {
+      LOGE("LIBRARY CHOICE: the fixed ranges are not all ours and this app has no " WIN_LIB " (%s): the plain library, as before", strerror(errno));
+    }
+  } else {
+    LOGI("LIBRARY CHOICE: the plain library libxdgame.so (the fixed GameCube address ranges are ours)");
+  }
+  if (!useWindow) snprintf(slash + 1, sizeof(path) - (size_t)(slash + 1 - path), "libxdgame.so");
+  if (useWindow) {
+    span = library_span(path);
+    at = span != 0 ? reserve_low(span, 0x50000000u) : 0;
+    if (at != 0) {
+      memset(&ext, 0, sizeof(ext));
+      ext.flags = ANDROID_DLEXT_RESERVED_ADDRESS;
+      ext.reserved_addr = (void*)at;
+      ext.reserved_size = span;
+      sGame = android_dlopen_ext(path, RTLD_NOW | RTLD_LOCAL, &ext);
+    } else {
+      LOGE("no gap of %zu bytes below 0x50000000 for the window library: it is loaded anywhere", span);
+      sGame = dlopen(path, RTLD_NOW | RTLD_LOCAL);
+    }
+    if (sGame == NULL) {
+      LOGE("loading %s failed: %s", path, dlerror());
+      return 0;
+    }
+    LOGI("the game's window library is in place: %s, %s %p, SDL_main at %p", path, at != 0 ? "low at" : "anywhere:", (void*)at, dlsym(sGame, "SDL_main"));
+    return 1;
+  }
   span = library_span(path);
   if (span == 0) {
     LOGE("cannot read %s", path);
     return 0;
   }
-  at = reserve_low(span);
+  at = reserve_low(span, 0x80000000u);
   if (at == 0) {
     LOGE("no gap of %zu bytes below 2 GB for the game's library", span);
     return 0;

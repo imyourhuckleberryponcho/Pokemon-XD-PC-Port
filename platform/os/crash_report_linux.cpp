@@ -32,14 +32,27 @@ std::atomic<int> sReportRunning{0};
 std::atomic<long> sReportThread{0};
 PortCrashReportHook sReportHook = nullptr;
 
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(__aarch64__)
 enum { REG_RAX, REG_RBX, REG_RCX, REG_RDX, REG_RSI, REG_RDI, REG_RBP, REG_RSP, REG_R8, REG_R9, REG_R10, REG_R11,
        REG_R12, REG_R13, REG_R14, REG_R15, REG_RIP, REG_ERR, REG_COUNT };
 typedef unsigned long long greg_t;
 const greg_t* mac_gregs(const ucontext_t* uc, greg_t* r) {
+#if defined(__APPLE__) && defined(__aarch64__)
+  const auto& s = uc->uc_mcontext->__ss;
+  const unsigned esr = uc->uc_mcontext->__es.__esr;
+  const unsigned ec = esr >> 26;
+  const greg_t err = (ec == 0x20 || ec == 0x21) ? 16 : ((ec == 0x24 || ec == 0x25) && (esr & 0x40)) ? 2 : 0;
+  const greg_t v[REG_COUNT] = {s.__x[0], s.__x[1], s.__x[2], s.__x[3], s.__x[4], s.__x[5], s.__fp, s.__sp, s.__x[8], s.__x[9],
+                               s.__x[10], s.__x[11], s.__x[12], s.__x[13], s.__x[14], s.__x[15], s.__pc, err};
+#elif defined(__APPLE__)
   const auto& s = uc->uc_mcontext->__ss;
   const greg_t v[REG_COUNT] = {s.__rax, s.__rbx, s.__rcx, s.__rdx, s.__rsi, s.__rdi, s.__rbp, s.__rsp, s.__r8, s.__r9,
                                s.__r10, s.__r11, s.__r12, s.__r13, s.__r14, s.__r15, s.__rip, uc->uc_mcontext->__es.__err};
+#else
+  const auto& m = uc->uc_mcontext;
+  const greg_t v[REG_COUNT] = {m.regs[0], m.regs[1], m.regs[2], m.regs[3], m.regs[4], m.regs[5], m.regs[29], m.sp, m.regs[8],
+                               m.regs[9], m.regs[10], m.regs[11], m.regs[12], m.regs[13], m.regs[14], m.regs[15], m.pc, 0};
+#endif
   for (int i = 0; i < REG_COUNT; ++i) r[i] = v[i];
   return r;
 }
@@ -145,7 +158,7 @@ void on_crash(int sig, siginfo_t* info, void* contextRaw) {
   }
   claim_report();
   const auto* uc = static_cast<const ucontext_t*>(contextRaw);
-#if defined(__APPLE__) || (defined(__ANDROID__) && defined(__aarch64__))
+#if defined(__APPLE__) || defined(__aarch64__)
   greg_t macRegisters[REG_COUNT];
 #endif
   const greg_t* r = PORT_GREGS(uc);

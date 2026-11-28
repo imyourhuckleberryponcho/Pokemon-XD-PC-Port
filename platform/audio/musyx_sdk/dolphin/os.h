@@ -28,7 +28,12 @@ OSTick PortMusyX_GetTick(void);
 #define OSGetTick PortMusyX_GetTick
 
 
+#ifdef XD_ADDR_WINDOW
+#include "../../../sdk/include/port_addr_window.h"
+#define __OSBusClock (*(volatile u32*)PortWin_Ptr(0x800000F8u))
+#else
 #define __OSBusClock (*(volatile u32*)(uintptr_t)0x800000F8u)
+#endif
 #define OS_TIMER_CLOCK (__OSBusClock / 4)
 #define OSTicksToMicroseconds(ticks) ((ticks) * 8 / (OS_TIMER_CLOCK / 125000))
 

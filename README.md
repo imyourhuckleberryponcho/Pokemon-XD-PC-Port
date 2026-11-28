@@ -13,7 +13,7 @@ This repository contains **no game assets, ROMs, ISOs or executables**, and none
 You need your own legally obtained copy of the game (USA, `GXXE01`); the port reads everything from your disc
 image while it runs.
 
-## Status: public beta — version 0.8.1
+## Status: public beta — version 0.8.2
 
 **Playable from New Game into the story, with known bugs.** It is not finished: expect crashes, stalls and
 graphics differences, and keep backups of saves you care about. Downloads are on the [Releases](../../releases)
@@ -159,6 +159,14 @@ Saves, settings, mods, logs and bug reports live in one data folder (`%APPDATA%\
 - Launcher, Save page, "Where your data is kept": "Open data folder"; "Move my data..." (user folder <-> portable: it
   copies everything, checks the copy, switches, and puts the old folder in the recycle bin / trash so nothing is lost; the
   launcher then starts again); "Remove all game data..." (asks first, names the folder, offers to export your saves first).
+
+### New in 0.8.2
+
+- The Eevee evolution offer shows full-body pictures for Leafeon, Glaceon and Sylveon too (also with only the Ultra Sun / Ultra Moon packs).
+- Shiny Gen 4-7 Pokemon now get their own shiny colours from your Ultra Sun / Ultra Moon dump (make your packs again once); Pancham and others have pupils again.
+- Android (beta): phones where the game said its memory spot was taken (like the Retroid Pocket 6) now get a second way to start (beta; tell us if it works).
+- Fixed: the New Game screen's randomizer count no longer keeps everything it read in memory: it reads each game archive once and gives the memory back (this is what made the Enhanced look run out of memory on some phones). The count still shows as before.
+- Online: 0.8.2 plays with 0.8.2 only. Older versions are turned away with a clear message on both sides.
 
 ### New in 0.8.1
 
