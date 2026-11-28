@@ -22,6 +22,10 @@
 #else
 #include <signal.h>
 #include <spawn.h>
+#ifdef __APPLE__
+#include <mach/machine.h>
+#include <sys/xattr.h>
+#endif
 #include <sys/wait.h>
 #include <unistd.h>
 extern char** environ;
@@ -116,6 +120,10 @@ bool InstallTool(const fs::path& folder, std::string& error, const std::function
   fs::remove_all(tmp, ec);
 #ifndef _WIN32
   fs::permissions(folder / t.exeName, fs::perms::owner_exec | fs::perms::group_exec | fs::perms::owner_read | fs::perms::owner_write, fs::perm_options::add, ec);
+#endif
+#ifdef __APPLE__
+  for (fs::recursive_directory_iterator it(folder, ec), end; !ec && it != end; it.increment(ec))
+    if (it->is_regular_file(ec)) removexattr(it->path().c_str(), "com.apple.quarantine", 0);
 #endif
   if (!ToolInstalled(folder)) { error = "The unpacked download is incomplete."; return false; }
   return true;
@@ -363,7 +371,18 @@ int RunProgram(const fs::path& exe, const std::vector<std::string>& args, const 
   for (std::string& s : store) argv.push_back(s.data());
   argv.push_back(nullptr);
   pid_t pid;
+#ifdef __APPLE__
+  posix_spawnattr_t attr;
+  posix_spawnattr_init(&attr);
+  cpu_type_t prefs[2] = {CPU_TYPE_ARM64, CPU_TYPE_X86_64};
+  size_t used = 0;
+  posix_spawnattr_setbinpref_np(&attr, 2, prefs, &used);
+  const int spawned = posix_spawn(&pid, exe.c_str(), nullptr, &attr, argv.data(), environ);
+  posix_spawnattr_destroy(&attr);
+  if (spawned != 0) { log = "could not start " + exe.string(); return -1; }
+#else
   if (posix_spawn(&pid, exe.c_str(), nullptr, nullptr, argv.data(), environ) != 0) { log = "could not start " + exe.string(); return -1; }
+#endif
   int status = 0;
   for (;;) {
     const pid_t r = waitpid(pid, &status, WNOHANG);

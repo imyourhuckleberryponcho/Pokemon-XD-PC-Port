@@ -1,4 +1,4 @@
-add_library(engine_n3ds STATIC n3ds_dump.cpp gf_read.cpp gf_pose.cpp decimate.cpp gf_pictures.cpp gf_match.cpp gf_to_xd.cpp usum_plan.cpp detmath.cpp usum_text.cpp usum_data.cpp usum_pack.cpp usum_forms.cpp usum_gen4.cpp usum_image.cpp usum_faces.cpp)
+add_library(engine_n3ds STATIC n3ds_dump.cpp gf_read.cpp gf_pose.cpp decimate.cpp gf_pictures.cpp gf_match.cpp gf_to_xd.cpp usum_plan.cpp detmath.cpp usum_text.cpp usum_data.cpp usum_pack.cpp usum_forms.cpp usum_gen4.cpp usum_image.cpp usum_faces.cpp usum_mega_fx.cpp)
 target_include_directories(engine_n3ds PUBLIC include)
 target_compile_features(engine_n3ds PUBLIC cxx_std_17)
 find_package(Threads REQUIRED)

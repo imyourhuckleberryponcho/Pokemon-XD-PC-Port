@@ -38,6 +38,10 @@ void PortAudio_SetSlowMotion(float speed);
 
 void PortAudio_SetVolume(float gain);
 
+void PortAudio_PlayOverlay(const int16_t* stereo, size_t frames, float gain);
+void PortAudio_StopOverlay(void);
+int PortAudio_OutRate(void);
+
 void PortAudio_SetPeakLimiter(int on);
 
 void PortAudio_SetPaused(bool paused);

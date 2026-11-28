@@ -2,6 +2,7 @@
 #include "gsthread_port.h"
 #include "port_ctx.h"
 
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -219,7 +220,7 @@ uintptr_t StackGuardGet() {
 
 void StackGuardSet(uintptr_t value) {
 #if defined(__APPLE__)
-  __stack_chk_guard = value;
+  (void)value;
 #elif defined(__x86_64__) && defined(__linux__)
   __asm__ volatile("movq %0, %%fs:0x28" : : "r"(value));
 #else
@@ -321,7 +322,7 @@ void ToBytes(const Snapshot& s, uintptr_t cookie, std::vector<uint8_t>& out) {
   }
 }
 
-bool FromBytes(const uint8_t* data, size_t size, uintptr_t, Snapshot& s, size_t* rewritten, uintptr_t* fileCookie,
+bool FromBytes(const uint8_t* data, size_t size, uintptr_t currentCookie, Snapshot& s, size_t* rewritten, uintptr_t* fileCookie,
                const char** why) {
   size_t pos = 0;
   auto bad = [&](const char* text) {
@@ -360,7 +361,26 @@ bool FromBytes(const uint8_t* data, size_t size, uintptr_t, Snapshot& s, size_t*
     pos += static_cast<size_t>(n);
     s.stacks.push_back(std::move(p));
   }
-  if (rewritten != nullptr) *rewritten = 0;
+  size_t changed = 0;
+#if defined(__APPLE__)
+  if (static_cast<uintptr_t>(cookie) != currentCookie && cookie != 0) {
+    auto fix = [&](uint8_t* base, size_t n, uintptr_t address) {
+      size_t off = static_cast<size_t>((8 - (address & 7)) & 7);
+      for (; off + 8 <= n; off += 8) {
+        uint64_t v;
+        std::memcpy(&v, base + off, 8);
+        if (v == cookie) {
+          const uint64_t now = currentCookie;
+          std::memcpy(base + off, &now, 8);
+          changed++;
+        }
+      }
+    };
+    for (Piece& p : s.stacks) fix(p.bytes.data(), p.bytes.size(), reinterpret_cast<uintptr_t>(p.address));
+    fix(s.core.data() + sizeof(Core) + offsetof(Tail, ctx), kCtxBuf, 0);
+  }
+#endif
+  if (rewritten != nullptr) *rewritten = changed;
   if (fileCookie != nullptr) *fileCookie = static_cast<uintptr_t>(cookie);
   return true;
 }

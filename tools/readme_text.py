@@ -197,6 +197,33 @@ Saves, settings, mods, logs and bug reports live in one data folder: {p['data']}
 """
 
 
+NEW_081 = """New in 0.8.1
+------------
+- Fixed on Windows: "Make models and Gen 4 pack" (and the other Battle Revolution model makers) crashed at once in
+  0.8.0, because one of the program files in the 0.8.0 download was built damaged. The file is fine now, and the build
+  checks every program file before it is packed. If the converter ever does crash, the launcher now says so in plain
+  words and keeps the log of the failed Make (extra_assets\\pbr.log).
+- Fixed: closing the game window while a port menu was open (and its menu music playing) ended in a "Stopped (abort)"
+  crash report. It closes cleanly now.
+- Fixed: a possible crash in double battles when a Pokemon changes form in battle (could not be reproduced here; the
+  battle picture's list is now kept in order).
+- Fixed: CONTINUE with the "New Game setup" screen turned off: a save that has Gen 4 Pokemon, played without the Gen 4
+  pack, now gets the same clear message as with the screen on, instead of going on.
+- Fixed: a CONTINUE that the title menu never saw (the button press arrived a moment too early) is now caught when the
+  first map opens, so the save's rules, timer and challenge settings still get set up.
+- PC launcher: Extra assets page, "Export packs for a phone" makes one zip of the packs you built on the PC (Gen 4 /
+  Gen 5-7 pictures and models, HD textures you ticked), ready to import in the Android app.
+- Android (beta): a "Getting the graphics ready" page with a progress bar prepares the game's shaders once at the
+  first start, so the first visits to new places stall less (B skips it). Performance mode is on by default on phones
+  (you can turn it off in Settings; the PC is unchanged). The launcher fits a phone better (wrapped preset labels,
+  stacked look-preset buttons with phone wording, an upright mods list, the bug-report hint says where the pause menu
+  button is). Soft reset (B + X + Start) restarts the app cleanly.
+- Mac (new, not yet tested on a real Mac): the HD texture maker is in the Mac app now (launcher, Extra assets, Make HD
+  textures), and save states are switched on again. Please report problems.
+- Online: 0.8.1 plays with 0.8.1 only. Older versions are turned away with a clear message on both sides.
+"""
+
+
 NEW_080 = """New in 0.8.0
 ------------
 - Prize desk and Arceus Plates: the prize desk shows its goods on pages (L / R, or Q / W): page 1 is the game's own
@@ -659,7 +686,7 @@ The full history is on the GitHub releases page: """ + RELEASES_URL + """
 
 
 def new_in():
-    return NEW_080 + chr(10) + NEW_077 + chr(10) + NEW_076 + chr(10) + NEW_075 + chr(10) + NEW_074 + chr(10) + NEW_073 + chr(10) + NEW_072 + chr(10) + NEW_071 + chr(10) + NEW_070 + chr(10) + NEW_061 + chr(10) + NEW_060 + chr(10) + NEW_05X
+    return NEW_081 + chr(10) + NEW_080 + chr(10) + NEW_077 + chr(10) + NEW_076 + chr(10) + NEW_075 + chr(10) + NEW_074 + chr(10) + NEW_073 + chr(10) + NEW_072 + chr(10) + NEW_071 + chr(10) + NEW_070 + chr(10) + NEW_061 + chr(10) + NEW_060 + chr(10) + NEW_05X
 
 
 def known_issues(system):

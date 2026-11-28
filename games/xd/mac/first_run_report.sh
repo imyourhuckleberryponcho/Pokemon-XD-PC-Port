@@ -303,6 +303,22 @@ if [ -n "$XD" ] && [ -f "$XD" ]; then
   else
     verdict INFO "with XD_LOW_MALLOC=all (a testing switch, not used by the game) the start did NOT end well: exit code $RC2"
   fi
+  # 0.8.1: save states on the Mac. A third start with XD_SAVESTATES=1 (the game's tasks and main thread run on stacks of the port's own
+  # inside the low block). It only gets that far when the start gets past the disc check; without a disc the line may not appear.
+  say ""
+  say "---- third start, with XD_SAVESTATES=1 (save states; information) ----"
+  start_once start_ss XD_SAVESTATES=1
+  RC3="$(cat "$WORK/start_ss_exit.txt" 2> /dev/null)"
+  say "exit code: $RC3"
+  head -n 60 "$WORK/start_ss.txt" >> "$RAW"
+  say "---- end ----"
+  if grep -q "^\[savestate\] on:" "$WORK/start_ss.txt"; then
+    verdict OK "save states: the game's tasks run as coroutines on the port's own stacks (exit code $RC3)"
+  elif grep -q "no memory for the task stacks" "$WORK/start_ss.txt"; then
+    verdict PROBLEM "save states: no memory for the task stacks (the low block was full or not reserved)"
+  else
+    verdict INFO "save states: the start ended before the save state code was reached (no disc given: expected; a real test needs a disc, see docs/SAVESTATES.md)"
+  fi
 else
   say "(skipped: no program)"
 fi

@@ -35,6 +35,10 @@ extern "C" void PortXD_GameDataRange2(unsigned char** begin, size_t* size) {
 #ifdef __APPLE__
 extern char __start_xdg_text[] __asm("section$start$__TEXT$xdg_text");
 extern char __stop_xdg_text[] __asm("section$end$__TEXT$xdg_text");
+extern unsigned char __start_xdg_data[] __asm("section$start$__DATA$xdg_data");
+extern unsigned char __stop_xdg_data[] __asm("section$end$__DATA$xdg_data");
+extern unsigned char __start_xdg_bss[] __asm("section$start$__DATA$xdg_bss");
+extern unsigned char __stop_xdg_bss[] __asm("section$end$__DATA$xdg_bss");
 #else
 extern "C" {
 extern char __start_xdg_text[];
@@ -45,10 +49,6 @@ extern unsigned char __start_xdg_bss[];
 extern unsigned char __stop_xdg_bss[];
 }
 #endif
-#ifdef __APPLE__
-extern "C" void PortXD_GameDataRange(unsigned char** begin, size_t* size) { *begin = nullptr; *size = 0; }
-extern "C" void PortXD_GameDataRange2(unsigned char** begin, size_t* size) { *begin = nullptr; *size = 0; }
-#else
 extern "C" void PortXD_GameDataRange(unsigned char** begin, size_t* size) {
   *begin = __start_xdg_data;
   *size = static_cast<size_t>(__stop_xdg_data - __start_xdg_data);
@@ -57,7 +57,6 @@ extern "C" void PortXD_GameDataRange2(unsigned char** begin, size_t* size) {
   *begin = __start_xdg_bss;
   *size = static_cast<size_t>(__stop_xdg_bss - __start_xdg_bss);
 }
-#endif
 #endif
 
 namespace {

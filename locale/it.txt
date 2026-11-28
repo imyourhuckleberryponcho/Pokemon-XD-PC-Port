@@ -822,6 +822,12 @@
 = A key (Photo mode key, F8 at first) pauses the game and lets you move the camera freely, hide the menus and text, and save pictures (PNG, in the photos folder) at full or higher resolution. The game carries on as if no time had passed.
 > Un tasto (tasto Modalità foto, all'inizio F8) mette in pausa il gioco e ti permette di muovere la camera liberamente, nascondere menu e testi e salvare immagini (PNG, nella cartella photos) a risoluzione piena o superiore. Il gioco prosegue come se non fosse passato tempo.
 
+= Mega Evolution light show
+> Spettacolo di luci della Megaevoluzione
+
+= When a Pokemon Mega Evolves in battle, its Mega Stone glows, a rainbow helix and lights gather round it and a burst of light covers the change. Only painted over the picture: the battle plays out the same and takes the same time.
+> Quando un Pokémon si Megaevolve in battaglia, la sua Megapietra brilla, un'elica arcobaleno e delle luci si radunano attorno a lui e un lampo di luce copre il cambiamento. Disegnato solo sopra l'immagine: la lotta si svolge uguale e dura lo stesso tempo.
+
 = HD textures
 > Texture HD
 
@@ -1539,6 +1545,12 @@
 = Look presets: set resolution, frame rate, anti-aliasing and texture filtering together. Only how the picture is drawn changes, never the game.
 > Preimpostazioni dell'aspetto: regolano insieme risoluzione, fotogrammi al secondo, anti-aliasing e filtro delle texture. Cambia solo il modo in cui l'immagine viene disegnata, mai il gioco.
 
+= Best looks (fast phone)
+> Grafica al massimo (telefono veloce)
+
+= Smooth on a weak phone
+> Fluido su un telefono debole
+
 = Best looks (fast PC)
 > Aspetto migliore (PC veloce)
 
@@ -2120,6 +2132,24 @@
 
 = a link couldn't be made: %s (%s)
 > non è stato possibile creare un collegamento: %s (%s)
+
+= %s is not there
+> %s non c’è
+
+= nothing to put in the zip
+> niente da mettere nello zip
+
+= a file is too large for the zip: %s
+> un file è troppo grande per lo zip: %s
+
+= these packs are too large for one zip (the phone takes zips under 4 GB): export fewer packs at a time
+> questi pacchetti sono troppo grandi per un solo zip (il telefono accetta zip sotto i 4 GB): esporta meno pacchetti per volta
+
+= the zip couldn't be written: %s
+> impossibile scrivere lo zip: %s
+
+= a file couldn't be read: %s
+> impossibile leggere un file: %s
 
 = Start menu
 > menu Start
@@ -3047,6 +3077,27 @@
 
 = That zip could not be used:
 > Questo zip non è stato utilizzabile:
+
+= Packs for a phone
+> Pacchetti per un telefono
+
+= Packs made on this PC can be used on the phone app: tick the ones to take, press Export, copy the zip to the phone and choose "Use a pack from a PC (.zip)" on its Extra assets page. A pack is a few hundred MB; the zip must stay under 4 GB.
+> I pacchetti fatti su questo PC si possono usare nell’app del telefono: spunta quelli da portare, premi Esporta, copia lo zip sul telefono e scegli «Usa un pacchetto da un PC (.zip)» nella sua pagina Risorse extra. Un pacchetto pesa alcune centinaia di MB; lo zip deve restare sotto i 4 GB.
+
+= Making the zip...
+> Creazione dello zip...
+
+= %llu of %llu MB
+> %llu di %llu MB
+
+= Export packs for a phone...
+> Esporta pacchetti per un telefono...
+
+= Done: %s
+> Fatto: %s
+
+= The zip could not be made: %s
+> Impossibile creare lo zip: %s
 
 = Discs of other games that this port can borrow assets from. Your discs are only read; what is made from them is made on this PC, kept in your own data folder (extra_assets) and never sent anywhere.
 > Dischi di altri giochi da cui questo port può prendere risorse. I tuoi dischi vengono solo letti; ciò che ne viene creato è creato su questo PC, conservato nella tua cartella dati (extra_assets) e non viene mai inviato da nessuna parte.
@@ -7794,9 +7845,6 @@
 = Switched to %s. Loading speed and Memory card speed change the next time you start the game.
 > Passato a %s. Velocità di caricamento e Velocità Memory Card cambiano la prossima volta che avvii il gioco.
 
-= New Game: %s (as chosen before)
-> Nuova partita: %s (come scelto prima)
-
 = This playthrough has Gen 4 Pokemon.
 > Questa partita ha Pokémon di Gen 4.
 
@@ -7805,6 +7853,9 @@
 
 = Your save is safe and unchanged. It needs the Gen 4 pack because the Pokemon in it come from there.
 > Il tuo salvataggio è al sicuro e invariato. Serve il pacchetto Gen 4 perché i Pokémon al suo interno vengono da lì.
+
+= New Game: %s (as chosen before)
+> Nuova partita: %s (come scelto prima)
 
 = This save's setup had: %s. The game carries on without it.
 > Il setup di questo salvataggio aveva: %s. Il gioco prosegue senza.
@@ -9900,8 +9951,8 @@
 = F9 opens a menu of the developers' own debug tools left in the game: go to any place, any point of the story, set story flags, start battles, get items and Pokemon. For testing; runs that used it are marked in their recording and bug reports.
 > F9 apre un menu degli strumenti di debug degli sviluppatori rimasti nel gioco: vai in un luogo qualsiasi, in un punto qualsiasi della storia, imposta i flag della storia, avvia lotte, ottieni strumenti e Pokémon. Per le prove; le partite che l'hanno usato sono segnate nella loro registrazione e nelle segnalazioni.
 
-= Experimental (Windows and Linux only). Lets you save the whole game at any moment and put it back: in the field menu a SAVE STATES entry under SETTINGS opens a small menu with four slots, each showing a picture, when and where, with Save here and Load. The key F1 (changeable on the Controls page) opens it too; in a battle it is the only way for now. The states are files in the save states folder of the data folder, kept for each playthrough. Using it marks the playthrough as one that used a cheat does (it can't join competitive online rooms, and a speedrun with it is invalid). It is refused with mods, while a speedrun timer runs or online. Takes effect the next time the game starts. Never in Original.
-> Sperimentale (solo Windows e Linux). Permette di salvare tutto il gioco in qualsiasi momento e di rimetterlo com'era: nel menu sul campo una voce STATI DI SALVATAGGIO sotto IMPOSTAZIONI apre un piccolo menu con quattro slot, ognuno con un'immagine, quando e dove, con Salva qui e Carica. Si apre anche con il tasto F1 (si cambia nella pagina Comandi); in battaglia per ora è l'unico modo. Gli stati sono file nella cartella « savestates » della cartella dei dati, tenuti per ogni partita. Usarli segna la partita come una in cui si è barato (non può entrare nelle stanze online competitive, e uno speedrun con essi non è valido). Viene rifiutato con le mod, mentre un cronometro da speedrun è in funzione o online. Ha effetto al prossimo avvio del gioco. Mai in Original.
+= Experimental (tested on Windows and Linux; not yet tested on the Mac). Lets you save the whole game at any moment and put it back: in the field menu a SAVE STATES entry under SETTINGS opens a small menu with four slots, each showing a picture, when and where, with Save here and Load. The key F1 (changeable on the Controls page) opens it too; in a battle it is the only way for now. The states are files in the save states folder of the data folder, kept for each playthrough. Using it marks the playthrough as one that used a cheat does (it can't join competitive online rooms, and a speedrun with it is invalid). It is refused with mods, while a speedrun timer runs or online. Takes effect the next time the game starts. Never in Original.
+> Sperimentale (provato su Windows e Linux, non ancora su Mac). Permette di salvare tutto il gioco in qualsiasi momento e di rimetterlo com'era: nel menu sul campo una voce STATI DI SALVATAGGIO sotto IMPOSTAZIONI apre un piccolo menu con quattro slot, ognuno con un'immagine, quando e dove, con Salva qui e Carica. Si apre anche con il tasto F1 (si cambia nella pagina Comandi); in battaglia per ora è l'unico modo. Gli stati sono file nella cartella « savestates » della cartella dei dati, tenuti per ogni partita. Usarli segna la partita come una in cui si è barato (non può entrare nelle stanze online competitive, e uno speedrun con essi non è valido). Viene rifiutato con le mod, mentre un cronometro da speedrun è in funzione o online. Ha effetto al prossimo avvio del gioco. Mai in Original.
 
 = Turns the cheat menu on: a hot key (F5, or hold L + R and press Start on the controller; both can be changed in the controls) opens a menu of cheats over the game. Off: no cheat does anything. A playthrough that used a cheat is marked as such for good (it can't join competitive online rooms, and a speedrun with it is invalid). Never in Original.
 > Attiva il menu dei trucchi: un tasto (F5, o tieni premuti L + R e premi Start sul controller; entrambi si cambiano nei comandi) lo apre sopra il gioco. Disattivato: nessun trucco fa niente. Una partita che ha usato un trucco resta segnata per sempre (non può entrare nelle stanze online competitive, e uno speedrun con trucchi non è valido). Mai in Originale.

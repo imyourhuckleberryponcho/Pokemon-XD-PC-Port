@@ -438,6 +438,36 @@ int main(int argc, char** argv) {
   }
 
   {
+    const fs::path pc = work / L"pc_extra_assets";
+    std::string big;
+    for (int i = 0; i < 30000; i++) big += "row " + std::to_string(i) + "\n";
+    write_file(pc / L"pbr_gen4" / L"gen4.json", "{\"id\": \"battle-revolution-gen4\", \"version\": 3}");
+    write_file(pc / L"pbr_gen4" / L"fsys" / L"models" / L"a.bin", big);
+    write_file(pc / L"pbr_gen4" / L"empty.bin", "");
+    write_file(pc / L"pbr" / L"mod.json", "{}");
+    write_file(pc / L"usum_version.txt", "version 2\n");
+    write_file(pc / L"pbr_gen4_version.txt", "version 3\n");
+    write_file(pc / L"colosseum" / L"x.txt", "not taken");
+    const fs::path zip = work / L"packs_for_phone.zip";
+    int calls = 0;
+    uint64_t lastTotal = 0;
+    check(ZipFolderEntries(pc, {"pbr_gen4", "pbr_gen4_version.txt", "usum_version.txt", "pbr"}, zip, error,
+                           [&](uint64_t, uint64_t total) { calls++; lastTotal = total; }),
+          "pack zip is made: " + error);
+    check(calls == 6 && lastTotal > 0 && !fs::exists(work / L"packs_for_phone.zip.part"), "pack zip: progress per file, no .part left");
+    const fs::path phone = work / L"phone_extra_assets";
+    check(ExtractZip(zip, phone, error), "pack zip unpacks like the phone does: " + error);
+    check(read_file(phone / L"pbr_gen4" / L"fsys" / L"models" / L"a.bin") == big && read_file(phone / L"pbr_gen4_version.txt") == "version 3\n" &&
+              read_file(phone / L"usum_version.txt") == "version 2\n" && fs::exists(phone / L"pbr" / L"mod.json") &&
+              fs::exists(phone / L"pbr_gen4" / L"empty.bin") && !fs::exists(phone / L"colosseum"),
+          "pack zip: folders and *_version.txt files at the top, as in extra_assets; a pack not chosen is not there");
+    check(!ZipFolderEntries(pc, {"nothere"}, work / L"none.zip", error) && !fs::exists(work / L"none.zip"), "pack zip: a missing pack is refused");
+    check(!ZipFolderEntries(pc, {"pbr"}, work / L"stopped.zip", error, {}, [] { return true; }) && !fs::exists(work / L"stopped.zip") &&
+              !fs::exists(work / L"stopped.zip.part"),
+          "pack zip: stopped leaves nothing");
+  }
+
+  {
     const fs::path root = work / L"Player folder whole";
     const std::vector<std::string> required = {"launcher.exe", "game.exe"};
     write_file(root / L"Starter.exe", "starter");

@@ -59,6 +59,10 @@ bool Sha256File(const std::filesystem::path& file, std::string& hex, std::string
 bool ExtractZip(const std::filesystem::path& zip, const std::filesystem::path& folder, std::string& error,
                 const std::function<bool()>& stop = {});
 
+bool ZipFolderEntries(const std::filesystem::path& root, const std::vector<std::string>& names, const std::filesystem::path& zip,
+                      std::string& error, const std::function<void(uint64_t, uint64_t)>& progress = {},
+                      const std::function<bool()>& stop = {});
+
 bool ExtractTarGz(const std::filesystem::path& archive, const std::filesystem::path& folder, std::string& error,
                   const std::function<bool()>& stop = {});
 

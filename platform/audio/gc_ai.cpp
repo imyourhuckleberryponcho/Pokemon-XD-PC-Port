@@ -7,8 +7,10 @@
 #include <SDL3/SDL_init.h>
 #include <SDL3/SDL_timer.h>
 
+#include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <mutex>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -520,6 +522,20 @@ size_t fold_block(int n) {
   return sFolded.size() * sizeof(int16_t);
 }
 
+std::mutex sOverlayLock;
+std::vector<int16_t> sOverlay;
+size_t sOverlayPos = 0;
+float sOverlayGain = 1.f;
+
+void mix_overlay() {
+  std::lock_guard<std::mutex> lock(sOverlayLock);
+  if (sOverlayPos >= sOverlay.size()) return;
+  for (size_t i = 0; i < sConvert.size() && sOverlayPos < sOverlay.size(); i++, sOverlayPos++) {
+    const float v = static_cast<float>(sConvert[i]) + static_cast<float>(sOverlay[sOverlayPos]) * sOverlayGain;
+    sConvert[i] = static_cast<int16_t>(std::clamp(v, -32768.f, 32767.f));
+  }
+}
+
 void take_block(void*, void*) {
   PortDsp_Join();
   const u32 addr = sNextAddr, length = sNextLength;
@@ -549,6 +565,7 @@ void take_block(void*, void*) {
       }
     }
     shape_block();
+    mix_overlay();
     if (sStream != nullptr) {
       int queued = SDL_GetAudioStreamQueued(sStream);
       if (queued == 0 && sBlocks > 20) sUnderruns++;
@@ -776,6 +793,19 @@ uint32_t PortAI_GhostTake(int16_t* out, uint32_t maxBytes) {
 int PortAudio_OutQueuedBytes(void) { return sStream != nullptr ? SDL_GetAudioStreamQueued(sStream) : -1; }
 
 int PortAudio_OutRate(void) { return kSampleRate; }
+
+void PortAudio_PlayOverlay(const int16_t* stereo, size_t frames, float gain) {
+  std::lock_guard<std::mutex> lock(sOverlayLock);
+  sOverlay.assign(stereo, stereo + (stereo != nullptr ? frames * 2 : 0));
+  sOverlayPos = 0;
+  sOverlayGain = gain < 0.f ? 0.f : gain > 1.f ? 1.f : gain;
+}
+
+void PortAudio_StopOverlay(void) {
+  std::lock_guard<std::mutex> lock(sOverlayLock);
+  sOverlay.clear();
+  sOverlayPos = 0;
+}
 
 void PortAudio_PutOut(const int16_t* samples, uint32_t bytes) {
   if (sStream != nullptr) {

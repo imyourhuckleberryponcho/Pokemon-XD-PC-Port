@@ -9,6 +9,9 @@
 #include <data_mods.h>
 #include <gs_formats.h>
 #include <port_disc.h>
+#ifdef __ANDROID__
+#include <port_low_arena.h>
+#endif
 
 #include <algorithm>
 #include <cstdio>
@@ -63,7 +66,15 @@ bool ReadDisc(const std::string& archive, const std::string& entry, std::vector<
     }
     PortDisc_Free(file);
   }
+#ifdef __ANDROID__
+  static size_t sKept = 0;
+  if (archive == em::kProgramArchive || (bytes.size() <= (256u << 10) && sKept + bytes.size() <= (32u << 20))) {
+    sKept += bytes.size();
+    cache[{archive, entry}] = {ok, bytes};
+  }
+#else
   cache[{archive, entry}] = {ok, bytes};
+#endif
   out = bytes;
   return ok;
 }
@@ -162,4 +173,9 @@ extern "C" void PortXD_ReadShadowCapacity(void) {
     std::fprintf(stderr, "[shadow capacity] pool %d (%s): %u eligible trainers, %u eligible Pokemon, %u free species, %u free rows\n", pool, pool == 0 ? "Gen 1-3" : pool == 1 ? "+ Gen 4" : "+ Gen 5-7",
                  cap.trainers, cap.slots, cap.species, cap.rows);
   }
+#ifdef __ANDROID__
+  PortLowStats st;
+  PortLow_GetStats(&st);
+  std::fprintf(stderr, "[shadow capacity] below-4-GB memory in use after the tables: %llu MB\n", static_cast<unsigned long long>(st.used >> 20));
+#endif
 }

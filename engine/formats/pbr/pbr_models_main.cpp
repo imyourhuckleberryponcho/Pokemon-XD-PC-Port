@@ -1,4 +1,5 @@
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -9,6 +10,51 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#endif
+
+#ifdef _WIN32
+namespace {
+LONG WINAPI CrashFilter(EXCEPTION_POINTERS* info) {
+  static volatile LONG once = 0;
+  if (InterlockedExchange(&once, 1) != 0) return EXCEPTION_CONTINUE_SEARCH;
+  const EXCEPTION_RECORD* er = info->ExceptionRecord;
+  const unsigned char* base = reinterpret_cast<const unsigned char*>(GetModuleHandleW(nullptr));
+  size_t image = 0;
+  if (base) {
+    const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
+    const auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS*>(base + dos->e_lfanew);
+    image = nt->OptionalHeader.SizeOfImage;
+  }
+  char line[2048];
+  size_t n = 0;
+  const unsigned char* at = static_cast<const unsigned char*>(er->ExceptionAddress);
+  const bool inside = base && at >= base && at < base + image;
+  n += snprintf(line + n, sizeof line - n, "error The converter crashed (exception 0x%08lX at %s+0x%llX", static_cast<unsigned long>(er->ExceptionCode),
+                inside ? "pbr_models.exe" : "another module", static_cast<unsigned long long>(inside ? at - base : reinterpret_cast<size_t>(at)));
+  if (er->ExceptionCode == EXCEPTION_ACCESS_VIOLATION && er->NumberParameters >= 2)
+    n += snprintf(line + n, sizeof line - n, ", %s address 0x%llX", er->ExceptionInformation[0] == 1 ? "writing" : er->ExceptionInformation[0] == 8 ? "running" : "reading",
+                  static_cast<unsigned long long>(er->ExceptionInformation[1]));
+  n += snprintf(line + n, sizeof line - n, "; build %s; calls:", pbr::CONVERTER_VERSION);
+  if (base) {
+    const ULONG_PTR* sp = reinterpret_cast<const ULONG_PTR*>(info->ContextRecord->Rsp);
+    int found = 0;
+    __try {
+      for (int i = 0; i < 4096 && found < 24; i++) {
+        const unsigned char* v = reinterpret_cast<const unsigned char*>(sp[i]);
+        if (v > base + 5 && v < base + image) {
+          n += snprintf(line + n, sizeof line - n, " 0x%llX", static_cast<unsigned long long>(v - base));
+          found++;
+        }
+      }
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
+  }
+  n += snprintf(line + n, sizeof line - n, ")\n");
+  fputs(line, stdout);
+  fflush(stdout);
+  return EXCEPTION_CONTINUE_SEARCH;
+}
+}
 #endif
 
 namespace {
@@ -98,6 +144,8 @@ static std::string utf8(const wchar_t* w) {
   return s;
 }
 int wmain(int argc, wchar_t** argv) {
+  SetUnhandledExceptionFilter(CrashFilter);
+  if (const char* t = std::getenv("PBR_MODELS_TEST_CRASH"); t && t[0] == '1') *reinterpret_cast<volatile int*>(0x100008f) = 1;
   std::vector<std::string> args;
   for (int i = 1; i < argc; i++) args.push_back(utf8(argv[i]));
   return run_main(args);

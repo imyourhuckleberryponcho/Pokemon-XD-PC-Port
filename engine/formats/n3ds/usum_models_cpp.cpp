@@ -281,6 +281,7 @@ void read_model_results(const std::string& out, const std::string& data_dir, con
 int main(int argc, char** argv) {
   std::string rom, plan, out, xd_disc, data_dir, write_plan_path, stage = "models";
   std::string packs = "usum,gen4,g57,form", only;
+  std::string write_sounds;
   int jobs = 0, lo = 0, hi = 100;
   bool plan_only = false, data_only = false, eol_crlf = false, no_models = false;
   std::string gen4_pack, pack_out, work, data_mods, dex_out, pbr_models_exe, gen4_values = "on", gen57_pack, xd_exe, data_folder, pictures_out, usum_py, gen57_only, gen57_skip;
@@ -318,8 +319,16 @@ int main(int argc, char** argv) {
     else if (a == "--stage") stage = next();
     else if (a == "--percent") { lo = atoi(next().c_str()); hi = atoi(next().c_str()); }
     else if (a == "--version") { printf("version %s\n", kConverterVersion); return 0; }
+    else if (a == "--write-sounds") write_sounds = next();
   }
   try {
+    if (!write_sounds.empty()) {
+      if (rom.empty()) throw Fail("usage: usum_models_cpp --rom <dump> --write-sounds <Gen 5-7 pack folder>");
+      std::string why;
+      const bool ok = write_pack_sounds(open_dump(rom), write_sounds, &why);
+      printf("%s\n", ok ? "sound/mega_evolution.wav written" : ("no Mega Evolution jingle: " + why).c_str());
+      return ok ? 0 : 3;
+    }
     if (rom.empty() || out.empty() || (plan.empty() && xd_disc.empty()))
       throw Fail("usage: usum_models_cpp --rom <dump> --xd-disc <XD image> --out <folder> [--data <json folder>] [--jobs N]   (or --plan <plan.tsv> --out <pack>)");
     if (plan.empty() && !data_only && (!gen57_pack.empty() || !gen4_pack.empty())) {

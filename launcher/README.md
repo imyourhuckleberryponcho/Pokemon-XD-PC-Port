@@ -202,6 +202,13 @@ there is no upload, no email and no network code. To share one, the player expor
 
 ## Extra assets
 
+**Export packs for a phone (0.8.1; Windows, Linux, Mac).** A card at the top of the page lists the packs installed in `<data folder>/extra_assets`
+(each source's folder, its second and third folder, e.g. `pbr`, `pbr_gen4`, `usum`, `usum_gen57`, `colosseum`) with a tick each (all ticked at
+first). "Export packs for a phone..." asks where to save the zip, then writes it on a thread of its own with a progress bar. The zip holds each
+ticked pack's folder and its `<folder>_version.txt` / `<source>_version.txt` files at the top level, so the phone app's "Use a pack from a PC (.zip)"
+(`engine::update::ExtractZip` into its `extra_assets`) puts them where the game looks. Refused with a plain message: over 4 GB or 65534 files in one zip
+(export fewer packs at a time), a file over 1 GB. Not shown on the phone.
+
 The page is in tabs, like Settings: **Models** (Ultra Sun / Ultra Moon first, then Battle Revolution, then Colosseum), **Languages** (the European and Japanese packs) and **Other** (HD texture packs; the tab only exists when there is something for it). A line above the tabs says what is installed. With a controller LT / RT switch tabs. A source says which tab it is on with `ExtraSource::tab` and `tabOrder`. Script: `extratab:<models|languages|other>`.
 
 A page for the discs of other games (not the game the port plays) whose pictures or models the port can use. The list

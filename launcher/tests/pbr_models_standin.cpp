@@ -84,11 +84,13 @@ int main(int argc, char** argv) {
   }
   const int delay = std::atoi(Env("XD_STANDIN_DELAY_MS", "60").c_str());
   const std::string fail = Env("XD_STANDIN_FAIL", "");
+  const bool crash = Env("XD_STANDIN_CRASH", "") == "1";
   uint64_t bytes = 0;
   for (size_t i = 0; i < models.size(); i++) {
     std::printf("progress %zu %zu %s\n", i, models.size(), models[i].name.c_str());
     std::fflush(stdout);
     std::this_thread::sleep_for(std::chrono::milliseconds(delay));
+    if (crash && i == models.size() / 2) *reinterpret_cast<volatile int*>(0x100008f) = 1;
     if (!fail.empty() && i == models.size() / 2) {
       std::printf("error %s\n", fail.c_str());
       return 1;

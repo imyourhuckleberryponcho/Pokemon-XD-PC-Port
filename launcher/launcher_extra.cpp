@@ -577,7 +577,11 @@ void MakeJob::Run(MakeRequest request, void* processPointer) {
     }
   }
   std::error_code ec;
-  fs::remove(request.logFile, ec);
+  if (result.phase == Phase::Failed) {
+    result.message += " (" + Utf8(request.logFile) + ")";
+  } else {
+    fs::remove(request.logFile, ec);
+  }
   {
     std::lock_guard<std::mutex> lock(mutex_);
     snap_ = result;

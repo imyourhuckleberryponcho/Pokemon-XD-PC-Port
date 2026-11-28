@@ -4786,6 +4786,7 @@ void Filter(PADStatus* status) {
     PortXD_ShowRuleMessage(message);
     return;
   }
+  if (IsTitleMenu(w)) xd::pt::NoteTitleSeen();
   if (xd::pt::ScreenEnabled() || xd::pt::EngineQuestionPossible() || xd::pt::TimerWatch() || xd::pt::PickerPossible() || xd::pt::ContinueWatch()) {
     if (IsTitleMenu(w) && w->state == 2 && w->pad_a4 == 0 && w->cursor >= 0 && w->cursor < 5 && !sTitleSelected &&
         xd::pt::TitleInput(status, menuTitleGetSelect(w->cursor), newButtons)) {

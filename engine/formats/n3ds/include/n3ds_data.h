@@ -114,4 +114,8 @@ void make_gen57_forms_data(const DataOptions& o, const Plan& plan, const ModelRe
 struct DumpCry { Bytes hdr, body; int wave = -1; };
 std::map<int, DumpCry> dump_cries(Usum& u, const std::string& data_dir, const std::vector<int>& nats);
 
+Bytes mega_jingle_wav(const RomFs& r, std::string* why = nullptr);
+bool write_pack_sounds(const RomFs& r, const std::string& pack_dir, std::string* why = nullptr);
+Bytes mega_fx_bin(const RomFs& r, std::string* why = nullptr);
+
 }

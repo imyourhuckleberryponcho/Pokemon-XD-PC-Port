@@ -4,6 +4,12 @@ namespace engine::settings {
 
 namespace {
 
+#ifdef __ANDROID__
+constexpr bool kPerformanceDefault = true;
+#else
+constexpr bool kPerformanceDefault = false;
+#endif
+
 std::vector<Definition> StandardSettings() {
   using D = Definition;
   using C = Category;
@@ -28,7 +34,7 @@ std::vector<Definition> StandardSettings() {
               "and the in-between pictures of Frame rate 60 are left out, so the graphics chip has far less to do. "
               "Only how the picture is drawn changes; the game itself runs exactly as before. It replaces the "
               "Resolution and Frame rate choices while it is on. Applies at once.",
-              false, false)
+              kPerformanceDefault, kPerformanceDefault)
           .OriginalNote("the GameCube's own picture, drawn at its own size.")
           .Implemented(),
       D::Enum("video.anti_aliasing", C::Video, "Anti-aliasing",
@@ -115,6 +121,12 @@ std::vector<Definition> StandardSettings() {
               "menus and text, and save pictures (PNG, in the photos folder) at full or higher resolution. The game "
               "carries on as if no time had passed.",
               false, true)
+          .Implemented(),
+      D::Bool("video.mega_effect", C::Video, "Mega Evolution light show",
+              "When a Pokemon Mega Evolves in battle, its Mega Stone glows, a rainbow helix and lights gather round it "
+              "and a burst of light covers the change. Only painted over the picture: the battle plays out the same "
+              "and takes the same time.",
+              false, false)
           .Implemented(),
       D::Bool("video.hd_textures", C::Video, "HD textures",
               "Uses the HD texture packs that are on in the mod list (the pictures you made with Make HD textures on the "

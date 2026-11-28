@@ -5,7 +5,7 @@
 
 #include "xd_savestate_ui.h"
 
-#if defined(_WIN32) || (defined(__linux__) && !defined(__ANDROID__) && defined(__x86_64__))
+#if defined(_WIN32) || (defined(__linux__) && !defined(__ANDROID__) && defined(__x86_64__)) || (defined(__APPLE__) && (defined(__x86_64__) || defined(__aarch64__)))
 #define XD_SAVESTATES_BUILT 1
 #endif
 

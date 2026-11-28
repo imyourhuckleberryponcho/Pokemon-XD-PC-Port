@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(xd_port VERSION 0.8.0 LANGUAGES C CXX)
+project(xd_port VERSION 0.8.1 LANGUAGES C CXX)
 option(XD_BUILD_AVF_ENCODER "macOS: build xd_encode, the replay export's video + sound encoder (AVFoundation)" OFF)
 if (APPLE AND XD_BUILD_AVF_ENCODER)
   enable_language(OBJCXX)

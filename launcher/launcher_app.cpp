@@ -661,6 +661,8 @@ class App {
     StopImportScan();
     ExtraStop();
     StopDataWork();
+    exportZipStop_ = true;
+    if (exportZipThread_.joinable()) exportZipThread_.join();
   }
   int Run();
 
@@ -701,6 +703,14 @@ class App {
   bool modToolPickedReady_ = false;
   std::function<void(const std::string&)> modToolPickDone_;
   void InitModTools();
+  std::thread exportZipThread_;
+  std::atomic<bool> exportZipBusy_{false}, exportZipStop_{false};
+  std::atomic<uint64_t> exportZipDone_{0}, exportZipTotal_{0};
+  std::string exportZipPicked_, exportZipMessage_;
+  bool exportZipPickedReady_ = false, exportZipOk_ = false;
+  std::map<std::string, bool> exportZipPick_;
+  void DrawExtraExportCard();
+  void ExportPacksStart(const std::string& zipFile);
   em::Review review_;
   bool reviewDirty_ = true;
   std::string assetStamp_;
@@ -1292,7 +1302,8 @@ void App::Dim(const std::string& text) {
   if (touch_) {
     std::string t = text;
     static const char* const kWords[][2] = {{"Click ", "Tap "}, {"click ", "tap "}, {"on this PC", "on this phone"}, {"this PC", "this phone"},
-                                            {"your PC", "your phone"}, {"for a PC", "for a phone"}};
+                                            {"your PC", "your phone"}, {"for a PC", "for a phone"},
+                                            {"press F10 in the game window", "open the pause menu (the || button) and choose BUG REPORT"}};
     for (const auto& w : kWords) {
       for (size_t at = t.find(w[0]); at != std::string::npos; at = t.find(w[0], at + std::strlen(w[1]))) {
         t.replace(at, std::strlen(w[0]), w[1]);
@@ -5900,6 +5911,112 @@ void App::ImportExtraZip(const std::string& zipFile) {
 }
 #endif
 
+namespace {
+struct ExportPack {
+  std::string folder, label;
+  std::vector<std::string> files;
+};
+std::vector<ExportPack> InstalledPacks(const std::vector<launcher::GameInfo::ExtraSource>& sources, const fs::path& root) {
+  std::vector<ExportPack> out;
+  std::error_code ec;
+  for (const auto& src : sources) {
+    const std::pair<std::string, std::string> folders[] = {{src.id, src.provides}, {src.secondFolder, src.secondProvides}, {src.thirdFolder, src.thirdProvides}};
+    for (const auto& [folder, label] : folders) {
+      if (folder.empty() || !fs::is_directory(root / PathOf(folder), ec)) continue;
+      ExportPack p;
+      p.folder = folder;
+      p.label = label.empty() ? folder : label;
+      p.files.push_back(folder);
+      for (const std::string& v : {folder + "_version.txt", src.id + "_version.txt"}) {
+        if (fs::is_regular_file(root / PathOf(v), ec) && std::find(p.files.begin(), p.files.end(), v) == p.files.end()) p.files.push_back(v);
+      }
+      out.push_back(std::move(p));
+    }
+  }
+  return out;
+}
+}
+
+void App::DrawExtraExportCard() {
+  const fs::path root = game_.settingsFolder / "extra_assets";
+  const std::vector<ExportPack> packs = InstalledPacks(game_.extra.sources, root);
+  if (packs.empty() && !exportZipBusy_ && exportZipMessage_.empty()) return;
+  if (!BeginCard("##extraexport")) {
+    EndCard();
+    return;
+  }
+  Heading(Tr("Packs for a phone"));
+  Dim(Tr("Packs made on this PC can be used on the phone app: tick the ones to take, press Export, copy the zip to the phone and choose "
+         "\"Use a pack from a PC (.zip)\" on its Extra assets page. A pack is a few hundred MB; the zip must stay under 4 GB."));
+  for (const ExportPack& p : packs) {
+    bool& on = exportZipPick_.emplace(p.folder, true).first->second;
+    ImGui::Checkbox(Lbl(Fmt("%s  (%s)", Tr(p.label).c_str(), p.folder.c_str()).c_str(), ("exp_" + p.folder).c_str()).c_str(), &on);
+  }
+  if (exportZipBusy_) {
+    const uint64_t done = exportZipDone_, total = exportZipTotal_;
+    ImGui::TextColored(kBusy, "%s", Tr("Making the zip..."));
+    ImGui::ProgressBar(total > 0 ? static_cast<float>(static_cast<double>(done) / static_cast<double>(total)) : 0.0f, ImVec2(-1, 0),
+                       Fmt(Tr("%llu of %llu MB"), static_cast<unsigned long long>(done >> 20), static_cast<unsigned long long>(total >> 20)).c_str());
+  } else {
+    bool any = false;
+    for (const ExportPack& p : packs) any = any || exportZipPick_[p.folder];
+    ImGui::BeginDisabled(!any);
+    if (ImGui::Button(Lbl(Tr("Export packs for a phone..."), "Export packs for a phone").c_str())) {
+      static SDL_DialogFileFilter kZip[1];
+      kZip[0] = {Tr("Zip files"), "zip"};
+      exportZipMessage_.clear();
+      const std::string where = Utf8(sys::KnownFolder(sys::Folder::Documents, false) / PathOf("pokemon-xd-packs.zip"));
+      ShowSaveDialog(
+          [](void* user, const char* const* files, int) {
+            App* app = static_cast<App*>(user);
+            if (files != nullptr && files[0] != nullptr) {
+              std::lock_guard<std::mutex> lock(app->pickMutex_);
+              app->exportZipPicked_ = files[0];
+              app->exportZipPickedReady_ = true;
+            }
+          },
+          this, window_, kZip, 1, where.c_str());
+    }
+    ImGui::EndDisabled();
+  }
+  if (!exportZipMessage_.empty()) ImGui::TextColored(exportZipOk_ ? kGood : kBad, "%s", exportZipMessage_.c_str());
+  EndCard();
+  ImGui::Spacing();
+}
+
+void App::ExportPacksStart(const std::string& zipFile) {
+  if (exportZipBusy_) return;
+  if (exportZipThread_.joinable()) exportZipThread_.join();
+  const fs::path root = game_.settingsFolder / "extra_assets";
+  std::vector<std::string> names;
+  for (const ExportPack& p : InstalledPacks(game_.extra.sources, root)) {
+    auto it = exportZipPick_.find(p.folder);
+    if (it != exportZipPick_.end() && !it->second) continue;
+    for (const std::string& f : p.files) {
+      if (std::find(names.begin(), names.end(), f) == names.end()) names.push_back(f);
+    }
+  }
+  std::string path = zipFile;
+  if (path.size() < 4 || (path.compare(path.size() - 4, 4, ".zip") != 0 && path.compare(path.size() - 4, 4, ".ZIP") != 0)) path += ".zip";
+  exportZipBusy_ = true;
+  exportZipStop_ = false;
+  exportZipDone_ = exportZipTotal_ = 0;
+  exportZipThread_ = std::thread([this, root, names, path] {
+    std::string error;
+    const bool ok = eu::ZipFolderEntries(
+        root, names, PathOf(path), error,
+        [this](uint64_t done, uint64_t total) {
+          exportZipDone_ = done;
+          exportZipTotal_ = total;
+        },
+        [this] { return exportZipStop_.load(); });
+    Log(std::string("export packs: ") + path + (ok ? ": written" : ": FAILED: " + error));
+    exportZipOk_ = ok;
+    exportZipMessage_ = ok ? Fmt(Tr("Done: %s"), path.c_str()) : Fmt(Tr("The zip could not be made: %s"), error.c_str());
+    exportZipBusy_ = false;
+  });
+}
+
 void App::DrawExtraPage() {
   PageTitle(Tr("Extra assets"),
             Tr("Discs of other games that this port can borrow assets from. Your discs are only read; what is made from "
@@ -5908,6 +6025,8 @@ void App::DrawExtraPage() {
   const int count = std::min(static_cast<int>(sources.size()), static_cast<int>(extras_.size()));
 #if defined(__ANDROID__)
   DrawExtraPhoneCard();
+#else
+  DrawExtraExportCard();
 #endif
   {
     std::string have;
@@ -7286,8 +7405,8 @@ void App::DrawModsPage() {
                                                ImGuiTableFlags_PadOuterX)) {
     ImGui::TableSetupColumn(Lbl(Tr("On"), "On").c_str(), ImGuiTableColumnFlags_WidthFixed);
     ImGui::TableSetupColumn(Lbl(Tr("Mod"), "Mod").c_str(), ImGuiTableColumnFlags_WidthStretch, 3.0f);
-    ImGui::TableSetupColumn(Lbl(Tr("Version, made by"), "Version, made by").c_str(), ImGuiTableColumnFlags_WidthStretch, 1.5f);
-    ImGui::TableSetupColumn(Lbl(Tr("Order"), "Order").c_str(), ImGuiTableColumnFlags_WidthFixed);
+    ImGui::TableSetupColumn(Lbl(Tr("Version, made by"), "Version, made by").c_str(), ImGuiTableColumnFlags_WidthStretch | PHONE_HIDE_COLUMN, 1.5f);
+    ImGui::TableSetupColumn(Lbl(Tr("Order"), "Order").c_str(), ImGuiTableColumnFlags_WidthFixed | PHONE_HIDE_COLUMN);
     ImGui::TableHeadersRow();
     int moveFrom = -1, moveTo = -1;
     for (int i = 0; i < static_cast<int>(list.size()); i++) {
@@ -7391,7 +7510,7 @@ void App::DrawModsPage() {
           if (hint != offHints_.end()) Dim(std::string(Tr("Can't be used yet. ")) + hint->second);
         }
       }
-      ImGui::TableSetColumnIndex(2);
+      const auto drawVersion = [&] {
       if (mod != nullptr) {
         ImGui::TextUnformatted(mod->manifest.version.c_str());
         if (!mod->manifest.author.empty()) {
@@ -7408,7 +7527,8 @@ void App::DrawModsPage() {
           modUpd_.AskRollBack(mod->manifest.id);
         }
       }
-      ImGui::TableSetColumnIndex(3);
+      };
+      const auto drawOrder = [&] {
       if (i == 0) {
         ImGui::BeginDisabled();
       }
@@ -7429,6 +7549,16 @@ void App::DrawModsPage() {
       }
       if (i + 1 == static_cast<int>(list.size())) {
         ImGui::EndDisabled();
+      }
+      };
+      if (LAUNCHER_PHONE(portrait_)) {
+        drawVersion();
+        drawOrder();
+      } else {
+        ImGui::TableSetColumnIndex(2);
+        drawVersion();
+        ImGui::TableSetColumnIndex(3);
+        drawOrder();
       }
       ImGui::PopID();
     }
@@ -10853,6 +10983,10 @@ int App::Run() {
       if (pickedReady_) {
         pickedReady_ = false;
         SelectDisc(picked_);
+      }
+      if (exportZipPickedReady_) {
+        exportZipPickedReady_ = false;
+        ExportPacksStart(exportZipPicked_);
       }
       if (modToolPickedReady_) {
         modToolPickedReady_ = false;

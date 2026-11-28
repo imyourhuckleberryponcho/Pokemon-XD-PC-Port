@@ -331,9 +331,26 @@ static void TestMake(const fs::path& standin, const fs::path& root) {
   SetEnv("XD_STANDIN_COUNT", "8");
   SetEnv("XD_STANDIN_FAIL", "the disc is damaged near the Pokemon models");
   s = RunStandIn(standin, root, (root / "pbr.iso").string(), 0);
-  CHECK(s.phase == P::Failed && s.message == "the disc is damaged near the Pokemon models");
+  CHECK(s.phase == P::Failed && s.message.find("the disc is damaged near the Pokemon models") == 0);
+  CHECK(s.message.find((root / "extra" / "pbr.log").string()) != std::string::npos);
+  CHECK(fs::is_regular_file(root / "extra" / "pbr.log"));
   CHECK(!fs::exists(fs::path(out.string() + ".tmp")) && fs::is_regular_file(out / "mod.json"));
   SetEnv("XD_STANDIN_FAIL", "");
+
+
+
+  SetEnv("XD_STANDIN_CRASH", "1");
+  s = RunStandIn(standin, root, (root / "pbr.iso").string(), 0);
+  CHECK(s.phase == P::Failed && s.message.find("exit code -1073741819") != std::string::npos);
+  CHECK(s.message.find((root / "extra" / "pbr.log").string()) != std::string::npos);
+  {
+    std::ifstream log(root / "extra" / "pbr.log", std::ios::binary);
+    const std::string text((std::istreambuf_iterator<char>(log)), std::istreambuf_iterator<char>());
+    CHECK(text.find("progress 0 8 ") != std::string::npos);
+  }
+  CHECK(!fs::exists(fs::path(out.string() + ".tmp")) && fs::is_regular_file(out / "mod.json"));
+  SetEnv("XD_STANDIN_CRASH", "");
+  fs::remove(root / "extra" / "pbr.log");
 
 
   SetEnv("XD_STANDIN_COUNT", "40");

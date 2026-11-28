@@ -262,18 +262,22 @@ Garc::Garc(const ByteFile& f, uint64_t off, uint64_t) : f_(f), off_(off) {
   Bytes o = f.read(off + hl, 0x10);
   if (o.size() < 0x10 || memcmp(o.data(), "OTAF", 4)) throw Fail("no OTAF");
   uint32_t osz = u32(&o[4]);
+  const uint32_t nfiles = (uint32_t)o[8] | (uint32_t)o[9] << 8;
   Bytes b = f.read(off + hl + osz, 12);
   if (b.size() < 12 || memcmp(b.data(), "BTAF", 4)) throw Fail("no BTAF");
   uint32_t bsz = u32(&b[4]), n2 = u32(&b[8]);
   Bytes body = f.read(off + hl + osz + 12, bsz - 12);
   size_t p = 0;
-  entries.reserve(n2);
-  for (uint32_t i = 0; i < n2; i++) {
+  const uint32_t n = nfiles != 0 && nfiles <= n2 ? nfiles : n2;
+  entries.reserve(n);
+  for (uint32_t i = 0; i < n; i++) {
+    if (p + 4 > body.size()) throw Fail("GARC BTAF cut short");
     uint32_t mask = u32(&body[p]);
     p += 4;
     std::vector<std::pair<int64_t, int64_t>> subs(32, {0, -1});
     for (int bit = 0; bit < 32; bit++) {
       if (mask >> bit & 1) {
+        if (p + 12 > body.size()) throw Fail("GARC BTAF cut short");
         subs[bit] = {u32(&body[p]), u32(&body[p + 8])};
         p += 12;
       }

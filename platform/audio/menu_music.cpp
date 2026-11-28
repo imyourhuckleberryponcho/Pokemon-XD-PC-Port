@@ -191,6 +191,16 @@ const char* ModeName(int mode) {
 
 }
 
+namespace {
+struct CopyThreadJoiner {
+  ~CopyThreadJoiner() {
+    sFinish = true;
+    sStop = true;
+    if (sThread.joinable()) sThread.join();
+  }
+} sCopyThreadJoiner;
+}
+
 extern "C" {
 
 void PortMenuMusic_SetEngine(const PortMenuMusicEngine* engine) { sEngine = engine; }

@@ -204,6 +204,9 @@ bool sNewGamePassOn = false;
 int sInjectA = 0;
 uint32_t sInjectFrom = 0;
 bool sScreen = false;
+bool sTitleSeen = false;
+bool sNewGameCreated = false;
+bool sLateDone = false;
 
 std::vector<std::pair<uint32_t, std::string>> sReplaySettings;
 size_t sReplayNext = 0;
@@ -993,6 +996,26 @@ void ContinueSetUp(const ep::Setup* setup, const char* why) {
 }
 
 bool ContinueWatch() { return sCardState == CardState::Setup && !sRestarted; }
+void NoteTitleSeen() { sTitleSeen = true; }
+void NoteNewGameCreated() { sNewGameCreated = true; }
+
+void LateContinueNet() {
+  if (sLateDone || sChosen != Chosen::None || sCardState != CardState::Setup || sRestarted || !sTitleSeen || sNewGameCreated) return;
+  if (std::getenv("XD_SAVESTATE_SCRIPT") != nullptr || std::getenv("XD_NO_LATE_CONTINUE") != nullptr) return;
+  if (!xd::speedrun::MapStarted()) return;
+  sLateDone = true;
+  std::fprintf(stderr, "[playthrough] CONTINUE reached the game without the title menu seeing it: the save's set-up is applied now (late safety net)\n");
+  if (HasGen4(sCardSetup.challenges) && !xd::gen4::PackPresent()) {
+    std::fprintf(stderr, "[playthrough] late safety net: the save has Gen 4 Pokemon and the Gen 4 pack is not there (too late to refuse; the save guard stops a save)\n");
+  }
+  sChosen = Chosen::Continue;
+  sChosenFrame = PortVI_GetFlipCount();
+  sCurrentUnknown = false;
+  AdoptSplit();
+  sCurrent = sCardSetup;
+  ContinueSetUp(&sCurrent, "continue, late safety net");
+  Note("continue: " + ep::Label(sCurrent) + " (late safety net)");
+}
 
 bool ChallengesPossible() {
   return (sCardState == CardState::Setup && !sCardSetup.challenges.empty()) || (sRestarted && !sRestartSetup.challenges.empty()) ||
@@ -1098,6 +1121,7 @@ bool TitleInput(PADStatus* status, int select, u16 newButtons) {
 
 bool TitleInputImpl(PADStatus* status, int select, u16 newButtons) {
   if ((newButtons & PAD_BUTTON_A) == 0) return false;
+  if (select == 1 && EnvIs("XD_TEST_MISS_CONTINUE", "1")) return false;
   if (select == 0 && sNewGamePassOn) {
     sNewGamePassOn = false;
     return false;
@@ -1124,6 +1148,18 @@ bool TitleInputImpl(PADStatus* status, int select, u16 newButtons) {
     s.mods = sLoaded;
     Begin(s, "");
     return false;
+  }
+  if (select == 1) {
+    if (sCardState == CardState::Setup && HasGen4(sCardSetup.challenges) && !xd::gen4::PackPresent()) {
+      for (int i = 0; i < PAD_MAX_CONTROLLERS; i++) {
+        if (status[i].err == PAD_ERR_NONE) status[i].button &= static_cast<u16>(~PAD_BUTTON_A);
+      }
+      PortInput_LatchHeld();
+      std::fprintf(stderr, "[playthrough] CONTINUE refused: the save has Gen 4 Pokemon and the Gen 4 pack is not there (the save is not touched)\n");
+      if (PortXD_OpenContinueRefusal(Tr("This playthrough has Gen 4 Pokemon."), Tr("Add your Battle Revolution disc or your Ultra Sun / Ultra Moon dump in the launcher (Extra assets) to continue it."),
+                                     Tr("Your save is safe and unchanged. It needs the Gen 4 pack because the Pokemon in it come from there."), std::string())) return true;
+      return false;
+    }
   }
   if (!sScreen) {
     const bool watched = sAsk || TimerWatch() || PickerPossible();
@@ -1178,16 +1214,6 @@ bool TitleInputImpl(PADStatus* status, int select, u16 newButtons) {
     return false;
   }
   if (select == 1) {
-    if (sScreen && sCardState == CardState::Setup && HasGen4(sCardSetup.challenges) && !xd::gen4::PackPresent()) {
-      for (int i = 0; i < PAD_MAX_CONTROLLERS; i++) {
-        if (status[i].err == PAD_ERR_NONE) status[i].button &= static_cast<u16>(~PAD_BUTTON_A);
-      }
-      PortInput_LatchHeld();
-      std::fprintf(stderr, "[playthrough] CONTINUE refused: the save has Gen 4 Pokemon and the Gen 4 pack is not there (the save is not touched)\n");
-      if (PortXD_OpenContinueRefusal(Tr("This playthrough has Gen 4 Pokemon."), Tr("Add your Battle Revolution disc or your Ultra Sun / Ultra Moon dump in the launcher (Extra assets) to continue it."),
-                                     Tr("Your save is safe and unchanged. It needs the Gen 4 pack because the Pokemon in it come from there."), std::string())) return true;
-      return false;
-    }
     const bool again = sChosen == Chosen::Continue;
     sPending = false;
     sChosen = Chosen::Continue;
@@ -1501,6 +1527,7 @@ void PortXD_PlaythroughFrame(void) {
   xd::discord::Frame();
   xd::stream::Frame();
   xd::battles::Frame();
+  xd::pt::LateContinueNet();
   if (!xd::speedrun::PlaythroughChosen() && xd::speedrun::MapStarted()) {
     if (sCardState == CardState::NoSave) {
       xd::speedrun::NewGame(xd::speedrun::NewGameDefault());

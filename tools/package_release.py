@@ -376,6 +376,13 @@ def main():
             f.write(readme_text.guide_text())
 
 
+
+    import pe_iat_check
+    damaged = [p for p in pe_iat_check.programs([out]) if pe_iat_check.check(p)[0]]
+    if damaged:
+        sys.exit('Damaged programs in the player folder (tools/pe_iat_check.py): ' + ', '.join(os.path.relpath(p, out) for p in damaged))
+
+
     allowed_top = {'Pokemon XD Launcher.exe', 'Read me.txt', 'Randomizer guide.txt', 'recomplauncher.json', 'game'}
     allowed_ext = {'.exe', '.dll', '.ttf', '.txt'}
     allowed_exe = {'Pokemon XD Launcher.exe', 'xd.exe', 'xd_launcher.exe', 'xd_hd_make.exe'}

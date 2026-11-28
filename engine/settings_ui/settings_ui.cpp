@@ -248,7 +248,19 @@ bool DrawPresetChooser(es::Registry& registry, const Options& options) {
     if (options.headingFont != nullptr) {
       ImGui::PushFont(static_cast<ImFont*>(options.headingFont));
     }
+#ifdef __ANDROID__
+    bool clicked;
+    if (ImGui::CalcTextSize(label.c_str()).x + indent > ImGui::GetContentRegionAvail().x) {
+      clicked = ImGui::RadioButton("##preset", now == p) && now != p;
+      ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x);
+      ImGui::TextWrapped("%s", label.c_str());
+      if (ImGui::IsItemClicked() && now != p) clicked = true;
+    } else {
+      clicked = ImGui::RadioButton(label.c_str(), now == p) && now != p;
+    }
+#else
     const bool clicked = ImGui::RadioButton(label.c_str(), now == p) && now != p;
+#endif
     if (options.headingFont != nullptr) {
       ImGui::PopFont();
     }
@@ -274,6 +286,20 @@ bool DrawPresetChooser(es::Registry& registry, const Options& options) {
   Wrapped(options.colors.dim,
           Tr("Look presets: set resolution, frame rate, anti-aliasing and texture filtering "
              "together. Only how the picture is drawn changes, never the game."));
+#ifdef __ANDROID__
+  {
+    if (ImGui::Button(Lbl(Tr("Best looks (fast phone)"), "Best looks (fast phone)").c_str())) {
+      changed |= ApplyLookPreset(registry, LookPreset::BestLooks) > 0;
+    }
+    const ImGuiStyle& st = ImGui::GetStyle();
+    const float firstEnd = ImGui::GetItemRectMax().x;
+    const float second = ImGui::CalcTextSize(Tr("Smooth on a weak phone")).x + 2 * st.FramePadding.x;
+    if (firstEnd + st.ItemSpacing.x + second < ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x) ImGui::SameLine();
+    if (ImGui::Button(Lbl(Tr("Smooth on a weak phone"), "Smooth on a weak phone").c_str())) {
+      changed |= ApplyLookPreset(registry, LookPreset::SmoothOnWeakPC) > 0;
+    }
+  }
+#else
   if (ImGui::Button(Lbl(Tr("Best looks (fast PC)"), "Best looks (fast PC)").c_str())) {
     changed |= ApplyLookPreset(registry, LookPreset::BestLooks) > 0;
   }
@@ -281,6 +307,7 @@ bool DrawPresetChooser(es::Registry& registry, const Options& options) {
   if (ImGui::Button(Lbl(Tr("Smooth on a weak PC"), "Smooth on a weak PC").c_str())) {
     changed |= ApplyLookPreset(registry, LookPreset::SmoothOnWeakPC) > 0;
   }
+#endif
   ImGui::Spacing();
   if (ask) {
     ImGui::OpenPopup(Lbl(Tr("Switch preset"), "Switch preset").c_str());

@@ -322,6 +322,7 @@ void Choose(int index) {
 }
 
 extern "C" void PortXD_NewGameCreate(void* save, uint16_t* name) {
+  xd::pt::NoteNewGameCreated();
   savedataCreate(save, name);
   if (!sPlan.on || sPlan.count == 0) {
     const std::vector<std::string>& options = xd::pt::CurrentOptions();

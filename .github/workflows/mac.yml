@@ -323,13 +323,13 @@ jobs:
             echo "app: $APP"
             echo "== codesign --verify (app)"; codesign --verify --strict --verbose=4 "$APP" 2>&1; echo "exit code $?"
             echo "== codesign -dv (app)"; codesign -dv --verbose=4 "$APP" 2>&1
-            for f in "$APP"/Contents/Frameworks/*.dylib "$APP/Contents/MacOS/xd" "$APP/Contents/MacOS/xd_launcher"; do
+            for f in "$APP"/Contents/Frameworks/*.dylib "$APP/Contents/MacOS/xd" "$APP/Contents/MacOS/xd_launcher" "$APP/Contents/MacOS/xd_hd_make"; do
               echo "== codesign --verify $(basename "$f")"; codesign --verify --strict --verbose=4 "$f" 2>&1; echo "exit code $?"
               echo "== otool -L $(basename "$f")"; otool -L "$f"
             done
             echo "== files"; ls -laR "$APP"
             echo "== paths outside the app and the system (must be none):"
-            for f in "$APP"/Contents/Frameworks/*.dylib "$APP/Contents/MacOS/xd" "$APP/Contents/MacOS/xd_launcher"; do
+            for f in "$APP"/Contents/Frameworks/*.dylib "$APP/Contents/MacOS/xd" "$APP/Contents/MacOS/xd_launcher" "$APP/Contents/MacOS/xd_hd_make"; do
               otool -L "$f" | tail -n +2 | awk '{print $1}' | grep -E "^(/usr/local|/opt/|@rpath)" | sed "s|^|$(basename "$f"): |"
             done
             echo "(end of list)"
@@ -380,11 +380,26 @@ jobs:
             ( cd "$RUNNER_TEMP/quarantined/Pokemon XD.app/Contents/MacOS" && XD_NO_LAUNCHER=1 XD_TEST_RUN=1 XD_NO_MESSAGE_BOXES=1 XD_CRASH_REPORT=0 \
                 XD_SETTINGS_DIR="$RUNNER_TEMP/pk/settings" XD_CARD_DIR="$RUNNER_TEMP/pk/card" XD_CACHE_DIR="$RUNNER_TEMP/pk/cache" \
                 perl -e 'alarm 120; exec @ARGV' ./xd_launcher 2>&1 | tail -n 4; echo "quarantined launcher -> game hand-over exit ${PIPESTATUS[0]}" )
+            echo "== save states switched on (0.8.1): the same start as above with XD_SAVESTATES=1 (no disc: it may end before the save state code)"
+            ( cd "$APP/Contents/MacOS" && XD_SAVESTATES=1 XD_TEST_RUN=1 XD_NO_MESSAGE_BOXES=1 XD_CRASH_REPORT=0                 XD_SETTINGS_DIR="$RUNNER_TEMP/pk/settings" XD_CARD_DIR="$RUNNER_TEMP/pk/card" XD_CACHE_DIR="$RUNNER_TEMP/pk/cache"                 perl -e 'alarm 120; exec @ARGV' ./xd 2>&1 | grep -E "savestate|exit|Stopped|disc" | head -n 8; echo "savestates start exit ${PIPESTATUS[0]}" )
+            echo "== HD texture maker (0.8.1): starts, downloads + checks + unpacks the official upscaler, the upscaler starts"
+            Q="$RUNNER_TEMP/quarantined/Pokemon XD.app/Contents/MacOS"
+            file "$Q/xd_hd_make"
+            perl -e 'alarm 60; exec @ARGV' "$Q/xd_hd_make" 2>&1 | head -n 3; echo "hdmake usage exit ${PIPESTATUS[0]}"
+            rm -rf "$RUNNER_TEMP/hdtools"
+            # (the disc is opened only after the install: the missing disc ends the run with exit 1 after the upscaler is in place)
+            perl -e 'alarm 300; exec @ARGV' "$Q/xd_hd_make" /nonexistent/xd.iso --pack "$RUNNER_TEMP/hdpack" --tools "$RUNNER_TEMP/hdtools" --install 2>&1 | tail -n 5; echo "hdmake install exit ${PIPESTATUS[0]}"
+            ls -laR "$RUNNER_TEMP/hdtools" 2>&1 | head -n 20
+            R="$RUNNER_TEMP/hdtools/realesrgan-ncnn-vulkan"
+            file "$R"; lipo -archs "$R" 2>&1; xattr -l "$R" 2>&1 | head -n 3
+            perl -e 'alarm 60; exec @ARGV' "$R" -h 2>&1 | head -n 6; echo "realesrgan -h exit ${PIPESTATUS[0]}"
           } > logs/package_helpers.txt 2>&1
           cat logs/package_helpers.txt
           grep -q "without a good signature: 0$" logs/package_helpers.txt || PROBLEMS_EXTRA="$PROBLEMS_EXTRA helper-signatures"
           grep -q "NOT IN THE APP" logs/package_helpers.txt && PROBLEMS_EXTRA="$PROBLEMS_EXTRA helper-missing"
           grep -q -E "^quarantined (usum|pbr)_models/[a-z_]+ exit [1-9]|Killed: 9|^quarantined launcher -> game hand-over exit (0|1[0-9][0-9])$" logs/package_helpers.txt && PROBLEMS_EXTRA="$PROBLEMS_EXTRA quarantine-blocks-helper"
+          grep -q "^hdmake usage exit 2$" logs/package_helpers.txt || PROBLEMS_EXTRA="$PROBLEMS_EXTRA hdmake-start"
+          grep -q "^hdmake install exit 1$" logs/package_helpers.txt && [ -x "$RUNNER_TEMP/hdtools/realesrgan-ncnn-vulkan" ] || PROBLEMS_EXTRA="$PROBLEMS_EXTRA hdmake-install"
           PROBLEMS=""
           grep -q "does NOT verify\|SIGNING FAILED\|signing failed" logs/package.log && PROBLEMS="$PROBLEMS signing"
           grep -q -E "^[^ ]+: (/usr/local|/opt/|@rpath)" logs/package_check.txt && PROBLEMS="$PROBLEMS library-paths"

@@ -1,4 +1,5 @@
 #include "xd_forms.h"
+#include "mega_fx.h"
 
 #include "online_battle.h"
 #include "xd_gen57.h"
@@ -77,6 +78,9 @@ void PortMenu_PictureRect(float* x, float* y, float* scale);
 void PortInput_SetPadObserver(void (*observer)(const PADStatus* status));
 }
 
+struct FormsGridEntry { void* slot; void* pokemon[2]; uint16_t count; uint8_t arg1, arg2; };
+extern "C" { extern struct FormsGrid { FormsGridEntry entries[4]; uint16_t count, pokemonCount; } gBattleGrid; }
+
 namespace {
 constexpr uint32_t kBank = 0x7D0u << 20;
 constexpr uint32_t kTextReact = 0xBF00, kTextMega = 0xBF01, kTextPrimal = 0xBF02;
@@ -112,6 +116,17 @@ bool BossBattle() {
 }
 void* sGiven[8];
 int sGivenCount = 0;
+
+void KeepGridClean(void* oldSeq, void* newSeq) {
+  for (FormsGridEntry& e : gBattleGrid.entries) {
+    for (void*& m : e.pokemon) {
+      if (m != oldSeq) continue;
+      std::fprintf(stderr, "[forms] the battle grid still held the old model %p after the swap: %s\n", oldSeq, newSeq != nullptr ? "the new one put in its place" : "removed");
+      m = newSeq;
+      if (newSeq == nullptr && e.count > 0) { e.count--; if (gBattleGrid.pokemonCount > 0) gBattleGrid.pokemonCount--; }
+    }
+  }
+}
 
 int SideOf(void* fop) { return fightTargetIsHostSide(fop, static_cast<uint16_t>(fightFloor_GetFightType(nullptr))) ? 0 : 1; }
 
@@ -177,8 +192,14 @@ bool SwapTo(void* fop, const xd::forms::Form& form, uint32_t messageId, bool run
   if (oldSeq != nullptr && newSeq != nullptr) {
     Sequence_LoadWaza(oldSeq, 0x81, 4, 0);
     Sequence_LoadWaza(newSeq, 0x83, 4, 0);
+    if (form.kind == xd::forms::Kind::Mega || form.kind == xd::forms::Kind::Primal) {
+      const int primal = form.kind != xd::forms::Kind::Primal ? 0 : form.key.find("kyogre") != std::string::npos ? 1 : form.key.find("groudon") != std::string::npos ? 2 : 3;
+      xd::megafx::Charge(fop, primal);
+    }
     fightSeqFightOutPokemonEffect(0x81, fop, 1, 0);
+    xd::megafx::Burst(fop);
     battleGridReplacePokemon(oldSeq, newSeq);
+    KeepGridClean(oldSeq, newSeq);
     battleGridUpdate();
     fightOutPokemon_SetSequencePtr(fop, newSeq);
     fightSeqFightOutPokemonEffect(0x83, fop, 0, 0);
@@ -215,6 +236,7 @@ namespace xd::forms {
 bool MegaRule() { return Loaded() && xd::challenges::Active("mega_evolution"); }
 
 void BattleEnded() {
+  xd::megafx::Reset();
   sArmed = false;
   sUsed[0] = sUsed[1] = false;
   for (int i = 0; i < 4; i++) { sPending[i] = nullptr; sChoiceMega[i] = false; }
@@ -258,6 +280,7 @@ void TurnStart() {
     if (f == nullptr || sUsed[SideOf(fop)]) continue;
     sUsed[SideOf(fop)] = true;
     void* idata = itemDataBiosGetPtr(static_cast<uint16_t>(f->stone));
+    xd::megafx::Begin(fop);
     Say(kTextReact, fop, idata != nullptr ? GSmsgGetGSchar(itemDataBiosGetName(idata)) : nullptr);
     SwapTo(fop, *f, kTextMega);
   }

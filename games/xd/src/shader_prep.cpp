@@ -2,6 +2,12 @@
 
 #include <SDL3/SDL.h>
 #include <run_status.h>
+#ifdef __ANDROID__
+#include <imgui.h>
+#include <port_menu.h>
+#include <settings.h>
+#include <sys/system_properties.h>
+#endif
 
 #ifdef _WIN32
 #define NOMINMAX
@@ -179,6 +185,168 @@ std::string PreparedReport() {
          "until then the first battles and places may stutter)";
 }
 
+#ifdef __ANDROID__
+std::string AndroidProp(const char* name) {
+  char v[PROP_VALUE_MAX] = {0};
+  __system_property_get(name, v);
+  return v;
+}
+
+std::string AndroidListHash() {
+  SDL_IOStream* io = SDL_IOFromFile("initial_pipeline_cache.db", "rb");
+  if (io == nullptr) return "";
+  uint64_t h = 1469598103934665603ull;
+  char buf[65536];
+  for (;;) {
+    const size_t n = SDL_ReadIO(io, buf, sizeof buf);
+    if (n == 0) break;
+    for (size_t i = 0; i < n; ++i) h = (h ^ static_cast<unsigned char>(buf[i])) * 1099511628211ull;
+  }
+  SDL_CloseIO(io);
+  char out[20];
+  std::snprintf(out, sizeof out, "%016llx", static_cast<unsigned long long>(h));
+  return out;
+}
+
+bool AndroidPrepareKey(std::string& key, std::string& cacheFolder) {
+  const std::string list = AndroidListHash();
+  if (list.empty()) return false;
+  std::string cache;
+  if (const char* dir = std::getenv("XD_CACHE_DIR"); dir != nullptr && dir[0] != '\0') {
+    cache = dir;
+  } else if (char* pref = SDL_GetPrefPath(nullptr, "Pokemon XD"); pref != nullptr) {
+    cache = pref;
+    SDL_free(pref);
+  }
+  if (cache.empty()) return false;
+  while (cache.size() > 1 && (cache.back() == '/' || cache.back() == '\\')) cache.pop_back();
+  key = "1|" XD_PORT_VERSION "|list " + list + "|android " + AndroidProp("ro.build.fingerprint") + "; vulkan " +
+        AndroidProp("ro.hardware.vulkan") + "; soc " + AndroidProp("ro.board.platform") + "; ";
+  for (char& c : key) {
+    if (static_cast<unsigned char>(c) < 0x20 || static_cast<unsigned char>(c) >= 0x7F) c = '?';
+  }
+  cacheFolder = cache;
+  return true;
+}
+
+std::string ReadFirstLine(const std::string& path) {
+  std::ifstream in(path);
+  std::string have;
+  std::getline(in, have);
+  while (!have.empty() && (have.back() == '\r' || have.back() == '\n')) have.pop_back();
+  return have;
+}
+
+struct AndroidPrep {
+  std::string key, stampPath;
+  std::chrono::steady_clock::time_point start;
+  uint32_t base = 0, total = 0;
+  bool skipped = false, done = false;
+  double lastLog = 0;
+};
+AndroidPrep sAndroid;
+bool sAndroidWanted = false;
+bool sAndroidOpened = false;
+
+bool AndroidPrepFrame(void*, const PortMenuInput* in) {
+  AuroraPipelineStats s{};
+  AuroraGetPipelineStats(&s);
+  AndroidPrep& a = sAndroid;
+  const uint32_t built = s.created - a.base;
+  a.total = std::max(a.total, built + s.queued);
+  const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - a.start).count();
+  if (in != nullptr && (in->pressed & 0x0200) != 0) { a.skipped = true; return false; }
+  if (s.queued == 0) { a.done = true; return false; }
+  if (secs > 45 * 60) { a.skipped = true; return false; }
+  if (secs - a.lastLog >= 15) {
+    a.lastLog = secs;
+    std::fprintf(stderr, "[shaders] preparing the graphics: %u of %u after %.0f s\n", built, a.total, secs);
+  }
+  ImGuiIO& io = ImGui::GetIO();
+  const ImVec2 size = io.DisplaySize;
+  ImDrawList* dl = ImGui::GetForegroundDrawList();
+  dl->AddRectFilled(ImVec2(0, 0), size, IM_COL32(8, 10, 24, 255));
+  const float unit = std::max(14.f, std::min(size.x, size.y) / 22.f);
+  ImFont* font = ImGui::GetFont();
+  const float cx = size.x / 2, cy = size.y / 2;
+  auto centered = [&](const char* text, float y, float px, ImU32 col) {
+    const float wrap = size.x * 0.58f;
+    const ImVec2 t = font->CalcTextSizeA(px, 1e9f, wrap, text, nullptr, nullptr);
+    dl->AddText(font, px, ImVec2(cx - t.x / 2, y), col, text, nullptr, wrap);
+    return t.y;
+  };
+  float y = cy - unit * 6.0f;
+  y += centered("Getting the graphics ready", y, unit * 1.5f, IM_COL32(255, 255, 255, 255)) + unit * 0.5f;
+  y += centered("This happens once on this phone (and again after a system update).", y, unit * 0.95f, IM_COL32(200, 205, 225, 255)) + unit * 0.2f;
+  y += centered("It avoids short freezes and sound gaps later. The game starts when it is done.", y, unit * 0.95f, IM_COL32(200, 205, 225, 255)) + unit * 1.0f;
+  const float barW = std::min(size.x - 4 * unit, unit * 28), barH = unit * 1.1f, bx = cx - barW / 2;
+  const float frac = a.total > 0 ? std::min(1.f, static_cast<float>(built) / static_cast<float>(a.total)) : 0.f;
+  dl->AddRectFilled(ImVec2(bx, y), ImVec2(bx + barW, y + barH), IM_COL32(40, 46, 80, 255), barH / 2);
+  dl->AddRectFilled(ImVec2(bx, y), ImVec2(bx + barW * frac, y + barH), IM_COL32(90, 160, 255, 255), barH / 2);
+  y += barH + unit * 0.6f;
+  char line[160];
+  const double left = built > 20 ? secs * (a.total - built) / built : 0;
+  if (left > 0) {
+    std::snprintf(line, sizeof line, "%u of %u   |   about %d min %02d s left", built, a.total, static_cast<int>(left) / 60,
+                  static_cast<int>(left) % 60);
+  } else {
+    std::snprintf(line, sizeof line, "%u of %u", built, a.total);
+  }
+  y += centered(line, y, unit * 1.0f, IM_COL32(255, 255, 255, 255)) + unit * 1.2f;
+  centered("Keep the phone plugged in if you can: it works hard for a while. Press B (or Back) to skip this time.", y, unit * 0.8f,
+           IM_COL32(150, 156, 185, 255));
+  SDL_Delay(30);
+  return true;
+}
+
+void AndroidPrepClose(void*) {
+  AndroidPrep& a = sAndroid;
+  AuroraPipelineStats s{};
+  AuroraGetPipelineStats(&s);
+  const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - a.start).count();
+  if (!a.done) {
+    std::fprintf(stderr, "[shaders] preparing the graphics: SKIPPED after %.1f s (%u compiled, %u left); asked again at the next start\n", secs,
+                 s.created - a.base, s.queued);
+    return;
+  }
+  for (int waited = 0; AuroraCacheWritesPending() != 0 && waited < 15000; waited += 50) SDL_Delay(50);
+  std::fprintf(stderr, "[shaders] prepared: %u pipelines compiled in %.1f s (Android, in the game)\n", s.created - a.base, secs);
+  if (FILE* f = std::fopen(a.stampPath.c_str(), "wb")) {
+    std::fputs((a.key + "\n").c_str(), f);
+    std::fclose(f);
+  }
+}
+
+const PortMenuPage kAndroidPrepPage{"shader preparation", nullptr, AndroidPrepFrame, AndroidPrepClose, nullptr};
+
+void AndroidPrepStart(std::string& report) {
+  std::string key, cache;
+  if (!AndroidPrepareKey(key, cache)) {
+    report = "prepared on this phone: not needed (no shader list in this APK)";
+    return;
+  }
+  const bool test = std::getenv("XD_INPUT_SCRIPT") != nullptr || std::getenv("XD_REPLAY") != nullptr ||
+                    std::getenv("XD_MENU_SCRIPT") != nullptr || std::getenv("XD_RENDER_ICON") != nullptr;
+  const char* force = std::getenv("XD_ANDROID_PREPARE_SHADERS");
+  const bool forced = force != nullptr && force[0] == '1';
+  const std::string stamp = cache + "/shaders_prepared.txt";
+  const std::string have = ReadFirstLine(stamp);
+  if (have == key && !forced) {
+    report = "prepared on this phone: yes (this version and system)";
+    return;
+  }
+  if (have != key) std::fprintf(stderr, "[shaders] preparation stamp: wanted \"%s\", found \"%s\"\n", key.c_str(), have.c_str());
+  if (test && !forced) {
+    report = "prepared on this phone: NO (a test run: not asked)";
+    return;
+  }
+  sAndroid.key = key;
+  sAndroid.stampPath = stamp;
+  sAndroidWanted = true;
+  report = "prepared on this phone: NO (the game prepares the graphics first, with a progress screen)";
+}
+#endif
+
 }
 
 extern "C" const char* PortXD_ShadersPreparedReport(void) { return sPreparedReport.c_str(); }
@@ -228,10 +396,23 @@ extern "C" void PortXD_ShadersStart(void) {
   const char* stats = std::getenv("XD_SHADER_STATS");
   sStats = stats != nullptr && stats[0] == '1';
   std::atexit(PrintTotals);
+#ifdef __ANDROID__
+  {
+    const engine::settings::Registry& reg = engine::settings::Global();
+    const size_t i = reg.Find("video.performance");
+    std::fprintf(stderr, "[android] performance mode: %s\n",
+                 i != engine::settings::kNoSetting && reg.ValueOf(i).i != 0 ? "on" : "off");
+  }
+#endif
 
   const char* stamp = std::getenv("XD_PREPARE_SHADERS");
   if (stamp == nullptr || stamp[0] == '\0') {
+#ifdef __ANDROID__
+    std::string text;
+    AndroidPrepStart(text);
+#else
     const std::string text = PreparedReport();
+#endif
     sPreparedReport = "shaders " + text;
     std::fprintf(stderr, "[shaders] %s\n", text.c_str());
     return;
@@ -281,6 +462,28 @@ extern "C" void PortXD_ShadersStart(void) {
 }
 
 extern "C" void PortXD_ShadersFrame(void) {
+#ifdef __ANDROID__
+  if (sAndroidWanted && !sAndroidOpened) {
+    AuroraPipelineStats p{};
+    AuroraGetPipelineStats(&p);
+    sAndroidOpened = true;
+    if (p.queued > 0) {
+      sAndroid.start = std::chrono::steady_clock::now();
+      sAndroid.base = p.created;
+      sAndroid.total = p.created + p.queued;
+      std::fprintf(stderr, "[shaders] preparing the graphics: %u known pipelines, %u to compile\n", p.knownPipelines, p.queued);
+      PortMenu_Open(&kAndroidPrepPage);
+    } else if (p.knownPipelines == 0) {
+      std::fprintf(stderr, "[shaders] preparing the graphics: no pipelines known (the list or the cache database could not be read), not stamped\n");
+    } else {
+      std::fprintf(stderr, "[shaders] preparing the graphics: nothing queued, stamp written\n");
+      if (FILE* f = std::fopen(sAndroid.stampPath.c_str(), "wb")) {
+        std::fputs((sAndroid.key + "\n").c_str(), f);
+        std::fclose(f);
+      }
+    }
+  }
+#endif
   if (!sStats) return;
   AuroraPipelineStats s{};
   AuroraGetPipelineStats(&s);

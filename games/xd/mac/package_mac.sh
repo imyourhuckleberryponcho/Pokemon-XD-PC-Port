@@ -37,6 +37,14 @@ if [ -x "$BIN/xd_launcher" ]; then
 else
   echo "  launcher: NOT included ($BIN/xd_launcher is missing): the app starts the game directly, as before"
 fi
+# The HD texture maker (docs/HD_TEXTURES.md): a second program next to the game, because the launcher's "Make HD textures" button
+# looks for <program folder>/xd_hd_make (the program folder is Contents/MacOS). Signed on its own below, like xd_launcher.
+if [ -x "$BIN/xd_hd_make" ]; then
+  cp "$BIN/xd_hd_make" "$APP/Contents/MacOS/xd_hd_make"
+  echo "  xd_hd_make: included (HD texture maker)"
+else
+  echo "  xd_hd_make: NOT included ($BIN/xd_hd_make is missing): the Make HD textures button will say the maker is not there"
+fi
 sed -e "s/@VERSION@/$VERSION/g" -e "s/@MAIN@/$MAIN/g" "$HERE/Info.plist.in" > "$APP/Contents/Info.plist"
 # The app's picture (original art, games/xd/resources/xd_icon.png): sips and iconutil are Apple's own tools.
 # Best effort: without the picture the app just shows the system's plain icon.
@@ -109,6 +117,9 @@ bundle_needs "$APP/Contents/MacOS/xd" "@executable_path/../Frameworks"
 if [ -f "$APP/Contents/MacOS/xd_launcher" ]; then
   bundle_needs "$APP/Contents/MacOS/xd_launcher" "@executable_path/../Frameworks"
 fi
+if [ -f "$APP/Contents/MacOS/xd_hd_make" ]; then
+  bundle_needs "$APP/Contents/MacOS/xd_hd_make" "@executable_path/../Frameworks"
+fi
 # The Battle Revolution converter (since 0.4.1 the C++ program, engine/formats/pbr): Contents/Resources/pbr_models/
 # pbr_models, so its libraries are two folders up from it (the launcher runs it by its real path).
 if [ -x "$BIN/pbr_models" ]; then
@@ -141,7 +152,7 @@ done
 rm -f "$TODO" "$TODO.needs"
 # Nothing may still point into a package manager's folders (a player's Mac has none).
 LEFT=0
-for f in "$APP/Contents/MacOS/xd" "$APP/Contents/MacOS/xd_launcher" "$APP/Contents/Resources/pbr_models/pbr_models" "$APP/Contents/Resources/pbr_models/colo_models" "$APP/Contents/Resources/pbr_models/xd_data_mods" "$APP/Contents/Resources/xd_languages/xd_languages" "$FW"/*.dylib; do
+for f in "$APP/Contents/MacOS/xd" "$APP/Contents/MacOS/xd_launcher" "$APP/Contents/MacOS/xd_hd_make" "$APP/Contents/Resources/pbr_models/pbr_models" "$APP/Contents/Resources/pbr_models/colo_models" "$APP/Contents/Resources/pbr_models/xd_data_mods" "$APP/Contents/Resources/xd_languages/xd_languages" "$FW"/*.dylib; do
   [ -f "$f" ] || continue
   echo "  $(basename "$f") asks for:"
   needs_of "$f" | sed 's/^/      /'
@@ -277,7 +288,7 @@ for helper in pbr_models usum_models xd_languages; do
 done
 # (the programs in Contents/MacOS: the main one is signed with the app, but the other one is a second program that
 # the app's seal only records as a file: ad hoc signed by itself first, so it carries a signature of its own)
-for prog in xd xd_launcher; do
+for prog in xd xd_launcher xd_hd_make; do
   if [ -f "$APP/Contents/MacOS/$prog" ]; then sign "$APP/Contents/MacOS/$prog"; fi
 done
 sign "$APP"

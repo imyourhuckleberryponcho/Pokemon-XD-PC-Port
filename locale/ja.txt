@@ -821,6 +821,12 @@
 = A key (Photo mode key, F8 at first) pauses the game and lets you move the camera freely, hide the menus and text, and save pictures (PNG, in the photos folder) at full or higher resolution. The game carries on as if no time had passed.
 > キー(フォトモードキー、最初はF8)でゲームを止め、カメラを自由に動かし、メニューや文字を隠し、等倍またはそれ以上の解像度で写真(PNG、photosフォルダ)を保存できます。ゲームは時間がたっていないかのように続きます。
 
+= Mega Evolution light show
+> メガシンカの光の演出
+
+= When a Pokemon Mega Evolves in battle, its Mega Stone glows, a rainbow helix and lights gather round it and a burst of light covers the change. Only painted over the picture: the battle plays out the same and takes the same time.
+> バトルでポケモンがメガシンカすると、メガストーンが光り、虹のらせんと光が集まり、閃光が変化をおおいます。画面の上に描くだけで、バトルの進み方も時間も変わりません。
+
 = HD textures
 > HDテクスチャ
 
@@ -1538,6 +1544,12 @@
 = Look presets: set resolution, frame rate, anti-aliasing and texture filtering together. Only how the picture is drawn changes, never the game.
 > 見た目のプリセット: 解像度、フレームレート、アンチエイリアス、テクスチャフィルタリングをまとめて設定します。変わるのは画面の描き方だけで、ゲームは変わりません。
 
+= Best looks (fast phone)
+> 最高の見た目(高性能スマホ)
+
+= Smooth on a weak phone
+> 非力なスマホでもなめらか
+
 = Best looks (fast PC)
 > 最高の見た目(高性能PC)
 
@@ -2119,6 +2131,24 @@
 
 = a link couldn't be made: %s (%s)
 > リンクを作れませんでした: %s(%s)
+
+= %s is not there
+> %s がありません
+
+= nothing to put in the zip
+> zipに入れるものがありません
+
+= a file is too large for the zip: %s
+> ファイルが大きすぎてzipに入りません: %s
+
+= these packs are too large for one zip (the phone takes zips under 4 GB): export fewer packs at a time
+> これらのパックは1つのzipには大きすぎます (スマホは4GB未満のzipを受け付けます)。一度に書き出すパックを減らしてください
+
+= the zip couldn't be written: %s
+> zipを書き込めませんでした: %s
+
+= a file couldn't be read: %s
+> ファイルを読み込めませんでした: %s
 
 = Start menu
 > スタートメニュー
@@ -3046,6 +3076,27 @@
 
 = That zip could not be used:
 > そのzipは使えませんでした:
+
+= Packs for a phone
+> スマホ用パック
+
+= Packs made on this PC can be used on the phone app: tick the ones to take, press Export, copy the zip to the phone and choose "Use a pack from a PC (.zip)" on its Extra assets page. A pack is a few hundred MB; the zip must stay under 4 GB.
+> このPCで作ったパックはスマホアプリで使えます。持っていくパックにチェックを入れて「書き出し」を押し、zipをスマホにコピーして、スマホの「追加データ」ページで「PCからパックを使う (.zip)」を選んでください。パックは数百MBあり、zipは4GB未満にしてください。
+
+= Making the zip...
+> zipを作成中...
+
+= %llu of %llu MB
+> %llu / %llu MB
+
+= Export packs for a phone...
+> スマホ用にパックを書き出す...
+
+= Done: %s
+> 完了: %s
+
+= The zip could not be made: %s
+> zipを作成できませんでした: %s
 
 = Discs of other games that this port can borrow assets from. Your discs are only read; what is made from them is made on this PC, kept in your own data folder (extra_assets) and never sent anywhere.
 > このポートがアセットを借りられる、ほかのゲームのディスクです。ディスクは読むだけで、そこから作られたものは、このPC上で、あなたのデータフォルダ(extra_assets)に作られ、どこにも送られません。
@@ -7793,9 +7844,6 @@
 = Switched to %s. Loading speed and Memory card speed change the next time you start the game.
 > %s に切りかえました。読みこみ速度とメモリーカードの速度は、次にゲームを始めたときに変わります。
 
-= New Game: %s (as chosen before)
-> ニューゲーム: %s(前に選んだとおり)
-
 = This playthrough has Gen 4 Pokemon.
 > このプレイには第4世代のポケモンがいます。
 
@@ -7804,6 +7852,9 @@
 
 = Your save is safe and unchanged. It needs the Gen 4 pack because the Pokemon in it come from there.
 > セーブデータは無事で変更されていません。中のポケモンは第4世代パックのものなので、パックが必要です。
+
+= New Game: %s (as chosen before)
+> ニューゲーム: %s(前に選んだとおり)
 
 = This save's setup had: %s. The game carries on without it.
 > このセーブの設定には %s がありました。ゲームはそれなしで続けます。
@@ -9899,8 +9950,8 @@
 = F9 opens a menu of the developers' own debug tools left in the game: go to any place, any point of the story, set story flags, start battles, get items and Pokemon. For testing; runs that used it are marked in their recording and bug reports.
 > F9で、ゲームに残された開発者自身のデバッグツールのメニューが開きます: 好きな場所やストーリーの時点へ行く、ストーリーのフラグを設定する、戦闘を始める、どうぐやポケモンを手に入れる。テスト用です。これを使ったプレイは、記録とバグレポートに印がつきます。
 
-= Experimental (Windows and Linux only). Lets you save the whole game at any moment and put it back: in the field menu a SAVE STATES entry under SETTINGS opens a small menu with four slots, each showing a picture, when and where, with Save here and Load. The key F1 (changeable on the Controls page) opens it too; in a battle it is the only way for now. The states are files in the save states folder of the data folder, kept for each playthrough. Using it marks the playthrough as one that used a cheat does (it can't join competitive online rooms, and a speedrun with it is invalid). It is refused with mods, while a speedrun timer runs or online. Takes effect the next time the game starts. Never in Original.
-> 実験的機能（WindowsとLinuxのみ）。いつでもゲーム全体を保存して元に戻せます。フィールドメニューの「せってい」の下にある「セーブステート」の項目から、4つのスロットがある小さなメニューが開きます。各スロットに画像・日時・場所が表示され、「ここに保存」「読み込む」が選べます。F1キー（操作ページで変更可）でも開けます。バトル中は今のところこれだけです。ステートはデータフォルダの「savestates」フォルダにプレイデータごとのファイルとして保存されます。使うとそのプレイデータはチートを使ったものとして記録されます（対戦ルームのオンライン参加不可、スピードランも無効）。MOD使用中、スピードランのタイマー動作中、オンライン中は使えません。次回のゲーム起動から有効です。オリジナルでは使えません。
+= Experimental (tested on Windows and Linux; not yet tested on the Mac). Lets you save the whole game at any moment and put it back: in the field menu a SAVE STATES entry under SETTINGS opens a small menu with four slots, each showing a picture, when and where, with Save here and Load. The key F1 (changeable on the Controls page) opens it too; in a battle it is the only way for now. The states are files in the save states folder of the data folder, kept for each playthrough. Using it marks the playthrough as one that used a cheat does (it can't join competitive online rooms, and a speedrun with it is invalid). It is refused with mods, while a speedrun timer runs or online. Takes effect the next time the game starts. Never in Original.
+> 実験的機能（WindowsとLinuxで確認済み、Macではまだ未確認）。いつでもゲーム全体を保存して元に戻せます。フィールドメニューの「せってい」の下にある「セーブステート」の項目から、4つのスロットがある小さなメニューが開きます。各スロットに画像・日時・場所が表示され、「ここに保存」「読み込む」が選べます。F1キー（操作ページで変更可）でも開けます。バトル中は今のところこれだけです。ステートはデータフォルダの「savestates」フォルダにプレイデータごとのファイルとして保存されます。使うとそのプレイデータはチートを使ったものとして記録されます（対戦ルームのオンライン参加不可、スピードランも無効）。MOD使用中、スピードランのタイマー動作中、オンライン中は使えません。次回のゲーム起動から有効です。オリジナルでは使えません。
 
 = Turns the cheat menu on: a hot key (F5, or hold L + R and press Start on the controller; both can be changed in the controls) opens a menu of cheats over the game. Off: no cheat does anything. A playthrough that used a cheat is marked as such for good (it can't join competitive online rooms, and a speedrun with it is invalid). Never in Original.
 > チートメニューを使えるようにします。キー（F5、またはコントローラーでL + Rを押したままStart）でゲームの上に開きます。どちらもコントロールの設定で変えられます。オフ：どのチートも働きません。チートを使ったプレイは永久に印が付き（対戦向けのオンラインルームには入れず、スピードランも無効になります）。オリジナルでは使えません。

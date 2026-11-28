@@ -205,7 +205,7 @@ add_library(monocypher STATIC ${PROJECT_SOURCE_DIR}/third_party/monocypher/monoc
   ${PROJECT_SOURCE_DIR}/third_party/monocypher/optional/monocypher-ed25519.c)
 target_include_directories(monocypher PUBLIC ${PROJECT_SOURCE_DIR}/third_party/monocypher)
 set(XD_UPDATE_COMMON update/update_manifest.cpp update/update_install.cpp update/update_util.cpp update/update_sha256.cpp
-    update/update_tar.cpp update/update_mac.cpp)
+    update/update_tar.cpp update/update_mac.cpp update/update_zipwrite.cpp)
 if (WIN32)
   add_library(engine_update STATIC ${XD_UPDATE_COMMON} update/update_fetch.cpp)
 else () # Linux / Mac: downloads through the system's curl (update/update_fetch_posix.cpp)

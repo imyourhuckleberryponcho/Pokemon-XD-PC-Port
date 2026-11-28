@@ -250,6 +250,86 @@ pbr::CryStream parse_cwav(const Bytes& v) {
 
 }
 
+Bytes mega_jingle_wav(const RomFs& r, std::string* why) {
+  auto no = [&](const char* w) { if (why) *why = w; return Bytes{}; };
+  const char* path = "data/sound/me_xy_mega_stone.dspadpcm.bcstm";
+  if (!r.has(path)) return no("the dump has no data/sound/me_xy_mega_stone stream");
+  const Bytes b = r.read(path);
+  auto s16 = [&](size_t o) { return (int16_t)le16(b, o); };
+  try {
+    if (b.size() < 0x40 || memcmp(b.data(), "CSTM", 4)) return no("not a CSTM stream");
+    const uint32_t nb = le16(b, 0x10);
+    uint32_t info = 0, data = 0;
+    for (uint32_t i = 0; i < nb; i++) {
+      const uint32_t t = le16(b, 0x14 + 12 * i), off = le32(b, 0x14 + 12 * i + 4);
+      if (t == 0x4000) info = off;
+      if (t == 0x4002) data = off;
+    }
+    if (!info || !data || memcmp(b.data() + info, "INFO", 4)) return no("a stream without its INFO / DATA blocks");
+    const uint32_t si = info + 8 + le32(b, info + 8 + 4), ct = info + 8 + le32(b, info + 8 + 16 + 4);
+    const int codec = b.at(si), nch = b.at(si + 2);
+    const uint32_t rate = le32(b, si + 4), bc = le32(b, si + 16), bs = le32(b, si + 20), bsamp = le32(b, si + 24), lbsamp = le32(b, si + 32),
+                   lbpad = le32(b, si + 36);
+    const uint32_t samples0 = data + 8 + le32(b, si + 48 + 4);
+    if (codec != 2 || nch < 1 || nch > 2 || rate < 8000 || rate > 48000 || bc == 0) return no("not a DSP-ADPCM stream of one or two channels");
+    if (le32(b, ct) < (uint32_t)nch) return no("a stream with fewer channel records than channels");
+    std::vector<std::array<int16_t, 16>> coef((size_t)nch);
+    for (int c = 0; c < nch; c++) {
+      const uint32_t ci = ct + le32(b, ct + 4 + 8 * (uint32_t)c + 4);
+      const uint32_t di = ci + le32(b, ci + 4);
+      for (int k = 0; k < 16; k++) coef[(size_t)c][(size_t)k] = s16(di + 2 * (uint32_t)k);
+    }
+    std::vector<std::vector<int16_t>> pcm((size_t)nch);
+    std::vector<std::array<int32_t, 2>> hist((size_t)nch, {0, 0});
+    for (uint32_t blk = 0; blk < bc; blk++) {
+      const bool last = blk + 1 == bc;
+      const uint32_t size = last ? lbpad : bs, nsamp = last ? lbsamp : bsamp;
+      for (int c = 0; c < nch; c++) {
+        size_t p = samples0 + (size_t)blk * bs * (uint32_t)nch + (size_t)c * size;
+        int32_t h1 = hist[(size_t)c][0], h2 = hist[(size_t)c][1];
+        for (uint32_t got = 0; got < nsamp;) {
+          const uint8_t ps = b.at(p);
+          const int32_t scale = 1 << (ps & 15), c1 = coef[(size_t)c][(size_t)(ps >> 4) * 2], c2 = coef[(size_t)c][(size_t)(ps >> 4) * 2 + 1];
+          for (int k = 0; k < 14 && got < nsamp; k++, got++) {
+            const uint8_t byte = b.at(p + 1 + (size_t)k / 2);
+            int32_t nib = (k % 2 == 0) ? byte >> 4 : byte & 15;
+            if (nib >= 8) nib -= 16;
+            int32_t v = (((nib * scale) << 11) + 1024 + c1 * h1 + c2 * h2) >> 11;
+            v = std::clamp(v, -32768, 32767);
+            pcm[(size_t)c].push_back((int16_t)v);
+            h2 = h1;
+            h1 = v;
+          }
+          p += 8;
+        }
+        hist[(size_t)c] = {h1, h2};
+      }
+    }
+    const uint32_t frames = (uint32_t)pcm[0].size(), bytes = frames * (uint32_t)nch * 2;
+    Bytes w(44 + bytes);
+    auto put32 = [&](size_t o, uint32_t v) { for (int i = 0; i < 4; i++) w[o + (size_t)i] = (uint8_t)(v >> (8 * i)); };
+    auto put16 = [&](size_t o, uint32_t v) { w[o] = (uint8_t)v; w[o + 1] = (uint8_t)(v >> 8); };
+    memcpy(w.data(), "RIFF", 4); put32(4, 36 + bytes); memcpy(w.data() + 8, "WAVEfmt ", 8); put32(16, 16); put16(20, 1); put16(22, (uint32_t)nch);
+    put32(24, rate); put32(28, rate * (uint32_t)nch * 2); put16(32, (uint32_t)nch * 2); put16(34, 16); memcpy(w.data() + 36, "data", 4); put32(40, bytes);
+    for (uint32_t i = 0; i < frames; i++)
+      for (int c = 0; c < nch; c++) put16(44 + ((size_t)i * (uint32_t)nch + (size_t)c) * 2, (uint16_t)pcm[(size_t)c][i]);
+    return w;
+  } catch (const std::exception&) {
+    return no("the stream is cut short");
+  }
+}
+
+bool write_pack_sounds(const RomFs& r, const std::string& pack_dir, std::string* why) {
+  const Bytes w = mega_jingle_wav(r, why);
+  if (w.empty()) return false;
+  PackFiles{pack_dir, false}.write_bytes("sound/mega_evolution.wav", w);
+  std::string why2;
+  const Bytes fx = mega_fx_bin(r, &why2);
+  if (!fx.empty()) PackFiles{pack_dir, false}.write_bytes("mega/usum_mega.bin", fx);
+  else if (why) *why = "no mega/usum_mega.bin: " + why2;
+  return true;
+}
+
 RowBridge build_row_bridge(Usum& u, const Json& tables, const XdTablesCache& xd, const std::set<int>& pre, int nat, int record, int pkx_row, int standin) {
   Ctx c{u, tables, xd, pre};
   RowOut r = build_row(c, nat, standin, record, pkx_row, nullptr);
@@ -705,6 +785,11 @@ void make_gen57_data(const DataOptions& o, const Plan& plan, const ModelResults&
       g.set("gen4_toc", Json(fnv64_hex(g4toc)));
     }
     pf.write("gen57.json", g.dump(1, true));
+  }
+  {
+    std::string why;
+    if (write_pack_sounds(u.rom(), tmp, &why)) log("sound/mega_evolution.wav written");
+    else log("no Mega Evolution jingle: " + why);
   }
   pf.write("report.json", report.dump(1, true));
   fs::remove_all(out, ec);
